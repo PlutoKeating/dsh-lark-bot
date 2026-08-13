@@ -38,3 +38,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Smoke test built CLI
+        run: node bin/dsh-lark-bot.mjs --version

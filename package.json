@@ -26,7 +26,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build",
+    "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build && node bin/dsh-lark-bot.mjs --version",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm typecheck && pnpm build"
   },
