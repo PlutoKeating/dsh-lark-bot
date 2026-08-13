@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { resolveDshRuntime } from './dsh-runtime.js';
 
 export type LarkTenant = 'feishu' | 'lark';
 
@@ -19,8 +20,6 @@ export interface RuntimeEnv {
 
 const DEFAULTS = {
   tenant: 'feishu' as const,
-  dshCommand: 'node',
-  dshArgs: ['lib/bin.js', 'cordis.yml'],
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
   runTimeoutMs: 300_000,
@@ -42,7 +41,7 @@ function parseTenant(value: string | undefined): LarkTenant {
 
 function parseDshArgs(value: string | undefined): string[] {
   const raw = value?.trim();
-  if (!raw) return [...DEFAULTS.dshArgs];
+  if (!raw) return [];
   return raw
     .split(',')
     .map((item) => item.trim())
@@ -74,15 +73,24 @@ export function loadRuntimeEnv(
 ): RuntimeEnv {
   const homeOverride = nonEmpty(source.DSH_LARK_HOME);
   const workspace = nonEmpty(source.DSH_LARK_WORKSPACE);
+  const home = homeOverride ? resolve(homeOverride) : join(homedir(), '.dsh-lark');
+  const dshCommand = nonEmpty(source.DSH_LARK_DSH_COMMAND);
+  const rawDshArgs = nonEmpty(source.DSH_LARK_DSH_ARGS);
+  const dshRuntime = resolveDshRuntime({
+    home,
+    env: source,
+    ...(dshCommand ? { command: dshCommand } : {}),
+    ...(rawDshArgs ? { args: parseDshArgs(rawDshArgs) } : {}),
+  });
 
   return {
-    home: homeOverride ? resolve(homeOverride) : join(homedir(), '.dsh-lark'),
+    home,
     tenant: parseTenant(source.DSH_LARK_TENANT),
     appId: nonEmpty(source.DSH_LARK_APP_ID),
     appSecret: nonEmpty(source.DSH_LARK_APP_SECRET),
     workspace: workspace ? resolve(workspace) : undefined,
-    dshCommand: nonEmpty(source.DSH_LARK_DSH_COMMAND) ?? DEFAULTS.dshCommand,
-    dshArgs: parseDshArgs(source.DSH_LARK_DSH_ARGS),
+    dshCommand: dshRuntime.command,
+    dshArgs: dshRuntime.args,
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),

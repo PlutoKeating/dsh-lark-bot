@@ -30,6 +30,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     `node: ${process.version}`,
     `profile: ${profileName}`,
     `home: ${paths.root}`,
+    `dsh_command: ${env.dshCommand}`,
+    `dsh_args: ${env.dshArgs.join(',')}`,
   ];
 
   let critical = false;

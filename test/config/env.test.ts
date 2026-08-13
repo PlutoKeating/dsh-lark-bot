@@ -3,7 +3,10 @@ import { loadRuntimeEnv } from '../../src/config/env.js';
 
 describe('loadRuntimeEnv', () => {
   it('uses safe defaults', () => {
-    const env = loadRuntimeEnv({});
+    const env = loadRuntimeEnv({
+      DSH_LARK_DSH_COMMAND: 'node',
+      DSH_LARK_DSH_ARGS: 'lib/bin.js,cordis.yml',
+    });
 
     expect(env.home.endsWith('.dsh-lark')).toBe(true);
     expect(env.tenant).toBe('feishu');

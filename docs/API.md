@@ -29,6 +29,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 
 主要环境变量：
 
+- `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径，并使用 `--profile headless`。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待退出再 SIGKILL 的宽限期，默认 `5000`。
 

@@ -8,6 +8,8 @@ import { ConfigStore } from '../../../src/config/profile-store.js';
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.DSH_LARK_HOME;
+  delete process.env.DSH_LARK_DSH_COMMAND;
+  delete process.env.DSH_LARK_DSH_ARGS;
   process.exitCode = 0;
 });
 
@@ -15,6 +17,7 @@ describe('runDoctor', () => {
   it('reports an existing profile and local dsh availability', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-'));
     process.env.DSH_LARK_HOME = root;
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
     const store = new ConfigStore(join(root, 'config.json'));
     await store.load();
     await store.saveProfile('default', {
@@ -41,6 +44,7 @@ describe('runDoctor', () => {
   it('marks missing profiles as a critical diagnostic', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-empty-'));
     process.env.DSH_LARK_HOME = root;
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
     const outputChunks: string[] = [];
 
     try {

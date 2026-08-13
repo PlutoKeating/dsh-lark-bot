@@ -140,12 +140,14 @@ rm -rf ~/.dsh-lark
 | :--- | :--- | :--- |
 | `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
-| `DSH_LARK_DSH_COMMAND` | `node` | dsh 启动命令 |
-| `DSH_LARK_DSH_ARGS` | `lib/bin.js,cordis.yml` | dsh 启动参数，逗号分隔 |
+| `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置 |
+| `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置 |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期 |
+
+启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
 ## 权限与数据 · Permissions & Data
 
