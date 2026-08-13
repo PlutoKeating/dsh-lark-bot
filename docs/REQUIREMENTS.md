@@ -120,6 +120,7 @@
 | :--- | :--- |
 | [`README.md`](../README.md) | 项目概览（双语） |
 | [`architecture.md`](architecture.md) | 架构分层与目录映射 |
+| [`adapter-notes.md`](adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线） |
 | [`RESEARCH.md`](RESEARCH.md) | 调研报告（官方现状、参考项目、可行性、技术差异） |
 | [`roadmap.md`](roadmap.md) | 路线图与里程碑 |
 | [`../AGENTS.md`](../AGENTS.md) | AI Agent 开发工作流规范 |
