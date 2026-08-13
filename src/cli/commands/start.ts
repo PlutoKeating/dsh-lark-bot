@@ -13,6 +13,7 @@ import { ConfigStore } from '../../config/profile-store.js';
 import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { SessionStore } from '../../session/store.js';
+import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 import type { StartOptions } from '../../cli.js';
 
@@ -82,6 +83,9 @@ export async function runStart(options: StartOptions): Promise<void> {
 
   const sessions = new SessionStore(paths.sessionsFile(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
+  const worktreeManager = new GitWorktreeManager({
+    worktreesRoot: paths.profilePath(profileName, 'worktrees'),
+  });
   await Promise.all([sessions.load(), workspaces.load()]);
 
   const adapterOptions: { command: string; args: string[]; stopGraceMs?: number } = {
@@ -109,6 +113,7 @@ export async function runStart(options: StartOptions): Promise<void> {
         adapter,
         sessions,
         workspaces,
+        workspaceManager: worktreeManager,
         activeRuns,
         channel: streaming,
         defaultWorkspace,

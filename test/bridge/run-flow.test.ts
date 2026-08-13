@@ -143,4 +143,52 @@ describe('runAgentBatch', () => {
     expect(lastText).toContain('无响应');
     expect(activeRuns.get('chat-timeout')).toBeUndefined();
   });
+
+  it('resolves the run cwd through the workspace manager when present', async () => {
+    let observedCwd: string | undefined;
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        observedCwd = options.cwd;
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const manager = {
+      ensure: vi.fn().mockResolvedValue({
+        cwd: '/tmp/worktrees/chat-a',
+        created: true,
+        branch: 'dsh-lark/chat-a-1',
+      }),
+    };
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['work on the feature'],
+      adapter,
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      workspaceManager: manager as never,
+      activeRuns: new ActiveRuns(),
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(manager.ensure).toHaveBeenCalledWith('chat-a', '/tmp/project');
+    expect(observedCwd).toBe('/tmp/worktrees/chat-a');
+  });
 });

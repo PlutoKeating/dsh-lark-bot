@@ -13,6 +13,7 @@ import { renderCard } from '../card/run-renderer.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
+import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
 
 export interface RunFlowInput {
@@ -22,6 +23,7 @@ export interface RunFlowInput {
   adapter: AgentAdapter;
   sessions: SessionStore;
   workspaces: WorkspaceStore;
+  workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
   channel: StreamingChannel;
   defaultWorkspace: string;
@@ -41,7 +43,11 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     return;
   }
 
-  const cwd = input.workspaces.cwdFor(input.scope) ?? input.defaultWorkspace;
+  const requestedCwd = input.workspaces.cwdFor(input.scope) ?? input.defaultWorkspace;
+  const workspace = input.workspaceManager
+    ? await input.workspaceManager.ensure(input.scope, requestedCwd)
+    : { cwd: requestedCwd };
+  const cwd = workspace.cwd;
   const sessionId = input.sessions.resumeFor(input.scope, cwd);
   const prompt = input.messages.join('\n\n');
   const runId = randomUUID();
