@@ -1,5 +1,5 @@
 import { registerApp, type RegisterAppOptions, type RegisterAppResult } from '@larksuite/channel';
-import { generate as generateQr } from 'qrcode-terminal';
+import qrcode from 'qrcode-terminal';
 import type { LarkTenant } from '../config/env.js';
 
 export interface OnboardedApp {
@@ -22,7 +22,7 @@ export async function onboardPersonalAgent(
   deps: RegistrationDeps = {},
 ): Promise<OnboardedApp> {
   const register = deps.register ?? registerApp;
-  const renderQr = deps.renderQr ?? ((value) => generateQr(value, { small: true }));
+  const renderQr = deps.renderQr ?? ((value) => qrcode.generate(value, { small: true }));
   const print = deps.print ?? ((line) => process.stdout.write(`${line}\n`));
 
   print('');
