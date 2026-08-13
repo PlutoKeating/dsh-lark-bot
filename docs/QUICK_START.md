@@ -32,6 +32,15 @@ dsh-lark-bot start
 4. 绑定成功后，bot 发送欢迎卡片到私聊。
 5. 直接发送消息即可开始使用；群聊中需要 `@bot`。
 
+如果已经有一个 PersonalAgent 应用，也可以跳过扫码：
+
+```bash
+dsh-lark-bot start \
+  --app-id cli_xxx \
+  --app-secret <secret> \
+  --tenant feishu
+```
+
 ## 4. 常用命令
 
 | 命令 | 作用 |
@@ -41,16 +50,17 @@ dsh-lark-bot start
 | `/ws list` | 查看命名工作空间 |
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
-| `/resume` | 恢复兼容的历史会话 |
 | `/status` | 查看当前状态 |
 | `/stop` | 终止当前任务 |
 | `/help` | 查看命令帮助 |
+
+启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
 
 ## 5. 本地状态
 
 - 配置文件：`~/.dsh-lark/config.json`
 - 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
-- 日志：`~/.dsh-lark/profiles/<profile>/logs/`
+- 运行日志：当前输出到 stderr JSON Lines；`~/.dsh-lark/profiles/<profile>/logs/` 为后续文件日志保留目录
 
-可通过 `DSH_LARK_HOME` 修改状态根目录。
+可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行墙钟超时，`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。

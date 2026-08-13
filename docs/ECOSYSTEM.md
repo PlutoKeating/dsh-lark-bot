@@ -73,11 +73,11 @@ README 必须覆盖以下九个章节（本仓库已建立骨架，部分标注 
 
 P1 代码完成后，实现工程师在提交前逐项确认：
 
-- [ ] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
-- [ ] README 九章节均已填实（无遗留 `🚧` 占位）
+- [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
+- [x] README 九章节均已填实（无遗留 `🚧` 占位）
 - [ ] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期
-- [ ] 「权限与数据」章节完整披露风险
-- [ ] `pnpm typecheck` 通过（L3）
+- [x] 「权限与数据」章节完整披露风险
+- [x] `pnpm typecheck` 通过（L3）
 - [ ] 至少完成一次最小任务的运行实测并记录环境（L4）
-- [ ] `dsh-plugin` topic 仍在
-- [ ] `git status` 干净，无密钥 / 构建产物 / 本地配置混入提交
+- [x] `dsh-plugin` topic 仍在
+- [x] `git status` 干净，无密钥 / 构建产物 / 本地配置混入提交

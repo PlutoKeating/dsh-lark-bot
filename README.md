@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-4D6BFE" alt="Agent">
   <img src="https://img.shields.io/badge/runtime-Node.js%20%E2%89%A5%2022-339933" alt="Node">
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
-  <img src="https://img.shields.io/badge/status-scaffolding-orange" alt="Status">
+  <img src="https://img.shields.io/badge/status-P1%20MVP-orange" alt="Status">
 </p>
 
 <br>
@@ -51,7 +51,7 @@
 - **DeepSeek Harness（`dsh`）**：developer preview（v0.1，2026-08 发布），通过 ACP / JSON-RPC SDK 接入。
 - **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
-- 支持的具体 dsh mainline commit 将在 P1 实现后锁定并在此声明（dsh 接口漂移频繁，需定期复验）。
+- 当前 adapter 采用 **headless 子进程 fallback**，通过可配置的 `dsh` 命令与参数驱动，尚未锁定具体 dsh mainline commit；接入 ACP / SDK 的正式版本将在 P2 锁版后声明。
 
 ## 安装与卸载 · Install / Uninstall
 
@@ -111,6 +111,7 @@ dsh-lark-bot start
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
+| `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期 |
 
 ## 权限与数据 · Permissions & Data
 
@@ -125,7 +126,15 @@ dsh-lark-bot start
 
 ## 排障 · Troubleshooting
 
-> 🚧 P1 实现后补充。预期覆盖：bot 静默、agent 无响应（`/status`、`/timeout`）、长连接断线重连、日志位置（`~/.dsh-lark/logs/`）。
+先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录和本机 `dsh` 可用性。
+
+常见问题：
+
+- **bot 静默 / 长连接失败**：查看 stderr 上的 JSONL 日志，关注 `channel` 与 `channel-command` 类别；SDK 会自动重连。
+- **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止。
+- **首次扫码失败**：确认本机时间准确、网络可访问飞书开放平台；已拿到 App ID/Secret 时可用 `--app-id` / `--app-secret` 跳过扫码。
+
+日志当前为 stderr JSON Lines，`~/.dsh-lark/profiles/<profile>/logs/` 为后续文件日志保留目录。
 
 ## 开发 · Development
 
@@ -169,20 +178,25 @@ pnpm ci:local
 飞书 / Lark ──WebSocket 长连接──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4
 ```
 
-核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接 DeepSeek Harness（走 ACP），可切换 claude / codex / opencode。
+核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接 DeepSeek Harness（当前 headless fallback，ACP 正式接入规划在 P2），可切换 claude / codex / opencode。
 
-The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to DeepSeek Harness (via ACP) and swappable to claude / codex / opencode.
+The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to DeepSeek Harness (currently headless fallback, with ACP planned for P2) and swappable to claude / codex / opencode.
 
 ## 目录结构 · Directory Structure
 
 | 目录 Dir | 职责 Responsibility |
 | :--- | :--- |
 | `src/bridge/` | 飞书通道接入（消息、卡片、媒体）<br>Feishu channel integration |
+| `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用<br>First-run QR onboarding |
 | `src/session/` | 会话路由、排队、访问控制<br>Session routing, queueing, access control |
 | `src/workspace/` | 项目工作区管理<br>Project workspace management |
 | `src/adapters/` | agent 后端适配器（dsh 优先）<br>Agent backend adapters (dsh first) |
+| `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
+| `src/bot/` | 运行注册、消息排队<br>Run registry & message queueing |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
 | `src/config/` | profile / 配置管理<br>Profile & config |
+| `src/core/` | 结构化日志<br>Structured logging |
+| `src/platform/` | 跨平台原子写入<br>Cross-platform atomic writes |
 | `docs/` | 架构、路线图等文档<br>Architecture, roadmap & docs |
 | `reference/` | 参考研究用的克隆仓库（不提交）<br>Cloned reference repos (not committed) |
 
