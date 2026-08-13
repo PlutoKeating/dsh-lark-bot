@@ -32,6 +32,8 @@ dsh-lark-bot start
 4. 绑定成功后，bot 发送欢迎卡片到私聊。
 5. 直接发送消息即可开始使用；群聊中需要 `@bot`。
 
+在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
+
 如果已经有一个 PersonalAgent 应用，也可以跳过扫码：
 
 ```bash
@@ -61,6 +63,7 @@ dsh-lark-bot start \
 - 配置文件：`~/.dsh-lark/config.json`
 - 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
+- Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 运行日志：当前输出到 stderr JSON Lines；`~/.dsh-lark/profiles/<profile>/logs/` 为后续文件日志保留目录
 
 可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行墙钟超时，`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。

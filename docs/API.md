@@ -96,6 +96,25 @@ export async function onboardPersonalAgent(
 
 默认使用 `@larksuite/channel` 的 `registerApp`，在终端打印二维码并等待用户扫码创建或选择 PersonalAgent 应用；可通过 `deps` 注入 `register` / `renderQr` / `print` 便于测试。
 
+## 2.3 Git worktree · Git worktree manager
+
+`src/workspace/git-worktree.ts` 提供：
+
+```ts
+export interface WorktreeEnsureResult {
+  cwd: string;
+  created: boolean;
+  branch?: string;
+}
+
+export class GitWorktreeManager {
+  ensure(scope: string, base: string): Promise<WorktreeEnsureResult>;
+  isGitRepository(cwd: string): Promise<boolean>;
+}
+```
+
+当当前工作目录是 Git 仓库时，`runAgentBatch` 会为每个 scope 在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree；非 Git 目录保持原路径。若 base 下有 `.dsh-lark/AGENTS.md` 或 `AGENTS.md` 且目标 worktree 没有，则复制为目标根目录 `AGENTS.md`。
+
 ## 3. 结构化日志 · Structured logging
 
 `src/core/logger.ts` 提供：

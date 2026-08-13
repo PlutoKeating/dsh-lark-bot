@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-4D6BFE" alt="Agent">
   <img src="https://img.shields.io/badge/runtime-Node.js%20%E2%89%A5%2022-339933" alt="Node">
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
-  <img src="https://img.shields.io/badge/status-P1%20MVP-orange" alt="Status">
+  <img src="https://img.shields.io/badge/status-P2%20workspace-orange" alt="Status">
 </p>
 
 <br>
@@ -100,6 +100,8 @@ dsh-lark-bot start
 - 环境变量统一使用 `DSH_LARK_*` 前缀
 - 模板见 [`.env.example`](.env.example)
 
+会话运行在 Git 仓库中时，会自动在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建隔离 worktree，并复制项目级 `AGENTS.md`。
+
 当前核心环境变量：
 
 | 变量 | 默认值 | 说明 |
@@ -189,7 +191,7 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/bridge/` | 飞书通道接入（消息、卡片、媒体）<br>Feishu channel integration |
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用<br>First-run QR onboarding |
 | `src/session/` | 会话路由、排队、访问控制<br>Session routing, queueing, access control |
-| `src/workspace/` | 项目工作区管理<br>Project workspace management |
+| `src/workspace/` | 项目工作区、git worktree 隔离与规则注入<br>Project workspace, git worktree isolation & rule injection |
 | `src/adapters/` | agent 后端适配器（dsh 优先）<br>Agent backend adapters (dsh first) |
 | `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
 | `src/bot/` | 运行注册、消息排队<br>Run registry & message queueing |
