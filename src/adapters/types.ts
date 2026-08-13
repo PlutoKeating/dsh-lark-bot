@@ -1,12 +1,12 @@
 export type AgentEvent =
-  | { type: 'system'; sessionId?: string; cwd?: string; model?: string }
+  | { type: 'system'; sessionId: string | undefined; cwd: string | undefined; model: string | undefined }
   | { type: 'text'; delta: string }
   | { type: 'final_text'; content: string }
   | { type: 'thinking'; delta: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; output: string; isError: boolean }
   | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
-  | { type: 'done'; sessionId?: string; terminationReason: 'normal' | 'interrupted' | 'timeout' }
+  | { type: 'done'; sessionId: string | undefined; terminationReason: 'normal' | 'interrupted' | 'timeout' }
   | { type: 'error'; message: string; terminationReason: 'failed' | 'interrupted' | 'timeout' };
 
 export interface AgentRunOptions {
@@ -28,8 +28,8 @@ export interface AgentRun {
 
 export interface AgentAvailability {
   ok: boolean;
-  error?: string;
-  version?: string;
+  error: string | undefined;
+  version: string | undefined;
 }
 
 export interface AgentAdapter {
