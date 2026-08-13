@@ -19,6 +19,7 @@ describe('ConfigStore', () => {
         workspace: '/tmp/project',
         stopGraceMs: 2_000,
         runTimeoutMs: 60_000,
+        operatorOpenId: 'ou_owner',
       });
 
       const reloaded = new ConfigStore(path);
@@ -30,6 +31,8 @@ describe('ConfigStore', () => {
       expect(profile?.workspaces.default).toBe('/tmp/project');
       expect(profile?.preferences.stopGraceMs).toBe(2_000);
       expect(profile?.preferences.runTimeoutMs).toBe(60_000);
+      expect(profile?.access.allowedUsers).toContain('ou_owner');
+      expect(profile?.access.admins).toContain('ou_owner');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

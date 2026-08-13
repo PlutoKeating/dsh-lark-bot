@@ -20,6 +20,11 @@ export interface ProfileConfig {
     stopGraceMs: number | undefined;
     runTimeoutMs: number | undefined;
   };
+  access: {
+    allowedUsers: string[];
+    allowedChats: string[];
+    admins: string[];
+  };
 }
 
 export interface RootConfig {
@@ -40,7 +45,19 @@ export class ConfigStore {
       this.data = {
         schemaVersion: 1,
         activeProfile: parsed.activeProfile ?? 'default',
-        profiles: parsed.profiles ?? {},
+        profiles: Object.fromEntries(
+          Object.entries(parsed.profiles ?? {}).map(([name, profile]) => [
+            name,
+            {
+              ...profile,
+              access: {
+                allowedUsers: profile.access?.allowedUsers ?? [],
+                allowedChats: profile.access?.allowedChats ?? [],
+                admins: profile.access?.admins ?? [],
+              },
+            },
+          ]),
+        ),
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -73,6 +90,7 @@ export class ConfigStore {
       model?: string;
       stopGraceMs?: number;
       runTimeoutMs?: number;
+      operatorOpenId?: string;
     },
   ): Promise<void> {
     const data = this.getData();
@@ -93,7 +111,16 @@ export class ConfigStore {
         stopGraceMs: input.stopGraceMs ?? existing?.preferences.stopGraceMs ?? undefined,
         runTimeoutMs: input.runTimeoutMs ?? existing?.preferences.runTimeoutMs ?? undefined,
       },
+      access: {
+        allowedUsers: existing?.access?.allowedUsers ?? [],
+        allowedChats: existing?.access?.allowedChats ?? [],
+        admins: existing?.access?.admins ?? [],
+      },
     };
+    if (input.operatorOpenId && !profile.access.allowedUsers.includes(input.operatorOpenId)) {
+      profile.access.allowedUsers.push(input.operatorOpenId);
+      profile.access.admins.push(input.operatorOpenId);
+    }
     data.profiles[name] = profile;
     data.activeProfile = name;
     await this.persist();

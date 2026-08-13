@@ -58,6 +58,9 @@ export async function runStart(options: StartOptions): Promise<void> {
         stopGraceMs: env.stopGraceMs,
         runTimeoutMs: env.runTimeoutMs,
       };
+      if (created.operatorOpenId !== undefined) {
+        onboardingProfile.operatorOpenId = created.operatorOpenId;
+      }
       if (env.workspace !== undefined) onboardingProfile.workspace = env.workspace;
       await configStore.saveProfile(profileName, onboardingProfile);
     } catch (error) {
@@ -145,6 +148,8 @@ export async function runStart(options: StartOptions): Promise<void> {
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     pending,
     defaultWorkspace,
+    allowedUsers: activeProfile.access.allowedUsers,
+    allowedChats: activeProfile.access.allowedChats,
   };
   if (activeProfile.preferences.model !== undefined) channelInput.model = activeProfile.preferences.model;
   if (activeProfile.preferences.stopGraceMs !== undefined) {

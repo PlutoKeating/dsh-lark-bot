@@ -28,6 +28,7 @@ describe('onboardPersonalAgent', () => {
       appId: 'cli_test',
       appSecret: 'secret',
       tenant: 'feishu',
+      operatorOpenId: 'ou_1',
     });
     expect(qr).toEqual(['https://example.test/qr']);
     expect(lines.join('\n')).toContain('未检测到飞书 / Lark 应用凭据');
@@ -46,6 +47,7 @@ describe('onboardPersonalAgent', () => {
     });
 
     expect(created.tenant).toBe('lark');
+    expect(created.operatorOpenId).toBe('ou_2');
   });
 
   it('propagates registration failures', async () => {

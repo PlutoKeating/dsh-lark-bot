@@ -38,7 +38,7 @@ export class DshAdapter implements AgentAdapter {
   }
 
   checkAvailability(): Promise<AgentAvailability> {
-    return checkDshAvailability({ command: this.command });
+    return checkDshAvailability({ command: this.command, args: this.args });
   }
 
   run(options: AgentRunOptions): AgentRun {

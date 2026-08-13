@@ -21,6 +21,8 @@ export interface StartChannelDeps {
   defaultRunTimeoutMs: number;
   pending: PendingQueue<NormalizedMessage>;
   defaultWorkspace: string;
+  allowedUsers?: string[];
+  allowedChats?: string[];
   model?: string;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
@@ -39,9 +41,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       deps.tenant === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn',
     source: 'dsh-lark-bot',
     policy: {
-      dmMode: 'open',
+      dmMode: deps.allowedUsers?.length ? 'allowlist' : 'open',
       requireMention: true,
       respondToMentionAll: false,
+      ...(deps.allowedUsers ? { dmAllowlist: deps.allowedUsers } : {}),
+      ...(deps.allowedChats ? { groupAllowlist: deps.allowedChats } : {}),
     },
     safety: {
       chatQueue: { enabled: false },

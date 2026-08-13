@@ -63,7 +63,10 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     lines.push(`workspace: ${workspace} (missing)`);
   }
 
-  const availability = await checkDshAvailability({ command: env.dshCommand });
+  const availability = await checkDshAvailability({
+    command: env.dshCommand,
+    args: env.dshArgs,
+  });
   if (availability.ok) {
     lines.push(`dsh: ok${availability.version ? ` (${availability.version})` : ''}`);
   } else {

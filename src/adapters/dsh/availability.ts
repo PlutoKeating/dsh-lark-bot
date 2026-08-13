@@ -1,8 +1,10 @@
 import { spawn } from 'cross-spawn';
+import { existsSync } from 'node:fs';
 import type { AgentAvailability } from '../types.js';
 
 export interface AvailabilityCheckOptions {
   command: string;
+  args?: string[];
   timeoutMs?: number;
 }
 
@@ -10,9 +12,12 @@ export async function checkDshAvailability(
   options: AvailabilityCheckOptions,
 ): Promise<AgentAvailability> {
   const timeoutMs = options.timeoutMs ?? 5_000;
+  const versionArgs = options.command === 'node' && options.args?.[0] && existsSync(options.args[0])
+    ? [options.args[0], '--version']
+    : ['--version'];
 
   return new Promise((resolve) => {
-    const child = spawn(options.command, ['--version'], {
+    const child = spawn(options.command, versionArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

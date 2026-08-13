@@ -6,6 +6,7 @@ export interface OnboardedApp {
   appId: string;
   appSecret: string;
   tenant: LarkTenant;
+  operatorOpenId: string | undefined;
 }
 
 export interface RegistrationDeps {
@@ -62,5 +63,6 @@ export async function onboardPersonalAgent(
     appId: result.client_id,
     appSecret: result.client_secret,
     tenant,
+    operatorOpenId: result.user_info?.open_id,
   };
 }
