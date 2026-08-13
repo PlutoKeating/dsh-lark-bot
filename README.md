@@ -150,6 +150,15 @@ pnpm ci:local
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
+发布双包（`dsh-lark-bot` 与 `dsh-feishu-bot` 共享同一份 dist / 版本 / 依赖）：
+
+```bash
+pnpm publish:dual:dry-run
+pnpm publish:dual
+```
+
+`scripts/publish-dual-packages.mjs` 从根 `package.json` 生成两份仅 `name` / `bin` 不同的发布清单，避免两份源码漂移。GitHub tag `v*` 会触发 [`release.yml`](.github/workflows/release.yml) 自动发布两个 npm 包并创建 Release。
+
 ## 许可与安全 · License & Security
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
