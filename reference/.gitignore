@@ -1,0 +1,5 @@
+# Cloned reference repos & upstream source are for study only — never committed.
+# 克隆的参考仓库与上游源码仅供研究，绝不提交。
+*
+!.gitignore
+!README.md
