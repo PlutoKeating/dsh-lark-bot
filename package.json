@@ -1,0 +1,78 @@
+{
+  "name": "dsh-lark-bot",
+  "version": "0.1.0",
+  "description": "Bridge DeepSeek Harness (dsh) into Feishu / Lark with streaming cards, project workspaces, approvals and scheduling",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "bin": {
+    "dsh-lark-bot": "./bin/dsh-lark-bot.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build",
+    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm typecheck && pnpm build"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "deepseek harness",
+    "feishu",
+    "lark",
+    "bridge",
+    "bot",
+    "typescript",
+    "chatbot",
+    "messaging",
+    "deepseek-harness",
+    "dsh-plugin"
+  ],
+  "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@larksuite/channel": "^0.4.1",
+    "commander": "^12.1.0",
+    "cross-spawn": "^7.0.6",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^22.10.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PlutoKeating/dsh-lark-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PlutoKeating/dsh-lark-bot/issues"
+  },
+  "homepage": "https://github.com/PlutoKeating/dsh-lark-bot#readme"
+}
