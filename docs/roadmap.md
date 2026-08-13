@@ -5,7 +5,7 @@
 | **P0 脚手架** Scaffolding | 仓库结构、文档、CI 骨架、README | ✅ 已完成 Done |
 | **P1 MVP** | 飞书 bot + dsh 单会话往返（发消息 → 收流式卡片） | 🚧 进行中 In progress |
 | **P2 工作区** Workspace | git worktree 隔离、项目级规则注入、多项目导航 | 🚧 进行中 In progress |
-| **P3 审批/调度** Approval & Scheduling | 卡片审批、异步任务队列、沙箱隔离 | ⬜ 待开始 Todo |
+| **P3 审批/调度** Approval & Scheduling | 访问白名单、卡片审批、异步任务队列、沙箱隔离 | 🚧 进行中 In progress |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones

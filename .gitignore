@@ -49,5 +49,6 @@ Desktop.ini
 *.swp
 *.swo
 *~
+.*.tmp
 .vscode/
 .idea/

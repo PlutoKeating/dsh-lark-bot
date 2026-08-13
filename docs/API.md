@@ -74,6 +74,11 @@ export interface ProfileConfig {
     stopGraceMs: number | undefined;
     runTimeoutMs: number | undefined;
   };
+  access: {
+    allowedUsers: string[];
+    allowedChats: string[];
+    admins: string[];
+  };
 }
 ```
 
@@ -91,6 +96,10 @@ export class RunPolicyStore {
 
 飞书命令 `/timeout [N|off|default]` 会读写该 store，`/timeout` 的覆盖值优先于 profile / 环境变量默认值。
 
+`src/config/access-manager.ts` 提供 `AccessManager`，负责把 `/invite user|admin|group <id>` 的变更持久化到当前 profile 的访问白名单。
+
+`src/session/store.ts` 的 `SessionStore` 现在会保存每个 scope 最近 40 条对话消息；`runAgentBatch` 会把这些历史拼入下一次 dsh prompt，以弥补 dsh headless 无状态进程的上下文缺失。
+
 ## 2.2 扫码绑定 · QR onboarding
 
 `src/onboard/registration.ts` 提供：
@@ -100,6 +109,7 @@ export interface OnboardedApp {
   appId: string;
   appSecret: string;
   tenant: 'feishu' | 'lark';
+  operatorOpenId: string | undefined;
 }
 
 export async function onboardPersonalAgent(
@@ -177,6 +187,6 @@ dsh 后端只允许在 `src/adapters/` 中依赖 dsh 接口，桥接层和会话
 - `dsh-lark-bot start`：前台启动桥接
 - `dsh-lark-bot doctor`：运行本地诊断
 
-飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/stop`、`/timeout`、`/help`。
+飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/stop`、`/timeout`、`/invite`、`/help`。
 
 两个命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。后续将补充 `profile`、`ps`、`kill` 等进程与配置管理命令。

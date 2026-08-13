@@ -52,12 +52,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | :--- | :--- |
 | `src/bridge/` | 飞书通道接入（消息、卡片、媒体） |
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用 |
-| `src/session/` | 会话路由、排队、访问控制 |
+| `src/session/` | 会话路由、上下文记忆、持久化 |
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（dsh 优先） |
 | `src/card/` | 流式卡片状态与渲染 |
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
-| `src/config/` | profile / 配置管理 |
+| `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/platform/` | 跨平台原子写入 |

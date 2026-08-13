@@ -61,9 +61,12 @@ dsh-lark-bot start \
 | `/status` | 查看当前状态 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
+| `/invite user|admin|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
+
+bot 会为每个飞书 scope 保存最近 40 条对话，`/new` 会清空当前 scope 的会话记忆。
 
 ## 5. 本地状态
 

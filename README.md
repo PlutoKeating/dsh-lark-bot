@@ -85,6 +85,7 @@ dsh-lark-bot start \
 | `/status` | 查看当前状态 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
+| `/invite user|admin|group <id>` | 管理访问白名单 |
 | `/help` | 查看帮助 |
 
 ### 4. 卸载
@@ -134,6 +135,8 @@ rm -rf ~/.dsh-lark
 
 会话运行在 Git 仓库中时，会自动在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建隔离 worktree，并复制项目级 `AGENTS.md`。
 
+每个飞书 scope 会保存最近 40 条对话消息，下一次消息会作为上下文传入 dsh headless，从而在无状态 headless 子进程上实现会话记忆。
+
 当前核心环境变量：
 
 | 变量 | 默认值 | 说明 |
@@ -162,7 +165,7 @@ rm -rf ~/.dsh-lark
 
 ## 排障 · Troubleshooting
 
-先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录和本机 `dsh` 可用性。
+先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并实际调用本机 dsh 的 `--version` 确认可用性。
 
 常见问题：
 
