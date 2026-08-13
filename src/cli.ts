@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
+import { runDoctor } from './cli/commands/doctor.js';
 import { runStart } from './cli/commands/start.js';
 
 function packageVersion(): string {
@@ -39,8 +40,13 @@ export function buildProgram(): Command {
   program
     .command('doctor')
     .description('Run local diagnostics')
-    .action(async () => {
-      process.stdout.write('dsh-lark-bot doctor: not implemented yet\n');
+    .option('--profile <name>', 'profile name')
+    .option('--workspace <path>', 'initial working directory')
+    .option('--app-id <id>', 'existing Lark/Feishu app id')
+    .option('--app-secret <secret>', 'existing Lark/Feishu app secret')
+    .option('--tenant <tenant>', 'feishu or lark')
+    .action(async (opts: StartOptions) => {
+      await runDoctor({ ...opts, version: packageVersion() });
     });
 
   return program;
