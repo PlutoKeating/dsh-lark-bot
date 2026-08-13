@@ -26,4 +26,15 @@ describe('run state reducer', () => {
     expect(state.terminal).toBe('interrupted');
     expect(state.footer).toBeNull();
   });
+
+  it('renders committed final text even when no streaming deltas were emitted', () => {
+    const state = reduce(initialState, {
+      type: 'final_text',
+      content: 'hello from dsh',
+    });
+
+    expect(state.blocks).toEqual([
+      { kind: 'text', content: 'hello from dsh', streaming: false },
+    ]);
+  });
 });
