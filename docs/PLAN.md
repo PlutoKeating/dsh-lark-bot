@@ -58,3 +58,9 @@
 3. 基于 ACP 实现 P3 卡片审批
 4. 补充异步任务队列与调度
 5. 稳定发布下一版本
+
+## 7. 当前阻塞 · Current blocker
+
+- 官方 `@deepseek-ai/dsh-acp@0.0.1-rc.1` 与 `@deepseek-ai/dsh-sdk-client@0.0.1-rc.1` 均依赖 `@deepseek-ai/dsh-type-meta`，但该传递依赖在 npm registry 返回 404。
+- 因此当前无法安装 ACP/SDK 客户端，P2 真正的 dsh fork / resume / replay、P3 卡片审批与调度均缺少可靠后端协议。
+- 现有 headless fallback 只能实现“会话历史注入”的近似续跑，不是 dsh 原生 session 恢复。
