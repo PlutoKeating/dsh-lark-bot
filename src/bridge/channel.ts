@@ -56,6 +56,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       streamThrottleMs: 400,
     },
     includeRawEvent: true,
+    resolveChatMode: true,
     handshakeTimeoutMs: 8_000,
     httpTimeoutMs: 30_000,
     respectProxyEnv: true,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   LarkChannel,
+  LarkChannelOptions,
   NormalizedMessage,
   SendOptions,
 } from '@larksuite/channel';
@@ -19,7 +20,8 @@ function makeChannel(): {
   channel: LarkChannel;
   handlers: Handlers;
   sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }>;
-  createChannel: () => LarkChannel;
+  createChannel: (options?: LarkChannelOptions) => LarkChannel;
+  createOptions: Record<string, unknown> | undefined;
 } {
   const handlers: Handlers = {};
   const sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }> = [];
@@ -39,11 +41,18 @@ function makeChannel(): {
     stream: vi.fn().mockResolvedValue(undefined),
   } as unknown as LarkChannel;
 
+  let createOptions: Record<string, unknown> | undefined;
   return {
     channel,
     handlers,
     sent,
-    createChannel: () => channel,
+    get createOptions() {
+      return createOptions;
+    },
+    createChannel: (options) => {
+      createOptions = options as Record<string, unknown> | undefined;
+      return channel;
+    },
   };
 }
 
@@ -103,6 +112,8 @@ describe('startChannel', () => {
       defaultWorkspace: '/tmp/project',
       createChannel: fake.createChannel,
     });
+
+    expect(fake.createOptions?.resolveChatMode).toBe(true);
 
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
       message({ content: '/status' }),

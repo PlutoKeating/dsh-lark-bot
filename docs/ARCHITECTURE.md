@@ -42,7 +42,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 
 ## 关键决策 · Key Decisions
 
-1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），免公网服务器、免域名、免内网穿透。
+1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。
 2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端（当前 headless subprocess fallback，ACP 正式接入规划在 P2），未来可切换 claude / codex / opencode。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
 
