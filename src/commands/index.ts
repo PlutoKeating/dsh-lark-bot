@@ -1,0 +1,168 @@
+import { resolve } from 'node:path';
+import type { ActiveRuns } from '../bot/active-runs.js';
+import type { SessionStore } from '../session/store.js';
+import type { WorkspaceStore } from '../workspace/store.js';
+
+export interface CommandChannel {
+  sendMarkdown(chatId: string, markdown: string, options?: { replyTo?: string }): Promise<void>;
+}
+
+export interface CommandContext {
+  scope: string;
+  chatId: string;
+  messageId: string;
+  threadId: string | undefined;
+  chatMode: 'p2p' | 'group' | 'topic';
+  sessions: SessionStore;
+  workspaces: WorkspaceStore;
+  activeRuns: ActiveRuns;
+  channel: CommandChannel;
+  defaultWorkspace: string;
+}
+
+type Handler = (args: string, ctx: CommandContext) => Promise<void>;
+
+const HELP = [
+  '**dsh-lark-bot 命令**',
+  '',
+  '- `/new` `/reset` — 开始新会话',
+  '- `/cd <path>` — 切换工作目录并重置会话',
+  '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
+  '- `/status` — 查看当前状态',
+  '- `/stop` — 终止当前任务',
+  '- `/help` — 显示本帮助',
+].join('\n');
+
+async function reply(ctx: CommandContext, markdown: string): Promise<void> {
+  await ctx.channel.sendMarkdown(ctx.chatId, markdown, {
+    replyTo: ctx.messageId,
+  });
+}
+
+async function handleNew(_args: string, ctx: CommandContext): Promise<void> {
+  const wasRunning = await ctx.activeRuns.interrupt(ctx.scope);
+  ctx.sessions.clear(ctx.scope);
+  await reply(ctx, wasRunning ? '已中断当前任务并开始新会话。' : '已开始新会话。');
+}
+
+async function handleCd(args: string, ctx: CommandContext): Promise<void> {
+  const path = args.trim();
+  if (!path) {
+    await reply(ctx, '用法：`/cd <path>`');
+    return;
+  }
+  const cwd = resolve(path);
+  await ctx.activeRuns.interrupt(ctx.scope);
+  ctx.workspaces.setCwd(ctx.scope, cwd);
+  ctx.sessions.clear(ctx.scope);
+  await reply(ctx, `已切换工作目录：\`${cwd}\`，会话已重置。`);
+}
+
+async function handleWs(args: string, ctx: CommandContext): Promise<void> {
+  const [sub, ...rest] = args.trim().split(/\s+/);
+  const name = rest.join(' ').trim();
+
+  if (!sub || sub === 'list') {
+    const current = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+    const named = ctx.workspaces.listNamed();
+    const lines = Object.entries(named).map(
+      ([key, value]) => `- **${key}** → \`${value}\`${value === current ? ' ← 当前' : ''}`,
+    );
+    await reply(
+      ctx,
+      [
+        `当前 cwd：\`${current}\``,
+        '',
+        ...(lines.length > 0 ? lines : ['暂无命名工作空间。']),
+      ].join('\n'),
+    );
+    return;
+  }
+
+  if (sub === 'save') {
+    if (!name) {
+      await reply(ctx, '用法：`/ws save <name>`');
+      return;
+    }
+    const current = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+    ctx.workspaces.saveNamed(name, current);
+    await reply(ctx, `已保存工作空间：**${name}** → \`${current}\``);
+    return;
+  }
+
+  if (sub === 'use') {
+    if (!name) {
+      await reply(ctx, '用法：`/ws use <name>`');
+      return;
+    }
+    const cwd = ctx.workspaces.getNamed(name);
+    if (!cwd) {
+      await reply(ctx, `未找到工作空间：**${name}**`);
+      return;
+    }
+    await ctx.activeRuns.interrupt(ctx.scope);
+    ctx.workspaces.setCwd(ctx.scope, cwd);
+    ctx.sessions.clear(ctx.scope);
+    await reply(ctx, `已切换到工作空间：**${name}** → \`${cwd}\``);
+    return;
+  }
+
+  if (sub === 'remove') {
+    if (!name) {
+      await reply(ctx, '用法：`/ws remove <name>`');
+      return;
+    }
+    const removed = ctx.workspaces.removeNamed(name);
+    await reply(ctx, removed ? `已删除工作空间：**${name}**` : `未找到工作空间：**${name}**`);
+    return;
+  }
+
+  await reply(ctx, '未知 `/ws` 子命令，请使用 list / save / use / remove。');
+}
+
+async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
+  const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+  const session = ctx.sessions.getRaw(ctx.scope)?.sessionId ?? '(无)';
+  const running = Boolean(ctx.activeRuns.get(ctx.scope));
+  const scopeLabel =
+    ctx.chatMode === 'topic' ? `${ctx.scope}（话题独立 session）` : ctx.scope;
+
+  await reply(
+    ctx,
+    [
+      `🧭 **scope**: \`${scopeLabel}\``,
+      `📁 **cwd**: \`${cwd}\``,
+      `🔗 **session**: \`${session}\``,
+      `🏃 **active run**: ${running ? 'yes' : 'no'}`,
+    ].join('\n'),
+  );
+}
+
+async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
+  const stopped = await ctx.activeRuns.interrupt(ctx.scope);
+  await reply(ctx, stopped ? '已请求终止当前任务。' : '当前没有运行中的任务。');
+}
+
+async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
+  await reply(ctx, HELP);
+}
+
+const handlers: Record<string, Handler> = {
+  '/new': handleNew,
+  '/reset': handleNew,
+  '/cd': handleCd,
+  '/ws': handleWs,
+  '/status': handleStatus,
+  '/stop': handleStop,
+  '/help': handleHelp,
+};
+
+export async function tryHandleCommand(text: string, ctx: CommandContext): Promise<boolean> {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('/')) return false;
+  const [command, ...rest] = trimmed.split(/\s+/);
+  const handler = handlers[command ?? ''];
+  if (!handler) return false;
+  await handler(rest.join(' '), ctx);
+  return true;
+}
