@@ -5,6 +5,7 @@ export interface CardStreamController {
 }
 
 export interface StreamingChannel extends CommandChannel {
+  sendCard?(chatId: string, card: object): Promise<void>;
   streamCard(
     chatId: string,
     initial: object,

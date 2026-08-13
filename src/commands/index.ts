@@ -4,6 +4,7 @@ import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
+import { renderWorkspaceCard } from '../card/workspace-card.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -11,6 +12,7 @@ export interface CommandChannel {
     markdown: string,
     options?: { replyTo?: string },
   ): Promise<void>;
+  sendCard?(chatId: string, card: object): Promise<void>;
 }
 
 export interface CommandContext {
@@ -77,6 +79,10 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
   if (!sub || sub === 'list') {
     const current = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
     const named = ctx.workspaces.listNamed();
+    if (ctx.channel.sendCard) {
+      await ctx.channel.sendCard(ctx.chatId, renderWorkspaceCard({ current, named }));
+      return;
+    }
     const lines = Object.entries(named).map(
       ([key, value]) => `- **${key}** → \`${value}\`${value === current ? ' ← 当前' : ''}`,
     );
