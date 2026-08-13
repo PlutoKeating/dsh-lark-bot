@@ -20,6 +20,8 @@ describe('WorkspaceStore', () => {
 
       expect(reloaded.cwdFor('chat-a')).toBe('/tmp/project-a');
       expect(reloaded.getNamed('api')).toBe('/tmp/project-api');
+      expect(reloaded.listIndex()).toHaveLength(1);
+      expect(reloaded.listIndex()[0]?.name).toBe('api');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

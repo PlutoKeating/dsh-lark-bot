@@ -79,8 +79,9 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
   if (!sub || sub === 'list') {
     const current = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
     const named = ctx.workspaces.listNamed();
+    const index = ctx.workspaces.listIndex();
     if (ctx.channel.sendCard) {
-      await ctx.channel.sendCard(ctx.chatId, renderWorkspaceCard({ current, named }));
+      await ctx.channel.sendCard(ctx.chatId, renderWorkspaceCard({ current, index }));
       return;
     }
     const lines = Object.entries(named).map(
@@ -120,6 +121,7 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
     }
     await ctx.activeRuns.interrupt(ctx.scope);
     ctx.workspaces.setCwd(ctx.scope, cwd);
+    ctx.workspaces.touchNamed(name);
     ctx.sessions.clear(ctx.scope);
     await reply(ctx, `已切换到工作空间：**${name}** → \`${cwd}\``);
     return;

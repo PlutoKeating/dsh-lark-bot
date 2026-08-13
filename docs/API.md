@@ -138,6 +138,8 @@ export class GitWorktreeManager {
 
 当当前工作目录是 Git 仓库时，`runAgentBatch` 会为每个 scope 在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree；非 Git 目录保持原路径。若 base 下有 `.dsh-lark/AGENTS.md` 或 `AGENTS.md` 且目标 worktree 没有，则复制为目标根目录 `AGENTS.md`。
 
+`src/workspace/store.ts` 现在维护命名工作区的 `lastUsed` 索引；`/ws list` 按最近使用排序，优先展示飞书导航卡片。
+
 `/ws list` 会优先通过 `sendCard` 发送工作空间导航卡片；不支持卡片的测试通道回退为 Markdown。
 
 ## 3. 结构化日志 · Structured logging

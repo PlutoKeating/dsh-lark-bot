@@ -5,7 +5,10 @@ describe('renderWorkspaceCard', () => {
   it('renders current cwd and named workspaces as markdown', () => {
     const card = renderWorkspaceCard({
       current: '/tmp/project',
-      named: { web: '/tmp/web', api: '/tmp/api' },
+      index: [
+        { name: 'web', cwd: '/tmp/web', lastUsed: 1 },
+        { name: 'api', cwd: '/tmp/api', lastUsed: undefined },
+      ],
     }) as { body: { elements: Array<{ content?: string }> } };
 
     const markdown = card.body.elements[0]?.content ?? '';

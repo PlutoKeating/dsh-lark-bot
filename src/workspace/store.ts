@@ -5,10 +5,11 @@ import { log } from '../core/logger.js';
 interface WorkspaceData {
   chats: Record<string, { cwd: string }>;
   named: Record<string, string>;
+  lastUsed: Record<string, number>;
 }
 
 export class WorkspaceStore {
-  private data: WorkspaceData = { chats: {}, named: {} };
+  private data: WorkspaceData = { chats: {}, named: {}, lastUsed: {} };
   private saving: Promise<void> = Promise.resolve();
   private readonly path: string;
 
@@ -23,6 +24,7 @@ export class WorkspaceStore {
       this.data = {
         chats: parsed.chats ?? {},
         named: parsed.named ?? {},
+        lastUsed: parsed.lastUsed ?? {},
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
@@ -56,14 +58,28 @@ export class WorkspaceStore {
 
   saveNamed(name: string, cwd: string): void {
     this.data.named[name] = cwd;
+    this.data.lastUsed[name] = Date.now();
+    this.schedulePersist();
+  }
+
+  touchNamed(name: string): void {
+    if (!(name in this.data.named)) return;
+    this.data.lastUsed[name] = Date.now();
     this.schedulePersist();
   }
 
   removeNamed(name: string): boolean {
     if (!(name in this.data.named)) return false;
     delete this.data.named[name];
+    delete this.data.lastUsed[name];
     this.schedulePersist();
     return true;
+  }
+
+  listIndex(): Array<{ name: string; cwd: string; lastUsed: number | undefined }> {
+    return Object.entries(this.data.named)
+      .map(([name, cwd]) => ({ name, cwd, lastUsed: this.data.lastUsed[name] }))
+      .sort((a, b) => (b.lastUsed ?? 0) - (a.lastUsed ?? 0));
   }
 
   async flush(): Promise<void> {
@@ -74,6 +90,7 @@ export class WorkspaceStore {
     const snapshot: WorkspaceData = {
       chats: { ...this.data.chats },
       named: { ...this.data.named },
+      lastUsed: { ...this.data.lastUsed },
     };
     this.saving = this.saving
       .then(async () => {
