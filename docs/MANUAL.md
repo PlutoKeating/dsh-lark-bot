@@ -81,6 +81,7 @@ dsh-lark-bot doctor
 会检查：
 
 - profile 是否可读
+- 访问白名单用户数 / 群聊数
 - 工作目录是否存在
 - dsh 是否真实可用
 

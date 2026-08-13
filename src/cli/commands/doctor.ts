@@ -46,6 +46,8 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
         `tenant=${profile.tenant}`,
         `app_id=${profile.accounts.appId}`,
         `app_secret=${profile.accounts.appSecret ? 'present' : 'missing'}`,
+        `allowed_users=${profile.access.allowedUsers.length}`,
+        `allowed_chats=${profile.access.allowedChats.length}`,
       ].join(' '),
     );
     if (!profile.accounts.appId || !profile.accounts.appSecret) critical = true;
