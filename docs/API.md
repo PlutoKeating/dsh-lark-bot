@@ -78,6 +78,18 @@ export interface ProfileConfig {
 
 `ConfigStore` 负责读取 `~/.dsh-lark/config.json`，并保存当前 active profile。App Secret 以文件权限 `0600` 写入本机。
 
+`src/bot/run-policy.ts` 提供内存级 `RunPolicyStore`，按 scope 覆盖运行超时：
+
+```ts
+export class RunPolicyStore {
+  get(scope: string): number | undefined;
+  set(scope: string, runTimeoutMs: number): void;
+  clear(scope: string): boolean;
+}
+```
+
+飞书命令 `/timeout [N|off|default]` 会读写该 store，`/timeout` 的覆盖值优先于 profile / 环境变量默认值。
+
 ## 2.2 扫码绑定 · QR onboarding
 
 `src/onboard/registration.ts` 提供：
@@ -163,5 +175,7 @@ dsh 后端只允许在 `src/adapters/` 中依赖 dsh 接口，桥接层和会话
 
 - `dsh-lark-bot start`：前台启动桥接
 - `dsh-lark-bot doctor`：运行本地诊断
+
+飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/stop`、`/timeout`、`/help`。
 
 两个命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。后续将补充 `profile`、`ps`、`kill` 等进程与配置管理命令。
