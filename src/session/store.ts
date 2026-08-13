@@ -3,8 +3,14 @@ import { writeFileAtomic } from '../platform/atomic-write.js';
 import { log } from '../core/logger.js';
 
 export interface SessionRecord {
-  sessionId: string;
+  sessionId: string | undefined;
   cwd: string;
+  messages: ChatMessage[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 interface SessionData {
@@ -37,8 +43,43 @@ export class SessionStore {
     return this.data.chats[scopeId];
   }
 
-  set(scopeId: string, sessionId: string, cwd: string): void {
-    this.data.chats[scopeId] = { sessionId, cwd };
+  set(scopeId: string, sessionId: string | undefined, cwd: string): void {
+    const existing = this.data.chats[scopeId];
+    this.data.chats[scopeId] = {
+      sessionId: sessionId ?? existing?.sessionId,
+      cwd,
+      messages: existing?.messages ?? [],
+    };
+    this.schedulePersist();
+  }
+
+  historyFor(scopeId: string, cwd: string): ChatMessage[] {
+    const record = this.data.chats[scopeId];
+    return record && record.cwd === cwd ? record.messages : [];
+  }
+
+  recordExchange(
+    scopeId: string,
+    cwd: string,
+    userMessages: string[],
+    assistantMessage: string | undefined,
+  ): void {
+    const existing = this.data.chats[scopeId];
+    const next: ChatMessage[] = [...(existing?.messages ?? [])];
+
+    for (const content of userMessages) {
+      if (content.trim()) next.push({ role: 'user', content });
+    }
+
+    if (assistantMessage?.trim()) {
+      next.push({ role: 'assistant', content: assistantMessage });
+    }
+
+    this.data.chats[scopeId] = {
+      sessionId: existing?.sessionId,
+      cwd,
+      messages: next.slice(-40),
+    };
     this.schedulePersist();
   }
 
@@ -73,7 +114,15 @@ export class SessionStore {
 
   private snapshot(): SessionData {
     return {
-      chats: { ...this.data.chats },
+      chats: Object.fromEntries(
+        Object.entries(this.data.chats).map(([key, record]) => [
+          key,
+          {
+            ...record,
+            messages: [...record.messages],
+          },
+        ]),
+      ),
     };
   }
 }

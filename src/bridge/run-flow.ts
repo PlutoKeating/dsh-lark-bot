@@ -51,7 +51,8 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     : { cwd: requestedCwd };
   const cwd = workspace.cwd;
   const sessionId = input.sessions.resumeFor(input.scope, cwd);
-  const prompt = input.messages.join('\n\n');
+  const history = input.sessions.historyFor(input.scope, cwd);
+  const prompt = buildPrompt(history, input.messages);
   const runId = randomUUID();
 
   const run = input.adapter.run({
@@ -69,6 +70,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   const stopRequested = { value: false };
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
   let timedOut = false;
+  let assistantOutput = '';
 
   try {
     await input.channel.streamCard(
@@ -79,6 +81,11 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           for await (const event of run.events) {
             if (timedOut) return;
             state = applyEvent(state, event, stopRequested);
+            if (event.type === 'final_text') {
+              assistantOutput = event.content;
+            } else if (event.type === 'text') {
+              assistantOutput += event.delta;
+            }
             if (event.type === 'system' && event.sessionId) {
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
             }
@@ -115,6 +122,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       },
       replyOptions,
     );
+    input.sessions.recordExchange(input.scope, cwd, input.messages, assistantOutput);
   } catch (error) {
     log.fail('run-flow', error, { scope: input.scope, runId });
     state = markInterrupted(state);
@@ -128,6 +136,25 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   } finally {
     input.activeRuns.delete(input.scope);
   }
+}
+
+function buildPrompt(
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: string[],
+): string {
+  if (history.length === 0) return messages.join('\n\n');
+
+  const transcript = history
+    .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
+    .join('\n\n');
+
+  return [
+    'Continue the conversation using the history below.',
+    '',
+    transcript,
+    '',
+    `Current user message:\n${messages.join('\n\n')}`,
+  ].join('\n');
 }
 
 function applyEvent(

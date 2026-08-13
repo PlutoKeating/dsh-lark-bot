@@ -12,6 +12,7 @@ describe('SessionStore', () => {
     try {
       const store = new SessionStore(path);
       store.set('chat-a', 'session-1', '/tmp/project-a');
+      store.recordExchange('chat-a', '/tmp/project-a', ['hello'], 'hi there');
       await store.flush();
 
       const reloaded = new SessionStore(path);
@@ -19,6 +20,10 @@ describe('SessionStore', () => {
 
       expect(reloaded.resumeFor('chat-a', '/tmp/project-a')).toBe('session-1');
       expect(reloaded.resumeFor('chat-a', '/tmp/other')).toBeUndefined();
+      expect(reloaded.historyFor('chat-a', '/tmp/project-a')).toEqual([
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi there' },
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
