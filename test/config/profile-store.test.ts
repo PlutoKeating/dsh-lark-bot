@@ -17,6 +17,8 @@ describe('ConfigStore', () => {
         appId: 'cli_test',
         appSecret: 'secret',
         workspace: '/tmp/project',
+        stopGraceMs: 2_000,
+        runTimeoutMs: 60_000,
       });
 
       const reloaded = new ConfigStore(path);
@@ -26,6 +28,8 @@ describe('ConfigStore', () => {
       expect(profile?.agentKind).toBe('dsh');
       expect(profile?.accounts.appId).toBe('cli_test');
       expect(profile?.workspaces.default).toBe('/tmp/project');
+      expect(profile?.preferences.stopGraceMs).toBe(2_000);
+      expect(profile?.preferences.runTimeoutMs).toBe(60_000);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

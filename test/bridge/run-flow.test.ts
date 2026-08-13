@@ -85,4 +85,62 @@ describe('runAgentBatch', () => {
     expect(activeRuns.get('chat-a')).toBeUndefined();
     expect(fake.updates.length).toBeGreaterThan(2);
   });
+
+  it('marks the card idle-timeout and stops the run after the wall-clock deadline', async () => {
+    let release: (() => void) | undefined;
+    const stopped = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stop = vi.fn(async () => {
+      release?.();
+    });
+
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(): AgentRun {
+        return {
+          runId: 'run-timeout',
+          events: (async function* () {
+            yield { type: 'text', delta: 'still going' };
+            await stopped;
+          })(),
+          stop,
+          waitForExit: async () => true,
+        };
+      },
+    };
+
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-timeout',
+      chatId: 'chat-timeout',
+      messages: ['long task'],
+      adapter,
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 10,
+    });
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    const lastCard = fake.updates[fake.updates.length - 1] as {
+      body?: { elements?: Array<{ content?: string }> };
+    };
+    const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
+    expect(lastText).toContain('无响应');
+    expect(activeRuns.get('chat-timeout')).toBeUndefined();
+  });
 });

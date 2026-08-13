@@ -27,6 +27,7 @@ export interface RunFlowInput {
   defaultWorkspace: string;
   model?: string;
   stopGraceMs?: number;
+  runTimeoutMs?: number;
   replyTo?: string;
 }
 
@@ -58,22 +59,51 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
 
   let state: RunState = initialState;
   const stopRequested = { value: false };
+  const timeoutMs = input.runTimeoutMs ?? 0;
+  let timedOut = false;
 
   try {
     await input.channel.streamCard(
       input.chatId,
       renderCard(state),
       async (controller) => {
-        for await (const event of run.events) {
-          state = applyEvent(state, event, stopRequested);
-          if (event.type === 'system' && event.sessionId) {
-            input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
+        const consume = async (): Promise<void> => {
+          for await (const event of run.events) {
+            if (timedOut) return;
+            state = applyEvent(state, event, stopRequested);
+            if (event.type === 'system' && event.sessionId) {
+              input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
+            }
+            await controller.update(renderCard(state));
           }
-          await controller.update(renderCard(state));
-        }
+        };
 
-        state = finalizeIfRunning(state);
-        await controller.update(renderCard(state));
+        let timeoutTimer: NodeJS.Timeout | undefined;
+        const timeoutPromise =
+          timeoutMs > 0
+            ? new Promise<void>((resolve) => {
+                timeoutTimer = setTimeout(() => {
+                  timedOut = true;
+                  void run.stop();
+                  resolve();
+                }, timeoutMs);
+              })
+            : undefined;
+
+        try {
+          if (timeoutPromise) {
+            await Promise.race([consume(), timeoutPromise]);
+          } else {
+            await consume();
+          }
+
+          state = timedOut
+            ? markIdleTimeout(state, timeoutMs / 60_000)
+            : finalizeIfRunning(state);
+          await controller.update(renderCard(state));
+        } finally {
+          if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+        }
       },
       replyOptions,
     );

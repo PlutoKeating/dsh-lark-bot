@@ -14,6 +14,7 @@ export interface RuntimeEnv {
   provider: string;
   model: string;
   runTimeoutMs: number;
+  stopGraceMs: number;
 }
 
 const DEFAULTS = {
@@ -23,6 +24,7 @@ const DEFAULTS = {
   provider: 'deepseek-official',
   model: 'deepseek-v4-flash',
   runTimeoutMs: 300_000,
+  stopGraceMs: 5_000,
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -57,6 +59,16 @@ function parseTimeout(value: string | undefined): number {
   return parsed;
 }
 
+function parseStopGrace(value: string | undefined): number {
+  const raw = value?.trim();
+  if (!raw) return DEFAULTS.stopGraceMs;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`DSH_LARK_STOP_GRACE_MS must be a non-negative integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -74,5 +86,6 @@ export function loadRuntimeEnv(
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
+    stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
   };
 }

@@ -18,6 +18,7 @@ export interface ProfileConfig {
   preferences: {
     model: string | undefined;
     stopGraceMs: number | undefined;
+    runTimeoutMs: number | undefined;
   };
 }
 
@@ -71,6 +72,7 @@ export class ConfigStore {
       workspace?: string;
       model?: string;
       stopGraceMs?: number;
+      runTimeoutMs?: number;
     },
   ): Promise<void> {
     const data = this.getData();
@@ -89,6 +91,7 @@ export class ConfigStore {
       preferences: {
         model: input.model ?? existing?.preferences.model ?? undefined,
         stopGraceMs: input.stopGraceMs ?? existing?.preferences.stopGraceMs ?? undefined,
+        runTimeoutMs: input.runTimeoutMs ?? existing?.preferences.runTimeoutMs ?? undefined,
       },
     };
     data.profiles[name] = profile;

@@ -12,6 +12,7 @@ describe('loadRuntimeEnv', () => {
     expect(env.provider).toBe('deepseek-official');
     expect(env.model).toBe('deepseek-v4-flash');
     expect(env.runTimeoutMs).toBe(300_000);
+    expect(env.stopGraceMs).toBe(5_000);
   });
 
   it('parses explicit command args and tenant', () => {
@@ -19,11 +20,13 @@ describe('loadRuntimeEnv', () => {
       DSH_LARK_TENANT: 'lark',
       DSH_LARK_DSH_ARGS: 'dist/bin.js, agent.cordis.yml',
       DSH_LARK_RUN_TIMEOUT_MS: '120000',
+      DSH_LARK_STOP_GRACE_MS: '2000',
     });
 
     expect(env.tenant).toBe('lark');
     expect(env.dshArgs).toEqual(['dist/bin.js', 'agent.cordis.yml']);
     expect(env.runTimeoutMs).toBe(120_000);
+    expect(env.stopGraceMs).toBe(2_000);
   });
 
   it('rejects invalid tenant and timeout values', () => {
@@ -32,6 +35,9 @@ describe('loadRuntimeEnv', () => {
     );
     expect(() => loadRuntimeEnv({ DSH_LARK_RUN_TIMEOUT_MS: '-1' })).toThrow(
       /DSH_LARK_RUN_TIMEOUT_MS/,
+    );
+    expect(() => loadRuntimeEnv({ DSH_LARK_STOP_GRACE_MS: 'invalid' })).toThrow(
+      /DSH_LARK_STOP_GRACE_MS/,
     );
   });
 });

@@ -37,7 +37,8 @@ export async function runStart(options: StartOptions): Promise<void> {
       appId: env.appId,
       appSecret: env.appSecret,
       model: env.model,
-      stopGraceMs: env.runTimeoutMs,
+      stopGraceMs: env.stopGraceMs,
+      runTimeoutMs: env.runTimeoutMs,
     };
     if (env.workspace !== undefined) profileInput.workspace = env.workspace;
     await configStore.saveProfile(profileName, profileInput);
@@ -52,7 +53,8 @@ export async function runStart(options: StartOptions): Promise<void> {
         appId: created.appId,
         appSecret: created.appSecret,
         model: env.model,
-        stopGraceMs: env.runTimeoutMs,
+        stopGraceMs: env.stopGraceMs,
+        runTimeoutMs: env.runTimeoutMs,
       };
       if (env.workspace !== undefined) onboardingProfile.workspace = env.workspace;
       await configStore.saveProfile(profileName, onboardingProfile);
@@ -85,6 +87,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   const adapterOptions: { command: string; args: string[]; stopGraceMs?: number } = {
     command: env.dshCommand,
     args: env.dshArgs,
+    stopGraceMs: env.stopGraceMs,
   };
   if (activeProfile.preferences.stopGraceMs !== undefined) {
     Object.assign(adapterOptions, { stopGraceMs: activeProfile.preferences.stopGraceMs });
@@ -110,6 +113,7 @@ export async function runStart(options: StartOptions): Promise<void> {
         channel: streaming,
         defaultWorkspace,
         replyTo: first.messageId,
+        runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
       };
       if (activeProfile.preferences.model !== undefined) runInput.model = activeProfile.preferences.model;
       if (activeProfile.preferences.stopGraceMs !== undefined) {
