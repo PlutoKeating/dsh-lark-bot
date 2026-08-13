@@ -93,6 +93,7 @@
 | **tags** | `typescript`、`chatbot`、`lark`、`feishu`、`deepseek`、`deepseek-harness`、`dsh-plugin`、`messaging`、`bot`、`bridge`、`dsh` |
 | **目录结构** | 参考仓库统一放 `reference/`（gitignored，不提交） |
 | **工作流** | 遵循根目录 `AGENTS.md`（发起人私有 gist 的规范） |
+| **生态交付** | 满足 `docs/ECOSYSTEM.md`（package.json / README 九章节 / 风险披露 / DSH 版本声明 / 兼容性自检） |
 | **代码变更** | 所有源码改动走 coding agent CLI（MiMoCode 等），不直接手写源码 |
 
 ---
@@ -121,6 +122,7 @@
 | [`README.md`](../README.md) | 项目概览（双语） |
 | [`architecture.md`](architecture.md) | 架构分层与目录映射 |
 | [`adapter-notes.md`](adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线） |
+| [`ECOSYSTEM.md`](ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读） |
 | [`RESEARCH.md`](RESEARCH.md) | 调研报告（官方现状、参考项目、可行性、技术差异） |
 | [`roadmap.md`](roadmap.md) | 路线图与里程碑 |
 | [`../AGENTS.md`](../AGENTS.md) | AI Agent 开发工作流规范 |

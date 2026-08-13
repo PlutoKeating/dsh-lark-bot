@@ -46,6 +46,49 @@
 - **Native Feishu experience**: streaming cards, interactive buttons, images / files, doc comments.
 - **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
+## 兼容性 · Compatibility
+
+- **DeepSeek Harness（`dsh`）**：developer preview（v0.1，2026-08 发布），通过 ACP / JSON-RPC SDK 接入。
+- **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
+- **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
+- 支持的具体 dsh mainline commit 将在 P1 实现后锁定并在此声明（dsh 接口漂移频繁，需定期复验）。
+
+## 安装与卸载 · Install / Uninstall
+
+> 🚧 P1 实现后补充。目标：clone 后 `pnpm install && pnpm build && pnpm start`，或 `npx dsh-lark-bot start` 一键启动；卸载 `npm uninstall -g dsh-lark-bot` 并清理 `~/.dsh-lark/` 配置目录。
+
+## 快速开始 · Quick Start
+
+> 🚧 P1 实现后补充。预期流程：启动 → 飞书扫码绑定 PersonalAgent 应用 → 私聊发消息 → 收到 `dsh` 的流式回复。
+
+## 配置 · Configuration
+
+> 🚧 P1 实现后补充。预期：`~/.dsh-lark/config.json` 存储 profile / agent / 工作区 / 访问控制；环境变量支持 `DSH_LARK_*`。
+
+## 权限与数据 · Permissions & Data
+
+本工具在**本机**运行，安装前请知悉它会访问：
+
+- **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
+- **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
+- **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
+- **进程**：spawn 本机 `dsh` 子进程执行 agent 任务。
+
+所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
+
+## 排障 · Troubleshooting
+
+> 🚧 P1 实现后补充。预期覆盖：bot 静默、agent 无响应（`/status`、`/timeout`）、长连接断线重连、日志位置（`~/.dsh-lark/logs/`）。
+
+## 开发 · Development
+
+> 🚧 P1 实现后补充。预期：TypeScript + pnpm；`pnpm test` / `pnpm typecheck` / `pnpm build`；详见 `AGENTS.md` 与 `docs/`。
+
+## 许可与安全 · License & Security
+
+- **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
+- **安全报告**：如发现安全漏洞，请通过 GitHub Security Advisory 私下报告，勿公开 issue。
+
 ## 文档 · Documentation
 
 > 接手本项目的工程师：**先读 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) 和 [`docs/RESEARCH.md`](docs/RESEARCH.md)**，即可完整理解项目诉求与来龙去脉，无需线下沟通。
@@ -57,6 +100,7 @@
 | [`docs/RESEARCH.md`](docs/RESEARCH.md) | 调研报告：官方现状、参考项目、可行性、技术差异<br>Research: official status, references, feasibility |
 | [`docs/architecture.md`](docs/architecture.md) | 架构分层与目录映射<br>Architecture layering & directory mapping |
 | [`docs/adapter-notes.md`](docs/adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线）<br>How to plug the dsh adapter |
+| [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读）<br>Ecosystem & delivery standards (for engineers) |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图与里程碑<br>Roadmap & milestones |
 | [`AGENTS.md`](AGENTS.md) | AI Agent 开发工作流规范<br>AI agent workflow spec |
 
