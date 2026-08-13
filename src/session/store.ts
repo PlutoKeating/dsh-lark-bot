@@ -31,7 +31,16 @@ export class SessionStore {
       const raw = await readFile(this.path, 'utf8');
       const parsed = JSON.parse(raw) as Partial<SessionData>;
       this.data = {
-        chats: parsed.chats ?? {},
+        chats: Object.fromEntries(
+          Object.entries(parsed.chats ?? {}).map(([scope, record]) => [
+            scope,
+            {
+              sessionId: record.sessionId,
+              cwd: record.cwd,
+              messages: record.messages ?? [],
+            },
+          ]),
+        ),
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
