@@ -11,6 +11,7 @@ import { resolveAppPaths } from '../../config/app-paths.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
 import { log } from '../../core/logger.js';
+import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { SessionStore } from '../../session/store.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 import type { StartOptions } from '../../cli.js';
@@ -44,23 +45,35 @@ export async function runStart(options: StartOptions): Promise<void> {
 
   const profile = configStore.getProfile(profileName);
   if (!profile) {
-    process.stderr.write(
-      [
-        '未找到可用配置。请先通过以下任一方式提供飞书应用凭据：',
-        '',
-        '  dsh-lark-bot start --app-id cli_xxx --app-secret <secret>',
-        '  或设置 DSH_LARK_APP_ID / DSH_LARK_APP_SECRET',
-        '',
-        '后续版本将支持终端二维码自动创建 PersonalAgent 应用。',
-      ].join('\n') + '\n',
-    );
+    try {
+      const created = await onboardPersonalAgent();
+      const onboardingProfile: Parameters<ConfigStore['saveProfile']>[1] = {
+        tenant: created.tenant,
+        appId: created.appId,
+        appSecret: created.appSecret,
+        model: env.model,
+        stopGraceMs: env.runTimeoutMs,
+      };
+      if (env.workspace !== undefined) onboardingProfile.workspace = env.workspace;
+      await configStore.saveProfile(profileName, onboardingProfile);
+    } catch (error) {
+      log.fail('onboarding', error);
+      process.stderr.write('扫码创建应用失败，未写入本地配置。\n');
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const activeProfile = configStore.getProfile(profileName);
+  if (!activeProfile) {
+    process.stderr.write('本地配置读取失败，请检查后重试。\n');
     process.exitCode = 1;
     return;
   }
 
   const defaultWorkspace =
     options.workspace ??
-    profile.workspaces.default ??
+    activeProfile.workspaces.default ??
     env.workspace ??
     paths.profilePath(profileName, 'workspace');
   await mkdir(defaultWorkspace, { recursive: true });
@@ -73,8 +86,8 @@ export async function runStart(options: StartOptions): Promise<void> {
     command: env.dshCommand,
     args: env.dshArgs,
   };
-  if (profile.preferences.stopGraceMs !== undefined) {
-    Object.assign(adapterOptions, { stopGraceMs: profile.preferences.stopGraceMs });
+  if (activeProfile.preferences.stopGraceMs !== undefined) {
+    Object.assign(adapterOptions, { stopGraceMs: activeProfile.preferences.stopGraceMs });
   }
   const adapter = new DshAdapter(adapterOptions);
   const activeRuns = new ActiveRuns();
@@ -98,9 +111,9 @@ export async function runStart(options: StartOptions): Promise<void> {
         defaultWorkspace,
         replyTo: first.messageId,
       };
-      if (profile.preferences.model !== undefined) runInput.model = profile.preferences.model;
-      if (profile.preferences.stopGraceMs !== undefined) {
-        runInput.stopGraceMs = profile.preferences.stopGraceMs;
+      if (activeProfile.preferences.model !== undefined) runInput.model = activeProfile.preferences.model;
+      if (activeProfile.preferences.stopGraceMs !== undefined) {
+        runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
       }
       await runAgentBatch(runInput);
     } finally {
@@ -109,9 +122,9 @@ export async function runStart(options: StartOptions): Promise<void> {
   });
 
   const channelInput: Parameters<typeof startChannel>[0] = {
-    appId: profile.accounts.appId,
-    appSecret: profile.accounts.appSecret,
-    tenant: profile.tenant,
+    appId: activeProfile.accounts.appId,
+    appSecret: activeProfile.accounts.appSecret,
+    tenant: activeProfile.tenant,
     adapter,
     sessions,
     workspaces,
@@ -119,9 +132,9 @@ export async function runStart(options: StartOptions): Promise<void> {
     pending,
     defaultWorkspace,
   };
-  if (profile.preferences.model !== undefined) channelInput.model = profile.preferences.model;
-  if (profile.preferences.stopGraceMs !== undefined) {
-    channelInput.stopGraceMs = profile.preferences.stopGraceMs;
+  if (activeProfile.preferences.model !== undefined) channelInput.model = activeProfile.preferences.model;
+  if (activeProfile.preferences.stopGraceMs !== undefined) {
+    channelInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
   }
   const bridge = await startChannel(channelInput);
   streaming = adaptLarkChannel(bridge.channel);
@@ -129,7 +142,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   log.info('cli', 'started', {
     profile: profileName,
     home: paths.root,
-    tenant: profile.tenant,
+    tenant: activeProfile.tenant,
     workspace: defaultWorkspace,
   });
   process.stdout.write(`dsh-lark-bot 已启动，profile=${profileName}\n`);
