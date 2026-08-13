@@ -98,7 +98,7 @@ export class RunPolicyStore {
 
 `src/config/access-manager.ts` 提供 `AccessManager`，负责把 `/invite user|admin|group <id>` 的变更持久化到当前 profile 的访问白名单。
 
-`src/session/store.ts` 的 `SessionStore` 现在会保存每个 scope 最近 40 条对话消息；`runAgentBatch` 会把这些历史拼入下一次 dsh prompt，以弥补 dsh headless 无状态进程的上下文缺失。
+`src/session/store.ts` 的 `SessionStore` 现在会保存每个 scope 最近 40 条对话消息，并支持 `fork(scopeId, newScopeId, cwd)` 复制历史到新分支；`runAgentBatch` 会把这些历史拼入下一次 dsh prompt，以弥补 dsh headless 无状态进程的上下文缺失。
 
 ## 2.2 扫码绑定 · QR onboarding
 

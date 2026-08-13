@@ -24,6 +24,13 @@ describe('SessionStore', () => {
         { role: 'user', content: 'hello' },
         { role: 'assistant', content: 'hi there' },
       ]);
+
+      expect(reloaded.fork('chat-a', 'chat-b', '/tmp/project-a')).toBe(true);
+      expect(reloaded.historyFor('chat-b', '/tmp/project-a')).toEqual([
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi there' },
+      ]);
+      expect(reloaded.resumeFor('chat-b', '/tmp/project-a')).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

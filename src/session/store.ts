@@ -90,6 +90,18 @@ export class SessionStore {
     return true;
   }
 
+  fork(scopeId: string, newScopeId: string, cwd: string): boolean {
+    const source = this.data.chats[scopeId];
+    if (!source) return false;
+    this.data.chats[newScopeId] = {
+      sessionId: undefined,
+      cwd,
+      messages: [...source.messages],
+    };
+    this.schedulePersist();
+    return true;
+  }
+
   resumeFor(scopeId: string, cwd: string): string | undefined {
     const record = this.data.chats[scopeId];
     return record && record.cwd === cwd ? record.sessionId : undefined;
