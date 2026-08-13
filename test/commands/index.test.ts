@@ -63,4 +63,17 @@ describe('command router', () => {
     await tryHandleCommand('/timeout default', ctx);
     expect(ctx.runPolicies.get('chat-a')).toBeUndefined();
   });
+
+  it('shows recent conversation context for /resume', async () => {
+    const ctx = makeContext();
+    ctx.sessions.recordExchange('chat-a', '/tmp/default', ['hello'], 'hi!');
+
+    await tryHandleCommand('/resume', ctx);
+
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('👤 hello'),
+      { replyTo: 'msg-1' },
+    );
+  });
 });

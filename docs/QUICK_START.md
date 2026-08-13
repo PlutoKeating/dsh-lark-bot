@@ -59,6 +59,7 @@ dsh-lark-bot start \
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/status` | 查看当前状态 |
+| `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
 | `/invite user|admin|group <id>` | 管理访问白名单 |

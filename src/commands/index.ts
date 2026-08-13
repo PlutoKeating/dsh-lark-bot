@@ -38,6 +38,7 @@ const HELP = [
   '- `/cd <path>` — 切换工作目录并重置会话',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看当前状态',
+  '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
   '- `/invite user|admin|group <id>` — 管理访问白名单',
@@ -149,6 +150,22 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
   );
 }
 
+async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
+  const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+  const history = ctx.sessions.historyFor(ctx.scope, cwd);
+  if (history.length === 0) {
+    await reply(ctx, '当前会话没有历史上下文。');
+    return;
+  }
+
+  const recent = history.slice(-6).map((message) => {
+    const speaker = message.role === 'user' ? '👤' : '🤖';
+    return `${speaker} ${message.content.slice(0, 300)}`;
+  });
+
+  await reply(ctx, [`当前 scope：\`${ctx.scope}\``, '', ...recent].join('\n'));
+}
+
 async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
   const stopped = await ctx.activeRuns.interrupt(ctx.scope);
   await reply(ctx, stopped ? '已请求终止当前任务。' : '当前没有运行中的任务。');
@@ -230,6 +247,7 @@ const handlers: Record<string, Handler> = {
   '/cd': handleCd,
   '/ws': handleWs,
   '/status': handleStatus,
+  '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/invite': handleInvite,

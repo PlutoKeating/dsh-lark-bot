@@ -189,6 +189,6 @@ dsh 后端只允许在 `src/adapters/` 中依赖 dsh 接口，桥接层和会话
 - `dsh-lark-bot start`：前台启动桥接
 - `dsh-lark-bot doctor`：运行本地诊断
 
-飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/stop`、`/timeout`、`/invite`、`/help`。
+飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/resume`、`/stop`、`/timeout`、`/invite`、`/help`。
 
 两个命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。后续将补充 `profile`、`ps`、`kill` 等进程与配置管理命令。
