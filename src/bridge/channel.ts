@@ -4,6 +4,7 @@ import type { ActiveRuns } from '../bot/active-runs.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
+import type { AccessManager } from '../config/access-manager.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
@@ -19,6 +20,7 @@ export interface StartChannelDeps {
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
   defaultRunTimeoutMs: number;
+  accessManager: AccessManager;
   pending: PendingQueue<NormalizedMessage>;
   defaultWorkspace: string;
   allowedUsers?: string[];
@@ -76,6 +78,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         activeRuns: deps.activeRuns,
         runPolicies: deps.runPolicies,
         defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
+        accessManager: deps.accessManager,
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
       };

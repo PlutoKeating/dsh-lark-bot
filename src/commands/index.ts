@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
+import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 
@@ -23,6 +24,7 @@ export interface CommandContext {
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
   defaultRunTimeoutMs: number;
+  accessManager: AccessManager;
   channel: CommandChannel;
   defaultWorkspace: string;
 }
@@ -38,6 +40,7 @@ const HELP = [
   '- `/status` — 查看当前状态',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
+  '- `/invite user|admin|group <id>` — 管理访问白名单',
   '- `/help` — 显示本帮助',
 ].join('\n');
 
@@ -188,6 +191,35 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, `已设置当前会话运行超时：${minutes} 分钟。`);
 }
 
+async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
+  const [kind, ...rest] = args.trim().split(/\s+/);
+  const id = rest.join(' ').trim();
+  if (!kind || !id) {
+    await reply(ctx, '用法：`/invite user <id>`、`/invite admin <id>`、`/invite group <chatId>`');
+    return;
+  }
+
+  if (kind === 'user') {
+    await ctx.accessManager.addUser(id);
+    await reply(ctx, `已允许用户：\`${id}\``);
+    return;
+  }
+
+  if (kind === 'admin') {
+    await ctx.accessManager.addAdmin(id);
+    await reply(ctx, `已设为管理员：\`${id}\``);
+    return;
+  }
+
+  if (kind === 'group') {
+    await ctx.accessManager.addChat(id);
+    await reply(ctx, `已允许群聊：\`${id}\``);
+    return;
+  }
+
+  await reply(ctx, '未知 `/invite` 类型，请使用 user / admin / group。');
+}
+
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, HELP);
 }
@@ -200,6 +232,7 @@ const handlers: Record<string, Handler> = {
   '/status': handleStatus,
   '/stop': handleStop,
   '/timeout': handleTimeout,
+  '/invite': handleInvite,
   '/help': handleHelp,
 };
 

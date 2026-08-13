@@ -9,6 +9,7 @@ import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
 import type { StreamingChannel } from '../../bridge/types.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
+import { AccessManager } from '../../config/access-manager.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
 import { log } from '../../core/logger.js';
@@ -32,6 +33,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   const profileName = options.profile ?? 'default';
   const configStore = new ConfigStore(paths.configFile);
   await configStore.load();
+  const accessManager = new AccessManager(configStore, profileName);
 
   if (env.appId && env.appSecret) {
     const profileInput: Parameters<ConfigStore['saveProfile']>[1] = {
@@ -146,6 +148,7 @@ export async function runStart(options: StartOptions): Promise<void> {
     activeRuns,
     runPolicies,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
+    accessManager,
     pending,
     defaultWorkspace,
     allowedUsers: activeProfile.access.allowedUsers,

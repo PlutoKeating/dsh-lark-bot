@@ -91,6 +91,11 @@ export class ConfigStore {
       stopGraceMs?: number;
       runTimeoutMs?: number;
       operatorOpenId?: string;
+      access?: {
+        allowedUsers?: string[];
+        allowedChats?: string[];
+        admins?: string[];
+      };
     },
   ): Promise<void> {
     const data = this.getData();
@@ -112,9 +117,9 @@ export class ConfigStore {
         runTimeoutMs: input.runTimeoutMs ?? existing?.preferences.runTimeoutMs ?? undefined,
       },
       access: {
-        allowedUsers: existing?.access?.allowedUsers ?? [],
-        allowedChats: existing?.access?.allowedChats ?? [],
-        admins: existing?.access?.admins ?? [],
+        allowedUsers: input.access?.allowedUsers ?? existing?.access?.allowedUsers ?? [],
+        allowedChats: input.access?.allowedChats ?? existing?.access?.allowedChats ?? [],
+        admins: input.access?.admins ?? existing?.access?.admins ?? [],
       },
     };
     if (input.operatorOpenId && !profile.access.allowedUsers.includes(input.operatorOpenId)) {

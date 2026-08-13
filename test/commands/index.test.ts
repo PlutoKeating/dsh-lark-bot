@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
+import { AccessManager } from '../../src/config/access-manager.js';
+import { ConfigStore } from '../../src/config/profile-store.js';
 import {
   tryHandleCommand,
   type CommandChannel,
@@ -21,6 +23,10 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     activeRuns: new ActiveRuns(),
     runPolicies: new RunPolicyStore(),
     defaultRunTimeoutMs: 300_000,
+    accessManager: new AccessManager(
+      new ConfigStore(':memory:'),
+      'default',
+    ),
     channel: {
       sendMarkdown: vi.fn().mockResolvedValue(undefined),
     } as unknown as CommandChannel,

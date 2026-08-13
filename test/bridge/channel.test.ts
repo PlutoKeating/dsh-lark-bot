@@ -7,6 +7,8 @@ import type {
 import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
+import { AccessManager } from '../../src/config/access-manager.js';
+import { ConfigStore } from '../../src/config/profile-store.js';
 import { startChannel } from '../../src/bridge/channel.js';
 import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
@@ -96,6 +98,7 @@ describe('startChannel', () => {
       activeRuns,
       runPolicies: new RunPolicyStore(),
       defaultRunTimeoutMs: 300_000,
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
       pending: pending as never,
       defaultWorkspace: '/tmp/project',
       createChannel: fake.createChannel,
@@ -131,6 +134,7 @@ describe('startChannel', () => {
       activeRuns,
       runPolicies: new RunPolicyStore(),
       defaultRunTimeoutMs: 300_000,
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
       pending: pending as never,
       defaultWorkspace: '/tmp/project',
       createChannel: fake.createChannel,
