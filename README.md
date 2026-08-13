@@ -46,6 +46,19 @@
 - **Native Feishu experience**: streaming cards, interactive buttons, images / files, doc comments.
 - **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
+## 文档 · Documentation
+
+> 接手本项目的工程师：**先读 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) 和 [`docs/RESEARCH.md`](docs/RESEARCH.md)**，即可完整理解项目诉求与来龙去脉，无需线下沟通。
+> Engineers taking over this project: **read [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) and [`docs/RESEARCH.md`](docs/RESEARCH.md) first**.
+
+| 文档 Doc | 内容 Content |
+| :--- | :--- |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 完整项目诉求、产出预期、规范与约束<br>Complete requirements, outputs & specifications |
+| [`docs/RESEARCH.md`](docs/RESEARCH.md) | 调研报告：官方现状、参考项目、可行性、技术差异<br>Research: official status, references, feasibility |
+| [`docs/architecture.md`](docs/architecture.md) | 架构分层与目录映射<br>Architecture layering & directory mapping |
+| [`docs/roadmap.md`](docs/roadmap.md) | 路线图与里程碑<br>Roadmap & milestones |
+| [`AGENTS.md`](AGENTS.md) | AI Agent 开发工作流规范<br>AI agent workflow spec |
+
 ## 架构 · Architecture
 
 > 详见 [`docs/architecture.md`](docs/architecture.md) · See [`docs/architecture.md`](docs/architecture.md) for details.
