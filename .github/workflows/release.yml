@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 jobs:
   release:
@@ -52,6 +53,12 @@ jobs:
         run: node scripts/publish-dual-packages.mjs --pack-dir release-artifacts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish both packages to GitHub Packages
+        run: node scripts/publish-dual-packages.mjs --github
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PACKAGE_SCOPE: plutokeating
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

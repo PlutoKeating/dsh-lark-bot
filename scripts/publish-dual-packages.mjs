@@ -9,6 +9,7 @@ const ROOT = resolve(new URL('..', import.meta.url).pathname);
 const PACKAGE_NAMES = ['dsh-lark-bot', 'dsh-feishu-bot'];
 
 const dryRun = process.argv.includes('--dry-run');
+const github = process.argv.includes('--github');
 const packDirArgIndex = process.argv.indexOf('--pack-dir');
 const packDir =
   packDirArgIndex >= 0 ? resolve(process.argv[packDirArgIndex + 1] ?? 'release-artifacts') : undefined;
@@ -36,9 +37,12 @@ async function buildPackage(name) {
   const root = JSON.parse(raw);
 
   const { scripts, devDependencies, ...publishedManifest } = root;
+  const packageName = github
+    ? `@${(process.env.GITHUB_PACKAGE_SCOPE ?? 'plutokeating').toLowerCase()}/${name}`
+    : name;
   const manifest = {
     ...publishedManifest,
-    name,
+    name: packageName,
     bin: {
       [name]: `bin/${name}.mjs`,
     },
@@ -81,10 +85,12 @@ async function main() {
   for (const name of PACKAGE_NAMES) {
     const dir = await buildPackage(name);
     try {
-      const publishArgs = ['publish', '--access', 'public'];
+      const publishArgs = github
+        ? ['publish', '--registry', 'https://npm.pkg.github.com']
+        : ['publish', '--access', 'public'];
       if (dryRun) {
         publishArgs.push('--dry-run');
-      } else if (process.env.GITHUB_ACTIONS === 'true') {
+      } else if (process.env.GITHUB_ACTIONS === 'true' && !github) {
         publishArgs.push('--provenance');
       }
       await run('npm', publishArgs, dir);

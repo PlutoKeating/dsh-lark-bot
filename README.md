@@ -199,6 +199,8 @@ pnpm publish:dual
 
 `scripts/publish-dual-packages.mjs` 从根 `package.json` 生成两份仅 `name` / `bin` 不同的发布清单，避免两份源码漂移。GitHub tag `v*` 会触发 [`release.yml`](.github/workflows/release.yml) 自动发布两个 npm 包并创建 Release。
 
+同一份 dist 还会以 `@plutokeating/dsh-lark-bot` 和 `@plutokeating/dsh-feishu-bot` 发布到 GitHub Packages，便于在 GitHub Packages 页面查看。
+
 ## 许可与安全 · License & Security
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。

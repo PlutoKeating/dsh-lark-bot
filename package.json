@@ -29,6 +29,7 @@
     "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build && node bin/dsh-lark-bot.mjs --version",
     "publish:dual": "node scripts/publish-dual-packages.mjs",
     "publish:dual:dry-run": "node scripts/publish-dual-packages.mjs --dry-run",
+    "publish:github:dry-run": "node scripts/publish-dual-packages.mjs --github --dry-run",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm typecheck && pnpm build"
   },
