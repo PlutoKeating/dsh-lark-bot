@@ -84,7 +84,7 @@ async function main() {
       const publishArgs = ['publish', '--access', 'public'];
       if (dryRun) {
         publishArgs.push('--dry-run');
-      } else {
+      } else if (process.env.GITHUB_ACTIONS === 'true') {
         publishArgs.push('--provenance');
       }
       await run('npm', publishArgs, dir);
