@@ -180,6 +180,8 @@ dsh 后端只允许在 `src/adapters/` 中依赖 dsh 接口，桥接层和会话
 
 当前 `DshAdapter` 使用可配置的 headless 子进程：读取 stdout JSONL / 纯文本并翻译为 `AgentEvent`。`stopGraceMs` 控制 SIGTERM → SIGKILL 的宽限期。
 
+`src/media/attachments.ts` 会把飞书消息中的图片下载为本地路径，文本文件读取内容并追加到 prompt；超过 `256000` 字节的文本文件只注入路径，避免撑爆单次请求。
+
 ## 5. CLI · Command line
 
 当前命令：

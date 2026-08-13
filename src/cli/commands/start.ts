@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import type { NormalizedMessage } from '@larksuite/channel';
+import type { LarkChannel, NormalizedMessage } from '@larksuite/channel';
 import { DshAdapter } from '../../adapters/dsh/adapter.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
@@ -14,6 +14,7 @@ import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
 import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
+import { prepareAttachments } from '../../media/attachments.js';
 import { SessionStore } from '../../session/store.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
@@ -106,6 +107,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
   let streaming: StreamingChannel | undefined;
+  let larkChannel: LarkChannel | undefined;
 
   const pending = new PendingQueue<NormalizedMessage>(DEBOUNCE_MS, async (scope, batch) => {
     if (!streaming) return;
@@ -113,10 +115,19 @@ export async function runStart(options: StartOptions): Promise<void> {
     if (!first) return;
     pending.block(scope);
     try {
+      const attachments = await prepareAttachments(
+        larkChannel,
+        first,
+        paths.mediaDir(profileName),
+      );
+      const messages = [
+        first.content,
+        ...attachments.textFileNotes,
+      ].filter(Boolean);
       const runInput: Parameters<typeof runAgentBatch>[0] = {
         scope,
         chatId: first.chatId,
-        messages: batch.map((message) => message.content),
+        messages,
         adapter,
         sessions,
         workspaces,
@@ -127,6 +138,7 @@ export async function runStart(options: StartOptions): Promise<void> {
         defaultWorkspace,
         replyTo: first.messageId,
         runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
+        images: attachments.imagePaths,
       };
       if (activeProfile.preferences.model !== undefined) runInput.model = activeProfile.preferences.model;
       if (activeProfile.preferences.stopGraceMs !== undefined) {
@@ -160,6 +172,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   }
   const bridge = await startChannel(channelInput);
   streaming = adaptLarkChannel(bridge.channel);
+  larkChannel = bridge.channel;
 
   log.info('cli', 'started', {
     profile: profileName,

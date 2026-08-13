@@ -68,6 +68,8 @@ dsh-lark-bot start \
 
 bot 会为每个飞书 scope 保存最近 40 条对话，`/new` 会清空当前 scope 的会话记忆。
 
+发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
+
 ## 5. 本地状态
 
 - 配置文件：`~/.dsh-lark/config.json`

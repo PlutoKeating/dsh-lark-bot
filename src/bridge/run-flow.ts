@@ -32,6 +32,7 @@ export interface RunFlowInput {
   model?: string;
   stopGraceMs?: number;
   runTimeoutMs?: number;
+  images?: string[];
   replyTo?: string;
 }
 
@@ -61,7 +62,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       cwd,
       sessionId,
       model: input.model,
-      images: undefined,
+      images: input.images,
       stopGraceMs: input.stopGraceMs,
   });
   input.activeRuns.set(input.scope, { runId, stop: run.stop });

@@ -42,9 +42,14 @@ export class DshAdapter implements AgentAdapter {
   }
 
   run(options: AgentRunOptions): AgentRun {
+    const prompt =
+      options.images?.length
+        ? `${options.prompt}\n\nImage files attached to this message:\n${options.images.join('\n')}`
+        : options.prompt;
+
     const child = spawn(
       this.command,
-      [...this.args, options.prompt],
+      [...this.args, prompt],
       {
         cwd: options.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],

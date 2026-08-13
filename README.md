@@ -88,6 +88,8 @@ dsh-lark-bot start \
 | `/invite user|admin|group <id>` | 管理访问白名单 |
 | `/help` | 查看帮助 |
 
+飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
+
 ### 4. 卸载
 
 ```bash
