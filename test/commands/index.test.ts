@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import {
   tryHandleCommand,
   type CommandChannel,
@@ -18,6 +19,8 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     sessions: new SessionStore(':memory:'),
     workspaces: new WorkspaceStore(':memory:'),
     activeRuns: new ActiveRuns(),
+    runPolicies: new RunPolicyStore(),
+    defaultRunTimeoutMs: 300_000,
     channel: {
       sendMarkdown: vi.fn().mockResolvedValue(undefined),
     } as unknown as CommandChannel,
@@ -40,5 +43,18 @@ describe('command router', () => {
     const ctx = makeContext();
     await expect(tryHandleCommand('fix the bug', ctx)).resolves.toBe(false);
     expect(ctx.channel.sendMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('reads and updates the per-scope run timeout policy', async () => {
+    const ctx = makeContext();
+
+    await tryHandleCommand('/timeout 12', ctx);
+    expect(ctx.runPolicies.get('chat-a')).toBe(12 * 60_000);
+
+    await tryHandleCommand('/timeout off', ctx);
+    expect(ctx.runPolicies.get('chat-a')).toBe(0);
+
+    await tryHandleCommand('/timeout default', ctx);
+    expect(ctx.runPolicies.get('chat-a')).toBeUndefined();
   });
 });

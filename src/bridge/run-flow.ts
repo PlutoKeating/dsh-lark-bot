@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentAdapter, AgentEvent } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import type { RunPolicyStore } from '../bot/run-policy.js';
 import {
   finalizeIfRunning,
   initialState,
@@ -25,6 +26,7 @@ export interface RunFlowInput {
   workspaces: WorkspaceStore;
   workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
+  runPolicies?: RunPolicyStore;
   channel: StreamingChannel;
   defaultWorkspace: string;
   model?: string;
@@ -65,7 +67,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
 
   let state: RunState = initialState;
   const stopRequested = { value: false };
-  const timeoutMs = input.runTimeoutMs ?? 0;
+  const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
   let timedOut = false;
 
   try {

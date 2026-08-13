@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 
@@ -20,6 +21,8 @@ export interface CommandContext {
   sessions: SessionStore;
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
+  runPolicies: RunPolicyStore;
+  defaultRunTimeoutMs: number;
   channel: CommandChannel;
   defaultWorkspace: string;
 }
@@ -34,6 +37,7 @@ const HELP = [
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看当前状态',
   '- `/stop` — 终止当前任务',
+  '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
   '- `/help` — 显示本帮助',
 ].join('\n');
 
@@ -147,6 +151,43 @@ async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, stopped ? '已请求终止当前任务。' : '当前没有运行中的任务。');
 }
 
+async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
+  const input = args.trim();
+  const effectiveMs = ctx.runPolicies.get(ctx.scope) ?? ctx.defaultRunTimeoutMs;
+
+  if (!input) {
+    const minutes = effectiveMs > 0 ? Math.round(effectiveMs / 60_000) : 0;
+    await reply(
+      ctx,
+      minutes > 0
+        ? `当前会话运行超时：${minutes} 分钟。可用 \`/timeout <N|off|default>\` 调整。`
+        : '当前会话运行超时：关闭。',
+    );
+    return;
+  }
+
+  if (input === 'off') {
+    ctx.runPolicies.set(ctx.scope, 0);
+    await reply(ctx, '已关闭当前会话运行超时。');
+    return;
+  }
+
+  if (input === 'default') {
+    ctx.runPolicies.clear(ctx.scope);
+    await reply(ctx, '已恢复默认运行超时。');
+    return;
+  }
+
+  const minutes = Number(input);
+  if (!Number.isInteger(minutes) || minutes <= 0) {
+    await reply(ctx, '用法：`/timeout <N|off|default>`，N 为大于 0 的分钟数。');
+    return;
+  }
+
+  ctx.runPolicies.set(ctx.scope, minutes * 60_000);
+  await reply(ctx, `已设置当前会话运行超时：${minutes} 分钟。`);
+}
+
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, HELP);
 }
@@ -158,6 +199,7 @@ const handlers: Record<string, Handler> = {
   '/ws': handleWs,
   '/status': handleStatus,
   '/stop': handleStop,
+  '/timeout': handleTimeout,
   '/help': handleHelp,
 };
 

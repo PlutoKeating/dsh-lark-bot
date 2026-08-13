@@ -3,6 +3,7 @@ import type { NormalizedMessage } from '@larksuite/channel';
 import { DshAdapter } from '../../adapters/dsh/adapter.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
+import { RunPolicyStore } from '../../bot/run-policy.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -98,6 +99,7 @@ export async function runStart(options: StartOptions): Promise<void> {
   }
   const adapter = new DshAdapter(adapterOptions);
   const activeRuns = new ActiveRuns();
+  const runPolicies = new RunPolicyStore();
   let streaming: StreamingChannel | undefined;
 
   const pending = new PendingQueue<NormalizedMessage>(DEBOUNCE_MS, async (scope, batch) => {
@@ -115,6 +117,7 @@ export async function runStart(options: StartOptions): Promise<void> {
         workspaces,
         workspaceManager: worktreeManager,
         activeRuns,
+        runPolicies,
         channel: streaming,
         defaultWorkspace,
         replyTo: first.messageId,
@@ -138,6 +141,8 @@ export async function runStart(options: StartOptions): Promise<void> {
     sessions,
     workspaces,
     activeRuns,
+    runPolicies,
+    defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     pending,
     defaultWorkspace,
   };

@@ -2,6 +2,7 @@ import { createLarkChannel, type LarkChannel, type NormalizedMessage } from '@la
 import type { AgentAdapter } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
+import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
@@ -16,6 +17,8 @@ export interface StartChannelDeps {
   sessions: SessionStore;
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
+  runPolicies: RunPolicyStore;
+  defaultRunTimeoutMs: number;
   pending: PendingQueue<NormalizedMessage>;
   defaultWorkspace: string;
   model?: string;
@@ -67,6 +70,8 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         sessions: deps.sessions,
         workspaces: deps.workspaces,
         activeRuns: deps.activeRuns,
+        runPolicies: deps.runPolicies,
+        defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
       };
