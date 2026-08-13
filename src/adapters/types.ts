@@ -12,11 +12,11 @@ export type AgentEvent =
 export interface AgentRunOptions {
   runId: string;
   prompt: string;
-  cwd?: string;
-  sessionId?: string;
-  model?: string;
-  images?: readonly string[];
-  stopGraceMs?: number;
+  cwd: string | undefined;
+  sessionId: string | undefined;
+  model: string | undefined;
+  images: readonly string[] | undefined;
+  stopGraceMs: number | undefined;
 }
 
 export interface AgentRun {

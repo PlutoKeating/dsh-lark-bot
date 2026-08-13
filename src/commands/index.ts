@@ -4,7 +4,11 @@ import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 
 export interface CommandChannel {
-  sendMarkdown(chatId: string, markdown: string, options?: { replyTo?: string }): Promise<void>;
+  sendMarkdown(
+    chatId: string,
+    markdown: string,
+    options?: { replyTo?: string },
+  ): Promise<void>;
 }
 
 export interface CommandContext {
