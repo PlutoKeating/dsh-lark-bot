@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 export type LarkTenant = 'feishu' | 'lark';
@@ -64,7 +64,7 @@ export function loadRuntimeEnv(
   const workspace = nonEmpty(source.DSH_LARK_WORKSPACE);
 
   return {
-    home: homeOverride ? resolve(homeOverride) : homedir(),
+    home: homeOverride ? resolve(homeOverride) : join(homedir(), '.dsh-lark'),
     tenant: parseTenant(source.DSH_LARK_TENANT),
     appId: nonEmpty(source.DSH_LARK_APP_ID),
     appSecret: nonEmpty(source.DSH_LARK_APP_SECRET),

@@ -5,6 +5,7 @@ describe('loadRuntimeEnv', () => {
   it('uses safe defaults', () => {
     const env = loadRuntimeEnv({});
 
+    expect(env.home.endsWith('.dsh-lark')).toBe(true);
     expect(env.tenant).toBe('feishu');
     expect(env.dshCommand).toBe('node');
     expect(env.dshArgs).toEqual(['lib/bin.js', 'cordis.yml']);

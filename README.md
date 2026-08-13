@@ -55,15 +55,62 @@
 
 ## 安装与卸载 · Install / Uninstall
 
-> 🚧 P1 实现后补充。目标：clone 后 `pnpm install && pnpm build && pnpm start`，或 `npx dsh-lark-bot start` 一键启动；卸载 `npm uninstall -g dsh-lark-bot` 并清理 `~/.dsh-lark/` 配置目录。
+开发阶段：
+
+```bash
+git clone git@github.com:PlutoKeating/dsh-lark-bot.git
+cd dsh-lark-bot
+pnpm install
+pnpm build
+pnpm start
+```
+
+发布到 npm 后，目标安装方式：
+
+```bash
+npm install -g dsh-lark-bot
+dsh-lark-bot start
+```
+
+卸载并清理本地状态：
+
+```bash
+npm uninstall -g dsh-lark-bot
+rm -rf ~/.dsh-lark
+```
 
 ## 快速开始 · Quick Start
 
-> 🚧 P1 实现后补充。预期流程：启动 → 飞书扫码绑定 PersonalAgent 应用 → 私聊发消息 → 收到 `dsh` 的流式回复。
+```bash
+dsh-lark-bot start
+```
+
+1. 终端显示二维码。
+2. 用飞书 / Lark App 扫码。
+3. 选择或创建 PersonalAgent 应用。
+4. 绑定成功后，bot 会向你发送欢迎卡片。
+5. 私聊直接发消息；群聊或话题里 `@bot`。
+
+详见 [`docs/QUICK_START.md`](docs/QUICK_START.md)。
 
 ## 配置 · Configuration
 
-> 🚧 P1 实现后补充。预期：`~/.dsh-lark/config.json` 存储 profile / agent / 工作区 / 访问控制；环境变量支持 `DSH_LARK_*`。
+- 本地配置：`~/.dsh-lark/config.json`
+- 状态根目录可用 `DSH_LARK_HOME` 覆盖
+- 环境变量统一使用 `DSH_LARK_*` 前缀
+- 模板见 [`.env.example`](.env.example)
+
+当前核心环境变量：
+
+| 变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
+| `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
+| `DSH_LARK_DSH_COMMAND` | `node` | dsh 启动命令 |
+| `DSH_LARK_DSH_ARGS` | `lib/bin.js,cordis.yml` | dsh 启动参数，逗号分隔 |
+| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
+| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
+| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 
 ## 权限与数据 · Permissions & Data
 
@@ -82,7 +129,15 @@
 
 ## 开发 · Development
 
-> 🚧 P1 实现后补充。预期：TypeScript + pnpm；`pnpm test` / `pnpm typecheck` / `pnpm build`；详见 `AGENTS.md` 与 `docs/`。
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm ci:local
+```
+
+开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ## 许可与安全 · License & Security
 

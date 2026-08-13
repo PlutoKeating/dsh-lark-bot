@@ -1,2 +1,4 @@
 #!/usr/bin/env node
-import '../dist/cli.js';
+import { main } from '../dist/cli.js';
+
+await main();

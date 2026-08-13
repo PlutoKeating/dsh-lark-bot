@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "dev": "tsup --watch",
+    "start": "node bin/dsh-lark-bot.mjs start",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
