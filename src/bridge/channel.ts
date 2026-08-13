@@ -20,6 +20,7 @@ export interface StartChannelDeps {
   defaultWorkspace: string;
   model?: string;
   stopGraceMs?: number;
+  createChannel?: typeof createLarkChannel;
 }
 
 export interface BridgeChannel {
@@ -28,7 +29,7 @@ export interface BridgeChannel {
 }
 
 export async function startChannel(deps: StartChannelDeps): Promise<BridgeChannel> {
-  const channel = createLarkChannel({
+  const channel = (deps.createChannel ?? createLarkChannel)({
     appId: deps.appId,
     appSecret: deps.appSecret,
     domain:
