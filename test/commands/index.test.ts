@@ -76,4 +76,24 @@ describe('command router', () => {
       { replyTo: 'msg-1' },
     );
   });
+
+  it('lists the current access allowlist', async () => {
+    const ctx = makeContext({
+      accessManager: {
+        snapshot: () => ({
+          allowedUsers: ['ou_owner'],
+          allowedChats: ['oc_room'],
+          admins: ['ou_owner'],
+        }),
+      } as unknown as AccessManager,
+    });
+
+    await tryHandleCommand('/invite list', ctx);
+
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('ou_owner'),
+      { replyTo: 'msg-1' },
+    );
+  });
 });

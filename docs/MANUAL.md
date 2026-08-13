@@ -51,7 +51,9 @@ dsh-lark-bot start \
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置运行超时 |
-| `/invite user|admin|group <id>` | 管理访问白名单 |
+| `/invite user|admin|group <id>` | 添加白名单 |
+| `/invite list` | 查看白名单 |
+| `/invite remove user|group <id>` | 移除白名单 |
 | `/help` | 查看帮助 |
 
 ## 4. 会话与工作区 · Sessions & workspaces

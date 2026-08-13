@@ -62,7 +62,7 @@ dsh-lark-bot start \
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
-| `/invite user|admin|group <id>` | 管理访问白名单 |
+| `/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。

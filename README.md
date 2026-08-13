@@ -86,7 +86,7 @@ dsh-lark-bot start \
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
-| `/invite user|admin|group <id>` | 管理访问白名单 |
+| `/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>` | 管理访问白名单 |
 | `/help` | 查看帮助 |
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。

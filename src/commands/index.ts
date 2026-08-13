@@ -219,8 +219,26 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
 async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
   const [kind, ...rest] = args.trim().split(/\s+/);
   const id = rest.join(' ').trim();
+
+  if (kind === 'list') {
+    const snapshot = ctx.accessManager.snapshot();
+    await reply(
+      ctx,
+      [
+        '**访问白名单**',
+        `users: ${snapshot.allowedUsers.join(', ') || '(空)'}`,
+        `chats: ${snapshot.allowedChats.join(', ') || '(空)'}`,
+        `admins: ${snapshot.admins.join(', ') || '(空)'}`,
+      ].join('\n'),
+    );
+    return;
+  }
+
   if (!kind || !id) {
-    await reply(ctx, '用法：`/invite user <id>`、`/invite admin <id>`、`/invite group <chatId>`');
+    await reply(
+      ctx,
+      '用法：`/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>`',
+    );
     return;
   }
 
@@ -242,7 +260,23 @@ async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
     return;
   }
 
-  await reply(ctx, '未知 `/invite` 类型，请使用 user / admin / group。');
+  if (kind === 'remove') {
+    const [sub, target] = rest;
+    if (sub === 'user' && target) {
+      await ctx.accessManager.removeUser(target);
+      await reply(ctx, `已移除用户：\`${target}\``);
+      return;
+    }
+    if (sub === 'group' && target) {
+      await ctx.accessManager.removeChat(target);
+      await reply(ctx, `已移除群聊：\`${target}\``);
+      return;
+    }
+    await reply(ctx, '用法：`/invite remove user <id>` 或 `/invite remove group <chatId>`');
+    return;
+  }
+
+  await reply(ctx, '未知 `/invite` 类型，请使用 user / admin / group / list / remove。');
 }
 
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
