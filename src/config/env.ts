@@ -74,10 +74,11 @@ export function loadRuntimeEnv(
   const homeOverride = nonEmpty(source.DSH_LARK_HOME);
   const workspace = nonEmpty(source.DSH_LARK_WORKSPACE);
   const home = homeOverride ? resolve(homeOverride) : join(homedir(), '.dsh-lark');
+  const osHome = homedir();
   const dshCommand = nonEmpty(source.DSH_LARK_DSH_COMMAND);
   const rawDshArgs = nonEmpty(source.DSH_LARK_DSH_ARGS);
   const dshRuntime = resolveDshRuntime({
-    home,
+    home: osHome,
     env: source,
     ...(dshCommand ? { command: dshCommand } : {}),
     ...(rawDshArgs ? { args: parseDshArgs(rawDshArgs) } : {}),
