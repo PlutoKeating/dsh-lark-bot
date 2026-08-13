@@ -98,7 +98,9 @@
 | :--- | :--- |
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | 完整项目诉求、产出预期、规范与约束<br>Complete requirements, outputs & specifications |
 | [`docs/RESEARCH.md`](docs/RESEARCH.md) | 调研报告：官方现状、参考项目、可行性、技术差异<br>Research: official status, references, feasibility |
-| [`docs/architecture.md`](docs/architecture.md) | 架构分层与目录映射<br>Architecture layering & directory mapping |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 架构分层与目录映射<br>Architecture layering & directory mapping |
+| [`docs/API.md`](docs/API.md) | 模块接口与契约<br>Module interfaces & contracts |
+| [`docs/QUICK_START.md`](docs/QUICK_START.md) | 安装与快速开始<br>Install & quick start |
 | [`docs/adapter-notes.md`](docs/adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线）<br>How to plug the dsh adapter |
 | [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读）<br>Ecosystem & delivery standards (for engineers) |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图与里程碑<br>Roadmap & milestones |
@@ -106,7 +108,7 @@
 
 ## 架构 · Architecture
 
-> 详见 [`docs/architecture.md`](docs/architecture.md) · See [`docs/architecture.md`](docs/architecture.md) for details.
+> 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
 
 ```
 飞书 / Lark ──WebSocket 长连接──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4

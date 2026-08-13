@@ -100,7 +100,7 @@
 
 ## 6. 技术决策 · Technical Decisions
 
-详见 [`architecture.md`](architecture.md) 与 [`RESEARCH.md`](RESEARCH.md)，核心结论：
+详见 [`ARCHITECTURE.md`](ARCHITECTURE.md) 与 [`RESEARCH.md`](RESEARCH.md)，核心结论：
 
 1. **飞书通道与 agent 后端解耦**——桥接层复刻 `lark-channel-bridge` 成熟做法，agent 后端通过 adapter 抽象。
 2. **dsh 为默认后端**，通过 ACP（Agent Client Protocol）或 JSON-RPC 接入；可切换 claude / codex / opencode。
@@ -120,7 +120,7 @@
 | 文档 | 内容 |
 | :--- | :--- |
 | [`README.md`](../README.md) | 项目概览（双语） |
-| [`architecture.md`](architecture.md) | 架构分层与目录映射 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 架构分层与目录映射 |
 | [`adapter-notes.md`](adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线） |
 | [`ECOSYSTEM.md`](ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读） |
 | [`RESEARCH.md`](RESEARCH.md) | 调研报告（官方现状、参考项目、可行性、技术差异） |

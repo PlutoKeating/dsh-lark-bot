@@ -137,4 +137,4 @@ type AgentEvent =
 | claude adapter 范例 | `reference/lark-coding-agent-bridge/src/agent/claude/adapter.ts` |
 | dsh ACP 服务器 | `reference/deepseek-harness/packages/acp/acp/`（README + `src/index.ts`） |
 | dsh SDK client | `reference/deepseek-harness/packages/sdk/client/`（README + `src/client.ts`） |
-| dsh 架构/仓库总览 | `reference/deepseek-harness/AGENTS.md`、`docs/architecture.md` |
+| dsh 架构/仓库总览 | `reference/deepseek-harness/AGENTS.md`、`docs/ARCHITECTURE.md` |
