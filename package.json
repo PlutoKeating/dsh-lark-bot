@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "bin": {
-    "dsh-lark-bot": "./bin/dsh-lark-bot.mjs"
+    "dsh-lark-bot": "bin/dsh-lark-bot.mjs"
   },
   "exports": {
     ".": {
@@ -27,6 +27,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build && node bin/dsh-lark-bot.mjs --version",
+    "publish:dual": "node scripts/publish-dual-packages.mjs",
+    "publish:dual:dry-run": "node scripts/publish-dual-packages.mjs --dry-run",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm typecheck && pnpm build"
   },

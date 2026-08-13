@@ -48,16 +48,13 @@ jobs:
       - name: Smoke test built CLI
         run: node bin/dsh-lark-bot.mjs --version
 
-      - name: Create package tarball
-        run: pnpm pack
-
-      - name: Publish to npm
-        run: npm publish --access public --provenance
+      - name: Publish both npm packages and build release artifacts
+        run: node scripts/publish-dual-packages.mjs --pack-dir release-artifacts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dsh-lark-bot-*.tgz
+          files: release-artifacts/*.tgz
           generate_release_notes: true
