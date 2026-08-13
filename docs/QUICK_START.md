@@ -1,6 +1,6 @@
 # 快速开始 · Quick Start
 
-> 本文描述 dsh-lark-bot 面向最终用户的安装与首次使用流程，是 P1 的验收基线。
+> 本文描述 dsh-lark-bot 面向最终用户的安装与首次使用流程。
 
 ## 1. 前置条件
 
@@ -12,6 +12,8 @@
 
 ```bash
 npm install -g dsh-lark-bot
+# 也可以安装飞书命名版本
+npm install -g dsh-feishu-bot
 # 或开发阶段：
 git clone git@github.com:PlutoKeating/dsh-lark-bot.git
 cd dsh-lark-bot
@@ -20,10 +22,14 @@ pnpm build
 pnpm start
 ```
 
+两个 npm 包的代码、版本、依赖与 dist 完全一致，只是包名与命令名不同；日常使用任选其一即可。
+
 ## 3. 首次启动
 
 ```bash
 dsh-lark-bot start
+# 或
+dsh-feishu-bot start
 ```
 
 1. 终端显示二维码。

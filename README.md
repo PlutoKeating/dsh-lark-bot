@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-4D6BFE" alt="Agent">
   <img src="https://img.shields.io/badge/runtime-Node.js%20%E2%89%A5%2022-339933" alt="Node">
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
-  <img src="https://img.shields.io/badge/status-P2%20workspace-orange" alt="Status">
+  <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
 </p>
 
 <br>
@@ -23,6 +23,78 @@
 *Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace — drive your local coding agent from mobile, group chats and topics, and fold conversations, tasks, cards and **project workspaces** into one collaborative flow.*
 
 </div>
+
+---
+
+## 快速开始 · Quick Start（普通用户先看这里）
+
+### 1. 安装
+
+两个包名内容完全一致，任选一个即可：
+
+```bash
+# 推荐
+npm install -g dsh-lark-bot
+
+# 或飞书命名版本
+npm install -g dsh-feishu-bot
+```
+
+安装完成后，对应命令分别为 `dsh-lark-bot` 和 `dsh-feishu-bot`。
+
+### 2. 启动并绑定飞书
+
+```bash
+dsh-lark-bot start
+```
+
+或：
+
+```bash
+dsh-feishu-bot start
+```
+
+首次启动会：
+
+1. 在终端显示二维码。
+2. 用飞书 / Lark App 扫码。
+3. 选择或创建 PersonalAgent 应用。
+4. 绑定成功后，bot 会向你的私聊发送欢迎卡片。
+5. 私聊直接发消息；群聊或话题里 `@bot`。
+
+如果你已经有 PersonalAgent 应用，也可以跳过扫码：
+
+```bash
+dsh-lark-bot start \
+  --app-id cli_xxx \
+  --app-secret <secret> \
+  --tenant feishu
+```
+
+### 3. 基本使用
+
+在飞书里向 bot 发送普通消息即可开始工作，常用命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/new` `/reset` | 开始新会话 |
+| `/cd <path>` | 切换工作目录并重置会话 |
+| `/ws list` | 查看命名工作空间 |
+| `/ws save <name>` | 保存当前工作空间 |
+| `/ws use <name>` | 切换到命名工作空间 |
+| `/status` | 查看当前状态 |
+| `/stop` | 终止当前任务 |
+| `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
+| `/help` | 查看帮助 |
+
+### 4. 卸载
+
+```bash
+npm uninstall -g dsh-lark-bot
+rm -rf ~/.dsh-lark
+```
+
+更详细的安装、状态目录、日志和排障说明见 [`docs/QUICK_START.md`](docs/QUICK_START.md)。
 
 ---
 
@@ -52,46 +124,6 @@
 - **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 当前 adapter 采用 **headless 子进程 fallback**，通过可配置的 `dsh` 命令与参数驱动，尚未锁定具体 dsh mainline commit；接入 ACP / SDK 的正式版本将在 P2 锁版后声明。
-
-## 安装与卸载 · Install / Uninstall
-
-开发阶段：
-
-```bash
-git clone git@github.com:PlutoKeating/dsh-lark-bot.git
-cd dsh-lark-bot
-pnpm install
-pnpm build
-pnpm start
-```
-
-发布到 npm 后，目标安装方式：
-
-```bash
-npm install -g dsh-lark-bot
-dsh-lark-bot start
-```
-
-卸载并清理本地状态：
-
-```bash
-npm uninstall -g dsh-lark-bot
-rm -rf ~/.dsh-lark
-```
-
-## 快速开始 · Quick Start
-
-```bash
-dsh-lark-bot start
-```
-
-1. 终端显示二维码。
-2. 用飞书 / Lark App 扫码。
-3. 选择或创建 PersonalAgent 应用。
-4. 绑定成功后，bot 会向你发送欢迎卡片。
-5. 私聊直接发消息；群聊或话题里 `@bot`。
-
-详见 [`docs/QUICK_START.md`](docs/QUICK_START.md)。
 
 ## 配置 · Configuration
 
