@@ -509,13 +509,14 @@ The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bo
 
 - 状态：**活跃维护（Active）**。主维护者：**PlutoKeating**。
 - 问题 / 建议：优先在 GitHub Issues 提交；安全漏洞请走 [`SECURITY.md`](SECURITY.md) 的私下报告渠道。
-- 生态收录：awesome-dsh-plugins（`✅ 运行级可用`）与 omdsh-dev/community（`[Plugin]` 收录申请）已登记 / 提交。
+- 生态收录：awesome-dsh-plugins（`✅ 运行级可用`）已登记；omdsh-dev/community `[Plugin]` 收录
+  申请见 https://github.com/orgs/omdsh-dev/discussions/12 。
 
 - Status: **active**. Primary maintainer: **PlutoKeating**.
 - Bugs / feature requests: GitHub Issues; security issues via the private channel in
   [`SECURITY.md`](SECURITY.md).
-- Ecosystem: listed as `✅ 运行级可用` in awesome-dsh-plugins; `[Plugin]` submission filed with
-  omdsh-dev/community.
+- Ecosystem: listed as `✅ 运行级可用` in awesome-dsh-plugins; omdsh-dev/community `[Plugin]`
+  submission at https://github.com/orgs/omdsh-dev/discussions/12 .
 
 ## 许可与安全 | License & Security
 
