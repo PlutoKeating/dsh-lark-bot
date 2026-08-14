@@ -33,6 +33,8 @@
 9. **管理操作鉴权**：飞书会话内对 dsh 配置的写操作（`/model default`、`/model add|remove`、
    `/provider add|update|remove`、`/key set|remove`）仅管理员可执行（管理员由
    `/invite admin <open_id>` 定义）；查看类命令（`/model`、`/providers`、`/key list`）开放。
+10. **本地回调隔离**：`lark_notify` 工具的回调服务只绑定 `127.0.0.1`，每次启动生成随机
+    token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
 
 ## 数据与凭据 · Data & credentials
 

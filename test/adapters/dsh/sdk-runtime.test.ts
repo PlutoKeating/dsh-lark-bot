@@ -10,6 +10,7 @@ import {
   sdkProfileRoot,
   SDK_SERVER_PACKAGE,
 } from '../../../src/adapters/dsh/sdk-runtime.js';
+import { ownPackageInfo } from '../../../src/adapters/dsh/own-package.js';
 
 const tempDirs: string[] = [];
 
@@ -40,6 +41,7 @@ describe('ensureSdkProfile', () => {
     const result = await ensureSdkProfile({
       home,
       install: async (root) => {
+        const own = ownPackageInfo();
         await mkdir(join(root, 'node_modules', '@deepseek-ai', SDK_SERVER_PACKAGE.split('/')[1] ?? ''), {
           recursive: true,
         });
@@ -47,6 +49,7 @@ describe('ensureSdkProfile', () => {
           join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
           JSON.stringify({ name: SDK_SERVER_PACKAGE }),
         );
+        await mkdir(join(root, 'node_modules', own.name), { recursive: true });
       },
     });
 

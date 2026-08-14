@@ -11,6 +11,7 @@ import {
   isAcpProfileReady,
   resolveAcpLaunch,
 } from '../../../src/adapters/dsh/acp-runtime.js';
+import { ownPackageInfo } from '../../../src/adapters/dsh/own-package.js';
 
 const tempDirs: string[] = [];
 
@@ -20,9 +21,11 @@ afterEach(async () => {
 
 function installPlugin(root: string) {
   return async (): Promise<void> => {
+    const own = ownPackageInfo();
     const pluginRoot = join(root, 'node_modules', ...ACP_PACKAGE.split('/'));
     await mkdir(pluginRoot, { recursive: true });
     await writeFile(join(pluginRoot, 'package.json'), JSON.stringify({ name: ACP_PACKAGE }));
+    await mkdir(join(root, 'node_modules', own.name), { recursive: true });
   };
 }
 

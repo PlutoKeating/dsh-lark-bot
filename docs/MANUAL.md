@@ -78,6 +78,8 @@ dsh-lark-bot start \
 | `/role clear` | 解除当前 scope 的角色绑定 |
 | `/role save <id> <name> [--persona ..] [--model ..] [--tools ..] [--rules ..]` | 创建 / 更新角色（管理员） |
 | `/role remove <id>` | 删除角色（管理员） |
+| `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
+| `/notify list` | 查看 bridge 已注册的 scope |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
 | `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
@@ -124,6 +126,16 @@ dsh-lark-bot start \
 - 角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`（0600），重启后绑定仍然生效。
 - 模型优先级：每会话 `/model use` > 角色 `--model` > profile 偏好 > dsh 默认模型 > 环境默认。
 - 角色 save / remove 仅管理员可执行；set / clear 任意被邀请用户可执行。
+
+### 出站 @ 提及与跨会话通知
+
+- 出站契约支持 `mentions`（`userId` + 可选 `name`），桥接层自动把 `<at>` 提及标记拼入消息体。
+- `/notify <scope|chatId> <text>`：管理员向其他已注册会话推送消息；`/notify list` 查看
+  bridge 已知的 scope（`<profile>/scopes.json` 持久化，重启不丢）。
+- agent 侧工具 `lark_notify`：SDK / ACP runtime 均自动装配；参数 `text`、`scope`（目标会话，
+  缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
+  runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
+  不暴露公网。
 
 ## 5. 会话与工作区 · Sessions & workspaces
 

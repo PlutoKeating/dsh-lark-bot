@@ -445,3 +445,24 @@ export interface ServiceController {
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
 - `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`。
+
+`src/bridge/send-options.ts` 定义出站 `SendOptions { replyTo?, mentions?, threadId? }` 与
+`MentionTarget { userId, name? }`：`sendMarkdown` / `sendCard` / `streamCard` 均接受该选项，
+`adaptLarkChannel` 把 `mentions` 映射为 `@larksuite/channel` 的 `SendOptions.mentions`
+（自动拼接 `<at>` 提及标记），`threadId` 映射为 `replyInThread`。
+
+`src/bridge/scope-directory.ts` 提供持久化 `ScopeDirectory`（`<profile>/scopes.json`）：每个
+入站消息注册 scope → `{chatId, threadId}`，`resolve(scope)` / `resolveChat(chatId)` 用于
+跨会话出站；`/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
+
+`src/notify/server.ts` 提供 `NotifyServer`：127.0.0.1 回环 HTTP 服务，`POST /notify` 以
+`token` 鉴权，解析 scope/chat 后调用注入的 `send(destination, {text, mentions})`；token 由
+`generateNotifyToken()` 每启动生成，不落盘、不进日志。`src/notify/tool.ts` 是 cordis 插件
+（`dsh-lark-bot/notify`，`inject: ['tools']`）：注册 dsh 工具 `lark_notify`
+（`text` / `scope` / `chat_id` / `mention_user_ids`），把请求 POST 回 bridge 的
+`DSH_LARK_NOTIFY_URL`（token 取 `DSH_LARK_NOTIFY_TOKEN`）。
+
+SDK / ACP runtime profile（`src/adapters/dsh/sdk-runtime.ts` / `acp-runtime.ts`）会在
+`cordis.patch.yml` 插入 `lark-notify` 行，并把当前 bridge 包以 `link:` 依赖加入 profile，
+因此 `lark_notify` 在 `sdk` 与 `acp` 两种 adapter 下都自动可用（`headless` 无 runtime profile，
+不提供该工具）。

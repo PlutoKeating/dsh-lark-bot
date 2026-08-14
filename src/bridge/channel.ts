@@ -20,6 +20,7 @@ import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { adaptLarkChannel } from './lark-channel.js';
+import type { ScopeDirectory } from './scope-directory.js';
 
 export interface StartChannelDeps {
   appId: string;
@@ -34,6 +35,7 @@ export interface StartChannelDeps {
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   roleStore: RoleStore;
+  scopeDirectory?: ScopeDirectory;
   archiver: SessionArchive;
   defaultRetention: number;
   archiveMax: number;
@@ -98,6 +100,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   channel.on({
     message: async (msg) => {
       const scope = scopeForMessage(msg);
+      deps.scopeDirectory?.register(scope, msg.chatId, msg.threadId);
       if (
         deps.eventFreshnessMs !== undefined &&
         deps.eventFreshnessMs > 0 &&
@@ -123,6 +126,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         defaultScopeConcurrency: deps.defaultScopeConcurrency,
         retentionStore: deps.retentionStore,
         roleStore: deps.roleStore,
+        scopeDirectory: deps.scopeDirectory ?? EMPTY_SCOPE_DIRECTORY,
         archiver: deps.archiver,
         defaultRetention: deps.defaultRetention,
         archiveMax: deps.archiveMax,
@@ -193,6 +197,14 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     disconnect: () => channel.disconnect(),
   };
 }
+
+const EMPTY_SCOPE_DIRECTORY: ScopeDirectory = {
+  register: () => {},
+  resolve: () => undefined,
+  resolveChat: () => undefined,
+  knownScopes: () => [],
+  flush: async () => {},
+} as unknown as ScopeDirectory;
 
 function scopeForMessage(msg: NormalizedMessage): string {
   if (msg.chatMode === 'topic' && msg.threadId) return `${msg.chatId}:${msg.threadId}`;

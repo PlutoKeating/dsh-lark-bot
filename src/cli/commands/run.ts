@@ -15,7 +15,9 @@ import { RunPolicyStore } from '../../bot/run-policy.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
+import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import type { StreamingChannel } from '../../bridge/types.js';
+import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -133,10 +135,16 @@ export async function runBot(options: StartOptions): Promise<void> {
   const archiver = new SessionArchive(paths.archivesDir(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
   const roleStore = new RoleStore(paths.profilePath(profileName, 'roles.json'));
+  const scopeDirectory = new ScopeDirectory(paths.profilePath(profileName, 'scopes.json'));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
-  await Promise.all([sessions.load(), workspaces.load(), roleStore.load()]);
+  await Promise.all([
+    sessions.load(),
+    workspaces.load(),
+    roleStore.load(),
+    scopeDirectory.load(),
+  ]);
 
   let adapter;
   try {
@@ -162,6 +170,27 @@ export async function runBot(options: StartOptions): Promise<void> {
   const dshConfig = new DshProviderManager({ env: process.env });
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
+  const notifyToken = generateNotifyToken();
+  const notifyServer = new NotifyServer({
+    token: notifyToken,
+    resolve: (message) => {
+      if (message.scope) {
+        return scopeDirectory.resolve(message.scope);
+      }
+      if (message.chatId) {
+        return scopeDirectory.resolveChat(message.chatId);
+      }
+      return undefined;
+    },
+    send: async (destination, payload) => {
+      if (!streaming) throw new Error('bridge channel is not ready');
+      await streaming.sendMarkdown(destination.chatId, payload.text, {
+        ...(destination.threadId ? { threadId: destination.threadId } : {}),
+        ...(payload.mentions ? { mentions: payload.mentions } : {}),
+      });
+    },
+  });
+  process.env.DSH_LARK_NOTIFY_TOKEN = notifyToken;
 
   const pending = new PendingQueue<NormalizedMessage>(
     DEBOUNCE_MS,
@@ -234,6 +263,7 @@ export async function runBot(options: StartOptions): Promise<void> {
     defaultScopeConcurrency: env.scopeConcurrency,
     retentionStore,
     roleStore,
+    scopeDirectory,
     archiver,
     defaultRetention: env.retentionMsgs,
     archiveMax: env.archiveMax,
@@ -259,6 +289,8 @@ export async function runBot(options: StartOptions): Promise<void> {
   const bridge = await startChannel(channelInput);
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
+  await notifyServer.start();
+  process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
 
   log.info('cli', 'started', {
     profile: profileName,
@@ -269,9 +301,15 @@ export async function runBot(options: StartOptions): Promise<void> {
   process.stdout.write(`dsh-lark-bot 已启动，profile=${profileName}\n`);
 
   await waitForShutdown();
+  await notifyServer.stop();
   await bridge.disconnect();
   await adapter.dispose?.();
-  await Promise.all([sessions.flush(), workspaces.flush(), roleStore.flush()]);
+  await Promise.all([
+    sessions.flush(),
+    workspaces.flush(),
+    roleStore.flush(),
+    scopeDirectory.flush(),
+  ]);
 }
 
 function errorMessage(error: unknown): string {

@@ -126,6 +126,8 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 | `/role set <id>`、`/role clear` | 为当前 scope 绑定 / 解除角色<br>Bind / unbind a role for this scope |
 | `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` | 创建 / 更新角色（管理员）<br>Create / update a role (admin) |
 | `/role remove <id>` | 删除角色（管理员）<br>Remove a role (admin) |
+| `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员）<br>Push a cross-session notification (admin) |
+| `/notify list` | 查看 bridge 已注册的 scope<br>List scopes known to the bridge |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）<br>View or set the live message retention window (overflow is archived) |
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录<br>Archive / list / clean session transcripts |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度<br>View or set card density |
@@ -165,6 +167,18 @@ tool guidance and role rules — then bind one to the current scope with `/role 
 run in that scope carries the role instructions, and the role model wins below the per-session
 `/model use` override. Role definitions persist in
 `~/.dsh-lark/profiles/<profile>/roles.json`.
+
+**出站 @ 提及与跨会话通知**：bridge 出站契约支持 `mentions`（@ 提及）与跨 chat/thread 发送；
+`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）。agent 侧还内置 `lark_notify`
+dsh 工具（SDK / ACP 两种 runtime 均可装配）：agent 完成任务后可主动向其他群 / 话题发消息并
+@ 指定成员，桥接进程通过 127.0.0.1 本地回调端口 + 随机 token 校验，不暴露公网。
+
+**Outbound mentions & cross-session notify**: the outbound contract supports `mentions` and
+cross-chat/thread sends; `/notify <scope|chatId> <text>` pushes a report to another session
+(admin). The agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP
+runtime profiles): after a task finishes it can push messages to other groups/topics and @mention
+members. The bridge listens on 127.0.0.1 with a random per-boot token — nothing is exposed to the
+public network.
 
 ### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
@@ -327,6 +341,8 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
+- **本地回调**：运行 `lark_notify` 工具时，dsh runtime 子进程通过 `127.0.0.1` 随机端口 +
+  每启动随机 token 回调 bridge 进程（仅本机回环，不监听公网）。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
@@ -338,6 +354,8 @@ This tool runs **locally**; before installing, be aware that it accesses:
   (including running shell commands and modifying files).
 - **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and
   task context sent to the DeepSeek API.
+- **Local callback**: when the `lark_notify` tool runs, the dsh runtime subprocess calls the
+  bridge process back over a random 127.0.0.1 port with a per-boot token (loopback only).
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp`
   profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write

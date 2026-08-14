@@ -12,6 +12,7 @@
 ┌──────────────────────────────────────────┐
 │  bridge/   飞书通道接入                    │
 │  · 消息事件、流式卡片、卡片交互、媒体下载    │
+│  · 出站 @ 提及 + 跨会话通知（lark_notify 工具）│
 └──────────────────────────────────────────┘
         │
         ▼
@@ -63,6 +64,10 @@ systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）�
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
    重启 runtime，也能与 scope 内并行 run 共存。
+6. **出站通知通道**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
+   持久化 scope → chat/thread 映射；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
+   SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
+   并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
 
 ## 目录映射 · Directory Mapping
 

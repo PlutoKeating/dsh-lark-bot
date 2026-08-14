@@ -6,6 +6,7 @@ import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
+import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -46,6 +47,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     defaultScopeConcurrency: 2,
     retentionStore: new RetentionStore(),
     roleStore: new RoleStore(':memory:'),
+    scopeDirectory: new ScopeDirectory(':memory:'),
     archiver,
     defaultRetention: 40,
     archiveMax: 50,

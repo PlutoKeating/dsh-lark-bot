@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccessManager } from '../../src/config/access-manager.js';
-import { RoleStore } from '../../src/bot/role-store.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import { tryHandleCommand, type CommandContext } from '../../src/commands/index.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
+import { RoleStore } from '../../src/bot/role-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager as RealAccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -67,49 +67,37 @@ async function makeContext(overrides: Partial<CommandContext> = {}): Promise<Com
   };
 }
 
-describe('role slash commands', () => {
-  it('creates, binds, shows and lists roles', async () => {
+describe('notify slash commands', () => {
+  it('sends a cross-scope notification to a known scope', async () => {
     const ctx = await makeContext();
-    await tryHandleCommand(
-      '/role save pm PM --persona You are the product manager. --model deepseek-v4-pro --tools fs,search --rules 1. Protect scope.',
-      ctx,
+    ctx.scopeDirectory.register('chat-b', 'oc_group_b', undefined);
+    await tryHandleCommand('/notify chat-b 任务完成，请 review', ctx);
+
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith('oc_group_b', '任务完成，请 review', {});
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('已发送通知'),
+      { replyTo: 'msg-1' },
     );
-    expect(ctx.roleStore.get('pm')?.name).toBe('PM');
-    expect(ctx.roleStore.get('pm')?.persona).toBe('You are the product manager.');
-    expect(ctx.roleStore.get('pm')?.model).toBe('deepseek-v4-pro');
-    expect(ctx.roleStore.get('pm')?.tools).toBe('fs,search');
-    expect(ctx.roleStore.get('pm')?.agentsMd).toBe('1. Protect scope.');
-
-    await tryHandleCommand('/role set pm', ctx);
-    expect(ctx.roleStore.roleForScope('chat-a')?.id).toBe('pm');
-
-    await tryHandleCommand('/role show pm', ctx);
-    await tryHandleCommand('/role list', ctx);
-    const calls = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls.some((call) => (call[1] as string).includes('Product Manager'))).toBe(false);
-    expect(calls.some((call) => (call[1] as string).includes('You are the product manager.'))).toBe(true);
-    expect(calls.some((call) => (call[1] as string).includes('← 当前 scope'))).toBe(true);
   });
 
-  it('gates role mutation commands to admins', async () => {
+  it('lists registered scopes and gates sends to admins', async () => {
     const accessManager = {
       isAdmin: (id: string | undefined) => id === 'ou_real_admin',
       snapshot: () => ({ admins: ['ou_real_admin'], allowedUsers: [], allowedChats: [] }),
     } as unknown as AccessManager;
     const ctx = await makeContext({ senderId: 'ou_guest', accessManager });
-    await tryHandleCommand('/role save evil Hacker --persona pwn', ctx);
-    expect(ctx.roleStore.get('evil')).toBeUndefined();
-    const calls = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock.calls;
-    expect((calls[0]?.[1] as string) ?? '').toContain('仅管理员');
-  });
+    await tryHandleCommand('/notify chat-b hi', ctx);
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('仅管理员'),
+      { replyTo: 'msg-1' },
+    );
 
-  it('clears and removes roles', async () => {
-    const ctx = await makeContext();
-    await tryHandleCommand('/role save dev Dev --persona Write code.', ctx);
-    await tryHandleCommand('/role set dev', ctx);
-    await tryHandleCommand('/role clear', ctx);
-    expect(ctx.roleStore.roleForScope('chat-a')).toBeUndefined();
-    await tryHandleCommand('/role remove dev', ctx);
-    expect(ctx.roleStore.get('dev')).toBeUndefined();
+    const adminCtx = await makeContext();
+    adminCtx.scopeDirectory.register('chat-b', 'oc_group_b', undefined);
+    await tryHandleCommand('/notify list', adminCtx);
+    const calls = (adminCtx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((call) => (call[1] as string).includes('chat-b'))).toBe(true);
   });
 });

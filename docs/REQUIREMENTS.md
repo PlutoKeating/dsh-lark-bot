@@ -116,6 +116,16 @@
   （单个 runtime 无法同时承载多个 persona），prompt 注入 + 每请求 model 参数是可与并行
   协同共存的完整方案。
 
+### 4.8 出站 @ 提及与跨会话通知（outbound notify，0.6.0）
+
+- 出站契约 `SendOptions { replyTo?, mentions?, threadId? }`：`mentions` 以
+  `MentionTarget { userId, name? }` 表达，桥接层自动拼接 `<at>` 提及标记。
+- `ScopeDirectory`（`<profile>/scopes.json`）持久化 scope → chat/thread 映射；
+  `/notify <scope|chatId> <text>`（管理员）与 `/notify list`。
+- agent 侧 `lark_notify` dsh 工具（SDK / ACP runtime 自动装配）：`text` / `scope` /
+  `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
+  回调 bridge（仅回环，不监听公网，token 不落盘）。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints

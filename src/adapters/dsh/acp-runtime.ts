@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
+import { ownPackageInfo } from './own-package.js';
 
 export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
 export const ACP_VERSION = DSH_COMPATIBILITY.acp;
@@ -39,12 +40,14 @@ export function acpProfileRoot(home: string, profile: string, env?: NodeJS.Proce
 }
 
 function packageJsonFor(profile: string): string {
+  const own = ownPackageInfo();
   return `${JSON.stringify(
     {
       name: `dsh-profile-${profile}`,
       private: true,
       dependencies: {
         [ACP_PACKAGE]: ACP_VERSION,
+        [own.name]: `link:${own.root}`,
       },
       dsh: {
         profile: {
@@ -58,6 +61,7 @@ function packageJsonFor(profile: string): string {
 }
 
 export function acpPatchYaml(provider: string, model: string): string {
+  const own = ownPackageInfo();
   return [
     '# dsh-lark ACP JSON-RPC runtime overlay (managed by dsh-lark-bot).',
     '# stdout is reserved for ACP JSON-RPC frames; no console logger may load.',
@@ -81,6 +85,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '- id: hmr',
     '  disabled: true',
     '',
+    // In-process bridge callback tool (same contract as the SDK runtime).
+    '- insert:',
+    '    - id: lark-notify',
+    `      name: '${own.name}/notify'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
   ].join('\n');
 }
 
@@ -93,11 +105,13 @@ function acpPluginInstalled(profileRoot: string): boolean {
 }
 
 export function isAcpProfileReady(profileRoot: string): boolean {
+  const own = ownPackageInfo();
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    acpPluginInstalled(profileRoot)
+    acpPluginInstalled(profileRoot) &&
+    existsSync(join(profileRoot, 'node_modules', own.name))
   );
 }
 
@@ -144,24 +158,21 @@ export async function ensureAcpProfile(
   const ready = isAcpProfileReady(root);
 
   try {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
+    await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
+    await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
     if (!ready) {
-      await mkdir(root, { recursive: true });
-      await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
-      await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
-      await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
       const install = options.install ?? runPnpmInstall;
       await install(root);
-      if (!isAcpProfileReady(root)) {
-        return {
-          ok: false,
-          created: true,
-          error: `${ACP_PACKAGE}@${ACP_VERSION} was not found after install`,
-        };
-      }
     }
-    // The patch carries the provider/model route; rewrite it when changed so
-    // profile re-use picks up env overrides without reinstalling plugins.
-    await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
+    if (!isAcpProfileReady(root)) {
+      return {
+        ok: false,
+        created: true,
+        error: `${ACP_PACKAGE}@${ACP_VERSION} or bridge package was not found after install`,
+      };
+    }
     return { ok: true, created: !ready };
   } catch (error) {
     return {

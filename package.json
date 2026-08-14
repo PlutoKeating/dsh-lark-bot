@@ -57,7 +57,9 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
     "@larksuite/channel": "^0.4.1",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",

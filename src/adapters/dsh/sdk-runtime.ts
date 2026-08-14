@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
+import { ownPackageInfo } from './own-package.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
 export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
@@ -44,12 +45,14 @@ export function sdkProfileRoot(home: string, profile: string, env?: NodeJS.Proce
 }
 
 function packageJsonFor(profile: string): string {
+  const own = ownPackageInfo();
   return `${JSON.stringify(
     {
       name: `dsh-profile-${profile}`,
       private: true,
       dependencies: {
         [SDK_SERVER_PACKAGE]: SDK_SERVER_VERSION,
+        [own.name]: `link:${own.root}`,
       },
       dsh: {
         profile: {
@@ -63,6 +66,7 @@ function packageJsonFor(profile: string): string {
 }
 
 function patchYamlFor(): string {
+  const own = ownPackageInfo();
   return [
     '# dsh-lark SDK JSON-RPC runtime overlay (managed by dsh-lark-bot).',
     '# stdout is reserved for SDK JSON-RPC frames; no console logger may load.',
@@ -85,6 +89,15 @@ function patchYamlFor(): string {
     '- id: hmr',
     '  disabled: true',
     '',
+    // In-process bridge callback tool: lets the agent mention users and push
+    // messages to other chats/topics through the running bridge process.
+    '- insert:',
+    '    - id: lark-notify',
+    `      name: '${own.name}/notify'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
   ].join('\n');
 }
 
@@ -97,11 +110,13 @@ function sdkServerInstalled(profileRoot: string): boolean {
 }
 
 export function isSdkProfileReady(profileRoot: string): boolean {
+  const own = ownPackageInfo();
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    sdkServerInstalled(profileRoot)
+    sdkServerInstalled(profileRoot) &&
+    existsSync(join(profileRoot, 'node_modules', own.name))
   );
 }
 
@@ -150,7 +165,9 @@ export async function ensureSdkProfile(
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
     await writeFile(join(root, 'cordis.patch.yml'), patchYamlFor(), 'utf8');
     const install = options.install ?? runPnpmInstall;
-    await install(root);
+    if (!isSdkProfileReady(root)) {
+      await install(root);
+    }
     if (!isSdkProfileReady(root)) {
       return {
         ok: false,

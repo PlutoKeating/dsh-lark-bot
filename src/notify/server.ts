@@ -1,0 +1,134 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { log } from '../core/logger.js';
+import type { MentionTarget } from '../bridge/types.js';
+
+export interface NotifyMessage {
+  token: string;
+  /** Scope key (chat id or `chat:thread`); resolved via the scope directory. */
+  scope?: string;
+  /** Direct chat id fallback when scope is unknown. */
+  chatId?: string;
+  threadId?: string;
+  text: string;
+  mentions?: MentionTarget[];
+}
+
+export interface NotifyDestination {
+  chatId: string;
+  threadId: string | undefined;
+}
+
+export interface NotifyServerDeps {
+  token: string;
+  port?: number;
+  /** Resolve a scope/chat target to a concrete chat destination. */
+  resolve: (message: NotifyMessage) => NotifyDestination | undefined;
+  /** Send the outbound message (mentions supported). */
+  send: (
+    destination: NotifyDestination,
+    payload: { text: string; mentions?: MentionTarget[] },
+  ) => Promise<void>;
+}
+
+/**
+ * Localhost-only callback server for the dsh `lark_notify` tool. The dsh
+ * runtime (a child process) calls back into the bridge process over
+ * `http://127.0.0.1:<port>/notify` with a shared token, so agents can mention
+ * users and push messages to other chats/topics without exposing anything to
+ * the network.
+ */
+export class NotifyServer {
+  private server: Server | undefined;
+  private readonly token: string;
+  private readonly deps: NotifyServerDeps;
+  url: string | undefined;
+
+  constructor(deps: NotifyServerDeps) {
+    this.deps = deps;
+    this.token = deps.token;
+  }
+
+  async start(): Promise<void> {
+    if (this.server) return;
+    const server = createServer((req, res) => {
+      void this.handle(req, res);
+    });
+    this.server = server;
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(this.deps.port ?? 0, '127.0.0.1', () => {
+        const address = server.address() as AddressInfo;
+        this.url = `http://127.0.0.1:${String(address.port)}/notify`;
+        resolve();
+      });
+    });
+    log.info('notify', 'server-started', { url: this.url });
+  }
+
+  async stop(): Promise<void> {
+    const server = this.server;
+    this.server = undefined;
+    if (!server) return;
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections?.();
+    });
+  }
+
+  private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const respond = (status: number, body: Record<string, unknown>): void => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(`${JSON.stringify(body)}\n`);
+    };
+    if (req.method !== 'POST' || req.url !== '/notify') {
+      respond(404, { ok: false, error: 'not found' });
+      return;
+    }
+    try {
+      const body = await readBody(req);
+      const message = JSON.parse(body) as NotifyMessage;
+      if (message.token !== this.token) {
+        respond(401, { ok: false, error: 'invalid token' });
+        return;
+      }
+      if (!message.text?.trim()) {
+        respond(400, { ok: false, error: 'text is required' });
+        return;
+      }
+      const destination = this.deps.resolve(message);
+      if (!destination) {
+        respond(404, { ok: false, error: `unknown scope/chat: ${message.scope ?? message.chatId ?? ''}` });
+        return;
+      }
+      await this.deps.send(destination, {
+        text: message.text,
+        ...(message.mentions === undefined ? {} : { mentions: message.mentions }),
+      });
+      respond(200, { ok: true, chatId: destination.chatId, threadId: destination.threadId ?? null });
+    } catch (error) {
+      log.fail('notify', error);
+      respond(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+      if (chunks.reduce((size, item) => size + item.length, 0) > 1_000_000) {
+        reject(new Error('payload too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+export function generateNotifyToken(): string {
+  return `dsh-lark-${randomBytes(18).toString('hex')}`;
+}

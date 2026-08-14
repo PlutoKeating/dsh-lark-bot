@@ -11,9 +11,15 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 0.25.1
         version: 0.25.1(zod@4.4.3)
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@deepseek-ai/dsh-sdk-client':
         specifier: 0.1.0-rc.6
         version: 0.1.0-rc.6(c229de258ac217f4f8aeecfa07b958b6)
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.1.0-rc.6
+        version: 0.1.0-rc.6(f8724372086ccc1457fc84e7becee2e0)
       '@larksuite/channel':
         specifier: ^0.4.1
         version: 0.4.1

@@ -10,6 +10,8 @@ import type { RoleStore } from '../bot/role-store.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
+import type { ScopeDirectory } from '../bridge/scope-directory.js';
+import type { SendOptions } from '../bridge/send-options.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { renderWorkspaceCard } from '../card/workspace-card.js';
 import { parseCardDensity, type CardDensity } from '../card/density.js';
@@ -24,12 +26,13 @@ import {
 } from './models.js';
 import { handleArchive, handleRetention } from './archive.js';
 import { handleRole } from './roles.js';
+import { handleNotify } from './notify.js';
 
 export interface CommandChannel {
   sendMarkdown(
     chatId: string,
     markdown: string,
-    options?: { replyTo?: string },
+    options?: SendOptions,
   ): Promise<void>;
   sendCard?(chatId: string, card: object): Promise<void>;
 }
@@ -48,6 +51,7 @@ export interface CommandContext {
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   roleStore: RoleStore;
+  scopeDirectory: ScopeDirectory;
   archiver: SessionArchive;
   defaultRetention: number;
   archiveMax: number;
@@ -81,6 +85,8 @@ const HELP = [
   '- `/role list|show <id>|set <id>|clear` — 查看 / 绑定角色',
   '- `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` — 创建/更新角色（管理员）',
   '- `/role remove <id>` — 删除角色（管理员）',
+  '- `/notify <scope|chatId> <text>` — 跨会话发送通知（管理员）',
+  '- `/notify list` — 查看已注册 scope',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive list [N]`、`/archive clean` — 归档 / 查看 / 清理会话',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
@@ -435,6 +441,7 @@ const handlers: Record<string, Handler> = {
   '/timeout': handleTimeout,
   '/concurrency': handleConcurrency,
   '/role': handleRole,
+  '/notify': handleNotify,
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,
