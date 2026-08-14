@@ -41,6 +41,18 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 - README「兼容性」章节需声明支持的 dsh 版本 / mainline commit 及**最后验证日期**。
 - dsh 处于 developer preview，接口**频繁破坏性变更**。交付时锁定一个验证过的 commit，并在 dsh 升级后复验更新。
 - 接入点集中在 `src/adapters/`（ACP / SDK），dsh 漂移时只改这一层，不波及桥接核心。
+- 锁定版本以 [`src/config/dsh-compat.ts`](../src/config/dsh-compat.ts) 为单一事实来源，
+  矩阵文档与升级手册见 [`docs/COMPATIBILITY.md`](COMPATIBILITY.md)。
+
+### 4.1 自动化保障
+
+- `scripts/check-dsh-upstream.mjs`（+ 每周 CI `dsh-upstream` 任务）：对比 npm `latest`，
+  上游发布新 stable 时以失败引起注意；同时校验 `dsh-compat.ts` 与 `package.json`
+  的 `dsh-sdk-client` 锁定版本无漂移。
+- `scripts/probe-dsh-compat.mjs`（+ CI `compat-probe` 任务）：临时 DSH_HOME 安装锁定版
+  dsh + SDK server，通过 `dist/cli.js doctor` 走真实 SDK 初始化握手，满足 L4 运行实测。
+- 发版前执行 `pnpm release:check`（`ci:local` + 上游一致性检查）与本机
+  `dsh-lark-bot restart` + `doctor` 实机回归。
 
 ## 5. 风险披露 · Risk Disclosure
 

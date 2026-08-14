@@ -167,7 +167,8 @@ rm -rf ~/.dsh-lark
 
 - **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（2026-08-14：SDK JSON-RPC / ACP runtime 握手 +
   真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
-  具体锁定版本与漂移策略见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
+  具体锁定版本、升级政策与自动化探测见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)，
+  adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
 - **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
@@ -272,6 +273,7 @@ pnpm publish:dual
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 架构分层与目录映射<br>Architecture layering & directory mapping |
 | [`docs/API.md`](docs/API.md) | 模块接口与契约<br>Module interfaces & contracts |
 | [`docs/QUICK_START.md`](docs/QUICK_START.md) | 安装与快速开始<br>Install & quick start |
+| [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) | 兼容矩阵、升级政策与自动化<br>Compatibility matrix, upgrade policy & automation |
 | [`docs/MANUAL.md`](docs/MANUAL.md) | 完整用户手册<br>Complete user manual |
 | [`docs/adapter-notes.md`](docs/adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线）<br>How to plug the dsh adapter |
 | [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读）<br>Ecosystem & delivery standards (for engineers) |
