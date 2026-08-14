@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
@@ -47,6 +48,8 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     workspaces: new WorkspaceStore(':memory:'),
     activeRuns: new ActiveRuns(),
     runPolicies: new RunPolicyStore(),
+    concurrencyStore: new ConcurrencyStore(),
+    defaultScopeConcurrency: 2,
     retentionStore: new RetentionStore(),
     archiver: makeArchiver(),
     defaultRetention: 40,

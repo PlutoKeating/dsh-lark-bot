@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import type { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -31,6 +32,8 @@ async function withContext(
     workspaces: {} as CommandContext['workspaces'],
     activeRuns: {} as CommandContext['activeRuns'],
     runPolicies: {} as CommandContext['runPolicies'],
+    concurrencyStore: new ConcurrencyStore(),
+    defaultScopeConcurrency: 2,
     retentionStore: new RetentionStore(),
     archiver: {
       archive: vi.fn(),

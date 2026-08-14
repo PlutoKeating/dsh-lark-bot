@@ -4,6 +4,7 @@ import type { RuntimeEnv } from '../../config/env.js';
 import { buildAgentAdapter } from '../../adapters/index.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
 import { ApprovalRegistry } from '../../bot/approvals.js';
+import { ConcurrencyStore } from '../../bot/concurrency-store.js';
 import { DensityStore } from '../../bot/density-store.js';
 import { ModelStore } from '../../bot/model-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
@@ -150,6 +151,7 @@ export async function runBot(options: StartOptions): Promise<void> {
   }
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
+  const concurrencyStore = new ConcurrencyStore();
   const retentionStore = new RetentionStore();
   const approvals = new ApprovalRegistry();
   const questions = new QuestionRegistry();
@@ -159,55 +161,60 @@ export async function runBot(options: StartOptions): Promise<void> {
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
 
-  const pending = new PendingQueue<NormalizedMessage>(DEBOUNCE_MS, async (scope, batch) => {
-    if (!streaming) return;
-    const first = batch[0];
-    if (!first) return;
-    pending.block(scope);
-    try {
-      const attachments = await prepareAttachments(
-        larkChannel,
-        first,
-        paths.mediaDir(profileName),
-      );
-      const messages = [
-        first.content,
-        ...attachments.textFileNotes,
-      ].filter(Boolean);
-      const runInput: Parameters<typeof runAgentBatch>[0] = {
-        scope,
-        chatId: first.chatId,
-        messages,
-        adapter,
-        sessions,
-        workspaces,
-        workspaceManager: worktreeManager,
-        activeRuns,
-        runPolicies,
-        archiver,
-        approvals,
-        questions,
-        densityStore,
-        channel: streaming,
-        defaultWorkspace,
-        replyTo: first.messageId,
-        runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
-        retention: retentionStore.get(scope) ?? env.retentionMsgs,
-        images: attachments.imagePaths,
-        model:
-          models.get(scope) ??
-          activeProfile.preferences.model ??
-          (await dshConfig.defaultModel().catch(() => undefined)) ??
-          env.model,
-      };
-      if (activeProfile.preferences.stopGraceMs !== undefined) {
-        runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
+  const pending = new PendingQueue<NormalizedMessage>(
+    DEBOUNCE_MS,
+    async (scope, batch) => {
+      if (!streaming) return;
+      const first = batch[0];
+      if (!first) return;
+      pending.block(scope);
+      try {
+        const attachments = await prepareAttachments(
+          larkChannel,
+          first,
+          paths.mediaDir(profileName),
+        );
+        const messages = [
+          first.content,
+          ...attachments.textFileNotes,
+        ].filter(Boolean);
+        const runInput: Parameters<typeof runAgentBatch>[0] = {
+          scope,
+          chatId: first.chatId,
+          messages,
+          adapter,
+          sessions,
+          workspaces,
+          workspaceManager: worktreeManager,
+          activeRuns,
+          runPolicies,
+          archiver,
+          approvals,
+          questions,
+          densityStore,
+          channel: streaming,
+          defaultWorkspace,
+          replyTo: first.messageId,
+          runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
+          maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
+          retention: retentionStore.get(scope) ?? env.retentionMsgs,
+          images: attachments.imagePaths,
+          model:
+            models.get(scope) ??
+            activeProfile.preferences.model ??
+            (await dshConfig.defaultModel().catch(() => undefined)) ??
+            env.model,
+        };
+        if (activeProfile.preferences.stopGraceMs !== undefined) {
+          runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
+        }
+        await runAgentBatch(runInput);
+      } finally {
+        pending.unblock(scope);
       }
-      await runAgentBatch(runInput);
-    } finally {
-      pending.unblock(scope);
-    }
-  });
+    },
+    (scope) => concurrencyStore.get(scope) ?? env.scopeConcurrency,
+  );
 
   const channelInput: Parameters<typeof startChannel>[0] = {
     appId: activeProfile.accounts.appId,
@@ -218,6 +225,8 @@ export async function runBot(options: StartOptions): Promise<void> {
     workspaces,
     activeRuns,
     runPolicies,
+    concurrencyStore,
+    defaultScopeConcurrency: env.scopeConcurrency,
     retentionStore,
     archiver,
     defaultRetention: env.retentionMsgs,

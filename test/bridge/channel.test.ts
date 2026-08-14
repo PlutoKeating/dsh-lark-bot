@@ -7,6 +7,7 @@ import type {
 } from '@larksuite/channel';
 import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
@@ -111,6 +112,8 @@ describe('startChannel', () => {
       workspaces,
       activeRuns,
       runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
       archiver: {
         archive: vi.fn(),
@@ -151,7 +154,7 @@ describe('startChannel', () => {
     const sessions = new SessionStore(':memory:');
     const workspaces = new WorkspaceStore(':memory:');
     const activeRuns = new ActiveRuns();
-    const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(true);
+    const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(1);
     const pending = { push: vi.fn() };
 
     await startChannel({
@@ -163,6 +166,8 @@ describe('startChannel', () => {
       workspaces,
       activeRuns,
       runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
       archiver: {
         archive: vi.fn(),

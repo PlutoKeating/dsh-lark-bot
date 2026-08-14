@@ -11,6 +11,7 @@
 | **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
 | **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
 | **P8 会话归档** Session archival | 可配置保留窗口、超窗自动归档、`/archive` 手动导出（Markdown + JSONL + Git commit）、保留策略清理 | ✅ 已完成 Done（0.6.0） |
+| **P9 并行协同** Parallel collaboration | 同一 scope 多 run 并行（`ActiveRuns` / `PendingQueue` 并发上限 / `/concurrency`）、并行 run 独立 dsh session | ✅ 已完成 Done（0.6.0） |
 
 ## 里程碑 · Milestones
 
@@ -30,6 +31,9 @@
   `docs/COMPATIBILITY.md` 升级手册、`/help` 测试覆盖。
 - **P8 done**（0.6.0）：可配置保留窗口（`/retention` + `DSH_LARK_RETENTION_MSGS`）、超窗消息
   自动归档、`/archive` 手动导出与 `/archive list|clean`、保留策略清理。
+- **P9 done**（0.6.0）：同一 scope 并行 run（默认 2，`/concurrency` / `DSH_LARK_SCOPE_CONCURRENCY`
+  调整）；`ActiveRuns` 支持多 run 与定向终止，`PendingQueue` 按 scope 并发上限 flush，并行 run
+  使用独立 dsh session；`/status` 展示全部 active runs。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

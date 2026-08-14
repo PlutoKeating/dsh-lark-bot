@@ -71,6 +71,7 @@ dsh-lark-bot start \
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
+| `/concurrency [N\|default]` | 查看或设置当前 scope 的并行任务数 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
 | `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
@@ -113,6 +114,9 @@ dsh-lark-bot start \
 
 - 每个飞书私聊、群聊、话题对应独立 scope。
 - 每个 scope 默认保存最近 40 条对话（`/retention` 调整，`DSH_LARK_RETENTION_MSGS` 配置默认值）。
+- 同一 scope 默认允许 2 个任务并行（`/concurrency` 或 `DSH_LARK_SCOPE_CONCURRENCY` 调整，
+  1 为严格串行）；并行 run 各持独立 dsh session 与 runId，共享 scope 的会话转写与工作区，
+  `/status` 显示全部 active runs，`/stop` 终止全部。
 - 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
   Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
   可审计、可回放；`/archive [note]` 可随时手动导出完整会话。

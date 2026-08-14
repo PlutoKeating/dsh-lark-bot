@@ -3,6 +3,7 @@ import type { AgentAdapter } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
+import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { ModelStore } from '../bot/model-store.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
 import type { QuestionRegistry } from '../bot/questions.js';
@@ -28,6 +29,8 @@ export interface StartChannelDeps {
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
+  concurrencyStore: ConcurrencyStore;
+  defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   archiver: SessionArchive;
   defaultRetention: number;
@@ -114,6 +117,8 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         workspaces: deps.workspaces,
         activeRuns: deps.activeRuns,
         runPolicies: deps.runPolicies,
+        concurrencyStore: deps.concurrencyStore,
+        defaultScopeConcurrency: deps.defaultScopeConcurrency,
         retentionStore: deps.retentionStore,
         archiver: deps.archiver,
         defaultRetention: deps.defaultRetention,

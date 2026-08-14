@@ -41,6 +41,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
+- `DSH_LARK_SCOPE_CONCURRENCY`：每个 scope 允许的并行 run 数，默认 `2`（`1` 为严格串行）。
 - `DSH_LARK_RETENTION_MSGS`：每个 scope 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
 - `DSH_LARK_ARCHIVE_MAX`：每个 scope 最多保留的归档数，默认 `50`（`0` 关闭清理）。
 - `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
@@ -116,6 +117,19 @@ export class RunPolicyStore {
 ```
 
 飞书命令 `/timeout [N|off|default]` 读写该 store，覆盖值优先于 profile / 环境变量默认值。
+
+`src/bot/concurrency-store.ts` 提供内存级 `ConcurrencyStore`，按 scope 覆盖并行 run 上限；
+`/concurrency [N|default]` 读写，覆盖值优先于 `DSH_LARK_SCOPE_CONCURRENCY`（默认 2）。
+
+`src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
+（`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
+`interrupt(scope)` 终止全部并返回数量，`interruptRun(scope, runId)` 定向终止单个。
+`src/bot/pending-queue.ts` 的 `PendingQueue` 支持按 scope 的并发上限
+（`concurrencyFor(scope)` 构造参数），同一 scope 可并行 flush 多个批次；
+`block(scope)` 只阻止新批次启动，不影响已运行的批次。
+
+`runAgentBatch`（`src/bridge/run-flow.ts`）按 `maxConcurrency` 拒绝超限 run；同一 scope 的
+**首个** run 会续跑 dsh 原生 session，并发 run 一律使用全新 session id，避免共享 wire session。
 
 `src/config/access-manager.ts` 的 `AccessManager` 把 `/invite user|admin|group|list|remove` 的
 变更持久化到当前 profile 的访问白名单。
@@ -412,7 +426,7 @@ export interface ServiceController {
 `--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
-`/stop`、`/timeout`、`/retention`、`/archive [note|list [N]|clean]`、`/density`、
+`/stop`、`/timeout`、`/concurrency`、`/retention`、`/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。

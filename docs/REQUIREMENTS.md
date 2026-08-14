@@ -83,11 +83,13 @@
 - 幂等看门狗 `/timeout`（agent 无输出 N 分钟自动 kill）。
 
 ### 4.5 任务调度（scheduling）
-- 异步任务队列，长任务不阻塞事件回调。
-- 定时任务 / 依赖编排（dsh 自带 workflow capability）。
+- 异步任务队列（0.6.0）：同一 scope 默认 2 个 run 并行（`/concurrency` /
+  `DSH_LARK_SCOPE_CONCURRENCY` 调整，1 为严格串行），消息批量合并后以独立 run 推进，
+  互不阻塞事件回调；并行 run 使用独立 dsh session 与 runId，`/status` / `/stop` 覆盖全部。
+- 定时任务 / 依赖编排（dsh 自带 workflow capability）：规划中，依赖上游能力接入。
 
-> 状态说明：当前仅有单 scope 运行锁与消息排队（`PendingQueue`）；
-> **异步任务队列 / 定时任务 / workflow 编排**属于 P3 待办，尚未实现。
+> 状态说明：**scope 内并行 run 与异步任务队列已实现（0.6.0）**；定时任务 / workflow 编排
+> 属于后续迭代，等待上游能力接入。
 
 ### 4.6 模型 / provider / 凭据管理（已实现，0.5.0）
 

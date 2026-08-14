@@ -121,6 +121,7 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 | `/resume` | 查看当前会话最近上下文<br>Show the session's recent context |
 | `/stop` | 终止当前任务<br>Stop the current task |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时<br>View or set the current session run timeout |
+| `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数（默认 2）<br>View or set the concurrent-run limit for this scope (default 2) |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）<br>View or set the live message retention window (overflow is archived) |
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录<br>Archive / list / clean session transcripts |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度<br>View or set card density |
@@ -138,6 +139,15 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+
+同一 scope（私聊 / 群聊 / 话题）默认允许 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或
+`/concurrency` 调整）：连续发来的多条消息会以独立 run 并行推进，每个 run 使用独立的 dsh
+session 与独立 runId，`/status` 展示全部运行中的 run，`/stop` 一次性终止全部任务。
+
+Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with
+`DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs,
+each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts
+them all.
 
 ### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
@@ -281,6 +291,7 @@ Core environment variables:
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）<br>Stale-message rejection window (0 disables) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时<br>Wall-clock timeout for a single run |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期<br>Grace period after SIGTERM before SIGKILL |
+| `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行）<br>Concurrent runs per scope (1 = strictly serial) |
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留）<br>Messages kept per scope (0 keeps everything) |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理）<br>Max archives kept per scope (0 disables pruning) |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理）<br>Max archive age in days (0 disables pruning) |

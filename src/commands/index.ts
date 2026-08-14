@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
+import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { RetentionStore } from '../bot/retention-store.js';
@@ -41,6 +42,8 @@ export interface CommandContext {
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
+  concurrencyStore: ConcurrencyStore;
+  defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   archiver: SessionArchive;
   defaultRetention: number;
@@ -71,6 +74,7 @@ const HELP = [
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
+  '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive list [N]`、`/archive clean` — 归档 / 查看 / 清理会话',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
@@ -93,9 +97,12 @@ async function reply(ctx: CommandContext, markdown: string): Promise<void> {
 }
 
 async function handleNew(_args: string, ctx: CommandContext): Promise<void> {
-  const wasRunning = await ctx.activeRuns.interrupt(ctx.scope);
+  const interrupted = await ctx.activeRuns.interrupt(ctx.scope);
   ctx.sessions.clear(ctx.scope);
-  await reply(ctx, wasRunning ? '已中断当前任务并开始新会话。' : '已开始新会话。');
+  await reply(
+    ctx,
+    interrupted > 0 ? `已中断 ${String(interrupted)} 个任务并开始新会话。` : '已开始新会话。',
+  );
 }
 
 async function handleCd(args: string, ctx: CommandContext): Promise<void> {
@@ -182,9 +189,10 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
 async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
   const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
   const session = ctx.sessions.getRaw(ctx.scope)?.sessionId ?? '(无)';
-  const running = Boolean(ctx.activeRuns.get(ctx.scope));
+  const active = ctx.activeRuns.list(ctx.scope);
   const scopeLabel =
     ctx.chatMode === 'topic' ? `${ctx.scope}（话题独立 session）` : ctx.scope;
+  const runLines = active.map((run) => `  - \`${run.runId}\``);
 
   await reply(
     ctx,
@@ -192,7 +200,8 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
       `🧭 **scope**: \`${scopeLabel}\``,
       `📁 **cwd**: \`${cwd}\``,
       `🔗 **session**: \`${session}\``,
-      `🏃 **active run**: ${running ? 'yes' : 'no'}`,
+      `🏃 **active runs**: ${String(active.length)}`,
+      ...runLines,
     ].join('\n'),
   );
 }
@@ -215,7 +224,10 @@ async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
 
 async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
   const stopped = await ctx.activeRuns.interrupt(ctx.scope);
-  await reply(ctx, stopped ? '已请求终止当前任务。' : '当前没有运行中的任务。');
+  await reply(
+    ctx,
+    stopped > 0 ? `已请求终止当前 scope 的全部 ${String(stopped)} 个任务。` : '当前没有运行中的任务。',
+  );
 }
 
 async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
@@ -253,6 +265,34 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
 
   ctx.runPolicies.set(ctx.scope, minutes * 60_000);
   await reply(ctx, `已设置当前会话运行超时：${minutes} 分钟。`);
+}
+
+async function handleConcurrency(args: string, ctx: CommandContext): Promise<void> {
+  const input = args.trim();
+  const effective = ctx.concurrencyStore.get(ctx.scope) ?? ctx.defaultScopeConcurrency;
+
+  if (!input) {
+    await reply(
+      ctx,
+      `当前 scope 的并行任务数：**${String(effective)}**。可用 \`/concurrency <N|default>\` 调整（N ≥ 1）。`,
+    );
+    return;
+  }
+
+  if (input === 'default') {
+    ctx.concurrencyStore.clear(ctx.scope);
+    await reply(ctx, `已恢复默认并行任务数（${String(ctx.defaultScopeConcurrency)}）。`);
+    return;
+  }
+
+  const n = Number(input);
+  if (!Number.isInteger(n) || n < 1) {
+    await reply(ctx, '用法：`/concurrency <N|default>`，N 为大于等于 1 的整数。');
+    return;
+  }
+
+  ctx.concurrencyStore.set(ctx.scope, n);
+  await reply(ctx, `已设置当前 scope 的并行任务数：**${String(n)}**。`);
 }
 
 async function handleDensity(args: string, ctx: CommandContext): Promise<void> {
@@ -384,6 +424,7 @@ const handlers: Record<string, Handler> = {
   '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,
+  '/concurrency': handleConcurrency,
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,

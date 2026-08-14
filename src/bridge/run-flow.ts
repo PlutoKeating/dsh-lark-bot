@@ -40,6 +40,8 @@ export interface RunFlowInput {
   workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
   runPolicies?: RunPolicyStore;
+  /** Max concurrent runs allowed in the scope (queue enforces; guard is a fallback). */
+  maxConcurrency?: number;
   approvals?: ApprovalRegistry;
   questions?: QuestionRegistry;
   densityStore?: DensityStore;
@@ -55,8 +57,9 @@ export interface RunFlowInput {
 export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   const replyOptions = input.replyTo ? { replyTo: input.replyTo } : {};
 
-  if (input.activeRuns.get(input.scope)) {
-    await input.channel.sendMarkdown(input.chatId, '当前会话已有任务正在运行，请先 `/stop` 或等待完成。', {
+  const activeBefore = input.activeRuns.count(input.scope);
+  if (input.maxConcurrency !== undefined && activeBefore >= input.maxConcurrency) {
+    await input.channel.sendMarkdown(input.chatId, '当前会话的并行任务数已达上限，请稍后再试或 `/stop` 部分任务。', {
       ...replyOptions,
     });
     return;
@@ -67,7 +70,12 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     ? await input.workspaceManager.ensure(input.scope, requestedCwd)
     : { cwd: requestedCwd };
   const cwd = workspace.cwd;
-  const sessionId = input.sessions.resumeFor(input.scope, cwd);
+  // Only the first run in a scope resumes the native dsh session: concurrent
+  // runs get fresh sessions so they never share one wire session id.
+  const sessionId =
+    activeBefore === 0
+      ? input.sessions.resumeFor(input.scope, cwd)
+      : undefined;
   const history = input.sessions.historyFor(input.scope, cwd);
   const prompt = buildPrompt(history, input.messages);
   const runId = randomUUID();
@@ -175,7 +183,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       // best effort; the card may already have failed
     }
   } finally {
-    input.activeRuns.delete(input.scope);
+    input.activeRuns.delete(input.scope, runId);
     if (input.approvals) {
       input.approvals.settleAll(input.scope, 'cancelled');
     }

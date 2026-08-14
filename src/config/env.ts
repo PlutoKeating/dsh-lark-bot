@@ -21,6 +21,8 @@ export interface RuntimeEnv {
   maxTokens: number | undefined;
   runTimeoutMs: number;
   stopGraceMs: number;
+  /** Max agent runs allowed concurrently per scope (default 2). */
+  scopeConcurrency: number;
   /** Live messages kept per scope before overflow is archived (default 40). */
   retentionMsgs: number;
   /** Max archives retained per scope before pruning (default 50, 0 disables). */
@@ -37,6 +39,7 @@ const DEFAULTS = {
   model: 'deepseek-v4-flash',
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
+  scopeConcurrency: 2,
   retentionMsgs: 40,
   archiveMax: 50,
   archiveMaxAgeDays: 90,
@@ -130,6 +133,16 @@ function parsePositiveInt(value: string | undefined, fallback: number, name: str
   return parsed;
 }
 
+function parseMinOneInt(value: string | undefined, fallback: number, name: string): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -162,6 +175,11 @@ export function loadRuntimeEnv(
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
     stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
+    scopeConcurrency: parseMinOneInt(
+      source.DSH_LARK_SCOPE_CONCURRENCY,
+      DEFAULTS.scopeConcurrency,
+      'DSH_LARK_SCOPE_CONCURRENCY',
+    ),
     retentionMsgs: parsePositiveInt(
       source.DSH_LARK_RETENTION_MSGS,
       DEFAULTS.retentionMsgs,

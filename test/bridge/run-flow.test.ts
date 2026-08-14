@@ -245,6 +245,119 @@ describe('runAgentBatch', () => {
       { role: 'assistant', content: 'I remember.' },
     ]);
   });
+
+  it('gives concurrent runs in one scope fresh sessions and tracks both', async () => {
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const requestedSessions: Array<string | undefined> = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const makeAdapter = (sessionId: string) => {
+      const adapter: AgentAdapter = {
+        id: 'dsh',
+        displayName: 'DeepSeek Harness',
+        async isAvailable() {
+          return true;
+        },
+        async checkAvailability() {
+          return { ok: true, error: undefined, version: 'test' };
+        },
+        run(options): AgentRun {
+          requestedSessions.push(options.sessionId);
+          return {
+            runId: options.runId,
+            events: (async function* () {
+              yield { type: 'system', sessionId, cwd: '/tmp/project', model: undefined };
+              yield { type: 'done', sessionId, terminationReason: 'normal' };
+              await gate;
+            })(),
+            stop: vi.fn().mockResolvedValue(undefined),
+            waitForExit: async () => true,
+          };
+        },
+      };
+      return adapter;
+    };
+
+    const channel = makeChannel();
+    const first = runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['task one'],
+      adapter: makeAdapter('run-a'),
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: channel.channel,
+      defaultWorkspace: '/tmp/project',
+      maxConcurrency: 2,
+    });
+    // Give the first run a moment to register before starting the second.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const second = runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['task two'],
+      adapter: makeAdapter('run-b'),
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: channel.channel,
+      defaultWorkspace: '/tmp/project',
+      maxConcurrency: 2,
+    });
+
+    expect(activeRuns.count('chat-a')).toBe(2);
+    release?.();
+    await Promise.all([first, second]);
+
+    expect(requestedSessions[0]).toBeUndefined(); // first run: no resume available
+    expect(requestedSessions[1]).toBeUndefined(); // concurrent run: never shares a session
+    expect(activeRuns.count('chat-a')).toBe(0);
+  });
+
+  it('rejects runs beyond the configured scope concurrency cap', async () => {
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const run = vi.fn().mockReturnValue({
+      runId: 'run-1',
+      events: (async function* () {
+        yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+      })(),
+      stop: vi.fn(),
+      waitForExit: async () => true,
+    });
+    const adapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      isAvailable: async () => true,
+      checkAvailability: async () => ({ ok: true, error: undefined, version: 'test' }),
+      run,
+    } as unknown as AgentAdapter;
+    activeRuns.set('chat-a', { runId: 'run-0', stop: vi.fn() });
+
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['blocked'],
+      adapter,
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      maxConcurrency: 1,
+    });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(fake.messages[0]).toContain('上限');
+  });
 });
 
 describe('approvalHandlerFor', () => {
