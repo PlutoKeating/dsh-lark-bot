@@ -20,7 +20,10 @@
 
 ## 2. 桥接层 adapter 接口 · The AgentAdapter Contract
 
-定义在 [`../reference/lark-coding-agent-bridge/src/agent/types.ts`](../reference/lark-coding-agent-bridge/src/agent/types.ts)，摘要如下：
+> 下方是**参考仓库** `lark-coding-agent-bridge` 的契约（摘要），本项目实际契约见
+> `src/adapters/types.ts`：`AgentAdapter` 要求 `checkAvailability()`，可带 `dispose?()`；
+> `AgentRunOptions` 增加 `onApprovalRequest?`；`AgentEvent` 已加入 `thinking` / `usage` 事件。
+> 参考实现见 [`../reference/lark-coding-agent-bridge/src/agent/types.ts`](../reference/lark-coding-agent-bridge/src/agent/types.ts)。
 
 ```ts
 export interface AgentAdapter {
@@ -75,33 +78,28 @@ type AgentEvent =
 
 ## 3. 要改 / 新增的文件 · Files to Touch
 
-| 操作 | 路径 | 说明 |
-| :--- | :--- | :--- |
-| 新增 | `src/agent/dsh/adapter.ts` | `DshAdapter` 实现（核心） |
-| 新增 | `src/agent/dsh/*.ts` | dsh 输出 → AgentEvent 的翻译器、argv 等 |
-| 修改 | `src/agent/index.ts` | `export { DshAdapter } from './dsh/adapter'` |
-| 修改 | 注册处 | 把 `agentKind: 'dsh'` 接入 CLI `--agent dsh`、profile、availability 检查 |
+已落地文件（均为本次接入的实际路径）：
 
-参考实现（**照抄结构**）：[`../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts)（spawn 子进程 → JSONL 翻译成事件流），[`claude/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/claude/adapter.ts)（同理）。
+| 路径 | 说明 |
+| :--- | :--- |
+| `src/adapters/types.ts` | `AgentAdapter` / `AgentRun` / `AgentEvent` / 审批类型契约 |
+| `src/adapters/index.ts` | `buildAgentAdapter(env, prefs)` 按 `DSH_LARK_ADAPTER` 构建 |
+| `src/adapters/dsh/sdk-adapter.ts` | `SdkDshAdapter`（默认）：`DeepSeekHarness` runtime 池 |
+| `src/adapters/dsh/sdk-translate.ts` | SDK `session.event` → `AgentEvent`（chunk 流式翻译） |
+| `src/adapters/dsh/sdk-runtime.ts` | `ensureSdkProfile` / `resolveSdkLaunch`（`dsh-lark` profile） |
+| `src/adapters/dsh/acp-adapter.ts` | `AcpDshAdapter`：ACP client + `session/request_permission` |
+| `src/adapters/dsh/acp-runtime.ts` | `ensureAcpProfile` / `resolveAcpLaunch`（`dsh-lark-acp` profile） |
+| `src/adapters/dsh/event-channel.ts` | 有序事件队列（流式事件中转） |
+| `src/adapters/dsh/adapter.ts` | legacy `DshAdapter`（headless 子进程，保留兼容） |
+
+参考实现（**照抄结构**）：[`../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts)
+（spawn 子进程 → JSONL 翻译成事件流）、[`claude/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/claude/adapter.ts)（同理）。
 
 ---
 
 ## 4. dsh 接入路线 · Integration Routes
 
-### 路线 A：ACP 服务器（推荐）
-
-- 包：`@deepseek-ai/dsh-acp`，源码 [`../reference/deepseek-harness/packages/acp/acp/`](../reference/deepseek-harness/packages/acp/acp/)
-- 本质：**"Automation-only Agent Client Protocol server over JSON-RPC stdio"**。`apply(ctx, config)` 在 stdin/stdout 上开一个 `AgentSideConnection`，驱动 `ctx.agents`。
-- 协议方法：`initialize` / `authenticate` / `session/new` / `session/prompt` / `session/cancel` / `session/update`（发 `agent_message_chunk`）/ `session/request_permission`（一次性 allow/reject）。
-- 运行：`pnpm --dir <deepseek-harness> run demo:acp`（需要 `DEEPSEEK_API_KEY`）。
-- 适配思路：dsh adapter spawn `dsh`（ACP composition），通过 stdio JSON-RPC 对话，把 `session/update` 的 `agent_message_chunk` 和 `session/request_permission` 翻译成 `AgentEvent`。
-
-**ACP 已知限制（来自其 README）**：
-- **仅全新会话**——load / list / resume / delete / fork 均不支持。
-- **仅 committed 答案**——实时进度、reasoning、工具活动、usage 不上线。
-- **单一工作区**——images / audio / 多目录 / MCP 会被拒绝。
-
-### 路线 B：SDK client（默认）
+### 路线 A：SDK client（默认）
 
 - 包：`@deepseek-ai/dsh-sdk-client`，源码 [`../reference/deepseek-harness/packages/sdk/client/`](../reference/deepseek-harness/packages/sdk/client/)
 - 高层 API `DeepSeekHarness`：
@@ -115,10 +113,25 @@ type AgentEvent =
   const result = await harness.run('say hi')   // RunResult { sessionId, finalResponse, events, notifications }
   ```
 - 低层 API `HarnessClient`：显式 `start()/initialize()/prompt()/request()/close()` + 通知订阅。
-- 适配思路：dsh adapter 用 `DeepSeekHarness`/`HarnessClient` spawn dsh 子进程，把 `finalResponse` + `events`/`notifications` 映射成 `AgentEvent`。
+- 适配思路：dsh adapter 用 `DeepSeekHarness`/`HarnessClient` spawn dsh 子进程，把
+  `session.event`（`assistant/chunk` 的 reasoning/text/tool 增量）+ `finalResponse` 映射成
+  `AgentEvent`。
 
 **SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）；
 approval 流未实现（需 ACP 模式）。
+
+### 路线 B：ACP 服务器（审批）
+
+- 包：`@deepseek-ai/dsh-acp`，源码 [`../reference/deepseek-harness/packages/acp/acp/`](../reference/deepseek-harness/packages/acp/acp/)
+- 本质：**"Automation-only Agent Client Protocol server over JSON-RPC stdio"**。`apply(ctx, config)` 在 stdin/stdout 上开一个 `AgentSideConnection`，驱动 `ctx.agents`。
+- 协议方法：`initialize` / `authenticate` / `session/new` / `session/prompt` / `session/cancel` / `session/update`（发 `agent_message_chunk`）/ `session/request_permission`（一次性 allow/reject）。
+- 运行：`pnpm --dir <deepseek-harness> run demo:acp`（需要 `DEEPSEEK_API_KEY`）。
+- 适配思路：dsh adapter spawn `dsh`（ACP composition），通过 stdio JSON-RPC 对话，把 `session/update` 的 `agent_message_chunk` 和 `session/request_permission` 翻译成 `AgentEvent`。
+
+**ACP 已知限制（来自其 README）**：
+- **仅全新会话**——load / list / resume / delete / fork 均不支持。
+- **仅 committed 答案**——实时进度、reasoning、工具活动、usage 不上线。
+- **单一工作区**——images / audio / 多目录 / MCP 会被拒绝。
 
 ### 路线 C：headless（legacy）
 
@@ -149,7 +162,7 @@ SDK / ACP 模式需要对应 runtime profile：
    （`src/card/approval-card.ts` + `src/bot/approvals.ts`，run 结束时结算所有挂起审批）；
    SDK 协议未实现审批流。
 4. **dsh 是 developer preview**：接口会破坏性变更，dsh 相关代码全部隔离在 `src/adapters/dsh/`。
-5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层要求 `>=20.12`。统一用 ≥22.19。
+5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层 `package.json` engines 为 `>=22.19`。统一用 ≥22.19。
 6. **dsh-type-meta 404 已解除**：rc.1/rc.6 依赖链全部发布，官方 SDK/ACP 现可直接安装。
 
 ---

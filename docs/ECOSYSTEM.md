@@ -24,7 +24,7 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
 
 ## 3. README 规范 · README Specification
 
-README 必须覆盖以下九个章节（本仓库已建立骨架，部分标注 `🚧 P1 实现后补充`，落地后需填实）：
+README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 `README.md`）：
 
 1. Overview — 解决什么问题、适合谁
 2. Compatibility — 支持哪些 dsh 版本 / mainline commit，最后验证日期
@@ -63,6 +63,7 @@ README 必须覆盖以下九个章节（本仓库已建立骨架，部分标注 
 
 - 仓库保持 `dsh-plugin` topic（已添加），以便进入生态的自动发现。
 - 包名使用**自有命名空间**（`dsh-lark-bot`），不占用 `@dsh-external/*` 等组织或官方保留命名空间。
+- 已提交生态收录 PR：`AdamPlatin123/awesome-dsh-plugins#37`（`docs: 登记 dsh-lark-bot`）。
 
 ## 8. 许可一致性 · License Consistency
 
@@ -75,9 +76,10 @@ P1 代码完成后，实现工程师在提交前逐项确认：
 
 - [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
 - [x] README 九章节均已填实（无遗留 `🚧` 占位）
-- [ ] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期
+- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.6，2026-08-14）
 - [x] 「权限与数据」章节完整披露风险
 - [x] `pnpm typecheck` 通过（L3）
-- [ ] 至少完成一次最小任务的运行实测并记录环境（L4）
+- [x] 至少完成一次最小任务的运行实测并记录环境（L4：SDK / ACP runtime 握手 + 真实任务流式，
+      记录于 `docs/adapter-notes.md`；`DSH_LARK_E2E=1` 门控测试可复跑）
 - [x] `dsh-plugin` topic 仍在
 - [x] `git status` 干净，无密钥 / 构建产物 / 本地配置混入提交

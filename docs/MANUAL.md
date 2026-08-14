@@ -51,6 +51,8 @@ dsh-lark-bot start \
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置运行超时 |
+| `/density [compact|standard|detailed]` | 查看或设置卡片密度 |
+| `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
 | `/invite user|admin|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
 | `/invite remove user|group <id>` | 移除白名单 |
@@ -59,7 +61,8 @@ dsh-lark-bot start \
 ## 4. 会话与工作区 · Sessions & workspaces
 
 - 每个飞书私聊、群聊、话题对应独立 scope。
-- 每个 scope 保存最近 40 条对话，自动作为后续任务的上下文。
+- 每个 scope 保存最近 40 条对话；SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史
+  注入下一次 prompt 作为近似上下文。
 - 工作目录是 Git 仓库时，自动创建独立 git worktree，避免多会话互相污染。
 - 非 Git 目录直接使用指定目录。
 - 项目根目录有 `AGENTS.md` 时，会注入到 worktree。
@@ -83,7 +86,7 @@ dsh-lark-bot doctor
 - profile 是否可读
 - 访问白名单用户数 / 群聊数
 - 工作目录是否存在
-- dsh 是否真实可用
+- adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
 
 运行日志当前输出到 stderr JSON Lines。
 
@@ -100,9 +103,12 @@ rm -rf ~/.dsh-lark
 | --- | --- | --- |
 | `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
+| `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
 | `DSH_LARK_DSH_ARGS` | 自动发现 | dsh 启动参数 |
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
+| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
+| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |

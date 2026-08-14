@@ -12,6 +12,7 @@ This directory holds **cloned reference repositories, upstream source and docume
 | [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) | DeepSeek Harness 上游源码（`dsh`，agent 后端；ACP / SDK 接入点） |
 | [`AdamPlatin123/awesome-dsh-plugins`](https://github.com/AdamPlatin123/awesome-dsh-plugins) | dsh 插件生态目录 + 兼容性雷达（收录标准与判定机制，见 `docs/ECOSYSTEM.md`） |
 | [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | IM 桥接 bot 的另一个参考实现 |
+| [`mimocode-telegram-bot`](https://github.com/XiaomiMiMo/mimocode-telegram-bot) | MiMo-Code 的 Telegram 桥接参考实现（体验参照） |
 
 > 克隆命令示例 · Example clone command:
 > ```bash

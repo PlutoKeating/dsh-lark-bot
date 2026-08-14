@@ -82,6 +82,7 @@ dsh-lark-bot start \
 | `/ws list` | 查看命名工作空间 |
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
+| `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看当前状态 |
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
@@ -117,7 +118,7 @@ rm -rf ~/.dsh-lark
 ## 目标 · Goals
 
 - **一条命令启动**：clone 后一键安装运行，最终发布到 npm，`npx dsh-lark-bot` 即可拉起。
-- **飞书原生体验**：流式卡片、交互按钮、图片 / 文件、文档评论，全程双语。
+- **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
 - **完整工作区管理**：多项目隔离、git worktree、项目级规则注入、上下文持久化。
 
 - **One-command start**: clone and run in one step, eventually published to npm as `npx dsh-lark-bot`.
@@ -129,7 +130,7 @@ rm -rf ~/.dsh-lark
 - **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（2026-08-14：SDK JSON-RPC / ACP runtime 握手 +
   真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
   具体锁定版本与漂移策略见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
-- **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
+- **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
@@ -153,6 +154,7 @@ rm -rf ~/.dsh-lark
 | :--- | :--- | :--- |
 | `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
+| `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置 |
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置 |
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
@@ -236,6 +238,7 @@ pnpm publish:dual
 | [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读）<br>Ecosystem & delivery standards (for engineers) |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图与里程碑<br>Roadmap & milestones |
 | [`docs/PLAN.md`](docs/PLAN.md) | 主线开发计划与验收标准<br>Development plan & acceptance criteria |
+| [`SECURITY.md`](SECURITY.md) | 安全模型与报告渠道<br>Security model & reporting |
 | [`AGENTS.md`](AGENTS.md) | AI Agent 开发工作流规范<br>AI agent workflow spec |
 
 ## 架构 · Architecture
@@ -258,12 +261,14 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用<br>First-run QR onboarding |
 | `src/session/` | 会话路由、排队、访问控制<br>Session routing, queueing, access control |
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入<br>Project workspace, git worktree isolation & rule injection |
-| `src/adapters/` | agent 后端适配器（dsh 优先）<br>Agent backend adapters (dsh first) |
+| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy）<br>Agent backend adapters (sdk / acp / headless) |
 | `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
-| `src/bot/` | 运行注册、消息排队<br>Run registry & message queueing |
+| `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
+| `src/cli/` | CLI 入口与 start / doctor 命令<br>CLI entry & start / doctor commands |
 | `src/config/` | profile / 配置管理<br>Profile & config |
 | `src/core/` | 结构化日志<br>Structured logging |
+| `src/media/` | 附件下载与文本注入<br>Attachment download & text injection |
 | `src/platform/` | 跨平台原子写入<br>Cross-platform atomic writes |
 | `docs/` | 架构、路线图等文档<br>Architecture, roadmap & docs |
 | `reference/` | 参考研究用的克隆仓库（不提交）<br>Cloned reference repos (not committed) |

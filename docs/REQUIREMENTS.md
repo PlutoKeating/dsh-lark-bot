@@ -56,6 +56,9 @@
 - **COT 过程消息**：可选先发过程消息再发最终答案。
 - 图片 / 文件：下载到本地后交给 agent 处理。
 
+> 状态说明：私聊、群聊 `@bot`、话题（topic）已实现；**文档评论**与**富文本回复**为规划中能力，
+> 当前版本未实现。
+
 ### 4.2 会话管理（session）
 - 每个 chat / topic / thread / 文档评论 → 独立 session，互不串扰。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
@@ -79,6 +82,9 @@
 - 异步任务队列，长任务不阻塞事件回调。
 - 定时任务 / 依赖编排（dsh 自带 workflow capability）。
 
+> 状态说明：当前仅有单 scope 运行锁与消息排队（`PendingQueue`）；**异步任务队列 / 定时任务 /
+> workflow 编排**属于 P3 待办，尚未实现。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints
@@ -87,11 +93,11 @@
 | :--- | :--- |
 | **协议** | AGPLv3.0（官方原文，见根目录 `LICENSE`） |
 | **语言** | 中英双语，先中文后英文 |
-| **运行时** | Node.js ≥ 20.12（TypeScript） |
-| **后端 agent** | DeepSeek Harness（`dsh`），默认走 ACP |
+| **运行时** | Node.js ≥ 22.19（`package.json` engines） |
+| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client（`@deepseek-ai/dsh-sdk-client`），ACP 审批可选，headless legacy |
 | **关键词** | README / 介绍 / tags 含 `dsh`、`deepseek`、`deepseek harness`、`feishu`、`lark`、`bridge`、`bot` |
 | **tags** | `typescript`、`chatbot`、`lark`、`feishu`、`deepseek`、`deepseek-harness`、`dsh-plugin`、`messaging`、`bot`、`bridge`、`dsh` |
-| **目录结构** | 参考仓库统一放 `reference/`（gitignored，不提交） |
+| **目录结构** | 参考克隆仓库统一放 `reference/`（不提交，仅跟踪 `reference/.gitignore` 与 `reference/README.md` 两个元文件） |
 | **工作流** | 遵循根目录 `AGENTS.md`（发起人私有 gist 的规范） |
 | **生态交付** | 满足 `docs/ECOSYSTEM.md`（package.json / README 九章节 / 风险披露 / DSH 版本声明 / 兼容性自检） |
 | **代码变更** | 所有源码改动走 coding agent CLI（MiMoCode 等），不直接手写源码 |
@@ -105,7 +111,10 @@
 1. **飞书通道与 agent 后端解耦**——桥接层复刻 `lark-channel-bridge` 成熟做法，agent 后端通过 adapter 抽象。
 2. **dsh 为默认后端**，通过 ACP（Agent Client Protocol）或 JSON-RPC 接入；可切换 claude / codex / opencode。
 3. **工作区管理是核心差异化**——会话绑定 git worktree + 项目规则注入 + 上下文持久化。
-4. **注意**：dsh 与 claude/codex 接口不同（前者是一次性 headless + ACP/JSON-RPC，后者是常驻交互式 REPL），所以「换 dsh」不是 1:1 替换，需重写 agent adapter 层。
+4. **注意**：dsh 与 claude/codex 接口不同（官方提供 SDK client / ACP server / headless 三种接入形态，
+   后者是常驻交互式 REPL），所以「换 dsh」不是 1:1 替换，需重写 agent adapter 层。当前实现：
+   **默认 SDK client**（原生 session + 流式 thinking/text）、**ACP 审批模式**、**headless legacy**，
+   三者都收敛到同一 `AgentEvent` 契约，飞书层无需感知差异。
 
 ---
 

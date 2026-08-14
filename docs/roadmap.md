@@ -10,12 +10,14 @@
 
 ## 里程碑 · Milestones
 
-- **P1 完成标志**：`npx dsh-lark-bot start` 启动后，飞书扫码绑定，私聊发消息，能收到 `dsh` 返回的流式卡片。
-- **P2 完成标志**：`/ws save/use` 管理命名项目，每个会话绑定独立 git worktree，注入项目级 AGENTS.md。
-- **P4 完成标志**：已发布 `dsh-lark-bot@0.1.0` 与 `dsh-feishu-bot@0.1.0`，第三方可 `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装。
+- **P1 done**：`npx dsh-lark-bot start` 启动后飞书扫码绑定，私聊发消息，收到 `dsh` 返回的流式卡片。
+- **P2 done**：`/ws save/use` 管理命名项目，每个会话绑定独立 git worktree，注入项目级 AGENTS.md；
+  SDK 原生 session 续跑。
+- **P3 done（审批部分）**：ACP `session/request_permission` 审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
+- **P4 done**：已发布 `dsh-lark-bot@0.3.0` 与 `dsh-feishu-bot@0.3.0`，第三方可
+  `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装；GitHub Release 自动创建。
 
-## Milestones
-
-- **P1 done**: `npx dsh-lark-bot start`, scan-to-bind in Feishu, DM a message, receive a streaming card from `dsh`.
-- **P2 done**: `/ws save/use` manages named projects; each session binds an isolated git worktree with per-project AGENTS.md injected.
-- **P4 done**: published `dsh-lark-bot@0.1.0` and `dsh-feishu-bot@0.1.0` to npm with automated GitHub Release.
+Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
+isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
+P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.3.0` /
+`dsh-feishu-bot@0.3.0` on npm with automated GitHub Release.

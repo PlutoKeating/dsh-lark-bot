@@ -46,7 +46,10 @@
 
 ### 3.3 目录结构（adapter 落点）
 
-`src/` 下含：`agent/`（agent adapter 抽象，**dsh adapter 的落点**）、`workspace/`、`session/`、`card/`、`commands/`、`config/`、`daemon/`、`lark-cli/`、`media/`、`policy/`、`runtime/` 等。
+> 这是**参考仓库** `lark-coding-agent-bridge` 的目录结构：`src/agent/`（agent adapter 抽象）、
+> `workspace/`、`session/`、`card/`、`commands/`、`config/` 等。
+> 本项目实际落点为 `src/adapters/`（含 `dsh/` 子目录的 SDK / ACP / headless 三套 adapter），
+> 其余目录见 `docs/ARCHITECTURE.md`。
 
 ## 4. 参考项目对比 · Reference Projects
 
@@ -76,7 +79,7 @@
 | | claude / codex | dsh |
 | :--- | :--- | :--- |
 | 形态 | 常驻交互式 REPL CLI | `web`(常驻服务) / `headless`(一次性) / `acp`(自动化服务器) / JSON-RPC |
-| 会话续跑 | 子进程一直开着 | headless 无状态一次性，续跑需传 session 并 fork/resume |
+| 会话续跑 | 子进程一直开着 | SDK client 原生 `session(id)` 续跑；headless 无状态一次性 |
 | 流式输出 | stdout stream-json | append-only session event log（可回放） |
 
 **三条 dsh adapter 路线（2026-08-14 复核后已落地）：**
@@ -90,6 +93,8 @@
 ## 7. 落地建议 · Implementation Plan
 
 1. fork `lark-coding-agent-bridge`（MIT），复用其飞书层与 adapter 抽象。
-2. 新增 `agentKind: dsh` adapter，走路线 A（ACP）。
+2. 新增 dsh adapter：**默认 SDK client**（路线 A），**ACP 审批模式**（路线 B），headless legacy
+   （路线 C）——三路线已全部实现并验证（2026-08-14）。
 3. 工作区管理做增量：先 git worktree 隔离 + 项目级规则注入，再逐步加调度、沙箱。
-4. dsh 是 day-1 preview，ACP 接口会变——**dsh adapter 与 bridge 核心保持隔离**，dsh 一变只动 adapter 一个文件。
+4. dsh 是 day-1 preview，SDK / ACP 接口会变——**dsh adapter 与 bridge 核心保持隔离**，
+   dsh 一变只动 `src/adapters/dsh/`。

@@ -8,14 +8,14 @@
 | --- | --- | --- |
 | P0 | 仓库、文档、CI、脚手架 | ✅ 完成 |
 | P1 | 飞书 bot + dsh 单会话往返 | ✅ 完成 |
-| P2 | 项目工作区管理 | 🚧 进行中（SDK 原生 session 已接入） |
+| P2 | 项目工作区管理 | ✅ 完成（SDK 原生 session 已接入） |
 | P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
 
 ## 2. P1 验收标准
 
 - [x] 首次扫码创建 PersonalAgent 应用
-- [x] 私聊消息进入 dsh headless
+- [x] 私聊消息进入 dsh（SDK runtime / headless）
 - [x] 返回流式卡片
 - [x] `final_text` 正确渲染
 - [x] 会话记忆最近 40 条

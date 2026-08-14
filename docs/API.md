@@ -1,7 +1,7 @@
 # API 契约 · API Contract
 
-> 本文记录 dsh-lark-bot 对内部模块和外部调用方暴露的稳定接口。当前处于 P1 演进阶段，接口仍可能随 dsh ACP/SDK 落版而调整。
-> This file records stable interfaces exposed by dsh-lark-bot. They are still evolving during P1 and may change when the dsh ACP/SDK integration is finalized.
+> 本文记录 dsh-lark-bot 对内部模块和外部调用方暴露的稳定接口。当前处于 P3 演进阶段，接口可能随 dsh SDK/ACP 落版而调整。
+> This file records stable interfaces exposed by dsh-lark-bot. They are still evolving during P3 and may change when the dsh ACP/SDK integration is finalized.
 
 ## 1. 运行时环境 · Runtime environment
 
@@ -16,6 +16,7 @@ export interface RuntimeEnv {
   workspace: string | undefined;
   dshCommand: string;
   dshArgs: string[];
+  /** True when DSH_LARK_DSH_COMMAND / DSH_LARK_DSH_ARGS were set explicitly. */
   dshExplicit: boolean;
   adapterMode: 'sdk' | 'acp' | 'headless';
   provider: string;
@@ -30,9 +31,8 @@ export interface RuntimeEnv {
 export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 ```
 
-环境变量前缀统一为 `DSH_LARK_*`，敏感值只保留在运行时对象中，不写入日志或提交。
-
-主要环境变量：
+环境变量前缀统一为 `DSH_LARK_*`，敏感值只保留在运行时对象中，不写入日志或提交。完整清单见
+`README.md` 与 `.env.example`；本节仅列关键项：
 
 - `DSH_LARK_ADAPTER`：`sdk`（默认，官方 SDK client）/ `acp`（ACP 审批）/ `headless`（legacy）。
 - `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径。
@@ -40,54 +40,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
 - `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
-- `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待退出再 SIGKILL 的宽限期，默认 `5000`。
-
-## 2.4 Agent adapter 工厂
-
-`src/adapters/index.ts` 提供：
-
-```ts
-export async function buildAgentAdapter(
-  env: RuntimeEnv,
-  preferences: { stopGraceMs: number | undefined; model: string | undefined },
-): Promise<AgentAdapter>;
-```
-
-`sdk` 模式会先 `ensureSdkProfile`（创建 `~/.dsh/profiles/dsh-lark` SDK JSON-RPC runtime profile），
-`acp` 模式先 `ensureAcpProfile`（`~/.dsh/profiles/dsh-lark-acp`）。
-
-`AgentRunOptions` 新增可选审批回调：
-
-```ts
-onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
-// ApprovalRequest: { id, sessionId, toolName, reason, options: ApprovalOption[] }
-// ApprovalOutcome: 'allowed-once' | 'rejected' | 'cancelled'
-```
-
-`src/bot/approvals.ts` 的 `ApprovalRegistry` 负责 pending 审批注册与结算
-（run 结束 / dispose 时 `settleAll(scope, 'cancelled')`）。
-
-## 2.5 卡片与展示
-
-- `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
-  detailed 含完整 reasoning、工具输入输出与 token usage。
-- `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
-- `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
-  `extractQuestionAnswer(kind, value, options)`。
-- `src/bot/density-store.ts`：per-scope 卡片密度覆盖；`/density` 命令读写。
-
-## 2.6 安全模块
-
-`src/config/security.ts` 提供：
-
-- `redactSecrets(text)`：Bearer / `sk-` / `api_key=` 正则脱敏。
-- `isPathWithin(root, candidate)`：realpath containment（拒绝符号链接逃逸）。
-- `truncateUtf8Safe(text, maxBytes)`：UTF-8 安全字节截断。
-- `isEventFresh(timestampMs, windowMs, now?)`：过期事件拒绝。
-- `isSafeHttpUrl(url)`：SSRF 防护（拒绝环回 / 私网 / 链路本地 / CGNAT / IPv6 ULA）。
-- `DEFAULT_DENIED_INTERACTIVE_TOOLS` / `isDeniedTool(name)`：IM 不可回达工具默认拒绝。
-
-详细威胁模型见根目录 `SECURITY.md`。
+- `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -114,7 +67,7 @@ export function resolveAppPaths(root?: string): AppPaths;
 
 默认根目录为 `~/.dsh-lark`，可通过 `DSH_LARK_HOME` 覆盖。
 
-## 2.1 Profile 配置 · Profile config
+### 2.1 Profile 配置 · Profile config
 
 `src/config/profile-store.ts` 提供：
 
@@ -138,7 +91,8 @@ export interface ProfileConfig {
 }
 ```
 
-`ConfigStore` 负责读取 `~/.dsh-lark/config.json`，并保存当前 active profile。App Secret 以文件权限 `0600` 写入本机。
+`ConfigStore` 负责读写 `~/.dsh-lark/config.json` 与 active profile；App Secret 以文件权限 `0600`
+写入。扫码绑定得到的 `operatorOpenId` 会自动加入 `allowedUsers` 与 `admins`。
 
 `src/bot/run-policy.ts` 提供内存级 `RunPolicyStore`，按 scope 覆盖运行超时：
 
@@ -150,13 +104,16 @@ export class RunPolicyStore {
 }
 ```
 
-飞书命令 `/timeout [N|off|default]` 会读写该 store，`/timeout` 的覆盖值优先于 profile / 环境变量默认值。
+飞书命令 `/timeout [N|off|default]` 读写该 store，覆盖值优先于 profile / 环境变量默认值。
 
-`src/config/access-manager.ts` 提供 `AccessManager`，负责把 `/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>` 的变更持久化到当前 profile 的访问白名单。
+`src/config/access-manager.ts` 的 `AccessManager` 把 `/invite user|admin|group|list|remove` 的
+变更持久化到当前 profile 的访问白名单。
 
-`src/session/store.ts` 的 `SessionStore` 现在会保存每个 scope 最近 40 条对话消息，并支持 `fork(scopeId, newScopeId, cwd)` 复制历史到新分支；`runAgentBatch` 会把这些历史拼入下一次 dsh prompt，以弥补 dsh headless 无状态进程的上下文缺失。
+`src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 40 条对话，支持
+`fork(scopeId, newScopeId, cwd)` 复制历史；SDK 模式以原生 `session(id)` 续跑，headless 模式把
+历史拼入下一次 prompt 作为近似上下文。
 
-## 2.2 扫码绑定 · QR onboarding
+### 2.2 扫码绑定 · QR onboarding
 
 `src/onboard/registration.ts` 提供：
 
@@ -168,14 +125,13 @@ export interface OnboardedApp {
   operatorOpenId: string | undefined;
 }
 
-export async function onboardPersonalAgent(
-  deps?: RegistrationDeps,
-): Promise<OnboardedApp>;
+export async function onboardPersonalAgent(deps?: RegistrationDeps): Promise<OnboardedApp>;
 ```
 
-默认使用 `@larksuite/channel` 的 `registerApp`，在终端打印二维码并等待用户扫码创建或选择 PersonalAgent 应用；可通过 `deps` 注入 `register` / `renderQr` / `print` 便于测试。
+默认使用 `@larksuite/channel` 的 `registerApp`，终端打印二维码等待扫码；可通过 `deps` 注入
+`register` / `renderQr` / `print` 便于测试。
 
-## 2.3 Git worktree · Git worktree manager
+### 2.3 Git worktree · Git worktree manager
 
 `src/workspace/git-worktree.ts` 提供：
 
@@ -192,13 +148,123 @@ export class GitWorktreeManager {
 }
 ```
 
-当当前工作目录是 Git 仓库时，`runAgentBatch` 会为每个 scope 在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree；非 Git 目录保持原路径。若 base 下有 `.dsh-lark/AGENTS.md` 或 `AGENTS.md` 且目标 worktree 没有，则复制为目标根目录 `AGENTS.md`。
+当前目录是 Git 仓库时，`runAgentBatch` 为每个 scope 在
+`~/.dsh-lark/profiles/<profile>/worktrees/<slug>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree
+（slug 经过净化并做 realpath containment 校验）；非 Git 目录保持原路径。若 base 下有
+`.dsh-lark/AGENTS.md` 或 `AGENTS.md` 且目标 worktree 没有，则复制为目标根目录 `AGENTS.md`。
 
-`src/workspace/store.ts` 现在维护命名工作区的 `lastUsed` 索引；`/ws list` 按最近使用排序，优先展示飞书导航卡片。
+`src/workspace/store.ts` 维护命名工作区 `lastUsed` 索引；`/ws list` 优先通过 `sendCard` 发送
+导航卡片，不支持卡片的通道回退 Markdown。
 
-`/ws list` 会优先通过 `sendCard` 发送工作空间导航卡片；不支持卡片的测试通道回退为 Markdown。
+## 3. Agent 适配器 · Agent adapter
 
-## 3. 结构化日志 · Structured logging
+契约定义在 `src/adapters/types.ts`，与 lark-coding-agent-bridge 语义兼容：
+
+```ts
+export type AgentEvent =
+  | { type: 'system'; sessionId: string | undefined; cwd: string | undefined; model: string | undefined }
+  | { type: 'text'; delta: string }
+  | { type: 'final_text'; content: string }
+  | { type: 'thinking'; delta: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; id: string; output: string; isError: boolean }
+  | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
+  | { type: 'done'; sessionId: string | undefined; terminationReason: 'normal' | 'interrupted' | 'timeout' }
+  | { type: 'error'; message: string; terminationReason: 'failed' | 'interrupted' | 'timeout' };
+
+export interface AgentRunOptions {
+  runId: string;
+  prompt: string;
+  cwd: string | undefined;
+  sessionId: string | undefined;
+  model: string | undefined;
+  images: readonly string[] | undefined;
+  stopGraceMs: number | undefined;
+  /** ACP 审批通道：agent 请求一次性权限时回调。 */
+  onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
+}
+
+export interface AgentRun {
+  readonly runId: string;
+  readonly events: AsyncIterable<AgentEvent>;
+  stop(): Promise<void>;
+  waitForExit(timeoutMs: number): Promise<boolean>;
+}
+
+export interface AgentAdapter {
+  readonly id: string;
+  readonly displayName: string;
+  isAvailable(): Promise<boolean>;
+  checkAvailability(): Promise<AgentAvailability>;
+  run(options: AgentRunOptions): AgentRun;
+  dispose?(): Promise<void>;
+}
+```
+
+审批类型：
+
+```ts
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled';
+export interface ApprovalRequest {
+  id: string;
+  sessionId: string | undefined;
+  toolName: string;
+  reason: string | undefined;
+  options: readonly { optionId: string; name: string; kind: ApprovalOptionKind }[];
+}
+```
+
+`src/adapters/index.ts` 提供工厂，按 `env.adapterMode` 构建默认后端：
+
+```ts
+export async function buildAgentAdapter(
+  env: RuntimeEnv,
+  preferences: { stopGraceMs: number | undefined; model: string | undefined },
+): Promise<AgentAdapter>;
+```
+
+- `sdk`（默认）：`SdkDshAdapter`（`src/adapters/dsh/sdk-adapter.ts`），先 `ensureSdkProfile`
+  创建 `~/.dsh/profiles/dsh-lark`（`dsh-base` + `dsh-sdk-jsonrpc-server`），按 cwd 管理
+  `DeepSeekHarness` runtime 池，`session(id)` 原生续跑；`/stop` 关闭对应 runtime。
+- `acp`：`AcpDshAdapter`（`src/adapters/dsh/acp-adapter.ts`），先 `ensureAcpProfile` 创建
+  `~/.dsh/profiles/dsh-lark-acp`（`dsh-base` + `dsh-acp`），以 `ClientSideConnection` 连接
+  ACP server，`session/request_permission` 映射审批卡；会话每次全新。
+- `headless`：`DshAdapter`（`src/adapters/dsh/adapter.ts`），legacy 子进程 JSONL 翻译。
+
+翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
+`AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
+`event-channel.ts`（有序事件队列）。
+
+## 4. 卡片与展示 · Cards & rendering
+
+- `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
+  detailed 含完整 reasoning、工具输入输出与 token usage。
+- `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新。
+- `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
+- `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
+  `extractQuestionAnswer(kind, value, options)`。
+- `src/card/density.ts`：`CardDensity` 与 `parseCardDensity`。
+- `src/bot/density-store.ts`：per-scope 卡片密度覆盖；`/density` 命令读写。
+- `src/bot/approvals.ts`：`ApprovalRegistry`，pending 审批注册与结算（run 结束 / dispose 时
+  `settleAll(scope, 'cancelled')`）。
+- `src/bot/questions.ts`：`QuestionRegistry`，`/ask` 问答卡注册与答案回写会话。
+
+## 5. 安全模块 · Security
+
+`src/config/security.ts` 提供：
+
+- `redactSecrets(text)`：Bearer / `sk-` / `api_key=` 正则脱敏。
+- `isPathWithin(root, candidate)`：realpath containment（拒绝符号链接逃逸）。
+- `truncateUtf8Safe(text, maxBytes)`：UTF-8 安全字节截断。
+- `isEventFresh(timestampMs, windowMs, now?)`：过期事件拒绝。
+- `isSafeHttpUrl(url)`：SSRF 防护（拒绝环回 / 私网 / 链路本地 / CGNAT / IPv6 ULA）。
+- `DEFAULT_DENIED_INTERACTIVE_TOOLS` / `isDeniedTool(name)`：IM 不可回达工具默认拒绝。
+
+已接入：`src/core/logger.ts`（字段名 + 字符串正则双重脱敏）、`src/media/attachments.ts`
+（containment + UTF-8 安全读取）、`src/workspace/git-worktree.ts`（containment）、
+`src/bridge/channel.ts`（默认拒绝 dmMode + 过期消息）。详细威胁模型见根目录 `SECURITY.md`。
+
+## 6. 结构化日志 · Structured logging
 
 `src/core/logger.ts` 提供：
 
@@ -211,44 +277,26 @@ export interface Logger {
 }
 ```
 
-日志按 JSON Lines 输出，并自动脱敏 secret/token/password/api_key 等字段。
+日志按 JSON Lines 输出到 stderr，并自动脱敏 secret/token/password/api_key 等字段与
+`Bearer …` / `sk-…` / `api_key=…` 文本。
 
-## 4. Agent 适配器 · Agent adapter
-
-与 lark-coding-agent-bridge 语义兼容的事件契约：
-
-```ts
-export interface AgentRunOptions {
-  runId: string;
-  prompt: string;
-  cwd: string | undefined;
-  sessionId: string | undefined;
-  model: string | undefined;
-  images: readonly string[] | undefined;
-  stopGraceMs: number | undefined;
-}
-
-export interface AgentRun {
-  readonly runId: string;
-  readonly events: AsyncIterable<AgentEvent>;
-  stop(): Promise<void>;
-  waitForExit(timeoutMs: number): Promise<boolean>;
-}
-```
-
-dsh 后端只允许在 `src/adapters/` 中依赖 dsh 接口，桥接层和会话层不得直接依赖 dsh。
-
-当前 `DshAdapter` 使用可配置的 headless 子进程：读取 stdout JSONL / 纯文本并翻译为 `AgentEvent`。`stopGraceMs` 控制 SIGTERM → SIGKILL 的宽限期。
-
-`src/media/attachments.ts` 会把飞书消息中的图片下载为本地路径，文本文件读取内容并追加到 prompt；超过 `256000` 字节的文本文件只注入路径，避免撑爆单次请求。
-
-## 5. CLI · Command line
+## 7. CLI · Command line
 
 当前命令：
 
 - `dsh-lark-bot start`：前台启动桥接
-- `dsh-lark-bot doctor`：运行本地诊断
+- `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）
+- `dsh-lark-bot --version` / `-v`：版本号
 
-飞书会话内当前支持：`/new`、`/reset`、`/cd`、`/ws`、`/status`、`/resume`、`/stop`、`/timeout`、`/invite user|admin|group|list|remove`、`/help`。
+两个启动类命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。
 
-两个命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。后续将补充 `profile`、`ps`、`kill` 等进程与配置管理命令。
+飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
+`/stop`、`/timeout`、`/density`、`/ask`、`/invite user|admin|group|list|remove`、`/help`。
+
+## 8. 桥接层 · Bridge
+
+- `src/bridge/channel.ts`：`startChannel(deps)` 建立飞书长连接，路由 `message` / `cardAction`
+  事件，处理 `stop` / `approve` / `question-submit` 卡片按钮。
+- `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
+  超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
+- `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`。

@@ -53,11 +53,12 @@ dsh-lark-bot start \
 
 | 命令 | 作用 |
 | --- | --- |
-| `/new` | 开始新会话 |
+| `/new` `/reset` | 开始新会话 |
 | `/cd <path>` | 切换工作目录并重置会话 |
 | `/ws list` | 查看命名工作空间 |
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
+| `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看当前状态 |
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
@@ -85,6 +86,12 @@ bot 会为每个飞书 scope 保存最近 40 条对话，`/new` 会清空当前 
 - 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
+- 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
 - 运行日志：当前输出到 stderr JSON Lines；`~/.dsh-lark/profiles/<profile>/logs/` 为后续文件日志保留目录
+
+dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
+
+- `dsh-lark`：SDK JSON-RPC runtime（`DSH_LARK_ADAPTER=sdk`，默认）
+- `dsh-lark-acp`：ACP runtime（`DSH_LARK_ADAPTER=acp`，审批）
 
 可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行墙钟超时，`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。
