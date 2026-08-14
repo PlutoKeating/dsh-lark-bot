@@ -39,6 +39,11 @@ async function main() {
   const workspace = join(root, 'workspace');
   const env = {
     ...process.env,
+    // The scratch profiles workspace grows a package.json dynamically (the
+    // bot writes the runtime profile before its own pnpm install), so the
+    // workspace lockfile is intentionally re-generated. CI forces
+    // `frozen-lockfile` by default; opt out for the scratch workspace only.
+    npm_config_frozen_lockfile: 'false',
     DSH_HOME: dshHome,
     DSH_LARK_HOME: larkHome,
     DSH_LARK_ADAPTER: 'sdk',
