@@ -3,8 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { runDoctor } from './cli/commands/doctor.js';
 import { runBot } from './cli/commands/run.js';
-import { runServiceStart, runServiceCommand } from './cli/commands/service.js';
-import { runSupervise } from './cli/commands/supervise.js';
+import { runSetup } from './cli/commands/setup.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -37,31 +36,15 @@ export function buildProgram(): Command {
     .description('Bridge DeepSeek Harness into Feishu / Lark')
     .version(packageVersion(), '-v, --version');
 
-  addBotOptions(
-    program
-      .command('start')
-      .description('Install and start the background service (autostart + auto-restart)'),
-  ).action(async (opts: StartOptions) => {
-    await runServiceStart(opts, { version: packageVersion() });
-  });
-
-  addBotOptions(program.command('status').description('Show background service status')).action(
-    async (opts: StartOptions) => {
-      await runServiceCommand('status', opts, { version: packageVersion() });
-    },
-  );
-
-  addBotOptions(program.command('restart').description('Restart the background service')).action(
-    async (opts: StartOptions) => {
-      await runServiceCommand('restart', opts, { version: packageVersion() });
-    },
-  );
-
-  addBotOptions(program.command('stop').description('Stop the background service and remove autostart')).action(
-    async (opts: StartOptions) => {
-      await runServiceCommand('stop', opts, { version: packageVersion() });
-    },
-  );
+  program
+    .command('setup')
+    .description(
+      'Install this package as a standard dsh profile bundle (single install path)',
+    )
+    .option('--profile <name>', 'dsh profile to install into (default: dsh-lark)')
+    .action(async (opts: { profile?: string }) => {
+      await runSetup({ ...(opts.profile ? { profile: opts.profile } : {}) });
+    });
 
   program
     .command('doctor')
@@ -78,17 +61,9 @@ export function buildProgram(): Command {
   addBotOptions(
     program
       .command('run', { hidden: true })
-      .description('Run the bridge process (managed by the background service; not for interactive use)'),
+      .description('Run the bridge engine directly (diagnostics; the dsh plugin runs it in-process)'),
   ).action(async (opts: StartOptions) => {
     await runBot(opts);
-  });
-
-  addBotOptions(
-    program
-      .command('supervise', { hidden: true })
-      .description('Supervisor loop for the portable background service; not for interactive use'),
-  ).action(async (opts: StartOptions) => {
-    await runSupervise(opts);
   });
 
   return program;
