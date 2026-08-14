@@ -187,13 +187,53 @@ Security note: typing a key in a Feishu conversation exposes it to everyone who 
 chat; prefer private chats, `--api-key-env` references to existing environment variables, or the
 dsh Web UI. The bot never echoes key values in any reply.
 
-### 5. 卸载 | Uninstall
+## 安装与卸载 | Install & Uninstall
+
+### 安装 | Install
+
+唯一安装方式（标准 dsh profile bundle）：
+
+The only install path (a standard dsh profile bundle):
 
 ```bash
-dsh-lark-bot stop
-npm uninstall -g dsh-lark-bot
-rm -rf ~/.dsh-lark
+npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
+
+`setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
+`dsh plugin --profile dsh-lark add dsh-lark-bot`。已安装时重复执行即升级到最新版。
+
+`setup` locates your dsh, pre-approves pnpm's build policy (protobufjs) and runs the standard
+`dsh plugin --profile dsh-lark add dsh-lark-bot`. Re-running it upgrades to the latest version.
+
+### 升级 | Upgrade
+
+- 插件本体：重跑 `setup`（或 `dsh plugin --profile <name> add dsh-lark-bot`）拉取 npm 最新版。
+- CLI 工具（可选）：`npm i -g dsh-lark-bot@latest`；使用 `npx` 时无需全局安装。
+- 升级后重启 profile：`dsh --profile dsh-lark`。
+
+- Plugin: re-run `setup` (or `dsh plugin --profile <name> add dsh-lark-bot`) to pull the latest
+  npm release.
+- CLI tool (optional): `npm i -g dsh-lark-bot@latest`; not needed when using `npx`.
+- Restart the profile after upgrading: `dsh --profile dsh-lark`.
+
+### 禁用 | Disable
+
+保持插件加载但停止桥接引擎：启动 profile 前导出 `DSH_LARK_DISABLED=1`。彻底移除见下节。
+
+Keep the plugin loaded but stop the bridge engine: export `DSH_LARK_DISABLED=1` before booting
+the profile. For full removal see the next subsection.
+
+### 卸载 | Uninstall
+
+```bash
+dsh plugin --profile dsh-lark remove dsh-lark-bot
+```
+
+卸载后 profile 不再加载本插件。本地状态（配置 / 会话 / 归档 / 角色）保留在 `~/.dsh-lark`；
+如需清除，先备份再删除该目录。
+
+Removal unloads the plugin from the profile. Local state (config / sessions / archives / roles)
+stays in `~/.dsh-lark`; back it up before deleting it.
 
 更详细的安装、状态目录、日志和排障说明见 [`docs/QUICK_START.md`](docs/QUICK_START.md)。
 
@@ -212,6 +252,13 @@ logs and troubleshooting.
 
 **dsh-lark-bot** is a lightweight bridge that connects your local DeepSeek Harness (`dsh`) into Feishu / Lark, recreating the beloved OpenCode / MiMoCode Telegram-bot experience — chat with your coding agent, receive streaming cards, review diffs — and adds **full project workspace management** on top.
 
+**适合谁 / Who it is for**：在飞书 / Lark（私聊、群聊、话题）里指挥本机 dsh coding agent 的
+开发者与团队，尤其是需要多项目隔离、角色分工、并行任务与会话归档的协作场景。
+
+Developers and teams who drive a local dsh coding agent from Feishu / Lark (DMs, groups,
+topics) — especially those needing multi-project isolation, role-based collaboration, parallel
+tasks and session archival.
+
 ## 目标 | Goals
 
 - **一条命令安装部署**：`npx dsh-lark-bot@latest setup --profile dsh-lark` 装进 dsh profile，
@@ -227,7 +274,7 @@ logs and troubleshooting.
 
 ## 兼容性 | Compatibility
 
-- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（2026-08-14：SDK JSON-RPC / ACP runtime 握手 +
+- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（最后验证 2026-08-15：SDK JSON-RPC / ACP runtime 握手 +
   真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
   具体锁定版本、升级政策与自动化探测见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)，
   adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
@@ -237,7 +284,7 @@ logs and troubleshooting.
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
   子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark`（或 `dsh-lark-acp`）创建 runtime profile。
 
-- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (2026-08-14: SDK JSON-RPC / ACP
+- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (last verified 2026-08-15: SDK JSON-RPC / ACP
   runtime handshake + real streaming task verification), connected through the official
   `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see
   [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for pinned versions, the upgrade policy and
@@ -251,17 +298,42 @@ logs and troubleshooting.
   fallback. On first start the bot creates the runtime profile at
   `~/.dsh/profiles/dsh-lark` (or `dsh-lark-acp`).
 
+## 已知限制 | Known limitations
+
+- ACP 模式会话每次全新（上游限制，无续跑）；SDK 协议暂无 mid-turn cancel，`/stop` 会关闭
+  对应 runtime 并自动重建。
+- 桥接引擎作为 dsh 插件在 dsh 进程内运行，agent 执行使用官方 dsh SDK runtime 子进程
+  （嵌套 runtime 是有意取舍，用于按工作区隔离的 runtime 池与 scope 内并行 run）。
+- 飞书文档评论、富文本回复为规划中能力，尚未实现。
+- pnpm ≥ 10 的构建脚本策略由 `setup` 自动处理；手动 `dsh plugin add` 时若报
+  `ERR_PNPM_IGNORED_BUILDS`，按官方指引在 profile 的 `pnpm-workspace.yaml` 加
+  `allowBuilds: { protobufjs: true }` 后重试。
+
+- ACP sessions are always fresh (an upstream limit); the SDK protocol has no mid-turn cancel,
+  so `/stop` closes and recreates the runtime.
+- The engine runs in-process as a dsh plugin; agent execution uses the official dsh SDK runtime
+  subprocess — a deliberate nested-runtime design for per-workspace runtime pools and parallel
+  runs.
+- Feishu doc comments and rich-text replies are planned, not yet implemented.
+- pnpm ≥ 10 build policy is handled by `setup`; when installing manually and
+  `ERR_PNPM_IGNORED_BUILDS` appears, add `allowBuilds: { protobufjs: true }` to the profile's
+  `pnpm-workspace.yaml` and retry.
+
 ## 配置 | Configuration
 
 - 本地配置：`~/.dsh-lark/config.json`
 - 状态根目录可用 `DSH_LARK_HOME` 覆盖
 - 环境变量统一使用 `DSH_LARK_*` 前缀
 - 模板见 [`.env.example`](.env.example)
+- 敏感项：`DSH_LARK_APP_SECRET`、`DEEPSEEK_API_KEY` 等凭据只保存在本机配置 / 环境中，日志与
+  卡片自动脱敏，仓库只提交 `.env.example` 模板。
 
 - Local config: `~/.dsh-lark/config.json`
 - The state root can be overridden with `DSH_LARK_HOME`
 - Environment variables use the `DSH_LARK_*` prefix
 - Template: [`.env.example`](.env.example)
+- Sensitive values: credentials (`DSH_LARK_APP_SECRET`, `DEEPSEEK_API_KEY`, …) stay in local
+  config/env only; logs and cards are redacted; only `.env.example` is committed.
 
 会话运行在 Git 仓库中时，会自动在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建隔离 worktree，并复制项目级 `AGENTS.md`。
 
@@ -375,6 +447,14 @@ dsh 自己的日志体系。
 The bridge engine logs to `~/.dsh-lark/profiles/<profile>/logs/bot.log` (JSON Lines); the dsh
 host uses its own logging.
 
+**回滚 / Rollback**：`dsh plugin --profile dsh-lark remove dsh-lark-bot` 后重装固定版本即可
+（如 `dsh plugin --profile dsh-lark add dsh-lark-bot@0.6.0`）；`~/.dsh-lark` 状态独立于插件
+本体，升级 / 回滚不会丢失配置与会话。
+
+To roll back: remove the plugin and reinstall a pinned version (e.g.
+`dsh plugin --profile dsh-lark add dsh-lark-bot@0.6.0`); `~/.dsh-lark` state is independent of
+the package, so config and sessions survive upgrades / rollbacks.
+
 ## 开发 | Development
 
 ```bash
@@ -395,6 +475,13 @@ See [`AGENTS.md`](AGENTS.md) for the development workflow, [`docs/API.md`](docs/
 module contracts, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the architecture. See
 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the compatibility matrix, upgrade policy
 and automation.
+
+**贡献 / Contributing**：欢迎 Issue 与 PR。开发流程见 [`AGENTS.md`](AGENTS.md)（必读文档、
+提交规范与推送边界），生态交付标准见 [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)。
+
+Contributions are welcome via Issues and PRs; see [`AGENTS.md`](AGENTS.md) for the workflow
+(required reading, commit conventions, push policy) and [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)
+for ecosystem delivery standards.
 
 发布双包（`dsh-lark-bot` 与 `dsh-feishu-bot` 共享同一份 dist / 版本 / 依赖）：
 
@@ -418,14 +505,30 @@ create a Release automatically.
 The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bot` and
 `@plutokeating/dsh-feishu-bot`, viewable on the GitHub Packages page.
 
+## 维护与支持 | Maintenance
+
+- 状态：**活跃维护（Active）**。主维护者：**PlutoKeating**。
+- 问题 / 建议：优先在 GitHub Issues 提交；安全漏洞请走 [`SECURITY.md`](SECURITY.md) 的私下报告渠道。
+- 生态收录：awesome-dsh-plugins（`✅ 运行级可用`）与 omdsh-dev/community（`[Plugin]` 收录申请）已登记 / 提交。
+
+- Status: **active**. Primary maintainer: **PlutoKeating**.
+- Bugs / feature requests: GitHub Issues; security issues via the private channel in
+  [`SECURITY.md`](SECURITY.md).
+- Ecosystem: listed as `✅ 运行级可用` in awesome-dsh-plugins; `[Plugin]` submission filed with
+  omdsh-dev/community.
+
 ## 许可与安全 | License & Security
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
+- **版权归属**：源码版权归项目维护者所有，按 AGPL-3.0 授权；「DeepSeek」「飞书 / Lark」等
+  商标归各自权利人所有。
 - **安全报告**：如发现安全漏洞，请通过 GitHub Security Advisory 私下报告，勿公开 issue。
 - **安全模型**：默认拒绝、密钥脱敏、路径 containment、SSRF 防护、过期事件拒绝与交互工具
   默认禁用——详见 [`SECURITY.md`](SECURITY.md)。
 
 - **License**: GNU Affero General Public License v3.0 (see `LICENSE`).
+- **Copyright**: source is owned by the maintainers and licensed under AGPL-3.0; "DeepSeek" and
+  "Feishu / Lark" trademarks belong to their respective owners.
 - **Security reports**: report vulnerabilities privately via GitHub Security Advisory; do not
   open a public issue.
 - **Security model**: default-deny, secret redaction, path containment, SSRF protection, stale

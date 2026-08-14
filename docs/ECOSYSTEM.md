@@ -41,15 +41,21 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
 
 README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 `README.md`）：
 
-1. Overview — 解决什么问题、适合谁
-2. Compatibility — 支持哪些 dsh 版本 / mainline commit，最后验证日期
-3. Install / Uninstall — 如何安装、升级、禁用、彻底移除
-4. Quick start — 最小配置 + 可复现示例
-5. Configuration — 配置项、默认值、环境变量、敏感项
-6. Permissions & data — 访问哪些文件 / 网络 / 凭据 / 用户数据
-7. Troubleshooting — 常见错误、日志位置、回滚方式
-8. Development — 如何构建、测试、贡献
-9. License & security — 许可证、安全问题的私下报告方式
+1. Overview — 解决什么问题、适合谁（`这是什么 / What it is` + `目标 / Goals`）
+2. Compatibility — 支持哪些 dsh 版本 / mainline commit，最后验证日期（`兼容性 / Compatibility`）
+3. Install / Uninstall — 如何安装、升级、禁用、彻底移除（`安装与卸载 / Install & Uninstall`）
+4. Quick start — 最小配置 + 可复现示例（`快速开始 / Quick Start`）
+5. Configuration — 配置项、默认值、环境变量、敏感项（`配置 / Configuration`）
+6. Permissions & data — 访问哪些文件 / 网络 / 凭据 / 用户数据（`权限与数据 / Permissions & Data`）
+7. Troubleshooting — 常见错误、日志位置、回滚方式（`排障 / Troubleshooting`）
+8. Development — 如何构建、测试、贡献（`开发 / Development`）
+9. License & security — 许可证、版权归属、安全问题的私下报告方式（`许可与安全 / License & Security`）
+
+此外按 omdsh-dev/community 收录要求补充：
+
+- `维护与支持 / Maintenance` — 维护状态、主维护者、问题 / 安全报告渠道。
+- `已知限制 / Known limitations` — ACP 会话全新、SDK 无 mid-turn cancel、嵌套 runtime 取舍、
+  未实现能力（飞书文档评论等）、pnpm≥10 构建策略说明。
 
 ## 4. DSH 版本声明 · DSH Version Declaration
 
