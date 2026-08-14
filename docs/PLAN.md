@@ -11,6 +11,7 @@
 | P2 | 项目工作区管理 | ✅ 完成（SDK 原生 session 已接入） |
 | P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
+| P5 | 后台服务化（开机自启 + 自动重启） | ✅ 完成 |
 
 ## 2. P1 验收标准
 
@@ -59,8 +60,9 @@
 3. ✅ 基于 ACP `session/request_permission` 实现卡片审批（ACP adapter 模式）
 4. ✅ 安全模块（SECURITY.md + 脱敏 / SSRF / 路径 containment / 默认拒绝 / UTF-8 安全截断）
 5. ✅ 三档可变卡片 + thinking 流式展示
-6. ⏳ 补充异步任务队列与调度（后续迭代）
-7. ⏳ 稳定发布下一版本
+6. ✅ 后台服务化：`start` 安装后台服务并加入开机自启，退出 / 崩溃自动重启；`status` / `restart` / `stop`
+7. ⏳ 补充异步任务队列与调度（后续迭代）
+8. ⏳ 稳定发布下一版本
 
 ## 7. 当前阻塞 · Current blocker
 
@@ -135,3 +137,15 @@
 
 - 报告建议 AGPL → MIT 重议。**License 属于所有者法律决策**：本计划不擅自变更 LICENSE，仅在
   README / roadmap / PLAN 中记录决策状态；`homepage` 已配置，无需新增。
+
+## 9. P5 后台服务化 · Background service delivery
+
+| # | 动作 | 验收 |
+| --- | --- | --- |
+| P5-1 | `src/service/`：`ServiceManager` + 平台控制器（systemd / launchd / 计划任务 / 便携 supervisor） | 单元测试覆盖 |
+| P5-2 | CLI 重构：`start` = 安装并启动后台服务；新增 `status` / `restart` / `stop`；隐藏 `run` / `supervise` | `pnpm typecheck` + 程序注册测试 |
+| P5-3 | 开机自启：systemd `WantedBy=default.target`、launchd `RunAtLoad`、计划任务 AtLogOn、XDG autostart | 各平台配置生成测试 |
+| P5-4 | 崩溃自愈：systemd `Restart=always`、launchd `KeepAlive`、计划任务 RestartCount、supervisor 重启循环 | 真实 systemd 端到端验证 ✅ |
+| P5-5 | 环境快照：`DSH_LARK_*` / `DEEPSEEK_API_KEY` / `PATH` 写入 `service.env`（0600） | env-snapshot 测试 |
+| P5-6 | 后台日志：`profiles/<profile>/logs/bot.log` | 端到端验证日志落盘 ✅ |
+| P5-7 | 文档：README / QUICK_START / MANUAL / API / ARCHITECTURE / SECURITY 同步 | 文档审查 |

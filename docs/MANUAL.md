@@ -20,7 +20,10 @@ dsh-lark-bot --version
 dsh-feishu-bot --version
 ```
 
-## 2. 首次启动 · First start
+## 2. 后台服务与首次启动 · Background service & first start
+
+`dsh-lark-bot start` 会在本机安装后台服务：加入开机自启列表，并在进程退出、崩溃或出错时自动重启。
+首次启动会在终端显示二维码完成一次性绑定，绑定后 bot 转入后台运行，终端可以随时关闭。
 
 ```bash
 dsh-lark-bot start
@@ -37,7 +40,24 @@ dsh-lark-bot start \
   --tenant feishu
 ```
 
-## 3. 飞书内命令 · In-chat commands
+## 3. 服务管理 · Service management
+
+| 命令 | 作用 |
+| :--- | :--- |
+| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（幂等，已安装时重启以应用最新环境） |
+| `dsh-lark-bot status` | 查看安装状态、开机自启、运行状态、PID、重启次数 |
+| `dsh-lark-bot restart` | 重启后台服务（保留开机自启） |
+| `dsh-lark-bot stop` | 停止后台服务并移出开机自启 |
+
+实现机制：
+
+- Linux：systemd user service（`Restart=always`）；无 systemd 时降级为自带 supervisor + XDG autostart。
+- macOS：LaunchAgent（`KeepAlive` + `RunAtLoad`）。
+- Windows：计划任务（登录时启动 + 失败自动重启）。
+
+服务进程环境来自 `~/.dsh-lark/service/service.env`（0600），由 `start` / `restart` 从当前终端环境快照。
+
+## 4. 飞书内命令 · In-chat commands
 
 | 命令 | 作用 |
 | --- | --- |
@@ -58,7 +78,7 @@ dsh-lark-bot start \
 | `/invite remove user\|group <id>` | 移除白名单 |
 | `/help` | 查看帮助 |
 
-## 4. 会话与工作区 · Sessions & workspaces
+## 5. 会话与工作区 · Sessions & workspaces
 
 - 每个飞书私聊、群聊、话题对应独立 scope。
 - 每个 scope 保存最近 40 条对话；SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史
@@ -67,7 +87,7 @@ dsh-lark-bot start \
 - 非 Git 目录直接使用指定目录。
 - 项目根目录有 `AGENTS.md` 时，会注入到 worktree。
 
-## 5. 权限 · Permissions
+## 6. 权限 · Permissions
 
 - 首次扫码创建者自动写入白名单。
 - 使用 `/invite user <open_id>` 允许用户私聊。
@@ -75,7 +95,7 @@ dsh-lark-bot start \
 - 使用 `/invite admin <open_id>` 设为管理员。
 - 白名单非空时，飞书 SDK 启用 DM / group allowlist。
 
-## 6. 诊断与排障 · Diagnostics
+## 7. 诊断与排障 · Diagnostics
 
 ```bash
 dsh-lark-bot doctor
@@ -88,16 +108,18 @@ dsh-lark-bot doctor
 - 工作目录是否存在
 - adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
 
-运行日志当前输出到 stderr JSON Lines。
+后台服务运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，stdout + stderr）。
+服务状态可用 `dsh-lark-bot status` 查看；服务未运行时先检查该日志再运行 `doctor`。
 
-## 7. 卸载 · Uninstall
+## 8. 卸载 · Uninstall
 
 ```bash
+dsh-lark-bot stop
 npm uninstall -g dsh-lark-bot
 rm -rf ~/.dsh-lark
 ```
 
-## 8. 环境变量 · Environment
+## 9. 环境变量 · Environment
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -114,3 +136,7 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
+
+`start` / `restart` 会把当前终端的 `DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME`
+快照到 `~/.dsh-lark/service/service.env`（权限 0600），后台服务启动时读取；修改环境后重新执行
+`dsh-lark-bot start` 或 `restart` 即可生效。

@@ -42,7 +42,7 @@ npm install -g dsh-feishu-bot
 
 安装完成后，对应命令分别为 `dsh-lark-bot` 和 `dsh-feishu-bot`。
 
-### 2. 启动并绑定飞书
+### 2. 启动后台服务并绑定飞书
 
 ```bash
 dsh-lark-bot start
@@ -54,13 +54,15 @@ dsh-lark-bot start
 dsh-feishu-bot start
 ```
 
-首次启动会：
+`start` 会自动在本机安装一个**后台服务**：加入系统开机自启列表，并在进程退出、崩溃或出错时自动重启。首次启动会：
 
 1. 在终端显示二维码。
 2. 用飞书 / Lark App 扫码。
 3. 选择或创建 PersonalAgent 应用。
 4. 绑定成功后，bot 会向你的私聊发送欢迎卡片。
 5. 私聊直接发消息；群聊或话题里 `@bot`。
+
+绑定完成后 bot 转入后台运行，终端可以随时关闭。
 
 如果你已经有 PersonalAgent 应用，也可以跳过扫码：
 
@@ -71,7 +73,18 @@ dsh-lark-bot start \
   --tenant feishu
 ```
 
-### 3. 基本使用
+### 3. 服务管理命令
+
+| 命令 | 作用 |
+| :--- | :--- |
+| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（首次运行会先扫码绑定） |
+| `dsh-lark-bot status` | 查看服务状态（退出码 0=运行中，1=未运行） |
+| `dsh-lark-bot restart` | 重启后台服务（保留开机自启） |
+| `dsh-lark-bot stop` | 停止后台服务并移出开机自启 |
+
+后台服务的运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`。
+
+### 4. 基本使用
 
 在飞书里向 bot 发送普通消息即可开始工作，常用命令：
 
@@ -94,9 +107,10 @@ dsh-lark-bot start \
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
-### 4. 卸载
+### 5. 卸载
 
 ```bash
+dsh-lark-bot stop
 npm uninstall -g dsh-lark-bot
 rm -rf ~/.dsh-lark
 ```
@@ -117,7 +131,7 @@ rm -rf ~/.dsh-lark
 
 ## 目标 · Goals
 
-- **一条命令启动**：clone 后一键安装运行，最终发布到 npm，`npx dsh-lark-bot` 即可拉起。
+- **一条命令启动**：clone 后一键安装运行，最终发布到 npm，`npm i -g dsh-lark-bot && dsh-lark-bot start` 即可拉起后台服务。
 - **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
 - **完整工作区管理**：多项目隔离、git worktree、项目级规则注入、上下文持久化。
 
@@ -189,7 +203,8 @@ rm -rf ~/.dsh-lark
 - **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止。
 - **首次扫码失败**：确认本机时间准确、网络可访问飞书开放平台；已拿到 App ID/Secret 时可用 `--app-id` / `--app-secret` 跳过扫码。
 
-日志当前为 stderr JSON Lines，`~/.dsh-lark/profiles/<profile>/logs/` 为后续文件日志保留目录。
+以后台服务方式运行时，日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，
+stdout 与 stderr 合并）；当前进程的 stderr 仍为 JSON Lines。
 
 ## 开发 · Development
 
@@ -265,11 +280,12 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
-| `src/cli/` | CLI 入口与 start / doctor 命令<br>CLI entry & start / doctor commands |
+| `src/cli/` | CLI 入口与 start / status / restart / stop / doctor 命令<br>CLI entry & service commands |
 | `src/config/` | profile / 配置管理<br>Profile & config |
 | `src/core/` | 结构化日志<br>Structured logging |
 | `src/media/` | 附件下载与文本注入<br>Attachment download & text injection |
 | `src/platform/` | 跨平台原子写入<br>Cross-platform atomic writes |
+| `src/service/` | 后台服务管理（systemd / launchd / 计划任务 / 便携 supervisor）<br>Background service management |
 | `docs/` | 架构、路线图等文档<br>Architecture, roadmap & docs |
 | `reference/` | 参考研究用的克隆仓库（不提交）<br>Cloned reference repos (not committed) |
 

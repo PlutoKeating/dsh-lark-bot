@@ -58,6 +58,10 @@ export interface AppPaths {
   workspacesFile(profile: string): string;
   mediaDir(profile: string): string;
   logsDir(profile: string): string;
+  serviceDir: string;
+  serviceEnvFile: string;
+  serviceMetadataFile: string;
+  serviceLogFile(profile: string): string;
   registryFile: string;
   locksDir: string;
 }
@@ -66,6 +70,9 @@ export function resolveAppPaths(root?: string): AppPaths;
 ```
 
 默认根目录为 `~/.dsh-lark`，可通过 `DSH_LARK_HOME` 覆盖。
+
+服务相关路径：`serviceDir`（`<root>/service`）、`serviceEnvFile`（`service.env`，0600）、
+`serviceMetadataFile`（`service.json`）、`serviceLogFile(profile)`（`profiles/<profile>/logs/bot.log`）。
 
 ### 2.1 Profile 配置 · Profile config
 
@@ -280,20 +287,73 @@ export interface Logger {
 日志按 JSON Lines 输出到 stderr，并自动脱敏 secret/token/password/api_key 等字段与
 `Bearer …` / `sk-…` / `api_key=…` 文本。
 
-## 7. CLI · Command line
+## 7. 后台服务 · Background service
+
+`src/service/` 提供跨平台后台服务管理，实现「后台运行 + 开机自启 + 崩溃自动重启」：
+
+```ts
+export type ServicePlatform =
+  | 'linux-systemd'
+  | 'linux-portable'
+  | 'darwin-launchd'
+  | 'win32-task';
+
+export interface ServiceStatus {
+  name: string;
+  platform: ServicePlatform;
+  installed: boolean;
+  autostartEnabled: boolean;
+  state: 'running' | 'stopped' | 'error' | 'unknown';
+  pid: number | undefined;
+  detail: string;
+  restarts: number | undefined;
+}
+
+export interface ServiceController {
+  readonly platform: ServicePlatform;
+  installAndStart(spec: ServiceSpec): Promise<void>;
+  stop(spec: ServiceSpec): Promise<void>;
+  restart(spec: ServiceSpec): Promise<void>;
+  status(spec: ServiceSpec): Promise<ServiceStatus>;
+}
+```
+
+平台实现：
+
+- `linux-systemd.ts`：写 `~/.config/systemd/user/<name>.service`（`Restart=always` +
+  `WantedBy=default.target` + `EnvironmentFile`），通过 `systemctl --user` 管理；
+  `systemctl --user` 不可用时由 `manager.ts` 降级到便携 supervisor。
+- `macos-launchd.ts`：写 `~/Library/LaunchAgents/<label>.plist`（`KeepAlive` + `RunAtLoad` +
+  `EnvironmentVariables`），通过 `launchctl bootstrap / bootout / kickstart / print` 管理。
+- `windows-task.ts`：生成 PowerShell 脚本（`Register-ScheduledTask`，AtLogOn + RestartCount 5），
+  通过 `powershell.exe -File` 执行；`status` 解析 `Get-ScheduledTask` / `Get-ScheduledTaskInfo`。
+- `portable.ts`：无 systemd 的 Linux 降级方案——`supervise` 命令做崩溃重启循环，写
+  `service/supervisor-<name>.json` 状态文件，开机自启走 XDG `~/.config/autostart/*.desktop`。
+
+`manager.ts` 的 `ServiceManager` 编排安装 / 状态 / 重启 / 停止，并在 `start` / `restart` 时把
+`DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME` 快照到 `service.env`（0600）。
+
+服务进程本身通过隐藏命令 `dsh-lark-bot run` 运行（即原前台 bot 入口，服务专用，不接受扫码绑定）；
+便携降级路径通过隐藏命令 `dsh-lark-bot supervise` 运行。
+
+## 8. CLI · Command line
 
 当前命令：
 
-- `dsh-lark-bot start`：前台启动桥接
+- `dsh-lark-bot start`：安装并启动后台服务（首次运行时先完成扫码绑定）
+- `dsh-lark-bot status`：查询后台服务状态
+- `dsh-lark-bot restart`：重启后台服务
+- `dsh-lark-bot stop`：停止后台服务并移出开机自启
 - `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）
 - `dsh-lark-bot --version` / `-v`：版本号
 
-两个启动类命令均支持 `--profile`、`--workspace`、`--app-id`、`--app-secret`、`--tenant`。
+`start` / `status` / `restart` / `stop` / `doctor` 均支持 `--profile`、`--workspace`、`--app-id`、
+`--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
 `/stop`、`/timeout`、`/density`、`/ask`、`/invite user|admin|group|list|remove`、`/help`。
 
-## 8. 桥接层 · Bridge
+## 9. 桥接层 · Bridge
 
 - `src/bridge/channel.ts`：`startChannel(deps)` 建立飞书长连接，路由 `message` / `cardAction`
   事件，处理 `stop` / `approve` / `question-submit` 卡片按钮。

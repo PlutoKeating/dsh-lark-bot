@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { runDoctor } from './cli/commands/doctor.js';
-import { runStart } from './cli/commands/start.js';
+import { runBot } from './cli/commands/run.js';
+import { runServiceStart, runServiceCommand } from './cli/commands/service.js';
+import { runSupervise } from './cli/commands/supervise.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -17,6 +19,15 @@ export interface StartOptions {
   tenant?: string;
 }
 
+function addBotOptions(command: Command): Command {
+  return command
+    .option('--profile <name>', 'profile name')
+    .option('--workspace <path>', 'initial working directory')
+    .option('--app-id <id>', 'existing Lark/Feishu app id')
+    .option('--app-secret <secret>', 'existing Lark/Feishu app secret')
+    .option('--tenant <tenant>', 'feishu or lark');
+}
+
 export function buildProgram(): Command {
   const program = new Command();
 
@@ -25,17 +36,31 @@ export function buildProgram(): Command {
     .description('Bridge DeepSeek Harness into Feishu / Lark')
     .version(packageVersion(), '-v, --version');
 
-  program
-    .command('start')
-    .description('Start the bridge in the foreground')
-    .option('--profile <name>', 'profile name')
-    .option('--workspace <path>', 'initial working directory')
-    .option('--app-id <id>', 'existing Lark/Feishu app id')
-    .option('--app-secret <secret>', 'existing Lark/Feishu app secret')
-    .option('--tenant <tenant>', 'feishu or lark')
-    .action(async (opts: StartOptions) => {
-      await runStart(opts);
-    });
+  addBotOptions(
+    program
+      .command('start')
+      .description('Install and start the background service (autostart + auto-restart)'),
+  ).action(async (opts: StartOptions) => {
+    await runServiceStart(opts, { version: packageVersion() });
+  });
+
+  addBotOptions(program.command('status').description('Show background service status')).action(
+    async (opts: StartOptions) => {
+      await runServiceCommand('status', opts, { version: packageVersion() });
+    },
+  );
+
+  addBotOptions(program.command('restart').description('Restart the background service')).action(
+    async (opts: StartOptions) => {
+      await runServiceCommand('restart', opts, { version: packageVersion() });
+    },
+  );
+
+  addBotOptions(program.command('stop').description('Stop the background service and remove autostart')).action(
+    async (opts: StartOptions) => {
+      await runServiceCommand('stop', opts, { version: packageVersion() });
+    },
+  );
 
   program
     .command('doctor')
@@ -48,6 +73,22 @@ export function buildProgram(): Command {
     .action(async (opts: StartOptions) => {
       await runDoctor({ ...opts, version: packageVersion() });
     });
+
+  addBotOptions(
+    program
+      .command('run', { hidden: true })
+      .description('Run the bridge process (managed by the background service; not for interactive use)'),
+  ).action(async (opts: StartOptions) => {
+    await runBot(opts);
+  });
+
+  addBotOptions(
+    program
+      .command('supervise', { hidden: true })
+      .description('Supervisor loop for the portable background service; not for interactive use'),
+  ).action(async (opts: StartOptions) => {
+    await runSupervise(opts);
+  });
 
   return program;
 }

@@ -41,6 +41,10 @@
 DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 ```
 
+整条流水线由 `service/` 层以**后台服务**方式守护（CLI `start` / `status` / `restart` / `stop`）：
+systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）、Windows 计划任务
+（失败自动重启），以及无 systemd 时的便携 supervisor 降级；服务进程环境由 `service.env` 快照注入。
+
 ## 关键决策 · Key Decisions
 
 1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。
@@ -62,8 +66,9 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/card/` | 流式卡片状态与渲染 |
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
-| `src/cli/` | CLI 入口与 start / doctor 命令 |
+| `src/cli/` | CLI 入口与 start / status / restart / stop / doctor 命令 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |
 | `src/platform/` | 跨平台原子写入 |
+| `src/service/` | 后台服务管理：systemd / launchd / Windows 计划任务 / 便携 supervisor |

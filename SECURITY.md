@@ -35,6 +35,10 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
+- 后台服务把 `DEEPSEEK_API_KEY`、`DSH_LARK_*`、`PATH` 等环境快照到
+  `~/.dsh-lark/service/service.env`（`0600`）；systemd / launchd 单元文件中的 `EnvironmentFile`
+  只引用该文件，不内联密钥。
+- 后台运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，密钥字段脱敏后输出）。
 - 所有数据仅在本机、飞书开放平台与 DeepSeek API 之间流转；无遥测。
 
 ## 报告渠道 · Reporting

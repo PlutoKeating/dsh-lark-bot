@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import type { LarkChannel, NormalizedMessage } from '@larksuite/channel';
+import type { RuntimeEnv } from '../../config/env.js';
 import { buildAgentAdapter } from '../../adapters/index.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
 import { ApprovalRegistry } from '../../bot/approvals.js';
@@ -11,6 +12,7 @@ import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
 import type { StreamingChannel } from '../../bridge/types.js';
+import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
 import { loadRuntimeEnv } from '../../config/env.js';
@@ -21,24 +23,20 @@ import { prepareAttachments } from '../../media/attachments.js';
 import { SessionStore } from '../../session/store.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
-import type { StartOptions } from '../../cli.js';
 
 const DEBOUNCE_MS = 600;
 
-export async function runStart(options: StartOptions): Promise<void> {
-  const env = loadRuntimeEnv({
-    ...process.env,
-    ...(options.workspace ? { DSH_LARK_WORKSPACE: options.workspace } : {}),
-    ...(options.tenant ? { DSH_LARK_TENANT: options.tenant } : {}),
-    ...(options.appId ? { DSH_LARK_APP_ID: options.appId } : {}),
-    ...(options.appSecret ? { DSH_LARK_APP_SECRET: options.appSecret } : {}),
-  });
-  const paths = resolveAppPaths(env.home);
-  const profileName = options.profile ?? 'default';
-  const configStore = new ConfigStore(paths.configFile);
-  await configStore.load();
-  const accessManager = new AccessManager(configStore, profileName);
+export interface EnsureProfileOptions {
+  env: RuntimeEnv;
+  profileName: string;
+  allowOnboarding: boolean;
+}
 
+export async function ensureBotProfile(
+  store: ConfigStore,
+  options: EnsureProfileOptions,
+): Promise<boolean> {
+  const { env, profileName } = options;
   if (env.appId && env.appSecret) {
     const profileInput: Parameters<ConfigStore['saveProfile']>[1] = {
       tenant: env.tenant,
@@ -49,34 +47,68 @@ export async function runStart(options: StartOptions): Promise<void> {
       runTimeoutMs: env.runTimeoutMs,
     };
     if (env.workspace !== undefined) profileInput.workspace = env.workspace;
-    await configStore.saveProfile(profileName, profileInput);
+    await store.saveProfile(profileName, profileInput);
   }
 
-  const profile = configStore.getProfile(profileName);
-  if (!profile) {
-    try {
-      const created = await onboardPersonalAgent();
-      const onboardingProfile: Parameters<ConfigStore['saveProfile']>[1] = {
-        tenant: created.tenant,
-        appId: created.appId,
-        appSecret: created.appSecret,
-        model: env.model,
-        stopGraceMs: env.stopGraceMs,
-        runTimeoutMs: env.runTimeoutMs,
-      };
-      if (created.operatorOpenId !== undefined) {
-        onboardingProfile.operatorOpenId = created.operatorOpenId;
-      }
-      if (env.workspace !== undefined) onboardingProfile.workspace = env.workspace;
-      await configStore.saveProfile(profileName, onboardingProfile);
-    } catch (error) {
-      log.fail('onboarding', error);
-      process.stderr.write('扫码创建应用失败，未写入本地配置。\n');
-      process.exitCode = 1;
-      return;
+  if (store.getProfile(profileName)) return true;
+
+  if (!options.allowOnboarding) {
+    process.stderr.write(
+      '未检测到飞书 / Lark 应用凭据。请先在终端运行 `dsh-lark-bot start` 完成扫码绑定。\n',
+    );
+    return false;
+  }
+
+  try {
+    const created = await onboardPersonalAgent();
+    const onboardingProfile: Parameters<ConfigStore['saveProfile']>[1] = {
+      tenant: created.tenant,
+      appId: created.appId,
+      appSecret: created.appSecret,
+      model: env.model,
+      stopGraceMs: env.stopGraceMs,
+      runTimeoutMs: env.runTimeoutMs,
+    };
+    if (created.operatorOpenId !== undefined) {
+      onboardingProfile.operatorOpenId = created.operatorOpenId;
     }
+    if (env.workspace !== undefined) onboardingProfile.workspace = env.workspace;
+    await store.saveProfile(profileName, onboardingProfile);
+    return true;
+  } catch (error) {
+    log.fail('onboarding', error);
+    process.stderr.write('扫码创建应用失败，未写入本地配置。\n');
+    process.exitCode = 1;
+    return false;
   }
+}
 
+function mergeStartEnv(options: StartOptions): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ...(options.workspace ? { DSH_LARK_WORKSPACE: options.workspace } : {}),
+    ...(options.tenant ? { DSH_LARK_TENANT: options.tenant } : {}),
+    ...(options.appId ? { DSH_LARK_APP_ID: options.appId } : {}),
+    ...(options.appSecret ? { DSH_LARK_APP_SECRET: options.appSecret } : {}),
+  };
+}
+
+export async function runBot(options: StartOptions): Promise<void> {
+  const env = loadRuntimeEnv(mergeStartEnv(options));
+  const paths = resolveAppPaths(env.home);
+  const profileName = options.profile ?? 'default';
+  const configStore = new ConfigStore(paths.configFile);
+  await configStore.load();
+
+  const ready = await ensureBotProfile(configStore, {
+    env,
+    profileName,
+    allowOnboarding: false,
+  });
+  if (!ready) {
+    process.exitCode = 1;
+    return;
+  }
   const activeProfile = configStore.getProfile(profileName);
   if (!activeProfile) {
     process.stderr.write('本地配置读取失败，请检查后重试。\n');
@@ -176,7 +208,7 @@ export async function runStart(options: StartOptions): Promise<void> {
     questions,
     densityStore,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
-    accessManager,
+    accessManager: new AccessManager(configStore, profileName),
     pending,
     defaultWorkspace,
     accessDefaultDeny: env.accessDefaultDeny,

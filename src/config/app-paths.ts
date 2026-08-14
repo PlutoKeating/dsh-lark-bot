@@ -12,6 +12,10 @@ export interface AppPaths {
   workspacesFile: (profile: string) => string;
   mediaDir: (profile: string) => string;
   logsDir: (profile: string) => string;
+  serviceDir: string;
+  serviceEnvFile: string;
+  serviceMetadataFile: string;
+  serviceLogFile: (profile: string) => string;
   registryFile: string;
   locksDir: string;
 }
@@ -37,6 +41,10 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     workspacesFile: (profile) => profilePath(profile, 'workspaces.json'),
     mediaDir: (profile) => profilePath(profile, 'media'),
     logsDir: (profile) => profilePath(profile, 'logs'),
+    serviceDir: join(root, 'service'),
+    serviceEnvFile: join(root, 'service', 'service.env'),
+    serviceMetadataFile: join(root, 'service', 'service.json'),
+    serviceLogFile: (profile) => profilePath(profile, 'logs', 'bot.log'),
     registryFile: join(root, 'registry', 'processes.json'),
     locksDir: join(root, 'registry', 'locks'),
   };

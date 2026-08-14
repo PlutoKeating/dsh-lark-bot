@@ -22,5 +22,11 @@ describe('resolveAppPaths', () => {
     );
     expect(paths.mediaDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/media');
     expect(paths.logsDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/logs');
+    expect(paths.serviceDir).toBe('/tmp/dsh-lark-test/service');
+    expect(paths.serviceEnvFile).toBe('/tmp/dsh-lark-test/service/service.env');
+    expect(paths.serviceMetadataFile).toBe('/tmp/dsh-lark-test/service/service.json');
+    expect(paths.serviceLogFile('main')).toBe(
+      '/tmp/dsh-lark-test/profiles/main/logs/bot.log',
+    );
   });
 });
