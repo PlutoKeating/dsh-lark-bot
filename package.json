@@ -1,6 +1,6 @@
 {
   "name": "dsh-lark-bot",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Bridge DeepSeek Harness (dsh) into Feishu / Lark with streaming cards, project workspaces, approvals and scheduling",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
@@ -58,7 +58,8 @@
     "@larksuite/channel": "^0.4.1",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",

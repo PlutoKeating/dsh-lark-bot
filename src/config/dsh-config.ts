@@ -1,0 +1,547 @@
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { Document, parseDocument } from 'yaml';
+import { writeFileAtomic } from '../platform/atomic-write.js';
+import { resolveDshHome } from './dsh-runtime.js';
+
+export const DEEPSEEK_NAMESPACE = 'llm-deepseek';
+export const DEEPSEEK_PROVIDER = 'deepseek-official';
+export const DEEPSEEK_DEFAULT_API_KEY_ENV = 'DEEPSEEK_API_KEY';
+export const PIAI_NAMESPACE = 'llm-pi-ai';
+export const AGENT_DEFAULT_MODEL_NAMESPACE = 'agent-default-model';
+
+/**
+ * Wire protocols a dsh-llm-pi-ai profile may name. Mirrors
+ * `supportedProtocols()` from @deepseek-ai/dsh-llm-pi-ai; anything else is
+ * refused at configuration time by the official validator.
+ */
+export const SUPPORTED_PI_AI_PROTOCOLS = [
+  'openai-completions',
+  'openai-responses',
+  'anthropic-messages',
+] as const;
+export type PiAiProtocol = (typeof SUPPORTED_PI_AI_PROTOCOLS)[number];
+
+const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9._-]*$/;
+/** POSIX identifier rule enforced by dsh-credentials for `.credentials.yaml`. */
+const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export interface DshModelEntry {
+  id: string;
+  name: string | undefined;
+  contextWindow: number | undefined;
+  maxTokens: number | undefined;
+}
+
+export interface DshProviderSummary {
+  id: string;
+  displayName: string;
+  namespace: string;
+  configured: boolean;
+  credentialRef: string | undefined;
+  credentialReady: boolean;
+  models: DshModelEntry[];
+  /** Whether dsh-lark-bot can add/update/remove this provider via chat. */
+  managed: boolean;
+}
+
+export interface DshProviderManagerOptions {
+  home?: string;
+  env?: NodeJS.ProcessEnv;
+  settingsFile?: string;
+  credentialsFile?: string;
+}
+
+export interface DshPiAiProviderInput {
+  id: string;
+  displayName?: string;
+  apiKeyEnv?: string;
+  api?: string;
+  baseURL?: string;
+  models?: DshModelEntry[];
+}
+
+const DEFAULT_DEEPSEEK_MODELS: DshModelEntry[] = [
+  { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: undefined, maxTokens: undefined },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: undefined, maxTokens: undefined },
+];
+
+const LOCK_TIMEOUT_MS = 10_000;
+
+function isMapLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepEqualJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function parseModels(value: unknown): DshModelEntry[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const models: DshModelEntry[] = [];
+  for (const raw of value) {
+    if (!isMapLike(raw) || typeof raw.id !== 'string' || raw.id.length === 0) continue;
+    models.push({
+      id: raw.id,
+      name: typeof raw.name === 'string' ? raw.name : undefined,
+      contextWindow:
+        typeof raw.contextWindow === 'number' ? raw.contextWindow : undefined,
+      maxTokens: typeof raw.maxTokens === 'number' ? raw.maxTokens : undefined,
+    });
+  }
+  return models;
+}
+
+/** Raw model entries preserved verbatim so exotic fields survive round-trips. */
+function rawModels(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is Record<string, unknown> => isMapLike(entry));
+}
+
+function modelRecord(input: DshModelEntry): Record<string, unknown> {
+  const record: Record<string, unknown> = { id: input.id };
+  if (input.name !== undefined) record.name = input.name;
+  if (input.contextWindow !== undefined) record.contextWindow = input.contextWindow;
+  if (input.maxTokens !== undefined) record.maxTokens = input.maxTokens;
+  return record;
+}
+
+function validateProviderId(id: string): void {
+  if (!PROVIDER_ID_PATTERN.test(id)) {
+    throw new Error(`provider id 必须是小写字母开头且仅含 a-z 0-9 . _ -，得到 "${id}"`);
+  }
+}
+
+function validateBaseUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`baseURL 不是合法 URL：${url}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`baseURL 仅支持 http/https：${url}`);
+  }
+}
+
+function assertProtocol(api: string): asserts api is PiAiProtocol {
+  if (!(SUPPORTED_PI_AI_PROTOCOLS as readonly string[]).includes(api)) {
+    throw new Error(`不支持的 API 协议 "${api}"，可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}`);
+  }
+}
+
+/** Comment-preserving leaf patch used by dsh-settings-file. */
+function patchNode(
+  document: Document,
+  path: readonly (string | number)[],
+  current: unknown,
+  next: unknown,
+): void {
+  if (isMapLike(current) && isMapLike(next)) {
+    for (const key of Object.keys(current)) {
+      if (!(key in next)) document.deleteIn([...path, key]);
+    }
+    for (const [key, value] of Object.entries(next)) {
+      patchNode(document, [...path, key], current[key], value);
+    }
+    return;
+  }
+  if (!deepEqualJson(current, next)) document.setIn([...path], next);
+}
+
+function parseYamlMap(text: string | undefined, filename: string): Record<string, unknown> {
+  if (text === undefined || text.trim().length === 0) return {};
+  const document = parseDocument(text, { prettyErrors: true });
+  if (document.errors.length > 0) {
+    throw new Error(`invalid dsh config at ${filename}: ${document.errors.map((e) => e.message).join('; ')}`);
+  }
+  const root = document.toJS() ?? {};
+  if (!isMapLike(root)) {
+    throw new TypeError(`dsh config ${filename} must be a mapping`);
+  }
+  return root;
+}
+
+async function readOptional(file: string): Promise<string | undefined> {
+  try {
+    return await readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Cross-process writer lock compatible with dsh's own protocol: an exclusive
+ * `<file>.lock` sibling created with the `wx` flag, released by removal.
+ */
+async function withFileLock<T>(filename: string, operation: () => Promise<T>): Promise<T> {
+  const lockPath = `${filename}.lock`;
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      await writeFile(lockPath, `${process.pid}\n`, { flag: 'wx' });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (Date.now() >= deadline) {
+        throw new Error(`dsh config lock timed out at ${lockPath}`);
+      }
+      await sleep(80 + Math.random() * 120);
+    }
+  }
+  try {
+    return await operation();
+  } finally {
+    await rm(lockPath, { force: true }).catch(() => undefined);
+  }
+}
+
+export class DshProviderManager {
+  private readonly home: string;
+  private readonly env: NodeJS.ProcessEnv;
+  private readonly settingsFile: string;
+  private readonly credentialsFile: string;
+
+  constructor(options: DshProviderManagerOptions = {}) {
+    this.home = options.home ?? homedir();
+    this.env = options.env ?? process.env;
+    const dshHome = resolveDshHome(this.home, this.env);
+    this.settingsFile = options.settingsFile ?? join(dshHome, 'settings.yaml');
+    this.credentialsFile = options.credentialsFile ?? join(dshHome, '.credentials.yaml');
+  }
+
+  async readSettings(): Promise<Record<string, unknown>> {
+    return parseYamlMap(await readOptional(this.settingsFile), this.settingsFile);
+  }
+
+  async readCredentials(): Promise<Record<string, string>> {
+    const root = parseYamlMap(await readOptional(this.credentialsFile), this.credentialsFile);
+    const entries: Record<string, string> = {};
+    for (const [key, value] of Object.entries(root)) {
+      if (typeof value === 'string' && value.length > 0) entries[key] = value;
+    }
+    return entries;
+  }
+
+  async hasCredential(ref: string): Promise<boolean> {
+    const entries = await this.readCredentials();
+    if (entries[ref]) return true;
+    return Boolean(this.env[ref]?.trim());
+  }
+
+  async listCredentialRefs(): Promise<string[]> {
+    return Object.keys(await this.readCredentials());
+  }
+
+  async listProviders(): Promise<DshProviderSummary[]> {
+    const settings = await this.readSettings();
+    return [await this.describeDeepseek(settings), ...(await this.describePiAi(settings))];
+  }
+
+  private async describeDeepseek(settings: Record<string, unknown>): Promise<DshProviderSummary> {
+    const deepseek = isMapLike(settings[DEEPSEEK_NAMESPACE])
+      ? settings[DEEPSEEK_NAMESPACE]
+      : {};
+    const credentialRef =
+      typeof deepseek.apiKeyEnv === 'string' && deepseek.apiKeyEnv.length > 0
+        ? deepseek.apiKeyEnv
+        : DEEPSEEK_DEFAULT_API_KEY_ENV;
+    return {
+      id: DEEPSEEK_PROVIDER,
+      displayName: 'DeepSeek',
+      namespace: DEEPSEEK_NAMESPACE,
+      configured: Object.keys(deepseek).length > 0,
+      credentialRef,
+      credentialReady: await this.hasCredential(credentialRef),
+      models: parseModels(deepseek.models) ?? DEFAULT_DEEPSEEK_MODELS,
+      managed: true,
+    };
+  }
+
+  private async describePiAi(settings: Record<string, unknown>): Promise<DshProviderSummary[]> {
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    const summaries: DshProviderSummary[] = [];
+    for (const [id, raw] of Object.entries(providers)) {
+      const profile = isMapLike(raw) ? raw : {};
+      const ref =
+        typeof profile.apiKeyEnv === 'string' && profile.apiKeyEnv.length > 0
+          ? profile.apiKeyEnv
+          : undefined;
+      summaries.push({
+        id,
+        displayName: typeof profile.displayName === 'string' ? profile.displayName : id,
+        namespace: PIAI_NAMESPACE,
+        configured: true,
+        credentialRef: ref,
+        credentialReady: ref === undefined ? false : await this.hasCredential(ref),
+        models: parseModels(profile.models) ?? [],
+        managed: true,
+      });
+    }
+    return summaries;
+  }
+
+  async defaultModel(): Promise<string | undefined> {
+    const settings = await this.readSettings();
+    const section = settings[AGENT_DEFAULT_MODEL_NAMESPACE];
+    return isMapLike(section) && typeof section.model === 'string' ? section.model : undefined;
+  }
+
+  async setDefaultModel(model: string): Promise<void> {
+    if (!model.trim()) throw new Error('默认模型不能为空');
+    await this.writeNamespace(AGENT_DEFAULT_MODEL_NAMESPACE, { model });
+  }
+
+  async upsertDeepseekProvider(input: {
+    baseURL?: string;
+    apiKeyEnv?: string;
+    apiKey?: string;
+  }): Promise<void> {
+    const settings = await this.readSettings();
+    const current = isMapLike(settings[DEEPSEEK_NAMESPACE])
+      ? settings[DEEPSEEK_NAMESPACE]
+      : {};
+    const section = { ...current };
+    if (input.baseURL !== undefined) {
+      validateBaseUrl(input.baseURL);
+      section.baseURL = input.baseURL;
+    }
+    if (input.apiKeyEnv !== undefined) section.apiKeyEnv = input.apiKeyEnv;
+    if (input.apiKey !== undefined) {
+      const ref =
+        typeof section.apiKeyEnv === 'string' && section.apiKeyEnv.length > 0
+          ? section.apiKeyEnv
+          : DEEPSEEK_DEFAULT_API_KEY_ENV;
+      await this.setCredential(ref, input.apiKey);
+    }
+    await this.writeNamespace(DEEPSEEK_NAMESPACE, section);
+  }
+
+  async removeDeepseekProvider(): Promise<void> {
+    const settings = await this.readSettings();
+    const section = isMapLike(settings[DEEPSEEK_NAMESPACE])
+      ? settings[DEEPSEEK_NAMESPACE]
+      : {};
+    await this.deleteNamespace(DEEPSEEK_NAMESPACE);
+    await this.removeCredential(
+      typeof section.apiKeyEnv === 'string' && section.apiKeyEnv.length > 0
+        ? section.apiKeyEnv
+        : DEEPSEEK_DEFAULT_API_KEY_ENV,
+    );
+  }
+
+  async addDeepseekModel(input: DshModelEntry): Promise<void> {
+    const settings = await this.readSettings();
+    const current = isMapLike(settings[DEEPSEEK_NAMESPACE])
+      ? settings[DEEPSEEK_NAMESPACE]
+      : {};
+    const models =
+      rawModels(current.models).length > 0
+        ? rawModels(current.models)
+        : DEFAULT_DEEPSEEK_MODELS.map((model) => modelRecord(model));
+    if (models.some((model) => model.id === input.id)) {
+      throw new Error(`模型 ${input.id} 已存在于 ${DEEPSEEK_PROVIDER}`);
+    }
+    await this.writeNamespace(DEEPSEEK_NAMESPACE, {
+      ...current,
+      models: [...models, modelRecord(input)],
+    });
+  }
+
+  async removeDeepseekModel(id: string): Promise<boolean> {
+    const settings = await this.readSettings();
+    const current = isMapLike(settings[DEEPSEEK_NAMESPACE])
+      ? settings[DEEPSEEK_NAMESPACE]
+      : {};
+    const models = rawModels(current.models);
+    if (models.length === 0) return false;
+    const next = models.filter((model) => model.id !== id);
+    if (next.length === models.length) return false;
+    await this.writeNamespace(DEEPSEEK_NAMESPACE, { ...current, models: next });
+    return true;
+  }
+
+  async upsertPiAiProvider(input: DshPiAiProviderInput): Promise<void> {
+    validateProviderId(input.id);
+    const settings = await this.readSettings();
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    const existing = isMapLike(providers[input.id]) ? providers[input.id] : undefined;
+    const section: Record<string, unknown> = existing === undefined ? {} : { ...existing };
+
+    if (input.displayName !== undefined) section.displayName = input.displayName;
+    if (input.apiKeyEnv !== undefined) section.apiKeyEnv = input.apiKeyEnv;
+    if (input.api !== undefined) {
+      assertProtocol(input.api);
+      section.api = input.api;
+    }
+    if (input.baseURL !== undefined) {
+      validateBaseUrl(input.baseURL);
+      section.baseURL = input.baseURL;
+    }
+    if (input.models !== undefined) section.models = input.models.map(modelRecord);
+
+    if (existing === undefined) {
+      if (typeof section.api !== 'string') {
+        throw new Error('新增自定义 provider 必须指定 --api（openai-completions / openai-responses / anthropic-messages）');
+      }
+      assertProtocol(section.api);
+      if (typeof section.baseURL !== 'string') {
+        throw new Error('新增自定义 provider 必须指定 --base-url');
+      }
+      validateBaseUrl(section.baseURL);
+      const models = rawModels(section.models);
+      if (models.length === 0) {
+        throw new Error('新增自定义 provider 至少需要一个 --model（models 不能为空）');
+      }
+      for (const model of models) {
+        if (typeof model.id !== 'string' || model.id.length === 0) {
+          throw new Error(`--model 缺少有效 id：${JSON.stringify(model)}`);
+        }
+      }
+    }
+
+    await this.writeNamespace(PIAI_NAMESPACE, {
+      ...piAi,
+      providers: { ...providers, [input.id]: section },
+    });
+  }
+
+  async removePiAiProvider(id: string): Promise<boolean> {
+    const settings = await this.readSettings();
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    if (!(id in providers)) return false;
+    const next: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(providers)) {
+      if (key !== id) next[key] = value;
+    }
+    if (Object.keys(next).length === 0) {
+      await this.deleteNamespace(PIAI_NAMESPACE);
+    } else {
+      await this.writeNamespace(PIAI_NAMESPACE, { ...piAi, providers: next });
+    }
+    return true;
+  }
+
+  async addPiAiModel(providerId: string, input: DshModelEntry): Promise<void> {
+    validateProviderId(providerId);
+    const settings = await this.readSettings();
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    const section = isMapLike(providers[providerId]) ? providers[providerId] : undefined;
+    if (section === undefined) {
+      throw new Error(`provider ${providerId} 不存在，请先用 /provider add 创建`);
+    }
+    const models = rawModels(section.models);
+    if (models.some((model) => model.id === input.id)) {
+      throw new Error(`模型 ${input.id} 已存在于 ${providerId}`);
+    }
+    await this.writeNamespace(PIAI_NAMESPACE, {
+      ...piAi,
+      providers: {
+        ...providers,
+        [providerId]: { ...section, models: [...models, modelRecord(input)] },
+      },
+    });
+  }
+
+  async removePiAiModel(providerId: string, modelId: string): Promise<boolean> {
+    const settings = await this.readSettings();
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    const section = isMapLike(providers[providerId]) ? providers[providerId] : undefined;
+    if (section === undefined) {
+      throw new Error(`provider ${providerId} 不存在`);
+    }
+    const models = rawModels(section.models);
+    const next = models.filter((model) => model.id !== modelId);
+    if (next.length === models.length) return false;
+    await this.writeNamespace(PIAI_NAMESPACE, {
+      ...piAi,
+      providers: {
+        ...providers,
+        [providerId]: { ...section, models: next },
+      },
+    });
+    return true;
+  }
+
+  async setCredential(ref: string, value: string): Promise<void> {
+    if (!CREDENTIAL_REF_PATTERN.test(ref)) {
+      throw new Error(`非法凭据引用名：${ref}（应为 POSIX 环境变量名，如 OPENAI_API_KEY）`);
+    }
+    if (value.length === 0) throw new Error('凭据值不能为空');
+    await mkdir(dirname(this.credentialsFile), { recursive: true, mode: 0o700 });
+    await withFileLock(this.credentialsFile, async () => {
+      const text = await readOptional(this.credentialsFile);
+      const root = parseYamlMap(text, this.credentialsFile);
+      const document = text === undefined || text.trim().length === 0
+        ? new Document()
+        : parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh credentials at ${this.credentialsFile}`);
+      }
+      patchNode(document, [ref], root[ref], value);
+      await writeFileAtomic(this.credentialsFile, document.toString(), { mode: 0o600 });
+    });
+  }
+
+  async removeCredential(ref: string): Promise<boolean> {
+    let removed = false;
+    await withFileLock(this.credentialsFile, async () => {
+      const text = await readOptional(this.credentialsFile);
+      if (text === undefined || text.trim().length === 0) return;
+      const document = parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh credentials at ${this.credentialsFile}`);
+      }
+      if (document.has(ref)) {
+        document.deleteIn([ref]);
+        removed = true;
+        await writeFileAtomic(this.credentialsFile, document.toString(), { mode: 0o600 });
+      }
+    });
+    return removed;
+  }
+
+  private async writeNamespace(ns: string, section: Record<string, unknown>): Promise<void> {
+    await mkdir(dirname(this.settingsFile), { recursive: true });
+    await withFileLock(this.settingsFile, async () => {
+      const text = await readOptional(this.settingsFile);
+      const root = parseYamlMap(text, this.settingsFile);
+      if (text === undefined || text.trim().length === 0) {
+        await writeFileAtomic(this.settingsFile, new Document({ [ns]: section }).toString(), {});
+        return;
+      }
+      const document = parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh settings at ${this.settingsFile}`);
+      }
+      patchNode(document, [ns], root[ns], section);
+      await writeFileAtomic(this.settingsFile, document.toString(), {});
+    });
+  }
+
+  private async deleteNamespace(ns: string): Promise<void> {
+    await withFileLock(this.settingsFile, async () => {
+      const text = await readOptional(this.settingsFile);
+      if (text === undefined || text.trim().length === 0) return;
+      const document = parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh settings at ${this.settingsFile}`);
+      }
+      if (document.has(ns)) {
+        document.deleteIn([ns]);
+        await writeFileAtomic(this.settingsFile, document.toString(), {});
+      }
+    });
+  }
+}
