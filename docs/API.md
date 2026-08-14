@@ -32,6 +32,7 @@ export interface RuntimeEnv {
   guardianBridgeProfile: string;
   guardianPollMs: number;
   guardianStaleMs: number;
+  guardianEngineDeadMs: number;
 }
 
 export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
@@ -58,6 +59,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_GUARDIAN_BRIDGE_PROFILE`：提供飞书凭据与白名单的桥接状态 profile，默认 `default`。
 - `DSH_LARK_GUARDIAN_POLL_MS`：守护看门狗轮询间隔，默认 `2000`。
 - `DSH_LARK_GUARDIAN_STALE_MS`：心跳超时阈值，默认 `15000`。
+- `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS`：dsh 进程存活但心跳持续超时该时长即判定桥接引擎已死
+  并接管，默认 `120000`。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -545,8 +548,8 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
 
 状态机（每 `DSH_LARK_GUARDIAN_POLL_MS` 轮询）：
 
-1. **standby**：dsh 在线（心跳新鲜 或 存在 `--profile <name>` 进程）→ 不连接飞书；记录
-   `profileSeenUp`。
+1. **standby**：dsh 在线（心跳新鲜，或存在 `--profile <name>` 进程且心跳未超过
+   `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` 判定引擎已死）→ 不连接飞书；记录 `profileSeenUp`。
 2. **takeover**：`profileSeenUp` 且 dsh 持续下线（`DSH_LARK_GUARDIAN_STALE_MS` 心跳过期 +
    无进程，连续 `takeoverGracePolls` 次）→ 用桥接 profile 的凭据 / 白名单创建
    `@larksuite/channel` 长连接；只有 admin（无 admin 时回退 allowedUsers）可触发控制命令。

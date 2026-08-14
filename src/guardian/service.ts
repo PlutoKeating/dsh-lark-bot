@@ -68,6 +68,8 @@ export interface GuardianServiceOptions {
   safeProfile: string;
   pollMs?: number;
   staleMs?: number;
+  /** Live-process grace: heartbeat stale this long means the engine is dead. */
+  engineDeadMs?: number;
   /** Consecutive polls dsh must be down before taking over (flap guard). */
   takeoverGracePolls?: number;
   /** Delay between the `/safemode exit` reply and channel disconnect (ms). */
@@ -129,6 +131,7 @@ export class GuardianService {
       | 'safeProfile'
       | 'pollMs'
       | 'staleMs'
+      | 'engineDeadMs'
       | 'takeoverGracePolls'
       | 'sendDelayMs'
     >
@@ -153,6 +156,7 @@ export class GuardianService {
   private safeAdapter: AgentAdapter | undefined;
   private readonly transcripts = new Map<string, TranscriptEntry[]>();
   private downStreak = 0;
+  private lastHeartbeatFreshAt: number | undefined;
   private timer: NodeJS.Timeout | undefined;
   private ticking = false;
   private stopped = false;
@@ -165,6 +169,7 @@ export class GuardianService {
     this.options = {
       pollMs: options.pollMs ?? 2_000,
       staleMs: options.staleMs ?? 15_000,
+      engineDeadMs: options.engineDeadMs ?? 120_000,
       takeoverGracePolls: options.takeoverGracePolls ?? 2,
       sendDelayMs: options.sendDelayMs ?? 600,
       stateFile: options.stateFile,
@@ -294,10 +299,19 @@ export class GuardianService {
       const now = (this.options.now ?? Date.now)();
       const heartbeatFresh = isHeartbeatFresh(heartbeat, this.options.staleMs, now);
       this.lastHeartbeatAgeMs = heartbeat ? heartbeatAgeMs(heartbeat, now) : undefined;
+      if (heartbeatFresh) this.lastHeartbeatFreshAt = now;
       const processFound = await (this.options.findProcess ?? findProfileProcess)(
         this.state.dshProfile,
       );
-      const up = heartbeatFresh || processFound !== undefined;
+      const processAlive = processFound !== undefined;
+      const engineDead =
+        this.lastHeartbeatFreshAt !== undefined &&
+        now - this.lastHeartbeatFreshAt > this.options.engineDeadMs;
+      // A live process alone does not mean the channel is owned: if the bridge
+      // engine's heartbeat has been stale long enough, the engine is dead even
+      // though the dsh process survives — take over so the rescue entrance
+      // stays reachable.
+      const up = heartbeatFresh || (processAlive && !engineDead);
       this.dshUp = up;
 
       if (up) {
@@ -839,6 +853,7 @@ export async function buildGuardianService(
     safeProfile: state.safeProfile,
     pollMs: env.guardianPollMs,
     staleMs: env.guardianStaleMs,
+    engineDeadMs: env.guardianEngineDeadMs,
     ...overrides,
   });
 }

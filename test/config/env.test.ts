@@ -22,6 +22,7 @@ describe('loadRuntimeEnv', () => {
     expect(env.guardianBridgeProfile).toBe('default');
     expect(env.guardianPollMs).toBe(2_000);
     expect(env.guardianStaleMs).toBe(15_000);
+    expect(env.guardianEngineDeadMs).toBe(120_000);
   });
 
   it('parses explicit command args and tenant', () => {
@@ -60,6 +61,7 @@ describe('loadRuntimeEnv', () => {
       DSH_LARK_GUARDIAN_BRIDGE_PROFILE: 'bridge-a',
       DSH_LARK_GUARDIAN_POLL_MS: '3000',
       DSH_LARK_GUARDIAN_STALE_MS: '20000',
+      DSH_LARK_GUARDIAN_ENGINE_DEAD_MS: '180000',
       DSH_LARK_HEARTBEAT_MS: '10000',
     });
     expect(env.guardianDisabled).toBe(true);
@@ -67,6 +69,7 @@ describe('loadRuntimeEnv', () => {
     expect(env.guardianBridgeProfile).toBe('bridge-a');
     expect(env.guardianPollMs).toBe(3_000);
     expect(env.guardianStaleMs).toBe(20_000);
+    expect(env.guardianEngineDeadMs).toBe(180_000);
     expect(env.heartbeatMs).toBe(10_000);
   });
 });

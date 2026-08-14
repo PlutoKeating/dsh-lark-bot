@@ -43,6 +43,11 @@ export interface RuntimeEnv {
   guardianPollMs: number;
   /** Heartbeat staleness threshold before takeover, default 15000. */
   guardianStaleMs: number;
+  /**
+   * When a dsh process is alive but the bridge heartbeat has been stale for
+   * longer than this, treat the engine as dead and take over (default 120000).
+   */
+  guardianEngineDeadMs: number;
 }
 
 const DEFAULTS = {
@@ -58,6 +63,7 @@ const DEFAULTS = {
   heartbeatMs: 5_000,
   guardianPollMs: 2_000,
   guardianStaleMs: 15_000,
+  guardianEngineDeadMs: 120_000,
   guardianProfile: 'dsh-lark',
   guardianBridgeProfile: 'default',
 };
@@ -243,6 +249,11 @@ export function loadRuntimeEnv(
       source.DSH_LARK_GUARDIAN_STALE_MS,
       DEFAULTS.guardianStaleMs,
       'DSH_LARK_GUARDIAN_STALE_MS',
+    ),
+    guardianEngineDeadMs: parsePositiveIntMin(
+      source.DSH_LARK_GUARDIAN_ENGINE_DEAD_MS,
+      DEFAULTS.guardianEngineDeadMs,
+      'DSH_LARK_GUARDIAN_ENGINE_DEAD_MS',
     ),
   };
 }

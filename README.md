@@ -427,6 +427,7 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_BRIDGE_PROFILE` | `default` | 提供飞书凭据与白名单的桥接状态 profile<br>Bridge state profile providing Feishu credentials / allowlist |
 | `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔<br>Guardian watchdog poll interval |
 | `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值，超过且无 dsh 进程则接管飞书通道<br>Heartbeat staleness threshold before channel takeover |
+| `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` | `120000` | dsh 进程存活但心跳持续超时该时长，判定桥接引擎已死并接管<br>Live dsh process with heartbeat stale this long is treated as engine-dead (takeover) |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 

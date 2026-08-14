@@ -242,6 +242,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_BRIDGE_PROFILE` | `default` | 提供飞书凭据与白名单的桥接状态 profile |
 | `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔 |
 | `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值（超时且无 dsh 进程则接管） |
+| `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` | `120000` | dsh 进程存活但心跳持续超时该时长即判定引擎已死并接管 |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
 桥接引擎）；无需任何独立服务环境快照。

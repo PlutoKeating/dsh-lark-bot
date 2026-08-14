@@ -120,6 +120,8 @@ async function makeHarness(
     admins?: string[];
     allowedUsers?: string[];
     adapter?: AgentAdapter;
+    engineDeadMs?: number;
+    findProcess?: (dshProfile: string) => Promise<{ pid: number; cmdline: string } | undefined>;
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-guardian-'));
@@ -167,12 +169,13 @@ async function makeHarness(
     safeProfile: 'dsh-lark-safe',
     pollMs: 10,
     staleMs: 60,
+    engineDeadMs: overrides.engineDeadMs ?? 120_000,
     takeoverGracePolls: 1,
     sendDelayMs: 0,
     dshBin: '/fake/dsh/bin.js',
     createChannel: channelMock.createChannel,
     adapter,
-    findProcess: async () => undefined,
+    findProcess: overrides.findProcess ?? (async () => undefined),
     spawnDetachedFn,
     probeSafeProfileFn,
     saveState,
@@ -242,6 +245,28 @@ describe('GuardianService', () => {
     try {
       await until(() => (harness.channel.disconnect as ReturnType<typeof vi.fn>).mock.calls.length > 0);
       expect(harness.service.snapshot().mode).toBe('standby');
+    } finally {
+      heartbeat.stop();
+    }
+  });
+
+  it('takes over when the bridge engine is dead even though the dsh process survives', async () => {
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      engineDeadMs: 150,
+      findProcess: async () => ({ pid: 9, cmdline: 'dsh --profile dsh-lark' }),
+    });
+    const heartbeat = startHeartbeat(harness.heartbeatFile, 9, 20);
+    try {
+      await harness.service.start();
+      await sleep(60);
+      // Fresh heartbeat + live process: silent.
+      expect(harness.service.snapshot().mode).toBe('standby');
+      heartbeat.stop();
+      // Heartbeat goes stale and stays stale past engineDeadMs: the engine is
+      // dead despite the live process, so the guardian takes over.
+      await until(() => harness.service.snapshot().mode === 'takeover');
+      expect(harness.service.snapshot().mode).toBe('takeover');
     } finally {
       heartbeat.stop();
     }
