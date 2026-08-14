@@ -52,6 +52,9 @@
   与真实 SDK runtime 握手）。
 - **0.6.0 released**：`dsh-lark-bot@0.6.0` / `dsh-feishu-bot@0.6.0`（npm + GitHub Packages +
   GitHub Release），双包均带 dsh bundle 清单。
+- **0.7.0 released**：唯一路径定稿——`dsh-lark-bot setup` 安装 dsh profile bundle，桥接引擎
+  在 dsh 进程内作为标准插件运行；移除独立后台服务层；npm / GitHub Packages / GitHub Release
+  双包同步发布。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
