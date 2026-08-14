@@ -162,6 +162,10 @@ pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` 
 模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
 `agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
 
+dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
+供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
+[`COMPATIBILITY.md`](COMPATIBILITY.md)。
+
 `src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 40 条对话，支持
 `fork(scopeId, newScopeId, cwd)` 复制历史；SDK 模式以原生 `session(id)` 续跑，headless 模式把
 历史拼入下一次 prompt 作为近似上下文。
@@ -379,7 +383,7 @@ export interface ServiceController {
 `manager.ts` 的 `ServiceManager` 编排安装 / 状态 / 重启 / 停止，并在 `start` / `restart` 时把
 `DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME` 快照到 `service.env`（0600）。
 
-服务进程本身通过隐藏命令 `dsh-lark-bot run` 运行（即原前台 bot 入口，服务专用，不接受扫码绑定）；
+服务进程本身通过隐藏命令 `dsh-lark-bot run` 运行（bot 运行入口，服务专用，不接受扫码绑定）；
 便携降级路径通过隐藏命令 `dsh-lark-bot supervise` 运行。
 
 ## 8. CLI · Command line
@@ -397,7 +401,9 @@ export interface ServiceController {
 `--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
-`/stop`、`/timeout`、`/density`、`/ask`、`/invite user|admin|group|list|remove`、`/help`。
+`/stop`、`/timeout`、`/density`、`/model use|default|reset|add|remove`、`/providers`、
+`/provider add|update|remove`、`/key set|remove|list`、`/ask`、
+`/invite user|admin|group|list|remove`、`/help`。
 
 ## 9. 桥接层 · Bridge
 

@@ -8,6 +8,8 @@
 | **P3 审批/调度** Approval & Scheduling | 访问白名单、卡片审批（ACP）、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
 | **P5 后台服务** Background service | systemd / launchd / 计划任务：后台运行、开机自启、崩溃自动重启；CLI `start / status / restart / stop` | ✅ 已完成 Done |
+| **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
+| **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
 
 ## 里程碑 · Milestones
 
@@ -15,13 +17,21 @@
 - **P2 done**：`/ws save/use` 管理命名项目，每个会话绑定独立 git worktree，注入项目级 AGENTS.md；
   SDK 原生 session 续跑。
 - **P3 done（审批部分）**：ACP `session/request_permission` 审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
-- **P4 done**：已发布 `dsh-lark-bot@0.3.0` 与 `dsh-feishu-bot@0.3.0`，第三方可
+- **P4 done**：已发布 `dsh-lark-bot@0.4.1` 与 `dsh-feishu-bot@0.4.1`，第三方可
   `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装；GitHub Release 自动创建。
 - **P5 done**：`dsh-lark-bot start` 安装后台服务并加入开机自启，退出 / 崩溃自动重启；
   `status` / `restart` / `stop` 管理服务；无前台运行。
+- **P6 done**（0.5.0）：`/model use|default|reset|add|remove`、`/providers`、`/provider
+  add|update|remove`、`/key set|remove|list`；按 dsh 官方存储协议读写 `settings.yaml` +
+  `.credentials.yaml`，热切换与默认模型改动下一请求生效。
+- **P7 done**（0.5.1）：`src/config/dsh-compat.ts` 单一事实来源、`scripts/check-dsh-upstream.mjs`
+  上游雷达（每周 CI）、`scripts/probe-dsh-compat.mjs` 真实探测（CI `compat-probe`）、
+  `docs/COMPATIBILITY.md` 升级手册、`/help` 测试覆盖。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
-P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.3.0` /
-`dsh-feishu-bot@0.3.0` on npm with automated GitHub Release; P5 — background service with
-autostart and restart-on-failure, managed via `start` / `status` / `restart` / `stop`.
+P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.4.1` /
+`dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — background service with
+autostart and restart-on-failure, managed via `start` / `status` / `restart` / `stop`;
+P6 — model / provider / credential management in chat via the official dsh config protocol
+(0.5.0); P7 — compatibility matrix, upstream radar and real CI probe (0.5.1).

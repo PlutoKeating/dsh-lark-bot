@@ -19,7 +19,7 @@ git clone git@github.com:PlutoKeating/dsh-lark-bot.git
 cd dsh-lark-bot
 pnpm install
 pnpm build
-pnpm start
+pnpm start   # 同样安装并启动后台服务（幂等，可重复执行）
 ```
 
 两个 npm 包的代码、版本、依赖与 dist 完全一致，只是包名与命令名不同；日常使用任选其一即可。

@@ -155,11 +155,11 @@ rm -rf ~/.dsh-lark
 
 ## 目标 · Goals
 
-- **一条命令启动**：clone 后一键安装运行，最终发布到 npm，`npm i -g dsh-lark-bot && dsh-lark-bot start` 即可拉起后台服务。
+- **一条命令启动**：clone 后一键安装运行，已发布到 npm，`npm i -g dsh-lark-bot && dsh-lark-bot start` 即可拉起后台服务。
 - **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
 - **完整工作区管理**：多项目隔离、git worktree、项目级规则注入、上下文持久化。
 
-- **One-command start**: clone and run in one step, eventually published to npm as `npx dsh-lark-bot`.
+- **One-command start**: clone and run in one step, published to npm — `npm i -g dsh-lark-bot && dsh-lark-bot start`.
 - **Native Feishu experience**: streaming cards, interactive buttons, images / files, doc comments.
 - **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
@@ -215,12 +215,16 @@ rm -rf ~/.dsh-lark
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
+- **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
+  `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
+  引用，凭据文件权限 0600、目录 0700，字面密钥不进入 settings 或聊天记录）。
 
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
 
 ## 排障 · Troubleshooting
 
-先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并实际调用本机 dsh 的 `--version` 确认可用性。
+先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并对当前 adapter 做真实可用性探测
+（`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）。
 
 常见问题：
 
@@ -239,9 +243,13 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm ci:local
+pnpm release:check   # ci:local + 上游一致性检查
+pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手
+pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵
 ```
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+兼容矩阵的升级政策与自动化见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)。
 
 发布双包（`dsh-lark-bot` 与 `dsh-feishu-bot` 共享同一份 dist / 版本 / 依赖）：
 
@@ -307,7 +315,7 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
 | `src/cli/` | CLI 入口与 start / status / restart / stop / doctor 命令<br>CLI entry & service commands |
-| `src/config/` | profile / 配置管理<br>Profile & config |
+| `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理<br>Profile, config, access & dsh config management |
 | `src/core/` | 结构化日志<br>Structured logging |
 | `src/media/` | 附件下载与文本注入<br>Attachment download & text injection |
 | `src/platform/` | 跨平台原子写入<br>Cross-platform atomic writes |

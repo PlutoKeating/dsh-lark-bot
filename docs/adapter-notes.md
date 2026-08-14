@@ -162,6 +162,8 @@ SDK / ACP 模式需要对应 runtime profile：
    （`src/card/approval-card.ts` + `src/bot/approvals.ts`，run 结束时结算所有挂起审批）；
    SDK 协议未实现审批流。
 4. **dsh 是 developer preview**：接口会破坏性变更，dsh 相关代码全部隔离在 `src/adapters/dsh/`。
+   锁定版本、升级政策与自动化探测见 [`COMPATIBILITY.md`](COMPATIBILITY.md)；
+   版本常量统一取自 `src/config/dsh-compat.ts`。
 5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层 `package.json` engines 为 `>=22.19`。统一用 ≥22.19。
 6. **dsh-type-meta 404 已解除**：rc.1/rc.6 依赖链全部发布，官方 SDK/ACP 现可直接安装。
 

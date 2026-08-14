@@ -72,11 +72,38 @@ dsh-lark-bot start \
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
+| `/model` | 查看当前会话模型、dsh 默认模型与可用模型列表 |
+| `/model use <id>` | 热切换当前会话模型（下一轮生效） |
+| `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
+| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
+| `/providers` | 查看 dsh providers、模型与凭据状态 |
+| `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
+| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
 | `/invite user\|admin\|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
 | `/invite remove user\|group <id>` | 移除白名单 |
 | `/help` | 查看帮助 |
+
+### 模型 / Provider / 凭据管理
+
+模型与 provider 的配置直接读写 dsh 官方配置存储（`~/.dsh/settings.yaml` 与
+`~/.dsh/.credentials.yaml`，与 dsh Web **Settings → Models** 页面同一协议），改动在下一个
+请求生效、无需重启 bot：
+
+- `/model use <id>`：按会话热切换模型，下一轮消息即用新模型；`/model reset` 恢复默认。
+- `/model default <id>`：写入 dsh 的 `agent-default-model`，作为新会话的默认模型。
+- `/providers`：展示 dsh 已配置的 provider、模型与凭据状态（DeepSeek 官方 + 自定义 pi-ai）。
+- `/provider add|update <id>`：新增 / 更新自定义 provider（`llm-pi-ai`）或 `deepseek-official`；
+  自定义 provider 需要 `--api`（`openai-completions` / `openai-responses` / `anthropic-messages`）、
+  `--base-url` 与至少一个 `--model`。`/provider remove <id>` 删除 provider。
+- `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
+- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；settings
+  只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
+
+除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
+（`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在
+私聊使用，或优先用 `--api-key-env` 引用环境变量 / 在 dsh Web 页面录入。
 
 ## 5. 会话与工作区 · Sessions & workspaces
 
@@ -93,6 +120,8 @@ dsh-lark-bot start \
 - 使用 `/invite user <open_id>` 允许用户私聊。
 - 使用 `/invite group <chat_id>` 允许群聊。
 - 使用 `/invite admin <open_id>` 设为管理员。
+- 管理员可执行 `/model default`、`/model add|remove`、`/provider add|update|remove`、
+  `/key set|remove` 等写操作。
 - 白名单非空时，飞书 SDK 启用 DM / group allowlist。
 
 ## 7. 诊断与排障 · Diagnostics

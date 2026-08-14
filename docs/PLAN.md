@@ -12,6 +12,8 @@
 | P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
 | P5 | 后台服务化（开机自启 + 自动重启） | ✅ 完成 |
+| P6 | 模型 / provider / 凭据管理（飞书命令） | ✅ 完成（0.5.0） |
+| P7 | 兼容矩阵与自动化（单一事实来源 / 上游雷达 / 真实探测） | ✅ 完成（0.5.1） |
 
 ## 2. P1 验收标准
 
@@ -61,8 +63,10 @@
 4. ✅ 安全模块（SECURITY.md + 脱敏 / SSRF / 路径 containment / 默认拒绝 / UTF-8 安全截断）
 5. ✅ 三档可变卡片 + thinking 流式展示
 6. ✅ 后台服务化：`start` 安装后台服务并加入开机自启，退出 / 崩溃自动重启；`status` / `restart` / `stop`
-7. ⏳ 补充异步任务队列与调度（后续迭代）
-8. ⏳ 稳定发布下一版本
+7. ✅ 模型 / provider / 凭据管理（0.5.0）：`/model` `/providers` `/provider` `/key`，读写 dsh 官方配置
+8. ✅ 兼容矩阵与自动化（0.5.1）：`dsh-compat.ts` 单一事实来源 + 上游雷达 + CI 真实探测 + 升级手册
+9. ⏳ 补充异步任务队列与调度（后续迭代）
+10. ⏳ 稳定发布下一版本
 
 ## 7. 当前阻塞 · Current blocker
 
@@ -131,7 +135,7 @@
 ### 8.6 P2：测试密度提升（借鉴 Roy-oss1）
 
 - 新增模块全部配套单元测试（sdk-translate / sdk-adapter / sdk-runtime / acp-adapter / approval-card / question-card / approvals / security / density）。
-- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿（当前 91 用例 + 3 门控真实 runtime E2E）。
+- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿（现状：137 用例 + 3 门控真实 runtime E2E，2026-08-14）。
 
 ### 8.7 P2：License 决策项
 

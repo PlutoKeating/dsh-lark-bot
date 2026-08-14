@@ -85,6 +85,20 @@
 > 状态说明：当前仅有单 scope 运行锁与消息排队（`PendingQueue`）；
 > **异步任务队列 / 定时任务 / workflow 编排**属于 P3 待办，尚未实现。
 
+### 4.6 模型 / provider / 凭据管理（已实现，0.5.0）
+
+- `/model`：查看当前会话模型、dsh 默认模型与可用模型列表；`/model use <id>` 按会话热切换
+  （下一轮生效），`/model default <id>` 写入 dsh `agent-default-model`，`/model reset` 清除覆盖。
+- `/providers`：查看 dsh 已配置 providers / 模型 / 凭据状态。
+- `/provider add|update|remove <id>`：管理 `deepseek-official` 与自定义 pi-ai provider
+  （协议白名单 `openai-completions` / `openai-responses` / `anthropic-messages`）。
+- `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
+- `/key set|remove|list <引用名>`：读写 `~/.dsh/.credentials.yaml`。
+- 实现约束：与 dsh Web **Settings → Models** 同一存储协议（`~/.dsh/settings.yaml` +
+  `~/.dsh/.credentials.yaml`，`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、凭据文件
+  0600 / 目录 0700）；settings 只存 `apiKeyEnv` 引用，字面密钥不进 settings 与聊天记录；
+  除查看类命令外均为管理员操作；密钥值永不回显。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints
@@ -120,7 +134,8 @@
 
 ## 7. 路线图 · Roadmap
 
-见 [`roadmap.md`](roadmap.md)（P0 脚手架 → P1 MVP → P2 工作区 → P3 审批/调度 → P4 npm 发布）。
+见 [`roadmap.md`](roadmap.md)（P0 脚手架 → P1 MVP → P2 工作区 → P3 审批/调度 → P4 npm 发布 →
+P5 后台服务 → P6 模型/凭据管理 → P7 兼容自动化）。
 
 ---
 

@@ -30,6 +30,9 @@
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
 8. **审批**：ACP 模式下敏感操作通过 `session/request_permission` 以飞书审批卡一问一答；
    run 结束 / dispose 时所有挂起审批卡结算为拒绝（`src/bot/approvals.ts`）。
+9. **管理操作鉴权**：飞书会话内对 dsh 配置的写操作（`/model default`、`/model add|remove`、
+   `/provider add|update|remove`、`/key set|remove`）仅管理员可执行（管理员由
+   `/invite admin <open_id>` 定义）；查看类命令（`/model`、`/providers`、`/key list`）开放。
 
 ## 数据与凭据 · Data & credentials
 
@@ -39,6 +42,9 @@
   `~/.dsh-lark/service/service.env`（`0600`）；systemd / launchd 单元文件中的 `EnvironmentFile`
   只引用该文件，不内联密钥。
 - 后台运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，密钥字段脱敏后输出）。
+- 聊天命令管理的 dsh 配置按官方存储协议写入：`~/.dsh/settings.yaml`（只存 `apiKeyEnv`
+  引用，不落字面密钥）与 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）。bot 永不回显
+  密钥值；群聊中粘贴密钥会对群成员可见，建议私聊使用或改用环境变量 / dsh Web 页面录入。
 - 所有数据仅在本机、飞书开放平台与 DeepSeek API 之间流转；无遥测。
 
 ## 报告渠道 · Reporting
