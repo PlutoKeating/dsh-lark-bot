@@ -5,68 +5,38 @@
 
 ## 1. 安装 · Installation
 
-两个 npm 包内容一致，任选一个：
+唯一安装路径（标准 dsh profile bundle）：
 
 ```bash
-npm install -g dsh-lark-bot
-# 或
-npm install -g dsh-feishu-bot
+npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
-安装后命令分别为：
+`setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略 → 执行标准
+`dsh plugin --profile dsh-lark add dsh-lark-bot`。安装后包名 `dsh-lark-bot` /
+`dsh-feishu-bot` 内容一致，`dsh-lark-bot --version` 可查看版本。
+
+## 2. 启动与首次扫码 · Start & first scan
 
 ```bash
-dsh-lark-bot --version
-dsh-feishu-bot --version
+dsh --profile dsh-lark
 ```
 
-作为 dsh 插件安装（profile bundle）：
-
-```bash
-dsh plugin --profile <name> add dsh-lark-bot
-```
-
-profile 启动时装配 `dsh-lark-bot/plugin`：在 `ctx.larkBridge` 暴露 bridge 后台服务管理
-（status / start / restart / stop），不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 可在
-profile 启动时自动拉起 bridge。pnpm ≥ 10 若因 `ERR_PNPM_IGNORED_BUILDS`（protobufjs）失败，
-在 profile 目录 `pnpm-workspace.yaml` 加入 `allowBuilds: { protobufjs: true }` 后重试。
-
-## 2. 后台服务与首次启动 · Background service & first start
-
-`dsh-lark-bot start` 会在本机安装后台服务：加入开机自启列表，并在进程退出、崩溃或出错时自动重启。
-首次启动会在终端显示二维码完成一次性绑定，绑定后 bot 转入后台运行，终端可以随时关闭。
-
-```bash
-dsh-lark-bot start
-```
-
-首次启动会显示二维码，用飞书 / Lark App 扫码，选择或创建 PersonalAgent 应用。
+首次启动（无凭据时）在终端显示二维码，用飞书 / Lark App 扫码，选择或创建 PersonalAgent
+应用。绑定后 `dsh-lark-bot/plugin` 在 dsh 进程内运行桥接引擎（飞书通道 / 会话工作区 / 卡片 /
+通知回调），常驻与守护由 dsh 宿主负责。
 
 已拥有应用时，可跳过扫码：
 
 ```bash
-dsh-lark-bot start \
-  --app-id cli_xxx \
-  --app-secret <secret> \
-  --tenant feishu
+DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
+  dsh --profile dsh-lark
 ```
 
-## 3. 服务管理 · Service management
+## 3. 卸载 · Uninstall
 
-| 命令 | 作用 |
-| :--- | :--- |
-| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（幂等，已安装时重启以应用最新环境） |
-| `dsh-lark-bot status` | 查看安装状态、开机自启、运行状态、PID、重启次数 |
-| `dsh-lark-bot restart` | 重启后台服务（保留开机自启） |
-| `dsh-lark-bot stop` | 停止后台服务并移出开机自启 |
-
-实现机制：
-
-- Linux：systemd user service（`Restart=always`）；无 systemd 时降级为自带 supervisor + XDG autostart。
-- macOS：LaunchAgent（`KeepAlive` + `RunAtLoad`）。
-- Windows：计划任务（登录时启动 + 失败自动重启）。
-
-服务进程环境来自 `~/.dsh-lark/service/service.env`（0600），由 `start` / `restart` 从当前终端环境快照。
+```bash
+dsh plugin --profile dsh-lark remove dsh-lark-bot
+```
 
 ## 4. 飞书内命令 · In-chat commands
 
@@ -188,7 +158,7 @@ dsh-lark-bot doctor
 - 工作目录是否存在
 - adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
 
-后台服务运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，stdout + stderr）。
+桥接引擎日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines）。
 服务状态可用 `dsh-lark-bot status` 查看；服务未运行时先检查该日志再运行 `doctor`。
 
 ## 8. 卸载 · Uninstall
@@ -219,7 +189,7 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留） |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |
+| `DSH_LARK_DISABLED` | 未设置 | `1` 时保持桥接引擎停止（插件仍加载） |
 
-`start` / `restart` 会把当前终端的 `DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME`
-快照到 `~/.dsh-lark/service/service.env`（权限 0600），后台服务启动时读取；修改环境后重新执行
-`dsh-lark-bot start` 或 `restart` 即可生效。
+环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
+桥接引擎）；无需任何独立服务环境快照。

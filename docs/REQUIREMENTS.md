@@ -40,7 +40,7 @@
 
 | 目标 | 说明 |
 | :--- | :--- |
-| **一键安装运行** | `clone` 后一条命令即可启动；最终上架 npm，`npx dsh-lark-bot`（或 `npm i -g dsh-lark-bot`）即可拉起 |
+| **一键安装部署** | 一行命令 `npx dsh-lark-bot@latest setup --profile <name>` 装进 dsh profile，`dsh --profile <name>` 启动并首次扫码；桥接引擎作为 dsh 标准插件在 dsh 进程内运行 |
 | **飞书原生体验** | 流式卡片、交互按钮、图片 / 文件、文档评论、富文本回复，全程双语 |
 | **完整项目工作区管理** | 多项目隔离、git worktree / 分支、项目级规则注入、上下文持久化、任务调度、沙箱隔离（核心差异化能力） |
 | **可长期维护** | 工程化目录树、完善文档、CI、AGENTS.md 工作流规范 |
@@ -126,16 +126,22 @@
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
 
-### 4.9 dsh profile bundle（0.6.0）
+### 4.9 dsh profile bundle（唯一安装-部署-使用路径）
 
 - `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，可用
-  `dsh plugin --profile <name> add dsh-lark-bot` 标准安装（实测通过）。
-- `./plugin`：cordis 插件 `dsh-lark-bot`，提供 `ctx.larkBridge` 服务（status / start /
-  restart / stop），不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 时 profile 启动自动拉起 bridge。
+  `dsh plugin --profile <name> add dsh-lark-bot` 标准安装，或一行
+  `npx dsh-lark-bot@latest setup --profile <name>`（自动预批准 pnpm 构建策略后执行标准
+  `dsh plugin add`；实测通过）。
+- `./plugin`：cordis 插件 `dsh-lark-bot`，profile 启动时**进程内**运行完整桥接引擎
+  （`startBridgeEngine`）并注册 `ctx.larkBridge`（status / stop / start）；首次启动无凭据时
+  打印二维码完成一次性绑定；`DSH_LARK_DISABLED=1` 时保持停止（插件仍作为标准插件加载）。
 - `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
-- `./notify`：`lark_notify` 工具插件，SDK / ACP runtime 自动装配。
+- `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
+  `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
-- 形态关系：standalone CLI 为主形态，dsh bundle 为生态标准安装入口，两者并存、不冲突。
+- 形态关系（0.7.0 定稿）：**dsh profile bundle 即产品形态**——`dsh-lark-bot/plugin` 在 dsh
+  进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
+  `doctor` / 隐藏 `run`。独立后台服务路径已移除，不再存在双安装路径。
 
 ---
 

@@ -45,6 +45,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_RETENTION_MSGS`：每个 scope 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
 - `DSH_LARK_ARCHIVE_MAX`：每个 scope 最多保留的归档数，默认 `50`（`0` 关闭清理）。
 - `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
+- `DSH_LARK_DISABLED`：`1` 时保持桥接引擎停止（插件仍作为标准插件加载）。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -63,12 +64,6 @@ export interface AppPaths {
   mediaDir(profile: string): string;
   archivesDir(profile: string): string;
   logsDir(profile: string): string;
-  serviceDir: string;
-  serviceEnvFile: string;
-  serviceMetadataFile: string;
-  serviceLogFile(profile: string): string;
-  registryFile: string;
-  locksDir: string;
 }
 
 export function resolveAppPaths(root?: string): AppPaths;
@@ -76,8 +71,7 @@ export function resolveAppPaths(root?: string): AppPaths;
 
 默认根目录为 `~/.dsh-lark`，可通过 `DSH_LARK_HOME` 覆盖。
 
-服务相关路径：`serviceDir`（`<root>/service`）、`serviceEnvFile`（`service.env`，0600）、
-`serviceMetadataFile`（`service.json`）、`serviceLogFile(profile)`（`profiles/<profile>/logs/bot.log`）。
+桥接引擎日志：`profiles/<profile>/logs/bot.log`（JSON Lines）。
 
 ### 2.1 Profile 配置 · Profile config
 
@@ -368,68 +362,29 @@ export interface Logger {
 日志按 JSON Lines 输出到 stderr，并自动脱敏 secret/token/password/api_key 等字段与
 `Bearer …` / `sk-…` / `api_key=…` 文本。
 
-## 7. 后台服务 · Background service
+## 7. dsh 插件装载 · Plugin loading
 
-`src/service/` 提供跨平台后台服务管理，实现「后台运行 + 开机自启 + 崩溃自动重启」：
+包是标准 dsh profile bundle（`dsh.bundle.patch`）。profile 启动时 dsh 以标准插件方式装载：
 
-```ts
-export type ServicePlatform =
-  | 'linux-systemd'
-  | 'linux-portable'
-  | 'darwin-launchd'
-  | 'win32-task';
+- `dsh-lark-bot/plugin`（`src/plugin.ts`）：cordis 插件，启动/停止**进程内**桥接引擎
+  （`startBridgeEngine`，见 §3 与 `src/cli/commands/run.ts`），并注册 `ctx.larkBridge`
+  服务（`status()` / `stop()`）。首次启动无凭据时引擎执行扫码绑定；`DSH_LARK_DISABLED=1`
+  时保持停止。插件卸载时返回的 disposer 会停止引擎。
+- `dsh-lark-bot/notify`：`lark_notify` 工具（见 §9），配置缺省时在执行时读取
+  `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN` 环境变量。
 
-export interface ServiceStatus {
-  name: string;
-  platform: ServicePlatform;
-  installed: boolean;
-  autostartEnabled: boolean;
-  state: 'running' | 'stopped' | 'error' | 'unknown';
-  pid: number | undefined;
-  detail: string;
-  restarts: number | undefined;
-}
-
-export interface ServiceController {
-  readonly platform: ServicePlatform;
-  installAndStart(spec: ServiceSpec): Promise<void>;
-  stop(spec: ServiceSpec): Promise<void>;
-  restart(spec: ServiceSpec): Promise<void>;
-  status(spec: ServiceSpec): Promise<ServiceStatus>;
-}
-```
-
-平台实现：
-
-- `linux-systemd.ts`：写 `~/.config/systemd/user/<name>.service`（`Restart=always` +
-  `WantedBy=default.target` + `EnvironmentFile`），通过 `systemctl --user` 管理；
-  `systemctl --user` 不可用时由 `manager.ts` 降级到便携 supervisor。
-- `macos-launchd.ts`：写 `~/Library/LaunchAgents/<label>.plist`（`KeepAlive` + `RunAtLoad` +
-  `EnvironmentVariables`），通过 `launchctl bootstrap / bootout / kickstart / print` 管理。
-- `windows-task.ts`：生成 PowerShell 脚本（`Register-ScheduledTask`，AtLogOn + RestartCount 5），
-  通过 `powershell.exe -File` 执行；`status` 解析 `Get-ScheduledTask` / `Get-ScheduledTaskInfo`。
-- `portable.ts`：无 systemd 的 Linux 降级方案——`supervise` 命令做崩溃重启循环，写
-  `service/supervisor-<name>.json` 状态文件，开机自启走 XDG `~/.config/autostart/*.desktop`。
-
-`manager.ts` 的 `ServiceManager` 编排安装 / 状态 / 重启 / 停止，并在 `start` / `restart` 时把
-`DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME` 快照到 `service.env`（0600）。
-
-服务进程本身通过隐藏命令 `dsh-lark-bot run` 运行（bot 运行入口，服务专用，不接受扫码绑定）；
-便携降级路径通过隐藏命令 `dsh-lark-bot supervise` 运行。
+常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。
 
 ## 8. CLI · Command line
 
-当前命令：
+当前命令（唯一用户路径 = `setup`）：
 
-- `dsh-lark-bot start`：安装并启动后台服务（首次运行时先完成扫码绑定）
-- `dsh-lark-bot status`：查询后台服务状态
-- `dsh-lark-bot restart`：重启后台服务
-- `dsh-lark-bot stop`：停止后台服务并移出开机自启
-- `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）
-- `dsh-lark-bot --version` / `-v`：版本号
-
-`start` / `status` / `restart` / `stop` / `doctor` 均支持 `--profile`、`--workspace`、`--app-id`、
-`--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
+- `dsh-lark-bot setup --profile <name>`：唯一安装-部署命令——定位 dsh、预批准 pnpm 构建策略、
+  执行标准 `dsh plugin --profile <name> add dsh-lark-bot`，并打印下一步
+  （`dsh --profile <name>`）。默认 profile 名 `dsh-lark`。
+- `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）。
+- `dsh-lark-bot --version` / `-v`：版本号。
+- `dsh-lark-bot run`（隐藏）：直接运行桥接引擎（诊断用；插件模式下引擎在 dsh 进程内运行）。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/role list|show|set|clear|save|remove`、`/retention`、
@@ -443,14 +398,16 @@ export interface ServiceController {
 包同时是 dsh profile bundle（`dsh.bundle.patch` → `./cordis.patch.yml`），额外导出：
 
 - `./plugin`（`src/plugin.ts`）：cordis 插件 `dsh-lark-bot`，提供 `ctx.larkBridge` 服务
-  （`status()` / `start()` / `restart()` / `stop()`，委托 `ServiceManager`）；配置
-  `{ profile?, autostart?, home? }`，`DSH_LARK_AUTOSTART=1` 时 profile 启动即拉起 bridge。
+  （`status()` / `stop()` / `start()`）；默认在 profile 启动时**进程内**启动桥接引擎，
+  配置 `{ profile?, home?, appId?, appSecret?, tenant?, workspace?, adapter?, model?, disabled? }`；
+  `DSH_LARK_DISABLED=1` 时保持停止。
 - `./invariant`（`src/invariant.ts`）：`dsh-lark-bot-invariant` 伴生模块，向宿主
   `invariants` 注册表登记包归属（与官方 dsh-lark-channel/invariant 同契约）。
 - `./notify`（`src/notify/tool.ts`）：`lark-notify` 工具插件（见 §9）。
 
-`dsh plugin --profile <name> add dsh-lark-bot` 后，profile 的 `dsh.profile.bundles` 会追加
-`dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层。
+`dsh plugin --profile <name> add dsh-lark-bot`（或一行 `dsh-lark-bot setup`）后，profile 的
+`dsh.profile.bundles` 会追加 `dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层（
+`dsh-lark-bot/plugin` + `lark-notify` 两行）。
 
 ## 9. 桥接层 · Bridge
 

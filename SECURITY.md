@@ -40,9 +40,8 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
-- 后台服务把 `DEEPSEEK_API_KEY`、`DSH_LARK_*`、`PATH` 等环境快照到
-  `~/.dsh-lark/service/service.env`（`0600`）；systemd / launchd 单元文件中的 `EnvironmentFile`
-  只引用该文件，不内联密钥。
+- 桥接引擎在 dsh 宿主进程内运行，凭据与 `DSH_LARK_*` 环境直接随 dsh 进程提供，无独立服务
+  环境快照文件；敏感值不进日志与卡片。
 - 后台运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，密钥字段脱敏后输出）。
 - 聊天命令管理的 dsh 配置按官方存储协议写入：`~/.dsh/settings.yaml`（只存 `apiKeyEnv`
   引用，不落字面密钥）与 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）。bot 永不回显

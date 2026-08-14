@@ -7,7 +7,7 @@
 | **P2 工作区** Workspace | git worktree 隔离、项目级规则注入、多项目导航、SDK 原生 session 续跑 | ✅ 已完成 Done（SDK 接入） |
 | **P3 审批/调度** Approval & Scheduling | 访问白名单、卡片审批（ACP）、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
-| **P5 后台服务** Background service | systemd / launchd / 计划任务：后台运行、开机自启、崩溃自动重启；CLI `start / status / restart / stop` | ✅ 已完成 Done |
+| **P5 后台服务** Background service | ~~systemd / launchd / 计划任务后台服务~~ → 0.7.0 移除：唯一路径收敛为 dsh profile bundle 内嵌运行 | ⛔ 已移除 Removed (0.7.0) |
 | **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
 | **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
 | **P8 会话归档** Session archival | 可配置保留窗口、超窗自动归档、`/archive` 手动导出（Markdown + JSONL + Git commit）、保留策略清理 | ✅ 已完成 Done（0.6.0） |
@@ -15,17 +15,20 @@
 | **P10 多角色 Agent** Multi-role agents | 持久化角色定义（persona / 模型 / 工具指引 / 规则）+ 按 scope 绑定 + prompt 注入 | ✅ 已完成 Done（0.6.0） |
 | **P11 出站通知** Outbound notify | `SendOptions.mentions`、跨会话 `/notify`、`lark_notify` dsh 工具（127.0.0.1 回环回调 + token 鉴权） | ✅ 已完成 Done（0.6.0） |
 | **P12 dsh bundle** DSH plugin bundle | `dsh.bundle.patch` + `cordis.patch.yml`、`./plugin` / `./invariant` / `./notify` 导出、`dsh plugin add` 实测 | ✅ 已完成 Done（0.6.0） |
+| **P13 唯一路径** Single install path | `dsh-lark-bot setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；移除独立后台服务层 | ✅ 已完成 Done（0.7.0） |
 
 ## 里程碑 · Milestones
 
-- **P1 done**：`npx dsh-lark-bot start` 启动后飞书扫码绑定，私聊发消息，收到 `dsh` 返回的流式卡片。
+- **P1 done**：安装 bundle 后 `dsh --profile <name>` 启动，首次扫码绑定，私聊发消息，收到
+  `dsh` 返回的流式卡片。
 - **P2 done**：`/ws save/use` 管理命名项目，每个会话绑定独立 git worktree，注入项目级 AGENTS.md；
   SDK 原生 session 续跑。
 - **P3 done（审批部分）**：ACP `session/request_permission` 审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
 - **P4 done**：已发布 `dsh-lark-bot@0.4.1` 与 `dsh-feishu-bot@0.4.1`，第三方可
   `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装；GitHub Release 自动创建。
-- **P5 done**：`dsh-lark-bot start` 安装后台服务并加入开机自启，退出 / 崩溃自动重启；
-  `status` / `restart` / `stop` 管理服务；无前台运行。
+- **P5 removed**（0.7.0）：独立后台服务层（`start/status/restart/stop`、systemd /
+  launchd / 计划任务 / supervisor）已移除；桥接引擎作为 dsh profile bundle 插件在 dsh
+  进程内运行，守护由 dsh 宿主负责。
 - **P6 done**（0.5.0）：`/model use|default|reset|add|remove`、`/providers`、`/provider
   add|update|remove`、`/key set|remove|list`；按 dsh 官方存储协议读写 `settings.yaml` +
   `.credentials.yaml`，热切换与默认模型改动下一请求生效。
@@ -53,7 +56,7 @@
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
 P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.4.1` /
-`dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — background service with
-autostart and restart-on-failure, managed via `start` / `status` / `restart` / `stop`;
+`dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — background service (removed
+in 0.7.0, superseded by in-process bundle loading);
 P6 — model / provider / credential management in chat via the official dsh config protocol
 (0.5.0); P7 — compatibility matrix, upstream radar and real CI probe (0.5.1).

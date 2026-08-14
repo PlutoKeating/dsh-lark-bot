@@ -6,6 +6,13 @@
 ## 分层 · Layering
 
 ```
+┌──────────────────────────────────────────┐
+│  dsh profile · cordis 组合                │
+│  · dsh-lark-bot/plugin（桥接引擎，进程内） │
+│  · dsh-lark-bot/notify（lark_notify 工具）│
+└──────────────────────────────────────────┘
+        │  以标准插件方式加载 | loaded as a standard plugin
+        ▼
 飞书 / Lark（私聊 · 群聊 · 话题；文档评论为规划中）
         │  WebSocket 长连接（出站，免公网服务器 / 域名 / 内网穿透）
         ▼
@@ -43,9 +50,20 @@
 DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 ```
 
-整条流水线由 `service/` 层以**后台服务**方式守护（CLI `start` / `status` / `restart` / `stop`）：
-systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）、Windows 计划任务
-（失败自动重启），以及无 systemd 时的便携 supervisor 降级；服务进程环境由 `service.env` 快照注入。
+```
+┌──────────────────────────────────────────┐
+│  dsh profile（cordis 组合）                │
+│  · dsh-lark-bot/plugin  桥接引擎（进程内） │
+│  · dsh-lark-bot/notify  lark_notify 工具  │
+│  · @deepseek-ai/dsh-base …               │
+└──────────────────────────────────────────┘
+```
+
+本项目以 **dsh 标准 profile bundle** 交付：`dsh plugin add dsh-lark-bot`（或一行
+`dsh-lark-bot setup`）把包装进 profile，dsh 启动时以标准插件方式加载
+`dsh-lark-bot/plugin` —— 桥接引擎**在 dsh 进程内**运行（飞书 WebSocket 通道、会话/工作区、
+卡片、通知回调），并按需拉起官方 dsh SDK runtime 子进程执行 agent 任务。常驻 / 守护 / 重启
+由 dsh 宿主负责，不再有独立后台服务层。首次启动无凭据时打印二维码完成一次性绑定。
 
 ## 关键决策 · Key Decisions
 
@@ -68,6 +86,10 @@ systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）�
    持久化 scope → chat/thread 映射；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
+7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
+   dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
+   执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
+   `doctor` / 隐藏 `run`（诊断），README 只记录这一条路径。
 
 ## 目录映射 · Directory Mapping
 
@@ -81,9 +103,9 @@ systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）�
 | `src/card/` | 流式卡片状态与渲染 |
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
-| `src/cli/` | CLI 入口与 start / status / restart / stop / doctor 命令 |
+| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ 隐藏 `run` |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |
+| `src/notify/` | 进程内通知回调服务与 `lark_notify` 工具插件 |
 | `src/platform/` | 跨平台原子写入 |
-| `src/service/` | 后台服务管理：systemd / launchd / Windows 计划任务 / 便携 supervisor |

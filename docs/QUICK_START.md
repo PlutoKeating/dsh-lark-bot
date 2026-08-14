@@ -8,71 +8,48 @@
 - 已安装 DeepSeek Harness（`dsh`）并配置 `DEEPSEEK_API_KEY`
 - 一个飞书 / Lark 账号
 
-## 2. 安装
+## 2. 安装（唯一路径）
 
 ```bash
-npm install -g dsh-lark-bot
-# 也可以安装飞书命名版本
-npm install -g dsh-feishu-bot
-# 或开发阶段：
-git clone git@github.com:PlutoKeating/dsh-lark-bot.git
-cd dsh-lark-bot
-pnpm install
-pnpm build
-pnpm start   # 同样安装并启动后台服务（幂等，可重复执行）
+npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
-两个 npm 包的代码、版本、依赖与 dist 完全一致，只是包名与命令名不同；日常使用任选其一即可。
+`setup` 会：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs 等）→ 执行标准
+`dsh plugin --profile dsh-lark add dsh-lark-bot`，把本插件作为标准 bundle 装进 profile。
 
-## 3. 首次启动
+开发阶段也可以先 `pnpm install && pnpm build`，再用
+`DSH_LARK_SETUP_PACKAGE=/path/to/dsh-lark-bot-x.y.z.tgz node dist/cli.js setup --profile dsh-lark`
+安装本地构建产物（可选，不面向普通用户）。
 
-`start` 会在本机安装一个**后台服务**并立即启动：加入系统开机自启列表，进程退出 / 崩溃 / 出错时自动重启。
+## 3. 启动并扫码（首次一次性绑定）
 
 ```bash
-dsh-lark-bot start
-# 或
-dsh-feishu-bot start
+dsh --profile dsh-lark
 ```
 
-首次启动会在终端显示二维码（一次性绑定步骤，绑定后 bot 转入后台运行）：
+dsh 以标准插件方式加载桥接引擎；首次启动（无凭据时）终端显示二维码：
 
 1. 终端显示二维码。
 2. 使用飞书 App 扫码。
 3. 选择或创建 PersonalAgent 应用。
-4. 绑定成功后，bot 发送欢迎卡片到私聊。
+4. 绑定成功后，桥接引擎在 dsh 进程内运行并发送欢迎卡片到私聊。
 5. 直接发送消息即可开始使用；群聊中需要 `@bot`。
 
 在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
 
-如果已经有一个 PersonalAgent 应用，也可以跳过扫码：
+常驻 / 守护由 dsh 宿主负责（profile 在则引擎在）。已经有一个 PersonalAgent 应用时，
+可在启动命令的环境变量中提供凭据跳过扫码：
 
 ```bash
-dsh-lark-bot start \
-  --app-id cli_xxx \
-  --app-secret <secret> \
-  --tenant feishu
+DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
+  dsh --profile dsh-lark
 ```
 
-## 4. 服务管理
+## 4. 卸载
 
-| 命令 | 作用 |
-| :--- | :--- |
-| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（幂等；已安装时重启以应用最新环境变量） |
-| `dsh-lark-bot status` | 查看服务状态：是否安装、是否开机自启、运行状态、PID、重启次数 |
-| `dsh-lark-bot restart` | 重启后台服务（保留开机自启） |
-| `dsh-lark-bot stop` | 停止后台服务并移出开机自启 |
-
-退出码约定：`status` 返回 `0` 表示运行中，`1` 表示未运行 / 未安装；`start` / `restart` 失败时返回非零。
-
-后台实现按平台自动选择：
-
-- **Linux**：systemd user service（`Restart=always`，`~/.config/systemd/user/dsh-lark-bot.service`）；
-  无 systemd 时降级为自带 supervisor + XDG 开机自启（`~/.config/autostart/`）。
-- **macOS**：LaunchAgent（`KeepAlive` + `RunAtLoad`，`~/Library/LaunchAgents/io.dsh-lark-bot.plist`）。
-- **Windows**：计划任务（登录时启动 + 失败自动重启，`Register-ScheduledTask`）。
-
-服务启动时会把终端环境（`DSH_LARK_*`、`DEEPSEEK_API_KEY`、`PATH` 等）快照到
-`~/.dsh-lark/service/service.env`（权限 0600），保证 systemd / launchd 拉起的进程拿到与终端一致的环境。
+```bash
+dsh plugin --profile dsh-lark remove dsh-lark-bot
+```
 
 ## 5. 飞书内常用命令
 
@@ -132,9 +109,7 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
-- 运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（后台服务 stdout + stderr 合并的 JSON Lines）
-- 服务环境快照：`~/.dsh-lark/service/service.env`（0600，含 `DEEPSEEK_API_KEY` 等）
-- 服务元数据：`~/.dsh-lark/service/service.json`
+- 运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（桥接引擎 JSON Lines）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
 

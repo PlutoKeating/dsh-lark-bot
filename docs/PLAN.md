@@ -11,10 +11,11 @@
 | P2 | 项目工作区管理 | ✅ 完成（SDK 原生 session 已接入） |
 | P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
-| P5 | 后台服务化（开机自启 + 自动重启） | ✅ 完成 |
+| P5 | 后台服务化（开机自启 + 自动重启） | ⛔ 0.7.0 移除（唯一路径收敛为 dsh bundle 内嵌运行，守护由 dsh 宿主负责） |
 | P6 | 模型 / provider / 凭据管理（飞书命令） | ✅ 完成（0.5.0） |
 | P7 | 兼容矩阵与自动化（单一事实来源 / 上游雷达 / 真实探测） | ✅ 完成（0.5.1） |
 | P8 | 会话 / 任务归档（保留窗口 + 文件 / Git 归档） | ✅ 完成（0.6.0） |
+| P13 | 唯一安装-部署-使用路径：dsh profile bundle 内嵌运行 | ✅ 完成（0.7.0） |
 
 ## 2. P1 验收标准
 
@@ -69,7 +70,7 @@
 3. ✅ 基于 ACP `session/request_permission` 实现卡片审批（ACP adapter 模式）
 4. ✅ 安全模块（SECURITY.md + 脱敏 / SSRF / 路径 containment / 默认拒绝 / UTF-8 安全截断）
 5. ✅ 三档可变卡片 + thinking 流式展示
-6. ✅ 后台服务化：`start` 安装后台服务并加入开机自启，退出 / 崩溃自动重启；`status` / `restart` / `stop`
+6. ⛔ 后台服务化：0.7.0 移除——唯一路径收敛为 dsh profile bundle，桥接引擎在 dsh 进程内运行，守护由 dsh 宿主负责
 7. ✅ 模型 / provider / 凭据管理（0.5.0）：`/model` `/providers` `/provider` `/key`，读写 dsh 官方配置
 8. ✅ 兼容矩阵与自动化（0.5.1）：`dsh-compat.ts` 单一事实来源 + 上游雷达 + CI 真实探测 + 升级手册
 9. ✅ scope 内并行 run 与异步任务队列（0.6.0）
@@ -97,10 +98,11 @@
 
 ### 8.1 关键决策
 
-1. **不转 cordis 插件形态**：保留独立 CLI 桥接形态，但预留未来可选 cordis 形态的钩子（`AgentAdapter` 抽象已满足）。
-   > **0.6.0 更新**：已进一步补齐 **dsh profile bundle 形态**（`dsh.bundle.patch` →
-   > `cordis.patch.yml`，`./plugin` / `./invariant` / `./notify` 导出），支持
-   > `dsh plugin --profile <name> add` 标准安装；standalone CLI 仍为主形态，两者并存。
+1. **dsh profile bundle 即产品形态**（0.7.0 定稿）：`dsh.bundle.patch` →
+   `cordis.patch.yml`，`dsh-lark-bot/plugin` 在 dsh 进程内运行完整桥接引擎
+   （`startBridgeEngine`），`lark_notify` 作为标准工具行装载；CLI 只保留
+   `setup`（唯一安装命令）/ `doctor` / 隐藏 `run`。不再存在「独立后台服务 vs dsh 插件」
+   双路径。`AgentAdapter` 抽象保留，agent 后端可换。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
 3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
    （`@deepseek-ai/dsh-acp` + `@agentclientprotocol/sdk` 的 `ClientSideConnection` + `dsh-user-approval`）。
@@ -157,14 +159,9 @@
 - 报告建议 AGPL → MIT 重议。**License 属于所有者法律决策**：本计划不擅自变更 LICENSE，仅在
   README / roadmap / PLAN 中记录决策状态；`homepage` 已配置，无需新增。
 
-## 9. P5 后台服务化 · Background service delivery
+## 9. P5 后台服务化（0.7.0 已移除）· Background service (removed)
 
-| # | 动作 | 验收 |
-| --- | --- | --- |
-| P5-1 | `src/service/`：`ServiceManager` + 平台控制器（systemd / launchd / 计划任务 / 便携 supervisor） | 单元测试覆盖 |
-| P5-2 | CLI 重构：`start` = 安装并启动后台服务；新增 `status` / `restart` / `stop`；隐藏 `run` / `supervise` | `pnpm typecheck` + 程序注册测试 |
-| P5-3 | 开机自启：systemd `WantedBy=default.target`、launchd `RunAtLoad`、计划任务 AtLogOn、XDG autostart | 各平台配置生成测试 |
-| P5-4 | 崩溃自愈：systemd `Restart=always`、launchd `KeepAlive`、计划任务 RestartCount、supervisor 重启循环 | 真实 systemd 端到端验证 ✅ |
-| P5-5 | 环境快照：`DSH_LARK_*` / `DEEPSEEK_API_KEY` / `PATH` 写入 `service.env`（0600） | env-snapshot 测试 |
-| P5-6 | 后台日志：`profiles/<profile>/logs/bot.log` | 端到端验证日志落盘 ✅ |
-| P5-7 | 文档：README / QUICK_START / MANUAL / API / ARCHITECTURE / SECURITY 同步 | 文档审查 |
+0.7.0 按最终需求「一行命令 + 一个扫码 + dsh 标准插件加载」收敛唯一路径：删除独立后台服务层
+（`src/service/`、`start/status/restart/stop/supervise`），桥接引擎改为 dsh profile bundle
+插件在 dsh 进程内运行，常驻 / 守护 / 重启由 dsh 宿主负责。历史 P5 验收项（systemd /
+launchd / 计划任务 / supervisor / 环境快照）全部随该层移除。

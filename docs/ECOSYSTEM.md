@@ -24,10 +24,11 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
 
 ### 2.1 dsh profile bundle 形态
 
-- 包同时以 **standalone CLI bridge** 与 **dsh profile bundle** 两种形态分发：
-  `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，支持
-  `dsh plugin --profile <name> add dsh-lark-bot` 标准安装；bundle patch 装配
-  `dsh-lark-bot/plugin`（提供 `ctx.larkBridge` 服务，不阻塞 profile 启动）。
+- 产品形态为 **dsh profile bundle**（唯一安装-部署-使用路径）：`package.json` 声明
+  `dsh.bundle.patch` → `./cordis.patch.yml`，支持 `dsh plugin --profile <name> add
+  dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
+  bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
+  与 `lark-notify`（标准工具行）。
 - `./plugin`、`./invariant`、`./notify` 三个子路径导出随包发布：`plugin` 为 bundle 行对应的
   cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方 dsh-lark-channel 同款契约）；
   `notify` 为 `lark_notify` 工具插件，SDK / ACP runtime profile 自动装配。

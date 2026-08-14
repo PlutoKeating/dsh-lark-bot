@@ -28,107 +28,53 @@
 
 ## 快速开始 | Quick Start（普通用户先看这里 | for end users）
 
-### 1. 安装 | Install
+### 1. 安装（唯一路径）| Install (the only path)
 
-两个包名内容完全一致，任选一个即可：
+本项目以 **dsh 标准 profile bundle** 交付：一行命令把它装进一个 dsh profile，dsh 启动时以
+标准插件方式加载桥接引擎（`dsh.bundle.patch` 已声明，`dsh plugin add` 可直接安装）。
 
-Both package names ship identical content — pick either one:
-
-```bash
-# 推荐 | Recommended
-npm install -g dsh-lark-bot
-
-# 或飞书命名版本 | or the Feishu-named edition
-npm install -g dsh-feishu-bot
-```
-
-安装完成后，对应命令分别为 `dsh-lark-bot` 和 `dsh-feishu-bot`。
-
-After installation, the commands are `dsh-lark-bot` and `dsh-feishu-bot` respectively.
-
-也可以作为 **dsh 标准 profile bundle** 安装到任意 dsh profile（`dsh.bundle.patch` 已声明）：
-
-It is also installable as a **standard dsh profile bundle** (the package declares
-`dsh.bundle.patch`):
+This project ships as a **standard dsh profile bundle**: one command installs it into a dsh
+profile, and dsh loads the bridge engine as a standard plugin on boot (the package declares
+`dsh.bundle.patch`, so `dsh plugin add` works directly).
 
 ```bash
-dsh plugin --profile <name> add dsh-lark-bot
+# 唯一安装命令（无需先全局安装任何东西）| the only install command (no prior global install)
+npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
-安装后 profile 启动时会装配 `dsh-lark-bot/plugin`（在 `ctx.larkBridge` 暴露 bridge 后台服务的
-status / start / restart / stop，不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 可在 profile
-启动时自动拉起 bridge）。SDK / ACP runtime 还会自动装配 `lark_notify` 工具（见下文）。
+`setup` 会自动完成：发现本机 dsh → 预批准 pnpm 构建策略 → 执行标准的
+`dsh plugin --profile dsh-lark add dsh-lark-bot`。
 
-The profile then mounts `dsh-lark-bot/plugin` on boot — it exposes `ctx.larkBridge`
-(status / start / restart / stop of the standalone bridge service) without blocking boot; set
-`DSH_LARK_AUTOSTART=1` to start the bridge when the profile boots. The SDK / ACP runtimes also
-auto-mount the `lark_notify` tool (see below).
+`setup` automatically: locates your dsh install → pre-approves pnpm's build policy → runs the
+standard `dsh plugin --profile dsh-lark add dsh-lark-bot`.
 
-> pnpm ≥ 10 默认拒绝依赖构建脚本：若 `dsh plugin add` 报 `ERR_PNPM_IGNORED_BUILDS`
-> （protobufjs 等），按官方指引在 profile 目录的 `pnpm-workspace.yaml` 加
-> `allowBuilds:\n  protobufjs: true` 后重试（与官方 `dsh-lark-channel` 相同的处理方式）。
-
-> pnpm ≥ 10 blocks dependency build scripts by default: if `dsh plugin add` reports
-> `ERR_PNPM_IGNORED_BUILDS` (e.g. protobufjs), add `allowBuilds:\n  protobufjs: true` to the
-> profile's `pnpm-workspace.yaml` and retry — the same handling as the official
-> `dsh-lark-channel`.
-
-### 2. 启动后台服务并绑定飞书 | Start the background service and bind Feishu
+### 2. 启动并扫码绑定 | Start and bind with one scan
 
 ```bash
-dsh-lark-bot start
+dsh --profile dsh-lark
 ```
 
-或： | or:
+首次启动会在终端打印二维码：用飞书 / Lark App 扫码创建或选择 PersonalAgent 应用，绑定后
+dsh-lark-bot 的桥接引擎即在 dsh 进程内运行（飞书通道、会话/工作区、卡片、通知回调），
+私聊直接发消息，群聊 / 话题里 `@bot`。常驻与守护由 dsh 自己负责。
+
+On first boot the terminal prints a QR code: scan it with the Feishu / Lark app to create or
+choose a PersonalAgent app. After binding, the bridge engine runs **inside the dsh process**
+(Feishu channel, sessions/workspaces, cards, notify callback); message it directly in private
+chat, or use `@bot` in groups/topics. dsh owns the daemon lifecycle.
+
+已有 PersonalAgent 应用时可在 profile 环境变量中直接提供凭据跳过扫码（见「配置」）：
+
+With an existing PersonalAgent app, provide credentials via profile env to skip the QR step
+(see Configuration):
 
 ```bash
-dsh-feishu-bot start
+DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
+  dsh --profile dsh-lark
 ```
 
-`start` 会自动在本机安装一个**后台服务**：加入系统开机自启列表，并在进程退出、崩溃或出错时自动重启。首次启动会：
-
-`start` automatically installs a **background service** locally: it joins the OS autostart
-list and restarts automatically whenever the process exits, crashes or errors. On first launch:
-
-1. 在终端显示二维码。
-2. 用飞书 / Lark App 扫码。
-3. 选择或创建 PersonalAgent 应用。
-4. 绑定成功后，bot 会向你的私聊发送欢迎卡片。
-5. 私聊直接发消息；群聊或话题里 `@bot`。
-
-1. A QR code is shown in the terminal.
-2. Scan it with the Feishu / Lark app.
-3. Choose or create a PersonalAgent app.
-4. Once bound, the bot sends a welcome card to your private chat.
-5. Message it directly in private chat; use `@bot` in group chats or topics.
-
-绑定完成后 bot 转入后台运行，终端可以随时关闭。
-
-After binding, the bot runs in the background; you can close the terminal anytime.
-
-如果你已经有 PersonalAgent 应用，也可以跳过扫码：
-
-If you already have a PersonalAgent app, you can skip the QR step:
-
-```bash
-dsh-lark-bot start \
-  --app-id cli_xxx \
-  --app-secret <secret> \
-  --tenant feishu
-```
-
-### 3. 服务管理命令 | Service management commands
-
-| 命令 Command | 作用 Description |
-| :--- | :--- |
-| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（首次运行会先扫码绑定）<br>Install the background service, enable autostart and start it (first run prompts QR binding) |
-| `dsh-lark-bot status` | 查看服务状态（退出码 0=运行中，1=未运行）<br>Show service status (exit code 0=running, 1=not running) |
-| `dsh-lark-bot restart` | 重启后台服务（保留开机自启）<br>Restart the background service (keeps autostart) |
-| `dsh-lark-bot stop` | 停止后台服务并移出开机自启<br>Stop the background service and remove autostart |
-
-后台服务的运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`。
-
-Background service logs are written to `~/.dsh-lark/profiles/<profile>/logs/bot.log`.
+> 卸载：`dsh plugin --profile dsh-lark remove dsh-lark-bot`。
+> Uninstall: `dsh plugin --profile dsh-lark remove dsh-lark-bot`.
 
 ### 4. 基本使用 | Basic usage
 
@@ -268,11 +214,14 @@ logs and troubleshooting.
 
 ## 目标 | Goals
 
-- **一条命令启动**：clone 后一键安装运行，已发布到 npm，`npm i -g dsh-lark-bot && dsh-lark-bot start` 即可拉起后台服务。
+- **一条命令安装部署**：`npx dsh-lark-bot@latest setup --profile dsh-lark` 装进 dsh profile，
+  随后 `dsh --profile dsh-lark` 启动并扫码，桥接引擎作为标准插件在 dsh 进程内运行。
 - **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
 - **完整工作区管理**：多项目隔离、git worktree、项目级规则注入、上下文持久化。
 
-- **One-command start**: clone and run in one step, published to npm — `npm i -g dsh-lark-bot && dsh-lark-bot start`.
+- **One-command install & deploy**: `npx dsh-lark-bot@latest setup --profile dsh-lark`, then
+  `dsh --profile dsh-lark` and scan once — the bridge engine runs as a standard plugin inside
+  the dsh process.
 - **Native Feishu experience**: streaming cards, interactive buttons, images / files, doc comments.
 - **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
@@ -420,11 +369,11 @@ Common issues:
   is reachable; with an existing App ID/Secret you can skip scanning via `--app-id` /
   `--app-secret`.
 
-以后台服务方式运行时，日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，
-stdout 与 stderr 合并）；当前进程的 stderr 仍为 JSON Lines。
+桥接引擎日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines）；dsh 宿主日志走
+dsh 自己的日志体系。
 
-When running as a background service, logs go to `~/.dsh-lark/profiles/<profile>/logs/bot.log`
-(JSON Lines, stdout and stderr merged); the current process's stderr is still JSON Lines.
+The bridge engine logs to `~/.dsh-lark/profiles/<profile>/logs/bot.log` (JSON Lines); the dsh
+host uses its own logging.
 
 ## 开发 | Development
 
@@ -527,12 +476,11 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
-| `src/cli/` | CLI 入口与 start / status / restart / stop / doctor 命令<br>CLI entry & service commands |
+| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ 隐藏 `run`<br>CLI entry: setup / doctor / hidden run |
 | `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理<br>Profile, config, access & dsh config management |
 | `src/core/` | 结构化日志<br>Structured logging |
 | `src/media/` | 附件下载与文本注入<br>Attachment download & text injection |
 | `src/platform/` | 跨平台原子写入<br>Cross-platform atomic writes |
-| `src/service/` | 后台服务管理（systemd / launchd / 计划任务 / 便携 supervisor）<br>Background service management |
 | `docs/` | 架构、路线图等文档<br>Architecture, roadmap & docs |
 | `reference/` | 参考研究用的克隆仓库（不提交）<br>Cloned reference repos (not committed) |
 

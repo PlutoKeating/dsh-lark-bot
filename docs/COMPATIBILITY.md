@@ -7,7 +7,7 @@
 
 ## 1. 兼容矩阵
 
-> 最后验证：2026-08-14（本机 systemd 服务 + GitHub Actions `compat-probe` 实测）。
+> 最后验证：2026-08-15（dsh profile 插件装载 + GitHub Actions `compat-probe` 实测）。
 
 | 组件 | 锁定版本 | 说明 |
 | :--- | :--- | :--- |
@@ -49,7 +49,7 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走真实 SDK runtime 初始化握手。
 6. **实机回归**：`dsh-lark-bot restart` 后 `dsh-lark-bot status` + `doctor`，
-   确认后台服务运行正常；飞书会话内跑一轮真实任务。
+   确认 dsh profile 中插件装载正常（`dsh --profile <name>` 内引擎启动）；飞书会话内跑一轮真实任务。
 7. **更新验证日期**：把 `verifiedAt` 改为当天，同步本文矩阵表与
    `README.md`「兼容性」章节。
 8. **发版**：提交、push、打 tag，release 流水线自动发布双包。
