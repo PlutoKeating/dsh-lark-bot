@@ -2,10 +2,11 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
-export const SDK_SERVER_VERSION = '0.1.0-rc.6';
+export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
 export const SDK_BASE_BUNDLE = '@deepseek-ai/dsh-base';
 export const DEFAULT_SDK_PROFILE = 'dsh-lark';
 

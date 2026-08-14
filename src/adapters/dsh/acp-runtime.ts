@@ -2,10 +2,11 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 
 export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
-export const ACP_VERSION = '0.1.0-rc.6';
+export const ACP_VERSION = DSH_COMPATIBILITY.acp;
 export const ACP_BASE_BUNDLE = '@deepseek-ai/dsh-base';
 export const DEFAULT_ACP_PROFILE = 'dsh-lark-acp';
 
