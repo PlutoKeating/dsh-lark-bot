@@ -6,7 +6,11 @@ import type {
   AgentRun,
 } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
-import { runAgentBatch } from '../../src/bridge/run-flow.js';
+import { ApprovalRegistry } from '../../src/bot/approvals.js';
+import {
+  approvalHandlerFor,
+  runAgentBatch,
+} from '../../src/bridge/run-flow.js';
 import type { StreamingChannel } from '../../src/bridge/types.js';
 import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
@@ -240,5 +244,46 @@ describe('runAgentBatch', () => {
       { role: 'user', content: 'what did I just say?' },
       { role: 'assistant', content: 'I remember.' },
     ]);
+  });
+});
+
+describe('approvalHandlerFor', () => {
+  it('renders an approval card and resolves through the registry', async () => {
+    const approvals = new ApprovalRegistry();
+    const sendCard = vi.fn().mockResolvedValue(undefined);
+    const handler = approvalHandlerFor({
+      approvals,
+      channel: { sendCard },
+      chatId: 'chat-a',
+      scope: 'chat-a',
+    });
+    const outcome = handler({
+      id: 'call-1',
+      sessionId: 's1',
+      toolName: 'bash',
+      reason: 'run tests',
+      options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+    });
+    expect(sendCard).toHaveBeenCalledWith('chat-a', expect.objectContaining({ schema: '2.0' }));
+    expect(approvals.resolve('chat-a', 'call-1', 'allowed-once')).toBe(true);
+    await expect(outcome).resolves.toBe('allowed-once');
+  });
+
+  it('fails closed when no registry or card channel exists', async () => {
+    const handler = approvalHandlerFor({
+      approvals: undefined,
+      channel: {},
+      chatId: 'chat-a',
+      scope: 'chat-a',
+    });
+    await expect(
+      handler({
+        id: 'call-1',
+        sessionId: undefined,
+        toolName: 'bash',
+        reason: undefined,
+        options: [],
+      }),
+    ).resolves.toBe('cancelled');
   });
 });

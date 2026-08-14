@@ -22,6 +22,9 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     workspaces: new WorkspaceStore(':memory:'),
     activeRuns: new ActiveRuns(),
     runPolicies: new RunPolicyStore(),
+    approvals: undefined,
+    questions: undefined,
+    densityStore: undefined,
     defaultRunTimeoutMs: 300_000,
     accessManager: new AccessManager(
       new ConfigStore(':memory:'),

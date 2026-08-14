@@ -10,6 +10,7 @@ afterEach(() => {
   delete process.env.DSH_LARK_HOME;
   delete process.env.DSH_LARK_DSH_COMMAND;
   delete process.env.DSH_LARK_DSH_ARGS;
+  delete process.env.DSH_LARK_ADAPTER;
   process.exitCode = 0;
 });
 
@@ -18,6 +19,7 @@ describe('runDoctor', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-'));
     process.env.DSH_LARK_HOME = root;
     process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
     const store = new ConfigStore(join(root, 'config.json'));
     await store.load();
     await store.saveProfile('default', {
@@ -45,6 +47,7 @@ describe('runDoctor', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-empty-'));
     process.env.DSH_LARK_HOME = root;
     process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
     const outputChunks: string[] = [];
 
     try {
