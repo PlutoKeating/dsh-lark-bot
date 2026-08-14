@@ -88,6 +88,10 @@ dsh-lark-bot start \
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
+| `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数 |
+| `/role set <id>`、`/role list` | 绑定 / 查看多角色 Agent |
+| `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
+| `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model` `/model use <id>` `/model default <id>` | 查看 / 热切换当前会话模型 / 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId>` | 管理 provider 的模型（管理员） |
@@ -112,7 +116,9 @@ dsh-lark-bot start \
 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，审批卡通过 ACP
 `session/request_permission` 一问一答）；`headless` 保留旧版子进程 fallback。
 
-bot 会为每个飞书 scope 保存最近 40 条对话，`/new` 会清空当前 scope 的会话记忆。
+bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可调），超出保留窗口的消息自动
+归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown + JSONL + Git commit，`/archive`
+可手动导出）；`/new` 会清空当前 scope 的会话记忆。
 
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
 
@@ -120,6 +126,9 @@ bot 会为每个飞书 scope 保存最近 40 条对话，`/new` 会清空当前 
 
 - 配置文件：`~/.dsh-lark/config.json`
 - 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
+- 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
+- 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
+- scope 目录：`~/.dsh-lark/profiles/<profile>/scopes.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
