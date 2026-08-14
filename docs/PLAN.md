@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | P0 | 仓库、文档、CI、脚手架 | ✅ 完成 |
 | P1 | 飞书 bot + dsh 单会话往返 | ✅ 完成 |
-| P2 | 项目工作区管理 | 🚧 进行中 |
-| P3 | 审批、调度、沙箱 | 🚧 进行中 |
+| P2 | 项目工作区管理 | 🚧 进行中（SDK 原生 session 已接入） |
+| P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
 
 ## 2. P1 验收标准
@@ -31,7 +31,7 @@
 - [x] 命名工作区最近使用索引
 - [x] 工作空间导航卡片
 - [x] `SessionStore.fork` 复制历史
-- [ ] dsh 原生 session fork / resume / replay
+- [x] dsh 原生 session fork / resume / replay（`@deepseek-ai/dsh-sdk-client` `session(id)` + JSONL 持久化）
 
 ## 4. P3 验收标准
 
@@ -39,7 +39,8 @@
 - [x] `/invite user|admin|group|list|remove`
 - [x] 单 scope 运行锁与 `/stop`
 - [x] 墙钟超时看门狗
-- [ ] 卡片审批
+- [x] 卡片审批（ACP `session/request_permission` + 审批卡）
+- [x] 问答卡（单选 / 多选 / 自由文本）
 - [ ] 异步任务队列
 - [ ] 沙箱调度与 workflow 编排
 
@@ -53,14 +54,84 @@
 
 ## 6. 当前执行顺序
 
-1. 完成 P1 真实飞书 E2E
-2. 接入 dsh ACP / SDK 后补齐 P2 真正 fork/resume
-3. 基于 ACP 实现 P3 卡片审批
-4. 补充异步任务队列与调度
-5. 稳定发布下一版本
+1. ✅ 完成 P1 真实飞书 E2E
+2. ✅ 接入官方 `@deepseek-ai/dsh-sdk-client`（原生 session + 流式事件），替换 headless 子进程
+3. ✅ 基于 ACP `session/request_permission` 实现卡片审批（ACP adapter 模式）
+4. ✅ 安全模块（SECURITY.md + 脱敏 / SSRF / 路径 containment / 默认拒绝 / UTF-8 安全截断）
+5. ✅ 三档可变卡片 + thinking 流式展示
+6. ⏳ 补充异步任务队列与调度（后续迭代）
+7. ⏳ 稳定发布下一版本
 
 ## 7. 当前阻塞 · Current blocker
 
-- 官方 `@deepseek-ai/dsh-acp@0.0.1-rc.1` 与 `@deepseek-ai/dsh-sdk-client@0.0.1-rc.1` 均依赖 `@deepseek-ai/dsh-type-meta`，但该传递依赖在 npm registry 返回 404。
-- 因此当前无法安装 ACP/SDK 客户端，P2 真正的 dsh fork / resume / replay、P3 卡片审批与调度均缺少可靠后端协议。
-- 现有 headless fallback 只能实现“会话历史注入”的近似续跑，不是 dsh 原生 session 恢复。
+- ~~`dsh-type-meta` 404 阻塞~~：**已复核并解除**（2026-08-14）。当前 npm registry 上
+  `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6` / `@deepseek-ai/dsh-acp@0.1.0-rc.6` 的真实依赖链为
+  `@deepseek-ai/cordis@^4.0.1`、`dsh-llm` / `dsh-session` / `dsh-invariants` / `dsh-sdk-protocol` / `dsh-user-approval` 等，
+  **全部已发布且可安装**，`dsh-type-meta` 已不在依赖链中（详见第 8 节验证记录）。
+- 本地验证：`dsh --profile dsh-lark`（bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay）
+  已成功完成 `initialize` / `session/prompt` / `shutdown` 真实握手，`assistant/chunk` 流式事件可实时消费。
+
+---
+
+## 8. 战略执行计划（2026-08-14 第三方调研复核后）
+
+> 依据第三方产品调研官的战略分析（复用官方组件 > 借鉴竞品 > 自研），结合本仓库真实代码 / 配置 / 依赖链复核结论，制定并执行以下计划。
+
+### 8.1 关键决策
+
+1. **不转 cordis 插件形态**：保留独立 CLI 桥接形态，但预留未来可选 cordis 形态的钩子（`AgentAdapter` 抽象已满足）。
+2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
+3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
+   （`@deepseek-ai/dsh-acp` + `@agentclientprotocol/sdk` 的 `ClientSideConnection` + `dsh-user-approval`）。
+4. **唯一自研差异化**：git worktree 工作区管理 + AGENTS.md 注入 + 多 agent 抽象，继续投入。
+5. **License 维持 AGPL-3.0**（所有者决策项，见 8.7）；`package.json.homepage` 已存在，无需新增。
+
+### 8.2 P0：官方 SDK client 替换 headless（复用官方）
+
+| # | 动作 | 验收 |
+| --- | --- | --- |
+| P0-1 | 验证 npm 依赖链（`dsh-type-meta` 404 已解除） | registry 实测通过 ✅ |
+| P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
+| P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
+| P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
+| P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
+| P0-6 | 接线：`DSH_LARK_ADAPTER=sdk|acp|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 |
+
+### 8.3 P0：卡片审批 + 问答卡（复用官方 + 借鉴竞品）
+
+| # | 动作 | 验收 |
+| --- | --- | --- |
+| P0-7 | `src/adapters/dsh/acp-runtime.ts`：确保 `dsh-lark-acp` ACP runtime profile（`dsh-base` + `@deepseek-ai/dsh-acp` overlay，approval policy `ask`） | profile dump 通过 |
+| P0-8 | `src/adapters/dsh/acp-adapter.ts`：`AcpDshAdapter`（`ClientSideConnection` + `newSession` + `requestPermission` → 审批回调） | 单元测试（mock ACP server） |
+| P0-9 | `src/card/approval-card.ts`：审批卡（allow-once / reject-once 按钮） | 渲染测试 |
+| P0-10 | `src/card/question-card.ts`：问答卡（单选 / 多选 / 自由文本） | 渲染 + 答案提取测试 |
+| P0-11 | `src/bot/approvals.ts`：pending 审批注册表 + run 结束/dispose 时结算所有挂起审批卡 | 生命周期测试 |
+| P0-12 | 桥接接线：`run-flow` 提供 `onApprovalRequest`（发卡 + 等待按钮）、`channel.ts` 处理 `cmd=approve` | 集成测试 |
+
+### 8.4 P1：安全模块（借鉴 dsh-lark-bridge）
+
+| # | 动作 | 验收 |
+| --- | --- | --- |
+| P1-1 | 新建 `SECURITY.md`（威胁模型 / 默认拒绝 / 传输层强制 / 报告渠道） | 文档 |
+| P1-2 | `src/config/security.ts`：密钥脱敏（`Bearer`/`sk-` 正则）、SSRF 防护清单、路径 realpath containment、默认拒绝、UTF-8 安全截断、过期事件拒绝 | 单元测试 |
+| P1-3 | 应用到 `media/attachments.ts`（containment + UTF-8 安全读取）、`workspace/git-worktree.ts`（containment）、`commands/index.ts`（/cd containment）、`bridge/channel.ts`（默认拒绝 + 过期事件）、`core/logger.ts`（增强脱敏） | 单元测试 |
+| P1-4 | `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时默认拒绝（可选，默认兼容 onboarding） | 测试 |
+
+### 8.5 P1：三档可变卡片 + thinking 展示（借鉴 dsh-lark-bridge V2 + Roy-oss1）
+
+| # | 动作 | 验收 |
+| --- | --- | --- |
+| P1-5 | `src/card/density.ts`：`compact / standard / detailed` 三档 | 测试 |
+| P1-6 | `run-renderer.ts` 升级三档渲染；`run-state.ts` 增加 `usage` | 渲染测试 |
+| P1-7 | thinking 流式展示（reasoning-delta → 思考中 → 折叠内容），SDK 路径天然 typewriter | 渲染测试 |
+| P1-8 | `/density <compact|standard|detailed>` 命令 + profile 偏好 | 命令测试 |
+
+### 8.6 P2：测试密度提升（借鉴 Roy-oss1）
+
+- 新增模块全部配套单元测试（sdk-translate / sdk-adapter / sdk-runtime / acp-adapter / approval-card / question-card / approvals / security / density）。
+- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿。
+
+### 8.7 P2：License 决策项
+
+- 报告建议 AGPL → MIT 重议。**License 属于所有者法律决策**：本计划不擅自变更 LICENSE，仅在
+  README / roadmap / PLAN 中记录决策状态；`homepage` 已配置，无需新增。
