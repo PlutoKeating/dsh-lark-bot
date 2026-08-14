@@ -147,6 +147,7 @@ export async function ensureAcpProfile(
       await mkdir(root, { recursive: true });
       await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
       await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
+      await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
       const install = options.install ?? runPnpmInstall;
       await install(root);
       if (!isAcpProfileReady(root)) {
