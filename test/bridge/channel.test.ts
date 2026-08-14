@@ -7,12 +7,16 @@ import type {
 } from '@larksuite/channel';
 import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ModelStore } from '../../src/bot/model-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
+import { DshProviderManager } from '../../src/config/dsh-config.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import { startChannel } from '../../src/bridge/channel.js';
 import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
 
@@ -107,6 +111,11 @@ describe('startChannel', () => {
       activeRuns,
       runPolicies: new RunPolicyStore(),
       defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
       accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
       pending: pending as never,
       defaultWorkspace: '/tmp/project',
@@ -145,6 +154,11 @@ describe('startChannel', () => {
       activeRuns,
       runPolicies: new RunPolicyStore(),
       defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
       accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
       pending: pending as never,
       defaultWorkspace: '/tmp/project',

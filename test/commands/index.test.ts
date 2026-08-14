@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ModelStore } from '../../src/bot/model-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
+import { DshProviderManager } from '../../src/config/dsh-config.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import {
   tryHandleCommand,
@@ -25,7 +29,13 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     approvals: undefined,
     questions: undefined,
     densityStore: undefined,
+    models: new ModelStore(),
+    dshConfig: new DshProviderManager({
+      home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+    }),
     defaultRunTimeoutMs: 300_000,
+    defaultModel: 'deepseek-v4-flash',
+    senderId: undefined,
     accessManager: new AccessManager(
       new ConfigStore(':memory:'),
       'default',

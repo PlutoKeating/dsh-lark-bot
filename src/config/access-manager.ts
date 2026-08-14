@@ -21,6 +21,10 @@ export class AccessManager {
     };
   }
 
+  isAdmin(openId: string | undefined): boolean {
+    return Boolean(openId && this.snapshot().admins.includes(openId));
+  }
+
   async addUser(id: string): Promise<void> {
     const snapshot = this.snapshot();
     if (!snapshot.allowedUsers.includes(id)) snapshot.allowedUsers.push(id);

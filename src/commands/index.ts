@@ -10,6 +10,14 @@ import type { WorkspaceStore } from '../workspace/store.js';
 import { renderWorkspaceCard } from '../card/workspace-card.js';
 import { parseCardDensity, type CardDensity } from '../card/density.js';
 import { questionHandlerFor } from '../bridge/run-flow.js';
+import type { ModelStore } from '../bot/model-store.js';
+import type { DshProviderManager } from '../config/dsh-config.js';
+import {
+  handleKey,
+  handleModel,
+  handleProvider,
+  handleProviders,
+} from './models.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -33,7 +41,11 @@ export interface CommandContext {
   approvals: ApprovalRegistry | undefined;
   questions: QuestionRegistry | undefined;
   densityStore: DensityStore | undefined;
+  models: ModelStore;
+  dshConfig: DshProviderManager;
   defaultRunTimeoutMs: number;
+  defaultModel: string;
+  senderId: string | undefined;
   accessManager: AccessManager;
   channel: CommandChannel;
   defaultWorkspace: string;
@@ -52,6 +64,13 @@ const HELP = [
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
+  '- `/model` — 查看当前模型与 dsh 可用模型',
+  '- `/model use <id>` — 热切换当前会话模型（下一轮生效）',
+  '- `/model default <id>` — 写入 dsh 默认模型 agent-default-model（管理员）',
+  '- `/model add|remove <provider> <modelId>` — 管理 provider 的模型（管理员）',
+  '- `/providers` — 查看 dsh providers / 模型 / 凭据状态',
+  '- `/provider add|update|remove <id>` — 管理 provider（管理员；deepseek-official 与自定义 pi-ai）',
+  '- `/key set|remove|list <引用名>` — 管理 dsh 凭据（set/remove 需管理员）',
   '- `/ask <问题>` — 发送结构化问答卡（回答将记入会话）',
   '- `/invite user|admin|group <id>` — 管理访问白名单',
   '- `/help` — 显示本帮助',
@@ -356,6 +375,10 @@ const handlers: Record<string, Handler> = {
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/density': handleDensity,
+  '/model': handleModel,
+  '/providers': handleProviders,
+  '/provider': handleProvider,
+  '/key': handleKey,
   '/ask': handleAsk,
   '/invite': handleInvite,
   '/help': handleHelp,

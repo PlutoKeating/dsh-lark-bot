@@ -5,6 +5,7 @@ import { buildAgentAdapter } from '../../adapters/index.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
 import { ApprovalRegistry } from '../../bot/approvals.js';
 import { DensityStore } from '../../bot/density-store.js';
+import { ModelStore } from '../../bot/model-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
 import { QuestionRegistry } from '../../bot/questions.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
@@ -17,6 +18,7 @@ import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
+import { DshProviderManager } from '../../config/dsh-config.js';
 import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { prepareAttachments } from '../../media/attachments.js';
@@ -148,6 +150,8 @@ export async function runBot(options: StartOptions): Promise<void> {
   const approvals = new ApprovalRegistry();
   const questions = new QuestionRegistry();
   const densityStore = new DensityStore();
+  const models = new ModelStore();
+  const dshConfig = new DshProviderManager({ env: process.env });
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
 
@@ -184,8 +188,12 @@ export async function runBot(options: StartOptions): Promise<void> {
         replyTo: first.messageId,
         runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
         images: attachments.imagePaths,
+        model:
+          models.get(scope) ??
+          activeProfile.preferences.model ??
+          (await dshConfig.defaultModel().catch(() => undefined)) ??
+          env.model,
       };
-      if (activeProfile.preferences.model !== undefined) runInput.model = activeProfile.preferences.model;
       if (activeProfile.preferences.stopGraceMs !== undefined) {
         runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
       }
@@ -207,7 +215,10 @@ export async function runBot(options: StartOptions): Promise<void> {
     approvals,
     questions,
     densityStore,
+    models,
+    dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
+    defaultModel: activeProfile.preferences.model ?? env.model,
     accessManager: new AccessManager(configStore, profileName),
     pending,
     defaultWorkspace,
@@ -216,7 +227,6 @@ export async function runBot(options: StartOptions): Promise<void> {
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
   };
-  if (activeProfile.preferences.model !== undefined) channelInput.model = activeProfile.preferences.model;
   if (activeProfile.preferences.stopGraceMs !== undefined) {
     channelInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
   }

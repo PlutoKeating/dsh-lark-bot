@@ -3,12 +3,14 @@ import type { AgentAdapter } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
+import type { ModelStore } from '../bot/model-store.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import { extractQuestionAnswer } from '../card/question-card.js';
 import type { AccessManager } from '../config/access-manager.js';
+import type { DshProviderManager } from '../config/dsh-config.js';
 import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
@@ -30,12 +32,14 @@ export interface StartChannelDeps {
   approvals?: ApprovalRegistry;
   questions?: QuestionRegistry;
   densityStore?: DensityStore;
+  models: ModelStore;
+  dshConfig: DshProviderManager;
   defaultWorkspace: string;
+  defaultModel: string;
   allowedUsers?: string[];
   allowedChats?: string[];
   accessDefaultDeny?: boolean;
   eventFreshnessMs?: number;
-  model?: string;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
 }
@@ -108,8 +112,12 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         approvals: deps.approvals,
         questions: deps.questions,
         densityStore: deps.densityStore,
+        models: deps.models,
+        dshConfig: deps.dshConfig,
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
+        defaultModel: deps.defaultModel,
+        senderId: msg.senderId,
       };
 
       const handled = await tryHandleCommand(msg.content, context).catch((error: unknown) => {
