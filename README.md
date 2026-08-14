@@ -101,11 +101,35 @@ dsh-lark-bot start \
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
+| `/model` | 查看当前模型、dsh 默认模型与可用模型列表 |
+| `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启） |
+| `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
+| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
+| `/providers` | 查看 dsh 已配置 providers、模型与凭据状态 |
+| `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai） |
+| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看帮助 |
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
+
+### 模型 / Provider / 凭据管理
+
+模型与 provider 的配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 页面完全相同的
+存储协议），改动在下一个请求生效，无需重启 bot：
+
+- `/model use <id>`：按会话热切换模型，下一轮消息即用新模型。
+- `/model default <id>`：写入 dsh 的 `agent-default-model`，作为新会话的默认模型。
+- `/providers`：展示 dsh 已配置的 provider、模型与凭据状态（DeepSeek 官方 + 自定义 pi-ai）。
+- `/provider add|update|remove`：管理自定义 provider（`llm-pi-ai`）或 `deepseek-official`；
+  自定义 provider 需要 `--api`（`openai-completions` / `openai-responses` / `anthropic-messages`）、
+  `--base-url` 与至少一个 `--model`，与官方 schema 一致。
+- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）。settings 只保存 `apiKeyEnv`
+  引用，字面密钥不进入 settings 或聊天记录。
+
+安全提醒：在飞书会话里输入密钥会对该会话的可见成员暴露密钥，建议仅在私聊中使用，或优先用
+`--api-key-env` 引用已配置的环境变量 / dsh Web 页面录入。bot 不会在任何回复中回显密钥值。
 
 ### 5. 卸载
 

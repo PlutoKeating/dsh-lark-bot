@@ -116,6 +116,52 @@ export class RunPolicyStore {
 `src/config/access-manager.ts` 的 `AccessManager` 把 `/invite user|admin|group|list|remove` 的
 变更持久化到当前 profile 的访问白名单。
 
+`src/bot/model-store.ts` 提供内存级 `ModelStore`，按 scope 覆盖模型：
+
+```ts
+export class ModelStore {
+  get(scope: string): string | undefined;
+  set(scope: string, model: string): void;
+  clear(scope: string): boolean;
+}
+```
+
+飞书命令 `/model use <id>` 写该 store（下一轮消息生效），`/model reset` 清除覆盖。
+
+`src/config/dsh-config.ts` 的 `DshProviderManager` 直接读写 dsh 官方配置文件，与
+`dsh` Web **Settings → Models** 页面共用同一存储协议，改动在下一个请求生效、无需重启：
+
+- `~/.dsh/settings.yaml`：`llm-deepseek` / `llm-pi-ai`（`providers` 字典）/ `agent-default-model`
+  命名空间；写入使用 dsh-settings-file 同款 `patchNode` 叶子 diff + `<file>.lock` 跨进程写锁 +
+  原子替换，保留注释与无关字段。
+- `~/.dsh/.credentials.yaml`：凭据映射（0600，目录 0700），settings 只保存 `apiKeyEnv` 引用，
+  字面密钥不进入 settings。
+
+```ts
+export class DshProviderManager {
+  listProviders(): Promise<DshProviderSummary[]>;
+  defaultModel(): Promise<string | undefined>;
+  setDefaultModel(model: string): Promise<void>;
+  upsertDeepseekProvider(input: { baseURL?; apiKeyEnv?; apiKey? }): Promise<void>;
+  removeDeepseekProvider(): Promise<void>;
+  addDeepseekModel(input: DshModelEntry): Promise<void>;
+  removeDeepseekModel(id: string): Promise<boolean>;
+  upsertPiAiProvider(input: DshPiAiProviderInput): Promise<void>;
+  removePiAiProvider(id: string): Promise<boolean>;
+  addPiAiModel(providerId: string, input: DshModelEntry): Promise<void>;
+  removePiAiModel(providerId: string, modelId: string): Promise<boolean>;
+  setCredential(ref: string, value: string): Promise<void>;
+  removeCredential(ref: string): Promise<boolean>;
+  listCredentialRefs(): Promise<string[]>;
+  hasCredential(ref: string): Promise<boolean>;
+}
+```
+
+pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` / `openai-responses` /
+`anthropic-messages`；自定义 provider 按官方 schema 需要 `api` + `baseURL` + 非空 `models`。
+模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
+`agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
+
 `src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 40 条对话，支持
 `fork(scopeId, newScopeId, cwd)` 复制历史；SDK 模式以原生 `session(id)` 续跑，headless 模式把
 历史拼入下一次 prompt 作为近似上下文。

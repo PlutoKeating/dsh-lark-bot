@@ -53,6 +53,11 @@ systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）�
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约，dsh 漂移只影响 `src/adapters/dsh/`。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
+4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写
+   dsh 官方配置存储（`~/.dsh/settings.yaml` + `~/.dsh/.credentials.yaml`），与 dsh Web
+   Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），
+   因此不重复造配置管理 API，也不绕过官方热发布；ACP / SDK 协议本身不含配置管理方法，
+   模型切换通过每轮请求的 model 参数与 dsh 热发布生效。
 
 ## 目录映射 · Directory Mapping
 
