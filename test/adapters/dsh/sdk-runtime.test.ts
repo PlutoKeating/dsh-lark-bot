@@ -49,7 +49,16 @@ describe('ensureSdkProfile', () => {
           join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
           JSON.stringify({ name: SDK_SERVER_PACKAGE }),
         );
-        await mkdir(join(root, 'node_modules', own.name), { recursive: true });
+        const ownDir = join(root, 'node_modules', own.name);
+        await mkdir(ownDir, { recursive: true });
+        await writeFile(
+          join(ownDir, 'package.json'),
+          JSON.stringify({
+            name: own.name,
+            version: '0.6.0',
+            dsh: { bundle: { patch: './cordis.patch.yml' } },
+          }),
+        );
       },
     });
 

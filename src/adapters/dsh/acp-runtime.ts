@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
@@ -111,8 +112,26 @@ export function isAcpProfileReady(profileRoot: string): boolean {
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
     acpPluginInstalled(profileRoot) &&
-    existsSync(join(profileRoot, 'node_modules', own.name))
+    ownPackageLinked(profileRoot, own.name)
   );
+}
+
+/** True when the profile's node_modules link resolves to this package. */
+function ownPackageLinked(profileRoot: string, ownName: string): boolean {
+  const linkPath = join(profileRoot, 'node_modules', ownName);
+  try {
+    const real = realpathSync(linkPath);
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8')) as {
+      name?: unknown;
+      dsh?: { bundle?: { patch?: unknown } };
+    };
+    return (
+      pkg.name === ownName &&
+      pkg.dsh?.bundle?.patch !== undefined
+    );
+  } catch {
+    return false;
+  }
 }
 
 function runPnpmInstall(profileRoot: string): Promise<void> {
