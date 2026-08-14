@@ -1,7 +1,7 @@
 <h1 align="center">dsh-lark-bot</h1>
 
 <p align="center">
-  <strong>把 DeepSeek Harness 接入飞书 · Bridge DeepSeek Harness into Feishu / Lark</strong>
+  <strong>把 DeepSeek Harness 接入飞书 | Bridge DeepSeek Harness into Feishu / Lark</strong>
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
 
 ---
 
-## 快速开始 · Quick Start（普通用户先看这里）
+## 快速开始 | Quick Start（普通用户先看这里）
 
 ### 1. 安装
 
@@ -143,17 +143,17 @@ rm -rf ~/.dsh-lark
 
 ---
 
-## 关键词 · Keywords
+## 关键词 | Keywords
 
 `dsh` · `deepseek` · `deepseek harness` · `feishu` · `lark` · `bridge` · `bot`
 
-## 这是什么 · What it is
+## 这是什么 | What it is
 
 **dsh-lark-bot** 是一个轻量桥接工具，把本机的 DeepSeek Harness（`dsh`）接入飞书 / Lark，复刻当年 OpenCode Telegram Bot / MiMoCode Telegram Bot 的体验——在 IM 里与 coding agent 对话、收流式卡片、审阅 diff，并在此基础上叠加**完整的项目工作区管理**。
 
 **dsh-lark-bot** is a lightweight bridge that connects your local DeepSeek Harness (`dsh`) into Feishu / Lark, recreating the beloved OpenCode / MiMoCode Telegram-bot experience — chat with your coding agent, receive streaming cards, review diffs — and adds **full project workspace management** on top.
 
-## 目标 · Goals
+## 目标 | Goals
 
 - **一条命令启动**：clone 后一键安装运行，已发布到 npm，`npm i -g dsh-lark-bot && dsh-lark-bot start` 即可拉起后台服务。
 - **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
@@ -163,7 +163,7 @@ rm -rf ~/.dsh-lark
 - **Native Feishu experience**: streaming cards, interactive buttons, images / files, doc comments.
 - **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
-## 兼容性 · Compatibility
+## 兼容性 | Compatibility
 
 - **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（2026-08-14：SDK JSON-RPC / ACP runtime 握手 +
   真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
@@ -175,7 +175,7 @@ rm -rf ~/.dsh-lark
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
   子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark`（或 `dsh-lark-acp`）创建 runtime profile。
 
-## 配置 · Configuration
+## 配置 | Configuration
 
 - 本地配置：`~/.dsh-lark/config.json`
 - 状态根目录可用 `DSH_LARK_HOME` 覆盖
@@ -207,7 +207,7 @@ rm -rf ~/.dsh-lark
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
-## 权限与数据 · Permissions & Data
+## 权限与数据 | Permissions & Data
 
 本工具在**本机**运行，安装前请知悉它会访问：
 
@@ -221,7 +221,7 @@ rm -rf ~/.dsh-lark
 
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
 
-## 排障 · Troubleshooting
+## 排障 | Troubleshooting
 
 先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并对当前 adapter 做真实可用性探测
 （`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）。
@@ -235,7 +235,7 @@ rm -rf ~/.dsh-lark
 以后台服务方式运行时，日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，
 stdout 与 stderr 合并）；当前进程的 stderr 仍为 JSON Lines。
 
-## 开发 · Development
+## 开发 | Development
 
 ```bash
 pnpm install
@@ -262,14 +262,14 @@ pnpm publish:dual
 
 同一份 dist 还会以 `@plutokeating/dsh-lark-bot` 和 `@plutokeating/dsh-feishu-bot` 发布到 GitHub Packages，便于在 GitHub Packages 页面查看。
 
-## 许可与安全 · License & Security
+## 许可与安全 | License & Security
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
 - **安全报告**：如发现安全漏洞，请通过 GitHub Security Advisory 私下报告，勿公开 issue。
 - **安全模型**：默认拒绝、密钥脱敏、路径 containment、SSRF 防护、过期事件拒绝与交互工具
   默认禁用——详见 [`SECURITY.md`](SECURITY.md)。
 
-## 文档 · Documentation
+## 文档 | Documentation
 
 > 接手本项目的工程师：**先读 [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) 和 [`docs/RESEARCH.md`](docs/RESEARCH.md)**，即可完整理解项目诉求与来龙去脉，无需线下沟通。
 > Engineers taking over this project: **read [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) and [`docs/RESEARCH.md`](docs/RESEARCH.md) first**.
@@ -290,9 +290,9 @@ pnpm publish:dual
 | [`SECURITY.md`](SECURITY.md) | 安全模型与报告渠道<br>Security model & reporting |
 | [`AGENTS.md`](AGENTS.md) | AI Agent 开发工作流规范<br>AI agent workflow spec |
 
-## 架构 · Architecture
+## 架构 | Architecture
 
-> 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
+> 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
 
 ```
 飞书 / Lark ──WebSocket 长连接──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4
@@ -302,7 +302,7 @@ pnpm publish:dual
 
 The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to the official DeepSeek Harness SDK (`DSH_LARK_ADAPTER=sdk`), with an optional ACP approval mode and the legacy headless fallback.
 
-## 目录结构 · Directory Structure
+## 目录结构 | Directory Structure
 
 | 目录 Dir | 职责 Responsibility |
 | :--- | :--- |
@@ -323,11 +323,11 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `docs/` | 架构、路线图等文档<br>Architecture, roadmap & docs |
 | `reference/` | 参考研究用的克隆仓库（不提交）<br>Cloned reference repos (not committed) |
 
-## 路线图 · Roadmap
+## 路线图 | Roadmap
 
-见 [`docs/roadmap.md`](docs/roadmap.md) · See [`docs/roadmap.md`](docs/roadmap.md).
+见 [`docs/roadmap.md`](docs/roadmap.md) | See [`docs/roadmap.md`](docs/roadmap.md).
 
-## 参考项目 · References
+## 参考项目 | References
 
 | 项目 Project | 说明 About |
 | :--- | :--- |
@@ -335,7 +335,7 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) | DeepSeek Harness（`dsh`），agent 后端 |
 | [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | OpenCode 的 Telegram 手机端，另一参照 |
 
-## 免责声明 · Disclaimer
+## 免责声明 | Disclaimer
 
 > [!NOTE]
 > 本项目为非官方社区工具，与 DeepSeek、字节跳动 / 飞书（Lark）无关联，亦未获得其背书。DeepSeek Harness、Feishu / Lark 及相关商标归各自权利人所有。
