@@ -1,0 +1,28 @@
+name: dsh-upstream
+
+on:
+  schedule:
+    # Weekly check (Monday 03:17 UTC) that upstream DeepSeek Harness has not
+    # published a newer stable release than the pinned compatibility matrix.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Compare pinned matrix with upstream stable releases
+        run: node scripts/check-dsh-upstream.mjs --fail-on-upgrade
