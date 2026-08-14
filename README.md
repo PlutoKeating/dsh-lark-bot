@@ -126,7 +126,9 @@ rm -rf ~/.dsh-lark
 
 ## 兼容性 · Compatibility
 
-- **DeepSeek Harness（`dsh`）**：developer preview（v0.1，2026-08 发布），通过 ACP / JSON-RPC SDK 接入。
+- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（2026-08-14：SDK JSON-RPC / ACP runtime 握手 +
+  真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
+  具体锁定版本与漂移策略见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
 - **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
