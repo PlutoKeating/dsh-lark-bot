@@ -73,7 +73,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 - `scripts/probe-dsh-compat.mjs`（+ CI `compat-probe` 任务）：临时 DSH_HOME 安装锁定版
   dsh + SDK server，通过 `dist/cli.js doctor` 走真实 SDK 初始化握手，满足 L4 运行实测。
 - 发版前执行 `pnpm release:check`（`ci:local` + 上游一致性检查）与本机
-  `dsh-lark-bot restart` + `doctor` 实机回归。
+  `dsh --profile <name>`（重启完整 profile）+ `dsh-lark-bot doctor` 实机回归；
+  安装安全网守护时另跑 `dsh-lark-bot guardian status` 确认守护待机。
 
 ## 5. 风险披露 · Risk Disclosure
 
