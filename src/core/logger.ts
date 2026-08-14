@@ -1,4 +1,5 @@
 import type { Writable } from 'node:stream';
+import { redactSecrets } from '../config/security.js';
 
 type LogLevel = 'info' | 'warn' | 'error';
 
@@ -11,6 +12,7 @@ const SENSITIVE_KEY = /(secret|token|password|api[_-]?key)/i;
 
 function redactValue(value: unknown, key: string, depth: number): unknown {
   if (SENSITIVE_KEY.test(key)) return REDACTED;
+  if (typeof value === 'string') return redactSecrets(value);
   if (depth === 0) return value;
   if (Array.isArray(value)) {
     return value.map((item, index) => redactValue(item, `${key}.${index}`, depth - 1));

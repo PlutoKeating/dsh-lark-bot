@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentAdapter, AgentEvent } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import { ApprovalRegistry } from '../bot/approvals.js';
+import type { DensityStore } from '../bot/density-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
+import type { QuestionRegistry } from '../bot/questions.js';
 import {
   finalizeIfRunning,
   initialState,
@@ -11,11 +14,15 @@ import {
   type RunState,
 } from '../card/run-state.js';
 import { renderCard } from '../card/run-renderer.js';
+import { renderApprovalCard } from '../card/approval-card.js';
+import { renderQuestionCard } from '../card/question-card.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
+import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
+import type { QuestionCardInput } from '../card/question-card.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -27,6 +34,9 @@ export interface RunFlowInput {
   workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
   runPolicies?: RunPolicyStore;
+  approvals?: ApprovalRegistry;
+  questions?: QuestionRegistry;
+  densityStore?: DensityStore;
   channel: StreamingChannel;
   defaultWorkspace: string;
   model?: string;
@@ -64,6 +74,16 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       model: input.model,
       images: input.images,
       stopGraceMs: input.stopGraceMs,
+      ...(input.approvals
+        ? {
+            onApprovalRequest: approvalHandlerFor({
+              approvals: input.approvals,
+              channel: input.channel,
+              chatId: input.chatId,
+              scope: input.scope,
+            }),
+          }
+        : {}),
   });
   input.activeRuns.set(input.scope, { runId, stop: run.stop });
 
@@ -72,11 +92,12 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
   let timedOut = false;
   let assistantOutput = '';
+  const density = input.densityStore?.get(input.scope) ?? 'standard';
 
   try {
     await input.channel.streamCard(
       input.chatId,
-      renderCard(state),
+      renderCard(state, density),
       async (controller) => {
         const consume = async (): Promise<void> => {
           for await (const event of run.events) {
@@ -90,7 +111,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
             if (event.type === 'system' && event.sessionId) {
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
             }
-            await controller.update(renderCard(state));
+            await controller.update(renderCard(state, density));
           }
         };
 
@@ -116,7 +137,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           state = timedOut
             ? markIdleTimeout(state, timeoutMs / 60_000)
             : finalizeIfRunning(state);
-          await controller.update(renderCard(state));
+          await controller.update(renderCard(state, density));
         } finally {
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
         }
@@ -136,7 +157,72 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     }
   } finally {
     input.activeRuns.delete(input.scope);
+    if (input.approvals) {
+      input.approvals.settleAll(input.scope, 'cancelled');
+    }
+    if (input.questions) {
+      input.questions.settleAll(input.scope);
+    }
   }
+}
+
+/** Build the per-run approval handler wiring ACP requests to approval cards. */
+export function approvalHandlerFor(
+  input: {
+    approvals: ApprovalRegistry | undefined;
+    channel: { sendCard?: (chatId: string, card: object) => Promise<void> };
+    chatId: string;
+    scope: string;
+  },
+): (request: ApprovalRequest) => Promise<ApprovalOutcome> {
+  return async (request) => {
+    if (!input.approvals || !input.channel.sendCard) return 'cancelled';
+    const promise = input.approvals.register(input.scope, request);
+    try {
+      await input.channel.sendCard(
+        input.chatId,
+        renderApprovalCard({
+          id: request.id,
+          toolName: request.toolName,
+          reason: request.reason,
+          options: request.options,
+        }),
+      );
+    } catch (error) {
+      log.fail('approval-card', error, { scope: input.scope });
+      input.approvals.settleAll(input.scope, 'cancelled');
+      return 'cancelled';
+    }
+    return promise;
+  };
+}
+
+/** Build the per-run question handler wiring `/ask` cards back to sessions. */
+export function questionHandlerFor(
+  input: {
+    questions: QuestionRegistry | undefined;
+    channel: { sendCard?: (chatId: string, card: object) => Promise<void> };
+    chatId: string;
+    scope: string;
+  },
+): (question: QuestionCardInput) => Promise<string | string[] | undefined> {
+  return async (question) => {
+    if (!input.questions || !input.channel.sendCard) return undefined;
+    const { id, promise } = input.questions.register(input.scope, {
+      kind: question.kind,
+      question: question.question,
+      ...(question.options === undefined ? {} : { options: question.options }),
+      ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
+    });
+    try {
+      await input.channel.sendCard(input.chatId, renderQuestionCard({ ...question, id }));
+    } catch (error) {
+      log.fail('question-card', error, { scope: input.scope });
+      input.questions.settleAll(input.scope);
+      return undefined;
+    }
+    return promise;
+  };
 }
 
 function buildPrompt(

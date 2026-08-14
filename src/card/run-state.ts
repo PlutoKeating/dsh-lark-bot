@@ -20,6 +20,7 @@ export type Terminal = 'running' | 'done' | 'interrupted' | 'error' | 'idle_time
 export interface RunState {
   blocks: Block[];
   reasoning: { content: string; active: boolean };
+  usage: { inputTokens: number | undefined; outputTokens: number | undefined } | undefined;
   footer: FooterStatus;
   terminal: Terminal;
   errorMsg: string | undefined;
@@ -29,6 +30,7 @@ export interface RunState {
 export const initialState: RunState = {
   blocks: [],
   reasoning: { content: '', active: false },
+  usage: undefined,
   footer: 'thinking',
   terminal: 'running',
   errorMsg: undefined,
@@ -83,6 +85,15 @@ export function reduce(state: RunState, event: AgentEvent): RunState {
         ],
         reasoning: { ...state.reasoning, active: false },
         footer: null,
+      };
+
+    case 'usage':
+      return {
+        ...state,
+        usage: {
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+        },
       };
 
     case 'tool_use':

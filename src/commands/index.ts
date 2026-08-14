@@ -1,10 +1,15 @@
 import { resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import type { ApprovalRegistry } from '../bot/approvals.js';
+import type { DensityStore } from '../bot/density-store.js';
+import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { renderWorkspaceCard } from '../card/workspace-card.js';
+import { parseCardDensity, type CardDensity } from '../card/density.js';
+import { questionHandlerFor } from '../bridge/run-flow.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -25,6 +30,9 @@ export interface CommandContext {
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
+  approvals: ApprovalRegistry | undefined;
+  questions: QuestionRegistry | undefined;
+  densityStore: DensityStore | undefined;
   defaultRunTimeoutMs: number;
   accessManager: AccessManager;
   channel: CommandChannel;
@@ -43,6 +51,8 @@ const HELP = [
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
+  '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
+  '- `/ask <问题>` — 发送结构化问答卡（回答将记入会话）',
   '- `/invite user|admin|group <id>` — 管理访问白名单',
   '- `/help` — 显示本帮助',
 ].join('\n');
@@ -216,6 +226,59 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, `已设置当前会话运行超时：${minutes} 分钟。`);
 }
 
+async function handleDensity(args: string, ctx: CommandContext): Promise<void> {
+  const input = args.trim().toLowerCase();
+  if (!input) {
+    const current = ctx.densityStore?.get(ctx.scope) ?? 'standard';
+    await reply(
+      ctx,
+      `当前卡片密度：**${current}**。可用 \`/density compact|standard|detailed\` 调整。`,
+    );
+    return;
+  }
+  if (input === 'default') {
+    ctx.densityStore?.clear(ctx.scope);
+    await reply(ctx, '已恢复默认卡片密度。');
+    return;
+  }
+  const density: CardDensity | undefined = parseCardDensity(input);
+  if (!density) {
+    await reply(ctx, '用法：`/density [compact|standard|detailed|default]`');
+    return;
+  }
+  ctx.densityStore?.set(ctx.scope, density);
+  await reply(ctx, `已设置当前会话卡片密度：**${density}**。`);
+}
+
+async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
+  const question = args.trim();
+  if (!question) {
+    await reply(ctx, '用法：`/ask <问题>`');
+    return;
+  }
+  if (!ctx.questions) {
+    await reply(ctx, '问答卡未启用（请确认 questions 已接线）。');
+    return;
+  }
+  const answer = await questionHandlerFor({
+    questions: ctx.questions,
+    channel: ctx.channel,
+    chatId: ctx.chatId,
+    scope: ctx.scope,
+  })({
+    kind: 'text',
+    question,
+    id: '',
+  });
+  if (answer !== undefined) {
+    const text = Array.isArray(answer) ? answer.join('、') : answer;
+    ctx.sessions.recordExchange(ctx.scope, ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace, [text], undefined);
+    await reply(ctx, `已记录你的回答，并写入会话上下文。`);
+  } else {
+    await reply(ctx, '未收到回答（卡片可能已超时或被忽略）。');
+  }
+}
+
 async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
   const [kind, ...rest] = args.trim().split(/\s+/);
   const id = rest.join(' ').trim();
@@ -292,6 +355,8 @@ const handlers: Record<string, Handler> = {
   '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,
+  '/density': handleDensity,
+  '/ask': handleAsk,
   '/invite': handleInvite,
   '/help': handleHelp,
 };

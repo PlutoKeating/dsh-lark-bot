@@ -1,4 +1,5 @@
 import type { Block, FooterStatus, RunState, ToolEntry } from './run-state.js';
+import type { CardDensity } from './density.js';
 
 function markdown(content: string): object {
   return { tag: 'markdown', content };
@@ -46,7 +47,15 @@ function toolBlock(tool: ToolEntry): object {
   return markdown(`${icon} **${tool.name}**`);
 }
 
-export function renderCard(state: RunState): object {
+function usageLine(state: RunState): string {
+  if (!state.usage) return '';
+  const parts: string[] = [];
+  if (state.usage.inputTokens !== undefined) parts.push(`in ${state.usage.inputTokens}`);
+  if (state.usage.outputTokens !== undefined) parts.push(`out ${state.usage.outputTokens}`);
+  return parts.length ? `（tokens ${parts.join(' · ')}）` : '';
+}
+
+function renderStandard(state: RunState): object {
   const elements: object[] = [];
 
   if (state.reasoning.content) {
@@ -60,7 +69,11 @@ export function renderCard(state: RunState): object {
   }
 
   for (const block of state.blocks) {
-    elements.push(block.kind === 'text' ? textBlock(block) : toolBlock(block.tool));
+    if (block.kind === 'text') {
+      elements.push(textBlock(block));
+    } else if (block.tool.status !== 'done') {
+      elements.push(toolBlock(block.tool));
+    }
   }
 
   if (state.terminal === 'interrupted') {
@@ -71,6 +84,9 @@ export function renderCard(state: RunState): object {
     elements.push(noteMd(`⚠️ agent 失败：${state.errorMsg}`));
   } else if (state.terminal === 'done' && elements.length === 0) {
     elements.push(noteMd('_（未返回内容）_'));
+  } else if (state.terminal === 'done') {
+    const usage = usageLine(state);
+    if (usage) elements.push(noteMd(usage));
   }
 
   if (state.terminal === 'running') {
@@ -86,4 +102,94 @@ export function renderCard(state: RunState): object {
     },
     body: { elements },
   };
+}
+
+function renderCompact(state: RunState): object {
+  const elements: object[] = [noteMd(summaryText(state))];
+  if (state.terminal === 'running' && state.footer) {
+    elements.push(footerStatus(state.footer));
+  }
+  if (state.terminal === 'running') {
+    elements.push(stopButton());
+  }
+  return {
+    schema: '2.0',
+    config: {
+      streaming_mode: state.terminal === 'running',
+      summary: { content: summaryText(state) },
+    },
+    body: { elements },
+  };
+}
+
+function renderDetailed(state: RunState): object {
+  const elements: object[] = [];
+
+  if (state.reasoning.content) {
+    elements.push(
+      noteMd(
+        state.reasoning.active
+          ? '🧠 正在思考…'
+          : `🧠 **思考过程**\n${state.reasoning.content.slice(0, 2000)}`,
+      ),
+    );
+  }
+
+  for (const block of state.blocks) {
+    if (block.kind === 'text') {
+      elements.push(textBlock(block));
+      continue;
+    }
+    const tool = block.tool;
+    const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
+    const lines = [`${icon} **${tool.name}**`];
+    if (tool.input !== undefined && tool.input !== '') {
+      lines.push(`输入：\`\`\`\n${safeJsonPreview(tool.input)}\n\`\`\``);
+    }
+    if (tool.output) {
+      lines.push(`输出：${tool.output.slice(0, 500)}`);
+    }
+    elements.push(markdown(lines.join('\n')));
+  }
+
+  if (state.terminal === 'interrupted') {
+    elements.push(noteMd('_⏹ 已被中断_'));
+  } else if (state.terminal === 'idle_timeout') {
+    elements.push(noteMd(`_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_`));
+  } else if (state.terminal === 'error' && state.errorMsg) {
+    elements.push(noteMd(`⚠️ agent 失败：${state.errorMsg}`));
+  } else if (state.terminal === 'done') {
+    const usage = usageLine(state);
+    if (usage) elements.push(noteMd(usage));
+  }
+
+  if (state.terminal === 'running') {
+    if (state.footer) elements.push(footerStatus(state.footer));
+    elements.push(stopButton());
+  }
+
+  return {
+    schema: '2.0',
+    config: {
+      streaming_mode: state.terminal === 'running',
+      summary: { content: summaryText(state) },
+    },
+    body: { elements },
+  };
+}
+
+function safeJsonPreview(value: unknown): string {
+  if (typeof value === 'string') return value.slice(0, 300);
+  try {
+    return JSON.stringify(value).slice(0, 300);
+  } catch {
+    return String(value).slice(0, 300);
+  }
+}
+
+/** Render the run card at the requested density (compact / standard / detailed). */
+export function renderCard(state: RunState, density: CardDensity = 'standard'): object {
+  if (density === 'compact') return renderCompact(state);
+  if (density === 'detailed') return renderDetailed(state);
+  return renderStandard(state);
 }

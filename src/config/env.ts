@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { resolveDshRuntime } from './dsh-runtime.js';
 
 export type LarkTenant = 'feishu' | 'lark';
+export type AdapterMode = 'sdk' | 'acp' | 'headless';
 
 export interface RuntimeEnv {
   home: string;
@@ -12,10 +13,16 @@ export interface RuntimeEnv {
   workspace: string | undefined;
   dshCommand: string;
   dshArgs: string[];
+  /** True when DSH_LARK_DSH_COMMAND / DSH_LARK_DSH_ARGS were set explicitly. */
+  dshExplicit: boolean;
+  adapterMode: AdapterMode;
   provider: string;
   model: string;
+  maxTokens: number | undefined;
   runTimeoutMs: number;
   stopGraceMs: number;
+  accessDefaultDeny: boolean;
+  eventFreshnessMs: number;
 }
 
 const DEFAULTS = {
@@ -68,6 +75,42 @@ function parseStopGrace(value: string | undefined): number {
   return parsed;
 }
 
+function parseAdapterMode(value: string | undefined): AdapterMode {
+  const mode = nonEmpty(value) ?? 'sdk';
+  if (mode !== 'sdk' && mode !== 'acp' && mode !== 'headless') {
+    throw new Error(`DSH_LARK_ADAPTER must be "sdk", "acp" or "headless", got "${mode}"`);
+  }
+  return mode;
+}
+
+function parseMaxTokens(value: string | undefined): number | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`DSH_LARK_MAX_TOKENS must be a positive integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  const raw = value?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return fallback;
+}
+
+function parseFreshness(value: string | undefined): number {
+  const raw = value?.trim();
+  if (!raw) return 600_000;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`DSH_LARK_EVENT_FRESHNESS_MS must be a non-negative integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -75,12 +118,13 @@ export function loadRuntimeEnv(
   const workspace = nonEmpty(source.DSH_LARK_WORKSPACE);
   const home = homeOverride ? resolve(homeOverride) : join(homedir(), '.dsh-lark');
   const osHome = homedir();
-  const dshCommand = nonEmpty(source.DSH_LARK_DSH_COMMAND);
+  const explicitCommand = nonEmpty(source.DSH_LARK_DSH_COMMAND);
   const rawDshArgs = nonEmpty(source.DSH_LARK_DSH_ARGS);
+  const dshExplicit = explicitCommand !== undefined || rawDshArgs !== undefined;
   const dshRuntime = resolveDshRuntime({
     home: osHome,
     env: source,
-    ...(dshCommand ? { command: dshCommand } : {}),
+    ...(explicitCommand ? { command: explicitCommand } : {}),
     ...(rawDshArgs ? { args: parseDshArgs(rawDshArgs) } : {}),
   });
 
@@ -92,9 +136,14 @@ export function loadRuntimeEnv(
     workspace: workspace ? resolve(workspace) : undefined,
     dshCommand: dshRuntime.command,
     dshArgs: dshRuntime.args,
+    dshExplicit,
+    adapterMode: parseAdapterMode(source.DSH_LARK_ADAPTER),
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
+    maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
     stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
+    accessDefaultDeny: parseBoolean(source.DSH_LARK_ACCESS_DEFAULT_DENY, false),
+    eventFreshnessMs: parseFreshness(source.DSH_LARK_EVENT_FRESHNESS_MS),
   };
 }

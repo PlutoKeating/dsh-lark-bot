@@ -1,10 +1,15 @@
 import { createLarkChannel, type LarkChannel, type NormalizedMessage } from '@larksuite/channel';
 import type { AgentAdapter } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import type { ApprovalRegistry } from '../bot/approvals.js';
+import type { DensityStore } from '../bot/density-store.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
+import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
+import { extractQuestionAnswer } from '../card/question-card.js';
 import type { AccessManager } from '../config/access-manager.js';
+import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
@@ -22,9 +27,14 @@ export interface StartChannelDeps {
   defaultRunTimeoutMs: number;
   accessManager: AccessManager;
   pending: PendingQueue<NormalizedMessage>;
+  approvals?: ApprovalRegistry;
+  questions?: QuestionRegistry;
+  densityStore?: DensityStore;
   defaultWorkspace: string;
   allowedUsers?: string[];
   allowedChats?: string[];
+  accessDefaultDeny?: boolean;
+  eventFreshnessMs?: number;
   model?: string;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
@@ -43,7 +53,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       deps.tenant === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn',
     source: 'dsh-lark-bot',
     policy: {
-      dmMode: deps.allowedUsers?.length ? 'allowlist' : 'open',
+      dmMode: deps.allowedUsers?.length
+        ? 'allowlist'
+        : deps.accessDefaultDeny === true
+          ? 'disabled'
+          : 'open',
       requireMention: true,
       respondToMentionAll: false,
       ...(deps.allowedUsers ? { dmAllowlist: deps.allowedUsers } : {}),
@@ -68,6 +82,17 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   channel.on({
     message: async (msg) => {
       const scope = scopeForMessage(msg);
+      if (
+        deps.eventFreshnessMs !== undefined &&
+        deps.eventFreshnessMs > 0 &&
+        !isEventFresh(msg.createTime, deps.eventFreshnessMs)
+      ) {
+        log.warn('channel', 'stale-message-dropped', {
+          scope,
+          ageMs: Date.now() - msg.createTime,
+        });
+        return;
+      }
       const context = {
         scope,
         chatId: msg.chatId,
@@ -80,6 +105,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         runPolicies: deps.runPolicies,
         defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
         accessManager: deps.accessManager,
+        approvals: deps.approvals,
+        questions: deps.questions,
+        densityStore: deps.densityStore,
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
       };
@@ -95,11 +123,29 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         event.action.value && typeof event.action.value === 'object'
           ? (event.action.value as Record<string, unknown>)
           : undefined;
+      const scope = event.raw
+        ? await resolveCardScope(event.chatId, event.raw as { message?: { thread_id?: string } })
+        : event.chatId;
       if (value?.cmd === 'stop') {
-        const scope = event.raw
-          ? await resolveCardScope(event.chatId, event.raw as { message?: { thread_id?: string } })
-          : event.chatId;
         await deps.activeRuns.interrupt(scope);
+        return;
+      }
+      if (value?.cmd === 'approve' && typeof value.id === 'string' && deps.approvals) {
+        const outcome = value.outcome === 'allow' ? 'allowed-once' : 'rejected';
+        deps.approvals.resolve(scope, value.id, outcome);
+        return;
+      }
+      if (value?.cmd === 'question-submit' && typeof value.id === 'string' && deps.questions) {
+        const question = deps.questions.get(scope, value.id);
+        const form = event.action.formValue;
+        if (question) {
+          const answer = extractQuestionAnswer(
+            question.kind,
+            form?.answer,
+            question.options,
+          );
+          deps.questions.resolve(scope, value.id, answer);
+        }
       }
     },
     reconnecting: () => {

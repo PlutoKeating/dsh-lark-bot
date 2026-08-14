@@ -1,8 +1,11 @@
 import { mkdir } from 'node:fs/promises';
 import type { LarkChannel, NormalizedMessage } from '@larksuite/channel';
-import { DshAdapter } from '../../adapters/dsh/adapter.js';
+import { buildAgentAdapter } from '../../adapters/index.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
+import { ApprovalRegistry } from '../../bot/approvals.js';
+import { DensityStore } from '../../bot/density-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
+import { QuestionRegistry } from '../../bot/questions.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
@@ -95,17 +98,24 @@ export async function runStart(options: StartOptions): Promise<void> {
   });
   await Promise.all([sessions.load(), workspaces.load()]);
 
-  const adapterOptions: { command: string; args: string[]; stopGraceMs?: number } = {
-    command: env.dshCommand,
-    args: env.dshArgs,
-    stopGraceMs: env.stopGraceMs,
-  };
-  if (activeProfile.preferences.stopGraceMs !== undefined) {
-    Object.assign(adapterOptions, { stopGraceMs: activeProfile.preferences.stopGraceMs });
+  let adapter;
+  try {
+    adapter = await buildAgentAdapter(env, {
+      stopGraceMs:
+        activeProfile.preferences.stopGraceMs ?? env.stopGraceMs,
+      model: activeProfile.preferences.model,
+    });
+  } catch (error) {
+    log.fail('adapter', error);
+    process.stderr.write(`agent adapter 初始化失败：${errorMessage(error)}\n`);
+    process.exitCode = 1;
+    return;
   }
-  const adapter = new DshAdapter(adapterOptions);
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
+  const approvals = new ApprovalRegistry();
+  const questions = new QuestionRegistry();
+  const densityStore = new DensityStore();
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
 
@@ -134,6 +144,9 @@ export async function runStart(options: StartOptions): Promise<void> {
         workspaceManager: worktreeManager,
         activeRuns,
         runPolicies,
+        approvals,
+        questions,
+        densityStore,
         channel: streaming,
         defaultWorkspace,
         replyTo: first.messageId,
@@ -159,10 +172,15 @@ export async function runStart(options: StartOptions): Promise<void> {
     workspaces,
     activeRuns,
     runPolicies,
+    approvals,
+    questions,
+    densityStore,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     accessManager,
     pending,
     defaultWorkspace,
+    accessDefaultDeny: env.accessDefaultDeny,
+    eventFreshnessMs: env.eventFreshnessMs,
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
   };
@@ -184,7 +202,12 @@ export async function runStart(options: StartOptions): Promise<void> {
 
   await waitForShutdown();
   await bridge.disconnect();
+  await adapter.dispose?.();
   await Promise.all([sessions.flush(), workspaces.flush()]);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function waitForShutdown(): Promise<void> {

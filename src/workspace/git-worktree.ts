@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { access, copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { isPathWithin } from '../config/security.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -46,6 +47,7 @@ function slugify(scope: string): string {
   const slug = scope
     .trim()
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^[.]+/, '')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
   return slug || 'session';
@@ -66,6 +68,9 @@ export class GitWorktreeManager {
 
     const slug = slugify(scope);
     const target = join(this.options.worktreesRoot, slug);
+    if (!isPathWithin(this.options.worktreesRoot, target)) {
+      throw new Error(`unsafe worktree target rejected: ${target}`);
+    }
     if (await exists(target)) {
       await this.ensureProjectRules(base, target);
       return { cwd: target, created: false };

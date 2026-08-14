@@ -9,6 +9,24 @@ export type AgentEvent =
   | { type: 'done'; sessionId: string | undefined; terminationReason: 'normal' | 'interrupted' | 'timeout' }
   | { type: 'error'; message: string; terminationReason: 'failed' | 'interrupted' | 'timeout' };
 
+export type ApprovalOptionKind = 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
+
+export interface ApprovalOption {
+  optionId: string;
+  name: string;
+  kind: ApprovalOptionKind;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  sessionId: string | undefined;
+  toolName: string;
+  reason: string | undefined;
+  options: readonly ApprovalOption[];
+}
+
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled';
+
 export interface AgentRunOptions {
   runId: string;
   prompt: string;
@@ -17,6 +35,8 @@ export interface AgentRunOptions {
   model: string | undefined;
   images: readonly string[] | undefined;
   stopGraceMs: number | undefined;
+  /** ACP approval channel: invoked when the agent requests a one-shot permission. */
+  onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
 }
 
 export interface AgentRun {
@@ -38,6 +58,8 @@ export interface AgentAdapter {
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
   run(options: AgentRunOptions): AgentRun;
+  /** Optional teardown hook called on bridge shutdown. */
+  dispose?(): Promise<void>;
 }
 
 export function isTerminalEvent(event: AgentEvent): boolean {

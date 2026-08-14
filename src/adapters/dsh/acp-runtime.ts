@@ -1,0 +1,188 @@
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
+
+export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
+export const ACP_VERSION = '0.1.0-rc.6';
+export const ACP_BASE_BUNDLE = '@deepseek-ai/dsh-base';
+export const DEFAULT_ACP_PROFILE = 'dsh-lark-acp';
+
+export interface AcpRuntimeOptions {
+  home: string;
+  env?: NodeJS.ProcessEnv;
+  command?: string;
+  args?: string[];
+  bin?: string;
+  profile?: string;
+  provider?: string;
+  model?: string;
+  install?: (profileRoot: string) => Promise<void>;
+}
+
+export interface AcpLaunchSpec {
+  command: string;
+  args: string[];
+  profile: string;
+}
+
+export interface AcpProfileEnsureResult {
+  ok: boolean;
+  created: boolean;
+  error?: string;
+}
+
+export function acpProfileRoot(home: string, profile: string, env?: NodeJS.ProcessEnv): string {
+  return join(resolveDshHome(home, env), 'profiles', profile);
+}
+
+function packageJsonFor(profile: string): string {
+  return `${JSON.stringify(
+    {
+      name: `dsh-profile-${profile}`,
+      private: true,
+      dependencies: {
+        [ACP_PACKAGE]: ACP_VERSION,
+      },
+      dsh: {
+        profile: {
+          bundles: [ACP_BASE_BUNDLE],
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+export function acpPatchYaml(provider: string, model: string): string {
+  return [
+    '# dsh-lark ACP JSON-RPC runtime overlay (managed by dsh-lark-bot).',
+    '# stdout is reserved for ACP JSON-RPC frames; no console logger may load.',
+    '- insert:',
+    '    - id: acp',
+    `      name: '${ACP_PACKAGE}'`,
+    '      config:',
+    `        provider: ${provider}`,
+    `        model: ${model}`,
+    '',
+    '# Unattended IM runtime: interactive user questions cannot be answered',
+    '# through Feishu, so the tool is disabled (default-deny).',
+    '- id: user-questions',
+    '  disabled: true',
+    '',
+    '- id: system-prompt',
+    '  config:',
+    '    persona: >-',
+    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
+    '',
+    '- id: hmr',
+    '  disabled: true',
+    '',
+  ].join('\n');
+}
+
+function acpPluginInstalled(profileRoot: string): boolean {
+  const candidates = [
+    join(profileRoot, 'node_modules', ACP_PACKAGE),
+    join(profileRoot, '..', 'node_modules', ACP_PACKAGE),
+  ];
+  return candidates.some((path) => existsSync(path));
+}
+
+export function isAcpProfileReady(profileRoot: string): boolean {
+  return (
+    existsSync(join(profileRoot, 'package.json')) &&
+    existsSync(join(profileRoot, 'cordis.yml')) &&
+    existsSync(join(profileRoot, 'cordis.patch.yml')) &&
+    acpPluginInstalled(profileRoot)
+  );
+}
+
+function runPnpmInstall(profileRoot: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pnpm', ['install'], {
+      cwd: profileRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      output += chunk.toString('utf8');
+    });
+    child.on('error', (error) => {
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const tail = output.trim().split('\n').slice(-8).join('\n');
+      reject(new Error(`pnpm install exited with code ${String(code)}\n${tail}`));
+    });
+  });
+}
+
+/**
+ * Ensure the ACP runtime profile exists under the shared dsh installation.
+ * The profile composes `@deepseek-ai/dsh-base` with the official
+ * `@deepseek-ai/dsh-acp` plugin (approval policy stays `ask`; the bridge
+ * answers through `session/request_permission`).
+ */
+export async function ensureAcpProfile(
+  options: AcpRuntimeOptions,
+): Promise<AcpProfileEnsureResult> {
+  const profile = options.profile ?? DEFAULT_ACP_PROFILE;
+  const root = acpProfileRoot(options.home, profile, options.env);
+  const provider = options.provider ?? 'deepseek-official';
+  const model = options.model ?? 'deepseek-v4-flash';
+  const ready = isAcpProfileReady(root);
+
+  try {
+    if (!ready) {
+      await mkdir(root, { recursive: true });
+      await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
+      await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
+      const install = options.install ?? runPnpmInstall;
+      await install(root);
+      if (!isAcpProfileReady(root)) {
+        return {
+          ok: false,
+          created: true,
+          error: `${ACP_PACKAGE}@${ACP_VERSION} was not found after install`,
+        };
+      }
+    }
+    // The patch carries the provider/model route; rewrite it when changed so
+    // profile re-use picks up env overrides without reinstalling plugins.
+    await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
+    return { ok: true, created: !ready };
+  } catch (error) {
+    return {
+      ok: false,
+      created: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** Resolve the launch spec for the ACP runtime subprocess. */
+export function resolveAcpLaunch(options: AcpRuntimeOptions): AcpLaunchSpec {
+  const profile = options.profile ?? DEFAULT_ACP_PROFILE;
+  if (options.command || options.args) {
+    return {
+      command: options.command ?? 'node',
+      args: options.args ?? ['--profile', profile],
+      profile,
+    };
+  }
+  const bin = options.bin ?? discoverDshBin(options.home, options.env);
+  if (bin) {
+    return { command: 'node', args: [bin, '--profile', profile], profile };
+  }
+  return { command: 'dsh', args: ['--profile', profile], profile };
+}

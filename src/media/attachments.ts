@@ -1,5 +1,6 @@
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isPathWithin, truncateUtf8Safe } from '../config/security.js';
 import type {
   LarkChannel,
   NormalizedMessage,
@@ -12,6 +13,12 @@ export interface PreparedAttachments {
 
 const MAX_TEXT_FILE_BYTES = 256_000;
 
+function assertSafeMediaName(mediaDir: string, destination: string): void {
+  if (!isPathWithin(mediaDir, destination)) {
+    throw new Error(`unsafe attachment destination rejected: ${destination}`);
+  }
+}
+
 export async function prepareAttachments(
   channel: LarkChannel | undefined,
   message: NormalizedMessage,
@@ -23,6 +30,7 @@ export async function prepareAttachments(
   for (const resource of message.resources) {
     if (!channel || resource.type !== 'image' && resource.type !== 'file') continue;
     const destination = join(mediaDir, `${message.messageId}-${resource.fileKey}`);
+    assertSafeMediaName(mediaDir, destination);
     await channel.downloadResourceToFile(
       message.messageId,
       resource.fileKey,
@@ -42,8 +50,9 @@ export async function prepareAttachments(
     }
 
     const content = await readFile(destination, 'utf8');
+    const safeContent = truncateUtf8Safe(content, MAX_TEXT_FILE_BYTES);
     result.textFileNotes.push(
-      `[attachment: ${resource.fileName ?? resource.fileKey}]\n${content}`,
+      `[attachment: ${resource.fileName ?? resource.fileKey}]\n${safeContent}`,
     );
   }
 

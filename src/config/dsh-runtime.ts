@@ -9,6 +9,13 @@ export interface DshRuntimeSpec {
 
 const DS_HARNESS_RELATIVE = join('@deepseek-ai', 'dsh', 'lib', 'bin.js');
 
+export function resolveDshHome(
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return env.DSH_HOME?.trim() || join(home, '.dsh');
+}
+
 function firstExisting(...paths: string[]): string | undefined {
   return paths.find((path) => existsSync(path));
 }
@@ -27,7 +34,7 @@ export function discoverDshBin(
   home: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  const dshHome = env.DSH_HOME?.trim() || join(home, '.dsh');
+  const dshHome = resolveDshHome(home, env);
 
   const candidates = [
     join(dshHome, 'profiles', 'node_modules', DS_HARNESS_RELATIVE),

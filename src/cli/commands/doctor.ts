@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises';
-import { checkDshAvailability } from '../../adapters/dsh/availability.js';
+import { buildAgentAdapter } from '../../adapters/index.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
@@ -30,6 +30,7 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     `node: ${process.version}`,
     `profile: ${profileName}`,
     `home: ${paths.root}`,
+    `adapter: ${env.adapterMode}`,
     `dsh_command: ${env.dshCommand}`,
     `dsh_args: ${env.dshArgs.join(',')}`,
   ];
@@ -65,14 +66,21 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     lines.push(`workspace: ${workspace} (missing)`);
   }
 
-  const availability = await checkDshAvailability({
-    command: env.dshCommand,
-    args: env.dshArgs,
-  });
-  if (availability.ok) {
-    lines.push(`dsh: ok${availability.version ? ` (${availability.version})` : ''}`);
-  } else {
-    lines.push(`dsh: unavailable (${availability.error ?? 'unknown'})`);
+  try {
+    const adapter = await buildAgentAdapter(env, {
+      stopGraceMs: profile?.preferences.stopGraceMs,
+      model: profile?.preferences.model,
+    });
+    const availability = await adapter.checkAvailability();
+    if (availability.ok) {
+      lines.push(`dsh: ok${availability.version ? ` (${availability.version})` : ''}`);
+    } else {
+      lines.push(`dsh: unavailable (${availability.error ?? 'unknown'})`);
+      critical = true;
+    }
+    await adapter.dispose?.();
+  } catch (error) {
+    lines.push(`dsh: unavailable (${error instanceof Error ? error.message : String(error)})`);
     critical = true;
   }
 
