@@ -4,6 +4,12 @@ import { Command } from 'commander';
 import { runDoctor } from './cli/commands/doctor.js';
 import { runBot } from './cli/commands/run.js';
 import { runSetup } from './cli/commands/setup.js';
+import {
+  installGuardianCommand,
+  runGuardian,
+  statusGuardianCommand,
+  uninstallGuardianCommand,
+} from './cli/commands/guardian.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -42,8 +48,12 @@ export function buildProgram(): Command {
       'Install this package as a standard dsh profile bundle (single install path)',
     )
     .option('--profile <name>', 'dsh profile to install into (default: dsh-lark)')
-    .action(async (opts: { profile?: string }) => {
-      await runSetup({ ...(opts.profile ? { profile: opts.profile } : {}) });
+    .option('--guardian', 'also install the safety-net guardian service')
+    .action(async (opts: { profile?: string; guardian?: boolean }) => {
+      await runSetup({
+        ...(opts.profile ? { profile: opts.profile } : {}),
+        ...(opts.guardian ? { guardian: true } : {}),
+      });
     });
 
   program
@@ -65,6 +75,46 @@ export function buildProgram(): Command {
   ).action(async (opts: StartOptions) => {
     await runBot(opts);
   });
+
+  const guardian = program
+    .command('guardian')
+    .description(
+      'Safety-net guardian: a minimal process independent of dsh that keeps the Feishu rescue entrance alive',
+    );
+
+  guardian
+    .command('run')
+    .description('Run the guardian in the foreground (system service entry point)')
+    .option('--dsh-profile <name>', 'dsh profile to watch / relaunch (default from state)')
+    .option('--bridge-profile <name>', 'bridge state profile with Feishu credentials')
+    .action(async (opts: { dshProfile?: string; bridgeProfile?: string }) => {
+      await runGuardian(opts);
+    });
+
+  guardian
+    .command('install')
+    .description('Install the guardian as a system-level resident service')
+    .option('--dsh-profile <name>', 'dsh profile to watch / relaunch (default: dsh-lark)')
+    .option('--bridge-profile <name>', 'bridge state profile (default: default)')
+    .action(async (opts: { dshProfile?: string; bridgeProfile?: string }) => {
+      await installGuardianCommand(opts);
+    });
+
+  guardian
+    .command('uninstall')
+    .description('Remove the system service entry (state file is kept)')
+    .action(async () => {
+      await uninstallGuardianCommand();
+    });
+
+  guardian
+    .command('status')
+    .description('Show guardian / dsh / safe-mode state')
+    .option('--dsh-profile <name>', 'dsh profile to inspect')
+    .option('--bridge-profile <name>', 'bridge state profile to inspect')
+    .action(async (opts: { dshProfile?: string; bridgeProfile?: string }) => {
+      await statusGuardianCommand(opts);
+    });
 
   return program;
 }

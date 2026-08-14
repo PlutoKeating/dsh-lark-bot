@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
+import { loadRuntimeEnv } from '../../config/env.js';
+import { installGuardian } from '../../guardian/install.js';
 
 export interface SetupOptions {
   /** dsh profile to install the bundle into (default `dsh-lark`). */
@@ -14,6 +16,8 @@ export interface SetupOptions {
   dshHome?: string;
   /** dsh CLI bin override (tests). */
   bin?: string;
+  /** Also install the safety-net guardian as a system service. */
+  guardian?: boolean;
 }
 
 /**
@@ -46,6 +50,19 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   );
   await runDshPlugin(bin, profile, packageSpec);
 
+  if (options.guardian) {
+    const guardianResult = await installGuardian({
+      env: loadRuntimeEnv(process.env),
+      dshProfile: profile,
+    });
+    for (const message of guardianResult.messages) {
+      process.stdout.write(`${message}\n`);
+    }
+    if (!guardianResult.ok) {
+      throw new Error('guardian 服务安装未完全成功，请按提示手动启用后重试。');
+    }
+  }
+
   process.stdout.write(
     [
       '',
@@ -55,6 +72,16 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       '',
       '首次启动会在终端打印二维码，用飞书 / Lark 扫码完成一次性绑定；',
       '绑定后 dsh 即以标准插件方式加载 dsh-lark-bot 的桥接引擎。',
+      ...(options.guardian
+        ? [
+            '',
+            '安全网守护已安装：dsh 下线后仍可通过飞书发送 /safemode 进入仅核心安全模式自救。',
+            '查看状态：dsh-lark-bot guardian status',
+          ]
+        : [
+            '',
+            '提示：可加 --guardian 同时安装「安全网守护」（dsh 全部下线后的飞书救援通道）。',
+          ]),
       '',
     ].join('\n'),
   );

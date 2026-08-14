@@ -31,6 +31,18 @@ export interface RuntimeEnv {
   archiveMaxAgeDays: number;
   accessDefaultDeny: boolean;
   eventFreshnessMs: number;
+  /** Bridge engine heartbeat interval (guardian liveness signal), default 5000. */
+  heartbeatMs: number;
+  /** Guardian disabled switch (DSH_LARK_GUARDIAN_DISABLED=1 keeps it stopped). */
+  guardianDisabled: boolean;
+  /** dsh profile the guardian watches / relaunches (default `dsh-lark`). */
+  guardianProfile: string;
+  /** Bridge state profile providing Feishu credentials (default `default`). */
+  guardianBridgeProfile: string;
+  /** Guardian watchdog poll interval, default 2000. */
+  guardianPollMs: number;
+  /** Heartbeat staleness threshold before takeover, default 15000. */
+  guardianStaleMs: number;
 }
 
 const DEFAULTS = {
@@ -43,6 +55,11 @@ const DEFAULTS = {
   retentionMsgs: 40,
   archiveMax: 50,
   archiveMaxAgeDays: 90,
+  heartbeatMs: 5_000,
+  guardianPollMs: 2_000,
+  guardianStaleMs: 15_000,
+  guardianProfile: 'dsh-lark',
+  guardianBridgeProfile: 'default',
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -143,6 +160,16 @@ function parseMinOneInt(value: string | undefined, fallback: number, name: strin
   return parsed;
 }
 
+function parsePositiveIntMin(value: string | undefined, fallback: number, name: string): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -197,5 +224,25 @@ export function loadRuntimeEnv(
     ),
     accessDefaultDeny: parseBoolean(source.DSH_LARK_ACCESS_DEFAULT_DENY, false),
     eventFreshnessMs: parseFreshness(source.DSH_LARK_EVENT_FRESHNESS_MS),
+    heartbeatMs: parsePositiveIntMin(
+      source.DSH_LARK_HEARTBEAT_MS,
+      DEFAULTS.heartbeatMs,
+      'DSH_LARK_HEARTBEAT_MS',
+    ),
+    guardianDisabled: parseBoolean(source.DSH_LARK_GUARDIAN_DISABLED, false),
+    guardianProfile:
+      nonEmpty(source.DSH_LARK_GUARDIAN_PROFILE) ?? DEFAULTS.guardianProfile,
+    guardianBridgeProfile:
+      nonEmpty(source.DSH_LARK_GUARDIAN_BRIDGE_PROFILE) ?? DEFAULTS.guardianBridgeProfile,
+    guardianPollMs: parsePositiveIntMin(
+      source.DSH_LARK_GUARDIAN_POLL_MS,
+      DEFAULTS.guardianPollMs,
+      'DSH_LARK_GUARDIAN_POLL_MS',
+    ),
+    guardianStaleMs: parsePositiveIntMin(
+      source.DSH_LARK_GUARDIAN_STALE_MS,
+      DEFAULTS.guardianStaleMs,
+      'DSH_LARK_GUARDIAN_STALE_MS',
+    ),
   };
 }
