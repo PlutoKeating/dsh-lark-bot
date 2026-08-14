@@ -8,7 +8,6 @@ import {
   PROTOCOL_VERSION,
 } from '@agentclientprotocol/sdk';
 import { SdkDshAdapter } from '../../src/adapters/dsh/sdk-adapter.js';
-import { createSdkRun } from '../../src/adapters/dsh/sdk-translate.js';
 import {
   ensureSdkProfile,
   resolveSdkLaunch,

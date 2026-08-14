@@ -46,7 +46,7 @@ async function buildPackage(name) {
     bin: {
       [name]: `bin/${name}.mjs`,
     },
-    files: ['dist', 'bin', 'README.md', 'LICENSE'],
+    files: ['dist', 'bin', 'README.md', 'SECURITY.md', 'LICENSE'],
   };
 
   const dir = await mkdtemp(join(tmpdir(), `${name}-`));
@@ -59,6 +59,7 @@ async function buildPackage(name) {
     copyFile(join(ROOT, 'dist', 'index.js.map'), join(dir, 'dist', 'index.js.map')),
     copyFile(join(ROOT, 'dist', 'cli.js.map'), join(dir, 'dist', 'cli.js.map')),
     copyFile(join(ROOT, 'README.md'), join(dir, 'README.md')),
+    copyFile(join(ROOT, 'SECURITY.md'), join(dir, 'SECURITY.md')),
     copyFile(join(ROOT, 'LICENSE'), join(dir, 'LICENSE')),
   ]);
 
