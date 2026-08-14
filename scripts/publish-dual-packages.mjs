@@ -50,16 +50,34 @@ async function buildPackage(name) {
   };
   const bundlePatch = `# ${name} as a profile bundle.
 
-# Installed with \`dsh plugin --profile <name> add ${packageName}\`. The row
-# mounts the bridge-management plugin (\`${name}/plugin\`) and exposes
-# \`ctx.larkBridge\` without blocking profile boot. Set DSH_LARK_AUTOSTART=1
-# to start the standalone bridge when the profile boots.
+# Installed with \`dsh plugin --profile <name> add ${packageName}\` (or the
+# single \`${name} setup\` command), dsh appends this package to the profile's
+# \`dsh.profile.bundles\` and applies this patch on boot:
+#   - \`${name}/plugin\` starts the full bridge engine IN-PROCESS (Feishu
+#     channel, workspace/session layers, notify server, nested dsh SDK
+#     runtime) and exposes \`ctx.larkBridge\` (status / stop).
+#   - \`${name}/notify\` mounts the \`lark_notify\` tool for the host agent.
+# First boot without credentials prints a QR code for one-time binding.
+# Set DSH_LARK_DISABLED=1 to keep the engine stopped.
 
 - insert:
     - id: dsh-lark-bot
       name: '${name}/plugin'
       config:
-        autostart: !!js process.env.DSH_LARK_AUTOSTART === '1'
+        home: !!js process.env.DSH_LARK_HOME
+        tenant: !!js process.env.DSH_LARK_TENANT ?? 'feishu'
+        appId: !!js process.env.DSH_LARK_APP_ID
+        appSecret: !!js process.env.DSH_LARK_APP_SECRET
+        workspace: !!js process.env.DSH_LARK_WORKSPACE
+        adapter: !!js process.env.DSH_LARK_ADAPTER
+        model: !!js process.env.DSH_LARK_MODEL
+        disabled: !!js process.env.DSH_LARK_DISABLED === '1'
+
+    - id: lark-notify
+      name: '${name}/notify'
+      config:
+        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL
+        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
 `;
 
   const dir = await mkdtemp(join(tmpdir(), `${name}-`));

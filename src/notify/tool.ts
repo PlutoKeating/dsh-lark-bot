@@ -21,13 +21,6 @@ export interface Config {
  * runtime side of that channel.
  */
 export function apply(ctx: Context, config: Config = {}) {
-  const endpoint = config.endpoint;
-  const token = config.token;
-  if (!endpoint || !token) {
-    ctx.logger.warn(
-      '[lark-notify] endpoint/token not configured; DSH_LARK_NOTIFY_URL / DSH_LARK_NOTIFY_TOKEN must be set in the bridge process env',
-    );
-  }
   ctx.tools.register(
     defineTool({
       name: 'lark_notify',
@@ -74,6 +67,11 @@ export function apply(ctx: Context, config: Config = {}) {
         ],
       },
       async execute(args) {
+        // The callback endpoint/token may be configured by the patch row or
+        // injected at runtime: the bridge process sets the env vars when its
+        // notify server starts, so read them lazily at execute time.
+        const endpoint = config.endpoint ?? process.env.DSH_LARK_NOTIFY_URL;
+        const token = config.token ?? process.env.DSH_LARK_NOTIFY_TOKEN;
         if (!endpoint || !token) {
           throw new Error('lark_notify is not configured (endpoint/token missing)');
         }

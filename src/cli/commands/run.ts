@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import type { AgentAdapter } from '../../adapters/types.js';
 import type { LarkChannel, NormalizedMessage } from '@larksuite/channel';
 import type { RuntimeEnv } from '../../config/env.js';
 import { buildAgentAdapter } from '../../adapters/index.js';
@@ -34,6 +35,34 @@ import { WorkspaceStore } from '../../workspace/store.js';
 
 const DEBOUNCE_MS = 600;
 
+export interface BridgeEngineStatus {
+  state: 'running' | 'stopped';
+  profile: string;
+  home: string;
+  adapterId: string;
+  startedAt: string | undefined;
+  workspace: string | undefined;
+  notifyUrl: string | undefined;
+}
+
+export interface BridgeEngine {
+  readonly profile: string;
+  readonly home: string;
+  status(): BridgeEngineStatus;
+  stop(): Promise<void>;
+}
+
+export interface BridgeEngineOptions {
+  env: RuntimeEnv;
+  profileName: string;
+  /** Allow first-run QR onboarding when no credentials exist. */
+  allowOnboarding: boolean;
+  /** Injectable channel factory (tests / host integration). */
+  createChannel?: Parameters<typeof startChannel>[0]['createChannel'];
+  /** Injectable adapter (tests); otherwise built from env. */
+  adapter?: AgentAdapter;
+}
+
 export interface EnsureProfileOptions {
   env: RuntimeEnv;
   profileName: string;
@@ -61,10 +90,7 @@ export async function ensureBotProfile(
   if (store.getProfile(profileName)) return true;
 
   if (!options.allowOnboarding) {
-    process.stderr.write(
-      '未检测到飞书 / Lark 应用凭据。请先在终端运行 `dsh-lark-bot start` 完成扫码绑定。\n',
-    );
-    return false;
+    throw new Error('未检测到飞书 / Lark 应用凭据，且未允许扫码绑定。');
   }
 
   try {
@@ -85,9 +111,7 @@ export async function ensureBotProfile(
     return true;
   } catch (error) {
     log.fail('onboarding', error);
-    process.stderr.write('扫码创建应用失败，未写入本地配置。\n');
-    process.exitCode = 1;
-    return false;
+    throw new Error(`扫码创建应用失败：${errorMessage(error)}`);
   }
 }
 
@@ -101,34 +125,36 @@ function mergeStartEnv(options: StartOptions): NodeJS.ProcessEnv {
   };
 }
 
-export async function runBot(options: StartOptions): Promise<void> {
-  const env = loadRuntimeEnv(mergeStartEnv(options));
+/**
+ * Start the bridge engine. Runs the full Feishu channel pipeline (stores,
+ * adapter, card queue, notify server) and returns a handle that can be
+ * stopped. No process-level signal handling: the CLI wrapper owns signals,
+ * and the dsh bundle plugin owns lifecycle via the cordis context.
+ */
+export async function startBridgeEngine(
+  options: BridgeEngineOptions,
+): Promise<BridgeEngine> {
+  const env = options.env;
   const paths = resolveAppPaths(env.home);
-  const profileName = options.profile ?? 'default';
+  const profileName = options.profileName;
   const configStore = new ConfigStore(paths.configFile);
   await configStore.load();
 
   const ready = await ensureBotProfile(configStore, {
     env,
     profileName,
-    allowOnboarding: false,
+    allowOnboarding: options.allowOnboarding,
   });
   if (!ready) {
-    process.exitCode = 1;
-    return;
+    throw new Error('bot profile 未就绪。');
   }
   const activeProfile = configStore.getProfile(profileName);
   if (!activeProfile) {
-    process.stderr.write('本地配置读取失败，请检查后重试。\n');
-    process.exitCode = 1;
-    return;
+    throw new Error('本地配置读取失败，请检查后重试。');
   }
 
   const defaultWorkspace =
-    options.workspace ??
-    activeProfile.workspaces.default ??
-    env.workspace ??
-    paths.profilePath(profileName, 'workspace');
+    activeProfile.workspaces.default ?? env.workspace ?? paths.profilePath(profileName, 'workspace');
   await mkdir(defaultWorkspace, { recursive: true });
 
   const sessions = new SessionStore(paths.sessionsFile(profileName));
@@ -146,19 +172,12 @@ export async function runBot(options: StartOptions): Promise<void> {
     scopeDirectory.load(),
   ]);
 
-  let adapter;
-  try {
-    adapter = await buildAgentAdapter(env, {
-      stopGraceMs:
-        activeProfile.preferences.stopGraceMs ?? env.stopGraceMs,
+  const adapter =
+    options.adapter ??
+    (await buildAgentAdapter(env, {
+      stopGraceMs: activeProfile.preferences.stopGraceMs ?? env.stopGraceMs,
       model: activeProfile.preferences.model,
-    });
-  } catch (error) {
-    log.fail('adapter', error);
-    process.stderr.write(`agent adapter 初始化失败：${errorMessage(error)}\n`);
-    process.exitCode = 1;
-    return;
-  }
+    }));
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
   const concurrencyStore = new ConcurrencyStore();
@@ -282,6 +301,7 @@ export async function runBot(options: StartOptions): Promise<void> {
     eventFreshnessMs: env.eventFreshnessMs,
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
+    ...(options.createChannel ? { createChannel: options.createChannel } : {}),
   };
   if (activeProfile.preferences.stopGraceMs !== undefined) {
     channelInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
@@ -292,24 +312,55 @@ export async function runBot(options: StartOptions): Promise<void> {
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
 
+  const startedAt = new Date().toISOString();
   log.info('cli', 'started', {
     profile: profileName,
     home: paths.root,
     tenant: activeProfile.tenant,
     workspace: defaultWorkspace,
+    mode: 'engine',
+  });
+
+  let stopped = false;
+  return {
+    profile: profileName,
+    home: paths.root,
+    status: () => ({
+      state: stopped ? 'stopped' : 'running',
+      profile: profileName,
+      home: paths.root,
+      adapterId: adapter.id,
+      startedAt,
+      workspace: defaultWorkspace,
+      notifyUrl: notifyServer.url,
+    }),
+    stop: async () => {
+      if (stopped) return;
+      stopped = true;
+      await notifyServer.stop();
+      await bridge.disconnect();
+      await adapter.dispose?.();
+      await Promise.all([
+        sessions.flush(),
+        workspaces.flush(),
+        roleStore.flush(),
+        scopeDirectory.flush(),
+      ]);
+    },
+  };
+}
+
+export async function runBot(options: StartOptions): Promise<void> {
+  const env = loadRuntimeEnv(mergeStartEnv(options));
+  const profileName = options.profile ?? 'default';
+  const engine = await startBridgeEngine({
+    env,
+    profileName,
+    allowOnboarding: false,
   });
   process.stdout.write(`dsh-lark-bot 已启动，profile=${profileName}\n`);
-
   await waitForShutdown();
-  await notifyServer.stop();
-  await bridge.disconnect();
-  await adapter.dispose?.();
-  await Promise.all([
-    sessions.flush(),
-    workspaces.flush(),
-    roleStore.flush(),
-    scopeDirectory.flush(),
-  ]);
+  await engine.stop();
 }
 
 function errorMessage(error: unknown): string {

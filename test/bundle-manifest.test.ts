@@ -21,6 +21,8 @@ describe('dsh bundle manifest', () => {
     const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
     expect(patch).toContain("name: 'dsh-lark-bot/plugin'");
     expect(patch).toContain('id: dsh-lark-bot');
-    expect(patch).toContain('DSH_LARK_AUTOSTART');
+    expect(patch).toContain('id: lark-notify');
+    expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).toContain('DSH_LARK_DISABLED');
   });
 });
