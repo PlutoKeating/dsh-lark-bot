@@ -10,6 +10,7 @@ vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
 }));
 
+
 const tempDirs: string[] = [];
 
 beforeEach(() => {
@@ -51,6 +52,45 @@ describe('dsh-lark-bot setup', () => {
         { stdio: 'inherit' },
       );
       expect(stdout.join('')).toContain('dsh --profile demo');
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+
+  it('installs the safety-net guardian when --guardian is requested', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-setup-guardian-'));
+    tempDirs.push(home);
+    const stdout: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      stdout.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+
+    try {
+      const spawnMock = vi.mocked(spawn);
+      spawnMock.mockImplementation((() => {
+        const child = new EventEmitter();
+        queueMicrotask(() => child.emit('exit', 0));
+        return child as unknown as ReturnType<typeof spawn>;
+      }) as never);
+
+      const installGuardianFn = vi.fn().mockResolvedValue({
+        ok: true,
+        messages: ['守护状态已写入 /tmp/guardian.json（dsh profile=demo）'],
+      });
+      await runSetup({
+        profile: 'demo',
+        dshHome: home,
+        bin: '/fake/dsh/bin.js',
+        guardian: true,
+        installGuardianFn,
+      });
+
+      expect(installGuardianFn).toHaveBeenCalledWith(
+        expect.objectContaining({ dshProfile: 'demo' }),
+      );
+      expect(stdout.join('')).toContain('守护状态已写入');
     } finally {
       process.stdout.write = originalWrite;
     }

@@ -18,6 +18,8 @@ export interface SetupOptions {
   bin?: string;
   /** Also install the safety-net guardian as a system service. */
   guardian?: boolean;
+  /** Injectable guardian installer (tests). */
+  installGuardianFn?: typeof installGuardian;
 }
 
 /**
@@ -51,7 +53,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   await runDshPlugin(bin, profile, packageSpec);
 
   if (options.guardian) {
-    const guardianResult = await installGuardian({
+    const install = options.installGuardianFn ?? installGuardian;
+    const guardianResult = await install({
       env: loadRuntimeEnv(process.env),
       dshProfile: profile,
     });
@@ -59,7 +62,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       process.stdout.write(`${message}\n`);
     }
     if (!guardianResult.ok) {
-      throw new Error('guardian 服务安装未完全成功，请按提示手动启用后重试。');
+      process.stdout.write(
+        '\n注意：guardian 服务未完全启用，请按上方提示手动执行；也可稍后重跑 `dsh-lark-bot guardian install`。\n',
+      );
     }
   }
 
