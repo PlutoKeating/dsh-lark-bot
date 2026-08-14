@@ -10,8 +10,8 @@
 - 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
 - **两条官方接入路线均已实测**（2026-08-14）：
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
-    runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供 **reasoning-delta / text-delta
-    token 级流式**，支持 thinking 展示与 typewriter 卡片。
+    runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
+    **reasoning-delta / text-delta token 级流式**，支持 thinking 展示与 typewriter 卡片。
   - **ACP 服务器**（`@deepseek-ai/dsh-acp`）：`session/request_permission` → 飞书审批卡；
     ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话。
 - 旧的 **headless 子进程 fallback** 保留为 `DSH_LARK_ADAPTER=headless`，不再默认。

@@ -62,10 +62,10 @@ dsh-lark-bot start \
 | `/status` | 查看当前状态 |
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
-| `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
-| `/density [compact|standard|detailed]` | 查看或设置卡片密度 |
+| `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
+| `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/ask <问题>` | 发送结构化问答卡（回答写入会话上下文） |
-| `/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>` | 管理访问白名单 |
+| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。

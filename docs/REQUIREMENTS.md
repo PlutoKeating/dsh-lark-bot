@@ -82,8 +82,8 @@
 - 异步任务队列，长任务不阻塞事件回调。
 - 定时任务 / 依赖编排（dsh 自带 workflow capability）。
 
-> 状态说明：当前仅有单 scope 运行锁与消息排队（`PendingQueue`）；**异步任务队列 / 定时任务 /
-> workflow 编排**属于 P3 待办，尚未实现。
+> 状态说明：当前仅有单 scope 运行锁与消息排队（`PendingQueue`）；
+> **异步任务队列 / 定时任务 / workflow 编排**属于 P3 待办，尚未实现。
 
 ---
 

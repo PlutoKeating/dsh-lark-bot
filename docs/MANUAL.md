@@ -50,12 +50,12 @@ dsh-lark-bot start \
 | `/status` | 查看当前 scope、cwd、session、active run |
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
-| `/timeout [N|off|default]` | 查看或设置运行超时 |
-| `/density [compact|standard|detailed]` | 查看或设置卡片密度 |
+| `/timeout [N\|off\|default]` | 查看或设置运行超时 |
+| `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
-| `/invite user|admin|group <id>` | 添加白名单 |
+| `/invite user\|admin\|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
-| `/invite remove user|group <id>` | 移除白名单 |
+| `/invite remove user\|group <id>` | 移除白名单 |
 | `/help` | 查看帮助 |
 
 ## 4. 会话与工作区 · Sessions & workspaces

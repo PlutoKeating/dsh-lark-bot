@@ -95,7 +95,7 @@
 | P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
 | P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
 | P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
-| P0-6 | 接线：`DSH_LARK_ADAPTER=sdk|acp|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 ✅ |
+| P0-6 | 接线：`DSH_LARK_ADAPTER=sdk\|acp\|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 ✅ |
 
 ### 8.3 P0：卡片审批 + 问答卡（复用官方 + 借鉴竞品）
 
@@ -124,7 +124,7 @@
 | P1-5 | `src/card/density.ts`：`compact / standard / detailed` 三档 | 测试 |
 | P1-6 | `run-renderer.ts` 升级三档渲染；`run-state.ts` 增加 `usage` | 渲染测试 |
 | P1-7 | thinking 流式展示（reasoning-delta → 思考中 → 折叠内容），SDK 路径天然 typewriter | 渲染测试 |
-| P1-8 | `/density <compact|standard|detailed>` 命令 + profile 偏好 | 命令测试 |
+| P1-8 | `/density <compact\|standard\|detailed>` 命令 + profile 偏好 | 命令测试 |
 
 ### 8.6 P2：测试密度提升（借鉴 Roy-oss1）
 
