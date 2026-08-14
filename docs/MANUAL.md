@@ -72,6 +72,12 @@ dsh-lark-bot start \
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 的并行任务数 |
+| `/role list` | 查看角色列表与当前 scope 绑定 |
+| `/role show <id>` | 查看角色详情 |
+| `/role set <id>` | 为当前 scope 绑定角色（下一轮生效） |
+| `/role clear` | 解除当前 scope 的角色绑定 |
+| `/role save <id> <name> [--persona ..] [--model ..] [--tools ..] [--rules ..]` | 创建 / 更新角色（管理员） |
+| `/role remove <id>` | 删除角色（管理员） |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
 | `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
@@ -109,6 +115,15 @@ dsh-lark-bot start \
 除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
 （`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在
 私聊使用，或优先用 `--api-key-env` 引用环境变量 / 在 dsh Web 页面录入。
+
+### 多角色 Agent
+
+- `/role save <id> <name> --persona <文案>` 定义角色；`--model` 指定角色模型偏好，`--tools`
+  给出工具指引（逗号分隔），`--rules` 给出角色规则（等价于角色级 AGENTS.md）。
+- `/role set <id>` 把角色绑定到当前 scope，`/role clear` 解除；`/status` 会显示当前角色。
+- 角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`（0600），重启后绑定仍然生效。
+- 模型优先级：每会话 `/model use` > 角色 `--model` > profile 偏好 > dsh 默认模型 > 环境默认。
+- 角色 save / remove 仅管理员可执行；set / clear 任意被邀请用户可执行。
 
 ## 5. 会话与工作区 · Sessions & workspaces
 

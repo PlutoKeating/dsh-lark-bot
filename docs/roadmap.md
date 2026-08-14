@@ -12,6 +12,7 @@
 | **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
 | **P8 会话归档** Session archival | 可配置保留窗口、超窗自动归档、`/archive` 手动导出（Markdown + JSONL + Git commit）、保留策略清理 | ✅ 已完成 Done（0.6.0） |
 | **P9 并行协同** Parallel collaboration | 同一 scope 多 run 并行（`ActiveRuns` / `PendingQueue` 并发上限 / `/concurrency`）、并行 run 独立 dsh session | ✅ 已完成 Done（0.6.0） |
+| **P10 多角色 Agent** Multi-role agents | 持久化角色定义（persona / 模型 / 工具指引 / 规则）+ 按 scope 绑定 + prompt 注入 | ✅ 已完成 Done（0.6.0） |
 
 ## 里程碑 · Milestones
 
@@ -34,6 +35,9 @@
 - **P9 done**（0.6.0）：同一 scope 并行 run（默认 2，`/concurrency` / `DSH_LARK_SCOPE_CONCURRENCY`
   调整）；`ActiveRuns` 支持多 run 与定向终止，`PendingQueue` 按 scope 并发上限 flush，并行 run
   使用独立 dsh session；`/status` 展示全部 active runs。
+- **P10 done**（0.6.0）：`RoleStore` 持久化角色（`<profile>/roles.json`），`/role save|set|
+  clear|list|show|remove` 管理；角色 persona / 工具指引 / 规则随 prompt 注入，角色模型参与
+  模型优先级，可与并行 run 共存。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

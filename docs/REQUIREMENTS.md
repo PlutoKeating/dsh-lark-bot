@@ -105,6 +105,17 @@
   0600 / 目录 0700）；settings 只存 `apiKeyEnv` 引用，字面密钥不进 settings 与聊天记录；
   除查看类命令外均为管理员操作；密钥值永不回显。
 
+### 4.7 多角色 Agent（multi-role agents，0.6.0）
+
+- `/role save <id> <name> [--persona <文案>] [--model <id>] [--tools <csv>] [--rules <文案>]`
+  定义角色（管理员）；`/role set <id>` / `/role clear` 按 scope 绑定 / 解除。
+- 角色指令（persona / 工具指引 / 角色规则）随每次 run 的 prompt 注入，无需重启 runtime；
+  模型优先级：每会话 `/model use` > 角色 `--model` > profile 偏好 > dsh 默认 > 环境默认。
+- 角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`（0600）。
+- 设计取舍：不采用「每角色独立 dsh runtime profile」——那会与 scope 内并行 run 冲突
+  （单个 runtime 无法同时承载多个 persona），prompt 注入 + 每请求 model 参数是可与并行
+  协同共存的完整方案。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints

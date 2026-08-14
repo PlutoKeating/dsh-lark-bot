@@ -217,7 +217,11 @@ export class SessionArchive {
         });
       }
     }
-    return records.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+    return records.sort(
+      (a, b) =>
+        b.archivedAt.localeCompare(a.archivedAt) ||
+        b.archiveId.localeCompare(a.archiveId),
+    );
   }
 
   /** Remove archives beyond per-scope count/age limits. Returns the number removed. */
@@ -234,7 +238,11 @@ export class SessionArchive {
     for (const [scope, scoped] of byScope) {
       // Newest first: prune from the oldest end while keeping the newest
       // `maxArchives` records within the age window.
-      const ordered = [...scoped].sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+      const ordered = [...scoped].sort(
+        (a, b) =>
+          b.archivedAt.localeCompare(a.archivedAt) ||
+          b.archiveId.localeCompare(a.archiveId),
+      );
       const keep: ArchiveRecord[] = [];
       let keptCount = 0;
       for (const record of ordered) {

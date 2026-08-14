@@ -6,6 +6,7 @@ import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { RetentionStore } from '../bot/retention-store.js';
+import type { RoleStore } from '../bot/role-store.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
@@ -22,6 +23,7 @@ import {
   handleProviders,
 } from './models.js';
 import { handleArchive, handleRetention } from './archive.js';
+import { handleRole } from './roles.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -45,6 +47,7 @@ export interface CommandContext {
   concurrencyStore: ConcurrencyStore;
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
+  roleStore: RoleStore;
   archiver: SessionArchive;
   defaultRetention: number;
   archiveMax: number;
@@ -75,6 +78,9 @@ const HELP = [
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
   '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
+  '- `/role list|show <id>|set <id>|clear` — 查看 / 绑定角色',
+  '- `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` — 创建/更新角色（管理员）',
+  '- `/role remove <id>` — 删除角色（管理员）',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive list [N]`、`/archive clean` — 归档 / 查看 / 清理会话',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
@@ -190,9 +196,11 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
   const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
   const session = ctx.sessions.getRaw(ctx.scope)?.sessionId ?? '(无)';
   const active = ctx.activeRuns.list(ctx.scope);
+  const role = ctx.roleStore.roleForScope(ctx.scope);
   const scopeLabel =
     ctx.chatMode === 'topic' ? `${ctx.scope}（话题独立 session）` : ctx.scope;
   const runLines = active.map((run) => `  - \`${run.runId}\``);
+  const roleLine = role ? `🎭 **role**: \`${role.id}\` (${role.name})` : undefined;
 
   await reply(
     ctx,
@@ -200,6 +208,7 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
       `🧭 **scope**: \`${scopeLabel}\``,
       `📁 **cwd**: \`${cwd}\``,
       `🔗 **session**: \`${session}\``,
+      ...(roleLine ? [roleLine] : []),
       `🏃 **active runs**: ${String(active.length)}`,
       ...runLines,
     ].join('\n'),
@@ -425,6 +434,7 @@ const handlers: Record<string, Handler> = {
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/concurrency': handleConcurrency,
+  '/role': handleRole,
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,

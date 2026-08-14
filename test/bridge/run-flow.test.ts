@@ -358,6 +358,64 @@ describe('runAgentBatch', () => {
     expect(run).not.toHaveBeenCalled();
     expect(fake.messages[0]).toContain('上限');
   });
+
+  it('injects role persona/rules into the prompt and keeps the model route', async () => {
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    let prompt = '';
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        prompt = options.prompt;
+        return {
+          runId: 'run-role',
+          events: (async function* () {
+            yield { type: 'system', sessionId: 's1', cwd: '/tmp/project', model: undefined };
+            yield { type: 'done', sessionId: 's1', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['do it'],
+      adapter,
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      role: {
+        id: 'docs',
+        name: 'Documentation Writer',
+        persona: 'You write precise docs.',
+        model: 'deepseek-v4-flash',
+        tools: 'fs,search',
+        agentsMd: 'Never invent APIs.',
+        createdAt: '',
+        updatedAt: '',
+      },
+    });
+
+    expect(prompt).toContain('Role: Documentation Writer (docs)');
+    expect(prompt).toContain('You write precise docs.');
+    expect(prompt).toContain('Tools guidance: fs,search');
+    expect(prompt).toContain('Never invent APIs.');
+    expect(prompt).toContain('do it');
+  });
 });
 
 describe('approvalHandlerFor', () => {

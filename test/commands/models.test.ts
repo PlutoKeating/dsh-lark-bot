@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
+import { RoleStore } from '../../src/bot/role-store.js';
 import type { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
 import type { CommandChannel, CommandContext } from '../../src/commands/index.js';
@@ -35,6 +36,7 @@ async function withContext(
     concurrencyStore: new ConcurrencyStore(),
     defaultScopeConcurrency: 2,
     retentionStore: new RetentionStore(),
+    roleStore: new RoleStore(':memory:'),
     archiver: {
       archive: vi.fn(),
       list: vi.fn().mockResolvedValue([]),

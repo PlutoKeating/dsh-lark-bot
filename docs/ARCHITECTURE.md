@@ -59,6 +59,10 @@ systemd user service（`Restart=always`）、macOS LaunchAgent（`KeepAlive`）�
    Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），
    因此不重复造配置管理 API，也不绕过官方热发布；ACP / SDK 协议本身不含配置管理方法，
    模型切换通过每轮请求的 model 参数与 dsh 热发布生效。
+5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
+   工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
+   模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
+   重启 runtime，也能与 scope 内并行 run 共存。
 
 ## 目录映射 · Directory Mapping
 

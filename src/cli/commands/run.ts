@@ -10,6 +10,7 @@ import { ModelStore } from '../../bot/model-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
 import { QuestionRegistry } from '../../bot/questions.js';
 import { RetentionStore } from '../../bot/retention-store.js';
+import { RoleStore } from '../../bot/role-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
@@ -131,10 +132,11 @@ export async function runBot(options: StartOptions): Promise<void> {
   const sessions = new SessionStore(paths.sessionsFile(profileName));
   const archiver = new SessionArchive(paths.archivesDir(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
+  const roleStore = new RoleStore(paths.profilePath(profileName, 'roles.json'));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
-  await Promise.all([sessions.load(), workspaces.load()]);
+  await Promise.all([sessions.load(), workspaces.load(), roleStore.load()]);
 
   let adapter;
   try {
@@ -178,6 +180,7 @@ export async function runBot(options: StartOptions): Promise<void> {
           first.content,
           ...attachments.textFileNotes,
         ].filter(Boolean);
+        const role = roleStore.roleForScope(scope);
         const runInput: Parameters<typeof runAgentBatch>[0] = {
           scope,
           chatId: first.chatId,
@@ -189,6 +192,7 @@ export async function runBot(options: StartOptions): Promise<void> {
           activeRuns,
           runPolicies,
           archiver,
+          ...(role === undefined ? {} : { role }),
           approvals,
           questions,
           densityStore,
@@ -201,6 +205,7 @@ export async function runBot(options: StartOptions): Promise<void> {
           images: attachments.imagePaths,
           model:
             models.get(scope) ??
+            role?.model ??
             activeProfile.preferences.model ??
             (await dshConfig.defaultModel().catch(() => undefined)) ??
             env.model,
@@ -228,6 +233,7 @@ export async function runBot(options: StartOptions): Promise<void> {
     concurrencyStore,
     defaultScopeConcurrency: env.scopeConcurrency,
     retentionStore,
+    roleStore,
     archiver,
     defaultRetention: env.retentionMsgs,
     archiveMax: env.archiveMax,
@@ -265,7 +271,7 @@ export async function runBot(options: StartOptions): Promise<void> {
   await waitForShutdown();
   await bridge.disconnect();
   await adapter.dispose?.();
-  await Promise.all([sessions.flush(), workspaces.flush()]);
+  await Promise.all([sessions.flush(), workspaces.flush(), roleStore.flush()]);
 }
 
 function errorMessage(error: unknown): string {

@@ -8,6 +8,7 @@ import type { ModelStore } from '../bot/model-store.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RetentionStore } from '../bot/retention-store.js';
+import type { RoleStore } from '../bot/role-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import { extractQuestionAnswer } from '../card/question-card.js';
@@ -32,6 +33,7 @@ export interface StartChannelDeps {
   concurrencyStore: ConcurrencyStore;
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
+  roleStore: RoleStore;
   archiver: SessionArchive;
   defaultRetention: number;
   archiveMax: number;
@@ -120,6 +122,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         concurrencyStore: deps.concurrencyStore,
         defaultScopeConcurrency: deps.defaultScopeConcurrency,
         retentionStore: deps.retentionStore,
+        roleStore: deps.roleStore,
         archiver: deps.archiver,
         defaultRetention: deps.defaultRetention,
         archiveMax: deps.archiveMax,

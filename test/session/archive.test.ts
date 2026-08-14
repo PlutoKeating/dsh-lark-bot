@@ -75,6 +75,7 @@ describe('SessionArchive', () => {
         cwd: undefined,
         messages: [{ role: 'user', content: 'a' }],
       });
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const second = await archive.archive({
         scope: 'chat-a',
         cwd: undefined,

@@ -44,6 +44,7 @@
 - [x] `/invite user|admin|group|list|remove`
 - [x] scope 内运行跟踪与 `/stop`（全部 / 定向终止）
 - [x] scope 内并行 run（`ActiveRuns` 多 run / `PendingQueue` 并发上限 / `/concurrency`）
+- [x] 多角色 Agent（`RoleStore` + `/role` 命令：persona / 模型 / 工具指引 / 角色规则）
 - [x] 墙钟超时看门狗
 - [x] 卡片审批（ACP `session/request_permission` + 审批卡）
 - [x] 问答卡（单选 / 多选 / 自由文本）
@@ -70,8 +71,9 @@
 7. ✅ 模型 / provider / 凭据管理（0.5.0）：`/model` `/providers` `/provider` `/key`，读写 dsh 官方配置
 8. ✅ 兼容矩阵与自动化（0.5.1）：`dsh-compat.ts` 单一事实来源 + 上游雷达 + CI 真实探测 + 升级手册
 9. ✅ scope 内并行 run 与异步任务队列（0.6.0）
-10. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
-11. ⏳ 稳定发布下一版本
+10. ✅ 多角色 Agent（0.6.0）：`/role save|set|clear|list|show|remove`
+11. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
+12. ⏳ 稳定发布下一版本
 
 ## 7. 当前阻塞 · Current blocker
 

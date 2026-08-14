@@ -195,6 +195,12 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 scope 保留策略清理。`src/bot/retention-store.ts` 提供内存级 per-scope 保留条数覆盖，
 `/retention [N|default]` 读写。
 
+`src/bot/role-store.ts` 提供持久化 `RoleStore`（`<profile>/roles.json`，0600）：角色定义
+（`RoleDefinition`：`id` / `name` / `persona` / 可选 `model` / `tools` / `agentsMd`）与
+per-scope 角色绑定。`/role list|show|set|clear|save|remove` 读写；save / remove 仅管理员。
+运行期 `runAgentBatch` 接收 `role` 选项：角色 persona / 工具指引 / 规则作为 prompt 前缀注入，
+模型优先级为 每会话 `/model use` > 角色 `model` > profile 偏好 > dsh 默认 > 环境默认。
+
 ### 2.2 扫码绑定 · QR onboarding
 
 `src/onboard/registration.ts` 提供：
@@ -426,7 +432,8 @@ export interface ServiceController {
 `--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/retention`、`/archive [note|list [N]|clean]`、`/density`、
+`/stop`、`/timeout`、`/concurrency`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。

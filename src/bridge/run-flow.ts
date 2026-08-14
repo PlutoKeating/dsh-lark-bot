@@ -19,6 +19,7 @@ import { renderQuestionCard } from '../card/question-card.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
+import type { RoleDefinition } from '../bot/role-store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
@@ -32,6 +33,7 @@ export interface RunFlowInput {
   adapter: AgentAdapter;
   sessions: SessionStore;
   archiver?: SessionArchive;
+  role?: RoleDefinition;
   /** Live messages kept before overflow is archived; defaults to 40. */
   retention?: number;
   archiveMax?: number;
@@ -77,7 +79,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       ? input.sessions.resumeFor(input.scope, cwd)
       : undefined;
   const history = input.sessions.historyFor(input.scope, cwd);
-  const prompt = buildPrompt(history, input.messages);
+  const prompt = buildPrompt(history, input.messages, input.role);
   const runId = randomUUID();
 
   const run = input.adapter.run({
@@ -267,20 +269,41 @@ export function questionHandlerFor(
 function buildPrompt(
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   messages: string[],
+  role: RoleDefinition | undefined,
 ): string {
-  if (history.length === 0) return messages.join('\n\n');
+  const rolePreamble = role ? renderRolePreamble(role) : undefined;
+  const userText = messages.join('\n\n');
+  if (history.length === 0 && !rolePreamble) return userText;
 
   const transcript = history
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
     .join('\n\n');
 
-  return [
-    'Continue the conversation using the history below.',
+  const parts: string[] = [];
+  if (rolePreamble) parts.push(rolePreamble, '');
+  if (history.length > 0) {
+    parts.push('Continue the conversation using the history below.', '', transcript, '');
+  }
+  parts.push(`Current user message:\n${userText}`);
+  return parts.join('\n');
+}
+
+function renderRolePreamble(role: RoleDefinition): string {
+  const lines = [
+    `[Role instructions]`,
+    `Role: ${role.name} (${role.id})`,
+    `Persona: ${role.persona}`,
+  ];
+  if (role.model) lines.push(`Model preference: ${role.model}`);
+  if (role.tools) lines.push(`Tools guidance: ${role.tools}`);
+  if (role.agentsMd) {
+    lines.push('', 'Role rules (AGENTS.md):', role.agentsMd);
+  }
+  lines.push(
     '',
-    transcript,
-    '',
-    `Current user message:\n${messages.join('\n\n')}`,
-  ].join('\n');
+    'Stay in this role for the whole turn unless the user explicitly changes it.',
+  );
+  return lines.join('\n');
 }
 
 function applyEvent(

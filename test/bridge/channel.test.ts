@@ -10,6 +10,7 @@ import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
+import { RoleStore } from '../../src/bot/role-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -115,6 +116,7 @@ describe('startChannel', () => {
       concurrencyStore: new ConcurrencyStore(),
       defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
       archiver: {
         archive: vi.fn(),
         list: vi.fn().mockResolvedValue([]),
@@ -169,6 +171,7 @@ describe('startChannel', () => {
       concurrencyStore: new ConcurrencyStore(),
       defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
       archiver: {
         archive: vi.fn(),
         list: vi.fn().mockResolvedValue([]),

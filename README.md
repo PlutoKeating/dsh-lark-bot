@@ -122,6 +122,10 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 | `/stop` | 终止当前任务<br>Stop the current task |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时<br>View or set the current session run timeout |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数（默认 2）<br>View or set the concurrent-run limit for this scope (default 2) |
+| `/role list`、`/role show <id>` | 查看角色列表 / 详情<br>List roles / show a role |
+| `/role set <id>`、`/role clear` | 为当前 scope 绑定 / 解除角色<br>Bind / unbind a role for this scope |
+| `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` | 创建 / 更新角色（管理员）<br>Create / update a role (admin) |
+| `/role remove <id>` | 删除角色（管理员）<br>Remove a role (admin) |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）<br>View or set the live message retention window (overflow is archived) |
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录<br>Archive / list / clean session transcripts |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度<br>View or set card density |
@@ -148,6 +152,19 @@ Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (a
 `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs,
 each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts
 them all.
+
+**多角色 Agent**：管理员用 `/role save <id> <name> --persona <文案> [--model <id>] [--tools
+<csv>] [--rules <文案>]` 定义 PM / 开发 / 文档等角色（persona、模型偏好、工具指引、角色规则），
+`/role set <id>` 把角色绑定到当前 scope：下一轮起该 scope 的每个 run 都携带角色 persona 与
+规则，并优先使用角色模型（角色模型 < 每会话 `/model use`）。角色定义持久化在
+`~/.dsh-lark/profiles/<profile>/roles.json`。
+
+**Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name>
+--persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` — persona, model preference,
+tool guidance and role rules — then bind one to the current scope with `/role set <id>`. Every
+run in that scope carries the role instructions, and the role model wins below the per-session
+`/model use` override. Role definitions persist in
+`~/.dsh-lark/profiles/<profile>/roles.json`.
 
 ### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
