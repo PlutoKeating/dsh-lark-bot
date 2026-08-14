@@ -7,10 +7,14 @@
 
 ## 1. 核心结论 · TL;DR
 
-- 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，新增一个 `dsh` adapter 即可，飞书层完全不用动。
-- 落点：新建 `src/agent/dsh/`，并在 `src/agent/index.ts` 注册导出。
-- **两条接入路线**：dsh 的 **ACP 服务器**（推荐）或 **SDK client**（`@deepseek-ai/dsh-sdk-client`）。
-- **关键差异**：dsh 走 ACP/SDK 只吐「已提交的最终文本」（committed answers），**不是** claude/codex 那种 token 级流式 stdout——所以「流式卡片」体验要重新设计（卡片最后一次性更新，或用事件流分段）。
+- 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
+- **两条官方接入路线均已实测**（2026-08-14）：
+  - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
+    runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供 **reasoning-delta / text-delta
+    token 级流式**，支持 thinking 展示与 typewriter 卡片。
+  - **ACP 服务器**（`@deepseek-ai/dsh-acp`）：`session/request_permission` → 飞书审批卡；
+    ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话。
+- 旧的 **headless 子进程 fallback** 保留为 `DSH_LARK_ADAPTER=headless`，不再默认。
 
 ---
 
@@ -97,7 +101,7 @@ type AgentEvent =
 - **仅 committed 答案**——实时进度、reasoning、工具活动、usage 不上线。
 - **单一工作区**——images / audio / 多目录 / MCP 会被拒绝。
 
-### 路线 B：SDK client
+### 路线 B：SDK client（默认）
 
 - 包：`@deepseek-ai/dsh-sdk-client`，源码 [`../reference/deepseek-harness/packages/sdk/client/`](../reference/deepseek-harness/packages/sdk/client/)
 - 高层 API `DeepSeekHarness`：
@@ -113,17 +117,40 @@ type AgentEvent =
 - 低层 API `HarnessClient`：显式 `start()/initialize()/prompt()/request()/close()` + 通知订阅。
 - 适配思路：dsh adapter 用 `DeepSeekHarness`/`HarnessClient` spawn dsh 子进程，把 `finalResponse` + `events`/`notifications` 映射成 `AgentEvent`。
 
-**SDK 已知限制**：无 mid-turn cancel；`prompt()` 只返回入队回执；弃用一次 turn 需关闭整个 runtime。
+**SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）；
+approval 流未实现（需 ACP 模式）。
+
+### 路线 C：headless（legacy）
+
+- 现有 `DshAdapter`（`src/adapters/dsh/adapter.ts`）保留，`DSH_LARK_ADAPTER=headless` 使用。
+
+## 4.1 Runtime profile（自动维护）
+
+SDK / ACP 模式需要对应 runtime profile：
+
+| 模式 | profile | 组合 |
+| --- | --- | --- |
+| sdk | `~/.dsh/profiles/dsh-lark` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay |
+| acp | `~/.dsh/profiles/dsh-lark-acp` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-acp` overlay |
+
+`ensureSdkProfile` / `ensureAcpProfile`（`src/adapters/dsh/sdk-runtime.ts` /
+`src/adapters/dsh/acp-runtime.ts`）在首次启动时创建 profile 并 `pnpm install` 插件，幂等且可自愈
+（部分创建状态也会补齐）。stdout 保留给 JSON-RPC 协议；overlay 禁用了 `user-questions`
+（IM 无法回达的交互工具默认拒绝）与 HMR。
 
 ---
 
 ## 5. 关键差异与坑 · Key Differences & Pitfalls
 
-1. **无 token 级流式**：claude/codex 的 stdout 是 stream-json 逐 token 吐 `text` delta；dsh（ACP/SDK）只给「已提交的最终文本」。因此 `text` 增量事件会变成「最终一次性」或按 `agent_message_chunk` 分段，流式卡片的视觉效果要相应降级。
-2. **会话续跑**：dsh 的 ACP 不支持 resume（仅全新会话）；要续跑得走 SDK 的 `session(id?)` 或 harness 的 session log（fork/resume 在 dsh 内部支持，但 ACP 未暴露）。这直接影响桥接层的 `/resume` 命令。
-3. **审批**：ACP 有 `session/request_permission`（一次性 allow/reject），可映射到飞书卡片审批；SDK 的 client→server 通知/审批流「未实现」。
-4. **dsh 是 developer preview**：接口会破坏性变更，务必把 `DshAdapter` 与桥接核心隔离（改 dsh 只动 `src/agent/dsh/`）。
+1. **流式差异**：SDK 有 token 级流式（`assistant/chunk` 的 `reasoning-delta` / `text-delta`）；
+   ACP 按 committed 文本块发 `agent_message_chunk`。两种都走 `AgentEvent` 事件流渲染卡片。
+2. **会话续跑**：SDK 用 `session(id?)` + JSONL 持久化实现原生 resume；ACP 仅全新会话。
+3. **审批**：ACP 的 `session/request_permission`（一次性 allow/reject）映射飞书审批卡
+   （`src/card/approval-card.ts` + `src/bot/approvals.ts`，run 结束时结算所有挂起审批）；
+   SDK 协议未实现审批流。
+4. **dsh 是 developer preview**：接口会破坏性变更，dsh 相关代码全部隔离在 `src/adapters/dsh/`。
 5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层要求 `>=20.12`。统一用 ≥22.19。
+6. **dsh-type-meta 404 已解除**：rc.1/rc.6 依赖链全部发布，官方 SDK/ACP 现可直接安装。
 
 ---
 

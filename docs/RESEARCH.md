@@ -79,9 +79,13 @@
 | 会话续跑 | 子进程一直开着 | headless 无状态一次性，续跑需传 session 并 fork/resume |
 | 流式输出 | stdout stream-json | append-only session event log（可回放） |
 
-**两条 dsh adapter 路线：**
-- **路线 A（推荐）**：dsh adapter 对接 dsh 的 **ACP server**（`packages/acp`），飞书 bot 当 ACP client，天然支持会话、流式、工具审批、中断。
-- **路线 B**：headless + 自维护 session 续跑（简单，但每条消息冷启动 dsh 进程，慢）。
+**三条 dsh adapter 路线（2026-08-14 复核后已落地）：**
+- **路线 A（默认，已实现）**：官方 **SDK client**（`@deepseek-ai/dsh-sdk-client`）驱动
+  `dsh-sdk-jsonrpc-server` runtime——原生 `session(id)` 续跑、`assistant/chunk` 流式
+  reasoning/text 增量、工具事件、usage。
+- **路线 B（审批，已实现）**：官方 **ACP server**（`@deepseek-ai/dsh-acp`），飞书 bot 当
+  ACP client，`session/request_permission` 映射飞书审批卡；ACP 会话为全新会话（不支持 resume）。
+- **路线 C（legacy，保留）**：headless 子进程 fallback（`DSH_LARK_ADAPTER=headless`）。
 
 ## 7. 落地建议 · Implementation Plan
 

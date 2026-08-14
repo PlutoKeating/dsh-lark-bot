@@ -102,5 +102,9 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
 | `DSH_LARK_DSH_ARGS` | 自动发现 | dsh 启动参数 |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
+| `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
+| `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
+| `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |

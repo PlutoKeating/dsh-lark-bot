@@ -95,7 +95,7 @@
 | P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
 | P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
 | P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
-| P0-6 | 接线：`DSH_LARK_ADAPTER=sdk|acp|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 |
+| P0-6 | 接线：`DSH_LARK_ADAPTER=sdk|acp|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 ✅ |
 
 ### 8.3 P0：卡片审批 + 问答卡（复用官方 + 借鉴竞品）
 
@@ -129,7 +129,7 @@
 ### 8.6 P2：测试密度提升（借鉴 Roy-oss1）
 
 - 新增模块全部配套单元测试（sdk-translate / sdk-adapter / sdk-runtime / acp-adapter / approval-card / question-card / approvals / security / density）。
-- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿。
+- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿（当前 83 用例，含真实 runtime 门控 E2E）。
 
 ### 8.7 P2：License 决策项
 

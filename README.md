@@ -86,6 +86,8 @@ dsh-lark-bot start \
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N|off|default]` | 查看或设置当前会话运行超时 |
+| `/density [compact|standard|detailed]` | 查看或设置卡片密度 |
+| `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
 | `/invite user|admin|group <id>`、`/invite list`、`/invite remove user|group <id>` | 管理访问白名单 |
 | `/help` | 查看帮助 |
 
@@ -127,7 +129,9 @@ rm -rf ~/.dsh-lark
 - **DeepSeek Harness（`dsh`）**：developer preview（v0.1，2026-08 发布），通过 ACP / JSON-RPC SDK 接入。
 - **运行时**：Node.js ≥ 22（桥接层要求 ≥ 20.12，统一采用 ≥ 22）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
-- 当前 adapter 采用 **headless 子进程 fallback**，通过可配置的 `dsh` 命令与参数驱动，尚未锁定具体 dsh mainline commit；接入 ACP / SDK 的正式版本将在 P2 锁版后声明。
+- 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
+  token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
+  子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark`（或 `dsh-lark-acp`）创建 runtime profile。
 
 ## 配置 · Configuration
 
@@ -138,7 +142,8 @@ rm -rf ~/.dsh-lark
 
 会话运行在 Git 仓库中时，会自动在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建隔离 worktree，并复制项目级 `AGENTS.md`。
 
-每个飞书 scope 会保存最近 40 条对话消息，下一次消息会作为上下文传入 dsh headless，从而在无状态 headless 子进程上实现会话记忆。
+每个飞书 scope 会保存最近 40 条对话消息；SDK 模式下 dsh 原生 session 续跑，headless 模式
+则把历史注入下一次 prompt 实现近似记忆。
 
 当前核心环境变量：
 
@@ -148,8 +153,12 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置 |
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置 |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
+| `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限 |
+| `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
+| `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭） |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期 |
 
@@ -162,7 +171,7 @@ rm -rf ~/.dsh-lark
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
-- **进程**：spawn 本机 `dsh` 子进程执行 agent 任务。
+- **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
 
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
 
@@ -205,6 +214,8 @@ pnpm publish:dual
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
 - **安全报告**：如发现安全漏洞，请通过 GitHub Security Advisory 私下报告，勿公开 issue。
+- **安全模型**：默认拒绝、密钥脱敏、路径 containment、SSRF 防护、过期事件拒绝与交互工具
+  默认禁用——详见 [`SECURITY.md`](SECURITY.md)。
 
 ## 文档 · Documentation
 
@@ -233,9 +244,9 @@ pnpm publish:dual
 飞书 / Lark ──WebSocket 长连接──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4
 ```
 
-核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接 DeepSeek Harness（当前 headless fallback，ACP 正式接入规划在 P2），可切换 claude / codex / opencode。
+核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接官方 DeepSeek Harness SDK（`DSH_LARK_ADAPTER=sdk`），可选 ACP 审批模式与 legacy headless。
 
-The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to DeepSeek Harness (currently headless fallback, with ACP planned for P2) and swappable to claude / codex / opencode.
+The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to the official DeepSeek Harness SDK (`DSH_LARK_ADAPTER=sdk`), with an optional ACP approval mode and the legacy headless fallback.
 
 ## 目录结构 · Directory Structure
 

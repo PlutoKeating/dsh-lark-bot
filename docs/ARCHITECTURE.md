@@ -32,8 +32,9 @@
         ▼
 ┌──────────────────────────────────────────┐
 │  adapters/  agent 后端适配层               │
-│  · dsh（headless subprocess fallback，默认）│
-│  · claude / codex / opencode（可选）        │
+│  · dsh-sdk（官方 SDK client，默认）         │
+│  · dsh-acp（ACP 审批通道，可选）            │
+│  · dsh-headless（legacy fallback）          │
 └──────────────────────────────────────────┘
         │
         ▼
@@ -43,7 +44,10 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 ## 关键决策 · Key Decisions
 
 1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。
-2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端（当前 headless subprocess fallback，ACP 正式接入规划在 P2），未来可切换 claude / codex / opencode。
+2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端。默认走官方
+   `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
+   `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback。
+   桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约，dsh 漂移只影响 `src/adapters/dsh/`。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
 
 ## 目录映射 · Directory Mapping
@@ -54,7 +58,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用 |
 | `src/session/` | 会话路由、上下文记忆、持久化 |
 | `src/workspace/` | 项目工作区管理 |
-| `src/adapters/` | agent 后端适配器（dsh 优先） |
+| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy） |
 | `src/card/` | 流式卡片状态与渲染 |
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |

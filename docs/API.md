@@ -16,10 +16,15 @@ export interface RuntimeEnv {
   workspace: string | undefined;
   dshCommand: string;
   dshArgs: string[];
+  dshExplicit: boolean;
+  adapterMode: 'sdk' | 'acp' | 'headless';
   provider: string;
   model: string;
+  maxTokens: number | undefined;
   runTimeoutMs: number;
   stopGraceMs: number;
+  accessDefaultDeny: boolean;
+  eventFreshnessMs: number;
 }
 
 export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
@@ -29,9 +34,60 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 
 主要环境变量：
 
-- `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径，并使用 `--profile headless`。
+- `DSH_LARK_ADAPTER`：`sdk`（默认，官方 SDK client）/ `acp`（ACP 审批）/ `headless`（legacy）。
+- `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径。
+- `DSH_LARK_MAX_TOKENS`：可选，SDK-created agent 的每请求输出 token 上限。
+- `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
+- `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待退出再 SIGKILL 的宽限期，默认 `5000`。
+
+## 2.4 Agent adapter 工厂
+
+`src/adapters/index.ts` 提供：
+
+```ts
+export async function buildAgentAdapter(
+  env: RuntimeEnv,
+  preferences: { stopGraceMs: number | undefined; model: string | undefined },
+): Promise<AgentAdapter>;
+```
+
+`sdk` 模式会先 `ensureSdkProfile`（创建 `~/.dsh/profiles/dsh-lark` SDK JSON-RPC runtime profile），
+`acp` 模式先 `ensureAcpProfile`（`~/.dsh/profiles/dsh-lark-acp`）。
+
+`AgentRunOptions` 新增可选审批回调：
+
+```ts
+onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
+// ApprovalRequest: { id, sessionId, toolName, reason, options: ApprovalOption[] }
+// ApprovalOutcome: 'allowed-once' | 'rejected' | 'cancelled'
+```
+
+`src/bot/approvals.ts` 的 `ApprovalRegistry` 负责 pending 审批注册与结算
+（run 结束 / dispose 时 `settleAll(scope, 'cancelled')`）。
+
+## 2.5 卡片与展示
+
+- `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
+  detailed 含完整 reasoning、工具输入输出与 token usage。
+- `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
+- `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
+  `extractQuestionAnswer(kind, value, options)`。
+- `src/bot/density-store.ts`：per-scope 卡片密度覆盖；`/density` 命令读写。
+
+## 2.6 安全模块
+
+`src/config/security.ts` 提供：
+
+- `redactSecrets(text)`：Bearer / `sk-` / `api_key=` 正则脱敏。
+- `isPathWithin(root, candidate)`：realpath containment（拒绝符号链接逃逸）。
+- `truncateUtf8Safe(text, maxBytes)`：UTF-8 安全字节截断。
+- `isEventFresh(timestampMs, windowMs, now?)`：过期事件拒绝。
+- `isSafeHttpUrl(url)`：SSRF 防护（拒绝环回 / 私网 / 链路本地 / CGNAT / IPv6 ULA）。
+- `DEFAULT_DENIED_INTERACTIVE_TOOLS` / `isDeniedTool(name)`：IM 不可回达工具默认拒绝。
+
+详细威胁模型见根目录 `SECURITY.md`。
 
 ## 2. 本地状态路径 · Local state paths
 

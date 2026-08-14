@@ -17,6 +17,7 @@
     "dist",
     "bin",
     "README.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "scripts": {
