@@ -71,6 +71,10 @@ dsh-lark-bot start \
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
+| `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
+| `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
+| `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
+| `/archive clean` | 清理过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model` | 查看当前会话模型、dsh 默认模型与可用模型列表 |
 | `/model use <id>` | 热切换当前会话模型（下一轮生效） |
@@ -108,8 +112,13 @@ dsh-lark-bot start \
 ## 5. 会话与工作区 · Sessions & workspaces
 
 - 每个飞书私聊、群聊、话题对应独立 scope。
-- 每个 scope 保存最近 40 条对话；SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史
-  注入下一次 prompt 作为近似上下文。
+- 每个 scope 默认保存最近 40 条对话（`/retention` 调整，`DSH_LARK_RETENTION_MSGS` 配置默认值）。
+- 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
+  Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
+  可审计、可回放；`/archive [note]` 可随时手动导出完整会话。
+- 保留策略：每个 scope 最多保留 `DSH_LARK_ARCHIVE_MAX`（默认 50）条归档、超过
+  `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`（默认 90 天）的归档会被自动清理，`/archive clean` 手动触发。
+- SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史注入下一次 prompt 作为近似上下文。
 - 工作目录是 Git 仓库时，自动创建独立 git worktree，避免多会话互相污染。
 - 非 Git 目录直接使用指定目录。
 - 项目根目录有 `AGENTS.md` 时，会注入到 worktree。
@@ -165,6 +174,9 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
+| `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留） |
+| `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
+| `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |
 
 `start` / `restart` 会把当前终端的 `DSH_LARK_*`、`DEEPSEEK_API_KEY`、`DSH_HOME`、`PATH`、`HOME`
 快照到 `~/.dsh-lark/service/service.env`（权限 0600），后台服务启动时读取；修改环境后重新执行

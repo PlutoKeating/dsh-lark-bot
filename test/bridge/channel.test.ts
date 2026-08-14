@@ -8,6 +8,7 @@ import type {
 import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -110,6 +111,15 @@ describe('startChannel', () => {
       workspaces,
       activeRuns,
       runPolicies: new RunPolicyStore(),
+      retentionStore: new RetentionStore(),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
       defaultRunTimeoutMs: 300_000,
       models: new ModelStore(),
       dshConfig: new DshProviderManager({
@@ -153,6 +163,15 @@ describe('startChannel', () => {
       workspaces,
       activeRuns,
       runPolicies: new RunPolicyStore(),
+      retentionStore: new RetentionStore(),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
       defaultRunTimeoutMs: 300_000,
       models: new ModelStore(),
       dshConfig: new DshProviderManager({

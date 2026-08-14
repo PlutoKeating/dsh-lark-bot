@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
@@ -13,7 +14,27 @@ import {
   type CommandContext,
 } from '../../src/commands/index.js';
 import { SessionStore } from '../../src/session/store.js';
+import type { SessionArchive } from '../../src/session/archive.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
+
+function makeArchiver(): SessionArchive {
+  return {
+    archive: vi.fn().mockResolvedValue({
+      archiveId: 'archive-1',
+      scope: 'chat-a',
+      cwd: '/tmp/default',
+      source: 'manual',
+      note: undefined,
+      messageCount: 0,
+      archivedAt: new Date().toISOString(),
+      jsonlPath: '/tmp/a.jsonl',
+      markdownPath: '/tmp/a.md',
+      gitCommit: undefined,
+    }),
+    list: vi.fn().mockResolvedValue([]),
+    prune: vi.fn().mockResolvedValue(0),
+  } as unknown as SessionArchive;
+}
 
 function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
@@ -26,6 +47,11 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     workspaces: new WorkspaceStore(':memory:'),
     activeRuns: new ActiveRuns(),
     runPolicies: new RunPolicyStore(),
+    retentionStore: new RetentionStore(),
+    archiver: makeArchiver(),
+    defaultRetention: 40,
+    archiveMax: 50,
+    archiveMaxAgeDays: 90,
     approvals: undefined,
     questions: undefined,
     densityStore: undefined,

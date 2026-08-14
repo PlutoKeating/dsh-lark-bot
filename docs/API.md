@@ -41,6 +41,9 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
+- `DSH_LARK_RETENTION_MSGS`：每个 scope 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
+- `DSH_LARK_ARCHIVE_MAX`：每个 scope 最多保留的归档数，默认 `50`（`0` 关闭清理）。
+- `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -57,6 +60,7 @@ export interface AppPaths {
   sessionCatalogFile(profile: string): string;
   workspacesFile(profile: string): string;
   mediaDir(profile: string): string;
+  archivesDir(profile: string): string;
   logsDir(profile: string): string;
   serviceDir: string;
   serviceEnvFile: string;
@@ -166,9 +170,16 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
 
-`src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 40 条对话，支持
-`fork(scopeId, newScopeId, cwd)` 复制历史；SDK 模式以原生 `session(id)` 续跑，headless 模式把
-历史拼入下一次 prompt 作为近似上下文。
+`src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 `retention` 条对话
+（默认 40），`recordExchange` 支持传入 `{ retention, onArchive }`：超出保留窗口的消息先交给
+`onArchive` 归档，再裁剪；支持 `fork(scopeId, newScopeId, cwd)` 复制历史。SDK 模式以原生
+`session(id)` 续跑，headless 模式把历史拼入下一次 prompt 作为近似上下文。
+
+`src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
+`<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
+每次归档 / 清理单独 commit；`list(scope)` 列出归档，`prune({ maxArchives, maxAgeMs })` 按
+scope 保留策略清理。`src/bot/retention-store.ts` 提供内存级 per-scope 保留条数覆盖，
+`/retention [N|default]` 读写。
 
 ### 2.2 扫码绑定 · QR onboarding
 
@@ -401,7 +412,8 @@ export interface ServiceController {
 `--app-secret`、`--tenant`。`status` 退出码：`0`=运行中，`1`=未运行 / 未安装。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
-`/stop`、`/timeout`、`/density`、`/model use|default|reset|add|remove`、`/providers`、
+`/stop`、`/timeout`、`/retention`、`/archive [note|list [N]|clean]`、`/density`、
+`/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。
 

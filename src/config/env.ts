@@ -21,6 +21,12 @@ export interface RuntimeEnv {
   maxTokens: number | undefined;
   runTimeoutMs: number;
   stopGraceMs: number;
+  /** Live messages kept per scope before overflow is archived (default 40). */
+  retentionMsgs: number;
+  /** Max archives retained per scope before pruning (default 50, 0 disables). */
+  archiveMax: number;
+  /** Archives older than this many days are pruned (default 90, 0 disables). */
+  archiveMaxAgeDays: number;
   accessDefaultDeny: boolean;
   eventFreshnessMs: number;
 }
@@ -31,6 +37,9 @@ const DEFAULTS = {
   model: 'deepseek-v4-flash',
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
+  retentionMsgs: 40,
+  archiveMax: 50,
+  archiveMaxAgeDays: 90,
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -111,6 +120,16 @@ function parseFreshness(value: string | undefined): number {
   return parsed;
 }
 
+function parsePositiveInt(value: string | undefined, fallback: number, name: string): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -143,6 +162,21 @@ export function loadRuntimeEnv(
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
     stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
+    retentionMsgs: parsePositiveInt(
+      source.DSH_LARK_RETENTION_MSGS,
+      DEFAULTS.retentionMsgs,
+      'DSH_LARK_RETENTION_MSGS',
+    ),
+    archiveMax: parsePositiveInt(
+      source.DSH_LARK_ARCHIVE_MAX,
+      DEFAULTS.archiveMax,
+      'DSH_LARK_ARCHIVE_MAX',
+    ),
+    archiveMaxAgeDays: parsePositiveInt(
+      source.DSH_LARK_ARCHIVE_MAX_AGE_DAYS,
+      DEFAULTS.archiveMaxAgeDays,
+      'DSH_LARK_ARCHIVE_MAX_AGE_DAYS',
+    ),
     accessDefaultDeny: parseBoolean(source.DSH_LARK_ACCESS_DEFAULT_DENY, false),
     eventFreshnessMs: parseFreshness(source.DSH_LARK_EVENT_FRESHNESS_MS),
   };

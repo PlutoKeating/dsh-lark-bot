@@ -8,6 +8,7 @@ import { DensityStore } from '../../bot/density-store.js';
 import { ModelStore } from '../../bot/model-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
 import { QuestionRegistry } from '../../bot/questions.js';
+import { RetentionStore } from '../../bot/retention-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
@@ -23,6 +24,7 @@ import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { prepareAttachments } from '../../media/attachments.js';
 import { SessionStore } from '../../session/store.js';
+import { SessionArchive } from '../../session/archive.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 
@@ -126,6 +128,7 @@ export async function runBot(options: StartOptions): Promise<void> {
   await mkdir(defaultWorkspace, { recursive: true });
 
   const sessions = new SessionStore(paths.sessionsFile(profileName));
+  const archiver = new SessionArchive(paths.archivesDir(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
@@ -147,6 +150,7 @@ export async function runBot(options: StartOptions): Promise<void> {
   }
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
+  const retentionStore = new RetentionStore();
   const approvals = new ApprovalRegistry();
   const questions = new QuestionRegistry();
   const densityStore = new DensityStore();
@@ -180,6 +184,7 @@ export async function runBot(options: StartOptions): Promise<void> {
         workspaceManager: worktreeManager,
         activeRuns,
         runPolicies,
+        archiver,
         approvals,
         questions,
         densityStore,
@@ -187,6 +192,7 @@ export async function runBot(options: StartOptions): Promise<void> {
         defaultWorkspace,
         replyTo: first.messageId,
         runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
+        retention: retentionStore.get(scope) ?? env.retentionMsgs,
         images: attachments.imagePaths,
         model:
           models.get(scope) ??
@@ -212,6 +218,11 @@ export async function runBot(options: StartOptions): Promise<void> {
     workspaces,
     activeRuns,
     runPolicies,
+    retentionStore,
+    archiver,
+    defaultRetention: env.retentionMsgs,
+    archiveMax: env.archiveMax,
+    archiveMaxAgeDays: env.archiveMaxAgeDays,
     approvals,
     questions,
     densityStore,

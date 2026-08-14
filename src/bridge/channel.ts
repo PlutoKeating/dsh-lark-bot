@@ -6,6 +6,7 @@ import type { DensityStore } from '../bot/density-store.js';
 import type { ModelStore } from '../bot/model-store.js';
 import type { PendingQueue } from '../bot/pending-queue.js';
 import type { QuestionRegistry } from '../bot/questions.js';
+import type { RetentionStore } from '../bot/retention-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import { extractQuestionAnswer } from '../card/question-card.js';
@@ -14,6 +15,7 @@ import type { DshProviderManager } from '../config/dsh-config.js';
 import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
+import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { adaptLarkChannel } from './lark-channel.js';
 
@@ -26,6 +28,11 @@ export interface StartChannelDeps {
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
+  retentionStore: RetentionStore;
+  archiver: SessionArchive;
+  defaultRetention: number;
+  archiveMax: number;
+  archiveMaxAgeDays: number;
   defaultRunTimeoutMs: number;
   accessManager: AccessManager;
   pending: PendingQueue<NormalizedMessage>;
@@ -107,6 +114,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         workspaces: deps.workspaces,
         activeRuns: deps.activeRuns,
         runPolicies: deps.runPolicies,
+        retentionStore: deps.retentionStore,
+        archiver: deps.archiver,
+        defaultRetention: deps.defaultRetention,
+        archiveMax: deps.archiveMax,
+        archiveMaxAgeDays: deps.archiveMaxAgeDays,
         defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
         accessManager: deps.accessManager,
         approvals: deps.approvals,

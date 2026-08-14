@@ -9,6 +9,7 @@ export interface AppPaths {
   profilePath: (profile: string, ...parts: string[]) => string;
   sessionsFile: (profile: string) => string;
   sessionCatalogFile: (profile: string) => string;
+  archivesDir: (profile: string) => string;
   workspacesFile: (profile: string) => string;
   mediaDir: (profile: string) => string;
   logsDir: (profile: string) => string;
@@ -38,6 +39,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     profilePath,
     sessionsFile: (profile) => profilePath(profile, 'sessions.json'),
     sessionCatalogFile: (profile) => profilePath(profile, 'sessions.json.catalog.json'),
+    archivesDir: (profile) => profilePath(profile, 'archives'),
     workspacesFile: (profile) => profilePath(profile, 'workspaces.json'),
     mediaDir: (profile) => profilePath(profile, 'media'),
     logsDir: (profile) => profilePath(profile, 'logs'),

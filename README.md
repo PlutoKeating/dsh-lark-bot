@@ -121,6 +121,8 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 | `/resume` | 查看当前会话最近上下文<br>Show the session's recent context |
 | `/stop` | 终止当前任务<br>Stop the current task |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时<br>View or set the current session run timeout |
+| `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）<br>View or set the live message retention window (overflow is archived) |
+| `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录<br>Archive / list / clean session transcripts |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度<br>View or set card density |
 | `/model` | 查看当前模型、dsh 默认模型与可用模型列表<br>View current model, dsh default model and available models |
 | `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启）<br>Hot-switch the current session model (effective next message, no restart) |
@@ -249,11 +251,16 @@ logs and troubleshooting.
 When the session runs inside a Git repository, an isolated worktree is created at
 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` and a project-level `AGENTS.md` is copied in.
 
-每个飞书 scope 会保存最近 40 条对话消息；SDK 模式下 dsh 原生 session 续跑，headless 模式
-则把历史注入下一次 prompt 实现近似记忆。
+每个飞书 scope 默认保存最近 40 条对话消息（可用 `/retention` 或 `DSH_LARK_RETENTION_MSGS`
+调整）；超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown +
+JSONL，目录本身是 Git 仓库，每次归档独立 commit），支持 `/archive` 手动归档与保留策略清理。
+SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下一次 prompt 实现近似记忆。
 
-Each Feishu scope keeps the last 40 conversation messages; the SDK mode continues the native dsh
-session, while headless mode approximates memory by injecting history into the next prompt.
+Each Feishu scope keeps the last 40 conversation messages by default (adjustable with
+`/retention` or `DSH_LARK_RETENTION_MSGS`); messages beyond the retention window are archived to
+`~/.dsh-lark/profiles/<profile>/archives/` (Markdown + JSONL inside a Git repository, one commit
+per archive), and `/archive` exports the full session on demand. The SDK mode continues the native
+dsh session, while headless mode approximates memory by injecting history into the next prompt.
 
 当前核心环境变量：
 
@@ -274,6 +281,9 @@ Core environment variables:
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）<br>Stale-message rejection window (0 disables) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时<br>Wall-clock timeout for a single run |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期<br>Grace period after SIGTERM before SIGKILL |
+| `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留）<br>Messages kept per scope (0 keeps everything) |
+| `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理）<br>Max archives kept per scope (0 disables pruning) |
+| `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理）<br>Max archive age in days (0 disables pruning) |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 

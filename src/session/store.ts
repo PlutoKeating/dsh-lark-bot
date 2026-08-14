@@ -13,6 +13,13 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface RecordExchangeOptions {
+  /** Max live messages kept for the scope (overflow is archived, then trimmed). */
+  retention?: number;
+  /** Called with the messages that fall outside the retention window. */
+  onArchive?: (overflow: ChatMessage[]) => void | Promise<void>;
+}
+
 interface SessionData {
   chats: Record<string, SessionRecord>;
 }
@@ -20,6 +27,7 @@ interface SessionData {
 export class SessionStore {
   private data: SessionData = { chats: {} };
   private saving: Promise<void> = Promise.resolve();
+  private pendingArchive: Promise<void> = Promise.resolve();
   private readonly path: string;
 
   constructor(path: string) {
@@ -72,6 +80,7 @@ export class SessionStore {
     cwd: string,
     userMessages: string[],
     assistantMessage: string | undefined,
+    options: RecordExchangeOptions = {},
   ): void {
     const existing = this.data.chats[scopeId];
     const next: ChatMessage[] = [...(existing?.messages ?? [])];
@@ -84,12 +93,32 @@ export class SessionStore {
       next.push({ role: 'assistant', content: assistantMessage });
     }
 
+    const retention = options.retention ?? 40;
+    let kept: ChatMessage[] = next;
+    if (retention > 0 && next.length > retention) {
+      const overflow = next.slice(0, next.length - retention);
+      kept = next.slice(-retention);
+      this.pendingArchive = this.pendingArchive
+        .then(async () => {
+          await options.onArchive?.(overflow);
+        })
+        .catch((error: unknown) => {
+          log.fail('session', error, { scope: scopeId, step: 'archive-overflow' });
+        });
+    }
+
     this.data.chats[scopeId] = {
       sessionId: existing?.sessionId,
       cwd,
-      messages: next.slice(-40),
+      messages: kept,
     };
     this.schedulePersist();
+  }
+
+  /** Full live transcript for a scope (subject to the current retention window). */
+  fullHistoryFor(scopeId: string, cwd: string): ChatMessage[] {
+    const record = this.data.chats[scopeId];
+    return record && record.cwd === cwd ? [...record.messages] : [];
   }
 
   clear(scopeId: string): boolean {
@@ -117,6 +146,7 @@ export class SessionStore {
   }
 
   async flush(): Promise<void> {
+    await this.pendingArchive;
     await this.saving;
   }
 

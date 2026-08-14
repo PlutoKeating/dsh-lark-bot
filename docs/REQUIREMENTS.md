@@ -64,6 +64,10 @@
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
 - 中断命令：`/new`、`/cd`、`/ws use`、`/stop` 可打断当前任务。
 - 会话续跑 `/resume`、状态查询 `/status`。
+- **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
+  为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope 保留窗口，
+  超窗消息自动归档；`/archive list` 查看、`/archive clean` 按保留策略清理
+  （`DSH_LARK_ARCHIVE_MAX` / `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`）。
 
 ### 4.3 项目工作区管理（workspace，核心差异化）
 - `/cd <path>` 切换工作目录；`/ws save/use/list/remove` 管理命名工作区。

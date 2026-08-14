@@ -4,8 +4,10 @@ import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
+import type { RetentionStore } from '../bot/retention-store.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
+import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { renderWorkspaceCard } from '../card/workspace-card.js';
 import { parseCardDensity, type CardDensity } from '../card/density.js';
@@ -18,6 +20,7 @@ import {
   handleProvider,
   handleProviders,
 } from './models.js';
+import { handleArchive, handleRetention } from './archive.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -38,6 +41,11 @@ export interface CommandContext {
   workspaces: WorkspaceStore;
   activeRuns: ActiveRuns;
   runPolicies: RunPolicyStore;
+  retentionStore: RetentionStore;
+  archiver: SessionArchive;
+  defaultRetention: number;
+  archiveMax: number;
+  archiveMaxAgeDays: number;
   approvals: ApprovalRegistry | undefined;
   questions: QuestionRegistry | undefined;
   densityStore: DensityStore | undefined;
@@ -63,6 +71,8 @@ const HELP = [
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
+  '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
+  '- `/archive [note]`、`/archive list [N]`、`/archive clean` — 归档 / 查看 / 清理会话',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
   '- `/model` — 查看当前模型与 dsh 可用模型',
   '- `/model use <id>` — 热切换当前会话模型（下一轮生效）',
@@ -374,6 +384,8 @@ const handlers: Record<string, Handler> = {
   '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,
+  '/retention': handleRetention,
+  '/archive': handleArchive,
   '/density': handleDensity,
   '/model': handleModel,
   '/providers': handleProviders,

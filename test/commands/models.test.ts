@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { RetentionStore } from '../../src/bot/retention-store.js';
 import type { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
 import type { CommandChannel, CommandContext } from '../../src/commands/index.js';
@@ -30,6 +31,15 @@ async function withContext(
     workspaces: {} as CommandContext['workspaces'],
     activeRuns: {} as CommandContext['activeRuns'],
     runPolicies: {} as CommandContext['runPolicies'],
+    retentionStore: new RetentionStore(),
+    archiver: {
+      archive: vi.fn(),
+      list: vi.fn().mockResolvedValue([]),
+      prune: vi.fn().mockResolvedValue(0),
+    } as unknown as CommandContext['archiver'],
+    defaultRetention: 40,
+    archiveMax: 50,
+    archiveMaxAgeDays: 90,
     approvals: undefined,
     questions: undefined,
     densityStore: undefined,

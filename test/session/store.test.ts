@@ -35,4 +35,38 @@ describe('SessionStore', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('archives overflow beyond the retention window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
+    const path = join(root, 'sessions.json');
+    const archived: unknown[] = [];
+
+    try {
+      const store = new SessionStore(path);
+      store.recordExchange('chat-a', '/tmp/project', ['one'], 'r1', {
+        retention: 2,
+        onArchive: (overflow) => {
+          archived.push(overflow);
+        },
+      });
+      store.recordExchange('chat-a', '/tmp/project', ['two'], 'r2', {
+        retention: 2,
+        onArchive: (overflow) => {
+          archived.push(overflow);
+        },
+      });
+      await store.flush();
+
+      expect(archived).toEqual([
+        [{ role: 'user', content: 'one' }, { role: 'assistant', content: 'r1' }],
+      ]);
+      expect(store.historyFor('chat-a', '/tmp/project')).toEqual([
+        { role: 'user', content: 'two' },
+        { role: 'assistant', content: 'r2' },
+      ]);
+      expect(store.fullHistoryFor('chat-a', '/tmp/project')).toHaveLength(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

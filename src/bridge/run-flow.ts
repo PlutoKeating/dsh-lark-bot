@@ -18,6 +18,7 @@ import { renderApprovalCard } from '../card/approval-card.js';
 import { renderQuestionCard } from '../card/question-card.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
+import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
@@ -30,6 +31,11 @@ export interface RunFlowInput {
   messages: string[];
   adapter: AgentAdapter;
   sessions: SessionStore;
+  archiver?: SessionArchive;
+  /** Live messages kept before overflow is archived; defaults to 40. */
+  retention?: number;
+  archiveMax?: number;
+  archiveMaxAgeDays?: number;
   workspaces: WorkspaceStore;
   workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
@@ -144,7 +150,20 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       },
       replyOptions,
     );
-    input.sessions.recordExchange(input.scope, cwd, input.messages, assistantOutput);
+    input.sessions.recordExchange(input.scope, cwd, input.messages, assistantOutput, {
+      ...(input.retention === undefined ? {} : { retention: input.retention }),
+      ...(input.archiver
+        ? {
+            onArchive: (overflow) =>
+              input.archiver!.archive({
+                scope: input.scope,
+                cwd,
+                messages: overflow,
+                source: 'retention',
+              }).then(() => pruneArchives(input)),
+          }
+        : {}),
+    });
   } catch (error) {
     log.fail('run-flow', error, { scope: input.scope, runId });
     state = markInterrupted(state);
@@ -164,6 +183,18 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       input.questions.settleAll(input.scope);
     }
   }
+}
+
+async function pruneArchives(input: RunFlowInput): Promise<void> {
+  if (!input.archiver) return;
+  await input.archiver.prune({
+    ...(input.archiveMax !== undefined && input.archiveMax > 0
+      ? { maxArchives: input.archiveMax }
+      : {}),
+    ...(input.archiveMaxAgeDays !== undefined && input.archiveMaxAgeDays > 0
+      ? { maxAgeMs: input.archiveMaxAgeDays * 24 * 60 * 60 * 1000 }
+      : {}),
+  });
 }
 
 /** Build the per-run approval handler wiring ACP requests to approval cards. */

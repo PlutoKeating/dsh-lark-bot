@@ -10,6 +10,7 @@
 | **P5 后台服务** Background service | systemd / launchd / 计划任务：后台运行、开机自启、崩溃自动重启；CLI `start / status / restart / stop` | ✅ 已完成 Done |
 | **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
 | **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
+| **P8 会话归档** Session archival | 可配置保留窗口、超窗自动归档、`/archive` 手动导出（Markdown + JSONL + Git commit）、保留策略清理 | ✅ 已完成 Done（0.6.0） |
 
 ## 里程碑 · Milestones
 
@@ -27,6 +28,8 @@
 - **P7 done**（0.5.1）：`src/config/dsh-compat.ts` 单一事实来源、`scripts/check-dsh-upstream.mjs`
   上游雷达（每周 CI）、`scripts/probe-dsh-compat.mjs` 真实探测（CI `compat-probe`）、
   `docs/COMPATIBILITY.md` 升级手册、`/help` 测试覆盖。
+- **P8 done**（0.6.0）：可配置保留窗口（`/retention` + `DSH_LARK_RETENTION_MSGS`）、超窗消息
+  自动归档、`/archive` 手动导出与 `/archive list|clean`、保留策略清理。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
