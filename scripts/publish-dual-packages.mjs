@@ -46,8 +46,21 @@ async function buildPackage(name) {
     bin: {
       [name]: `bin/${name}.mjs`,
     },
-    files: ['dist', 'bin', 'README.md', 'SECURITY.md', 'LICENSE'],
+    files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'SECURITY.md', 'LICENSE'],
   };
+  const bundlePatch = `# ${name} as a profile bundle.
+
+# Installed with \`dsh plugin --profile <name> add ${packageName}\`. The row
+# mounts the bridge-management plugin (\`${name}/plugin\`) and exposes
+# \`ctx.larkBridge\` without blocking profile boot. Set DSH_LARK_AUTOSTART=1
+# to start the standalone bridge when the profile boots.
+
+- insert:
+    - id: dsh-lark-bot
+      name: '${name}/plugin'
+      config:
+        autostart: !!js process.env.DSH_LARK_AUTOSTART === '1'
+`;
 
   const dir = await mkdtemp(join(tmpdir(), `${name}-`));
   await mkdir(join(dir, 'dist'), { recursive: true });
@@ -56,15 +69,22 @@ async function buildPackage(name) {
     copyFile(join(ROOT, 'dist', 'index.js'), join(dir, 'dist', 'index.js')),
     copyFile(join(ROOT, 'dist', 'index.d.ts'), join(dir, 'dist', 'index.d.ts')),
     copyFile(join(ROOT, 'dist', 'cli.d.ts'), join(dir, 'dist', 'cli.d.ts')),
+    copyFile(join(ROOT, 'dist', 'plugin.js'), join(dir, 'dist', 'plugin.js')),
+    copyFile(join(ROOT, 'dist', 'plugin.d.ts'), join(dir, 'dist', 'plugin.d.ts')),
+    copyFile(join(ROOT, 'dist', 'invariant.js'), join(dir, 'dist', 'invariant.js')),
+    copyFile(join(ROOT, 'dist', 'invariant.d.ts'), join(dir, 'dist', 'invariant.d.ts')),
     copyFile(join(ROOT, 'dist', 'notify.js'), join(dir, 'dist', 'notify.js')),
     copyFile(join(ROOT, 'dist', 'notify.d.ts'), join(dir, 'dist', 'notify.d.ts')),
     copyFile(join(ROOT, 'dist', 'index.js.map'), join(dir, 'dist', 'index.js.map')),
     copyFile(join(ROOT, 'dist', 'cli.js.map'), join(dir, 'dist', 'cli.js.map')),
+    copyFile(join(ROOT, 'dist', 'plugin.js.map'), join(dir, 'dist', 'plugin.js.map')),
+    copyFile(join(ROOT, 'dist', 'invariant.js.map'), join(dir, 'dist', 'invariant.js.map')),
     copyFile(join(ROOT, 'dist', 'notify.js.map'), join(dir, 'dist', 'notify.js.map')),
     copyFile(join(ROOT, 'README.md'), join(dir, 'README.md')),
     copyFile(join(ROOT, 'SECURITY.md'), join(dir, 'SECURITY.md')),
     copyFile(join(ROOT, 'LICENSE'), join(dir, 'LICENSE')),
   ]);
+  await writeFile(join(dir, 'cordis.patch.yml'), bundlePatch, 'utf8');
 
   await mkdir(join(dir, 'bin'), { recursive: true });
   await writeFile(

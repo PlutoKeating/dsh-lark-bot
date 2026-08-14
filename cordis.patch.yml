@@ -1,0 +1,15 @@
+# dsh-lark-bot as a profile bundle.
+#
+# When this package is installed with `dsh plugin --profile <name> add
+# dsh-lark-bot`, dsh appends it to the profile's `dsh.profile.bundles` and
+# applies this patch on boot. The row mounts the bridge-management plugin
+# (`dsh-lark-bot/plugin`), exposing `ctx.larkBridge` (status / start /
+# restart / stop) without blocking profile boot. The bridge itself stays a
+# standalone service (`dsh-lark-bot start`); set `DSH_LARK_AUTOSTART=1` to
+# have this bundle start it when the profile boots.
+
+- insert:
+    - id: dsh-lark-bot
+      name: 'dsh-lark-bot/plugin'
+      config:
+        autostart: !!js process.env.DSH_LARK_AUTOSTART === '1'

@@ -17,10 +17,24 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
 
 | 项 | 要求 |
 | :--- | :--- |
-| `package.json` | 存在且 `name` 非空（`dsh-lark-bot`） |
-| 入口 | 提供 `main` / `exports` / 明确的 dsh 集成入口 |
+| `package.json` | 存在且 `name` 非空（`dsh-lark-bot` / `dsh-feishu-bot`） |
+| 入口 | 提供 `main` / `exports` / `dsh.bundle.patch`（`./cordis.patch.yml`） |
 | 依赖 | 所有运行时依赖在 `dependencies` / `peerDependencies` 显式声明 |
 | 许可证字段 | `license` 字段与根 `LICENSE` 文件**一致**（均为 AGPL-3.0） |
+
+### 2.1 dsh profile bundle 形态
+
+- 包同时以 **standalone CLI bridge** 与 **dsh profile bundle** 两种形态分发：
+  `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，支持
+  `dsh plugin --profile <name> add dsh-lark-bot` 标准安装；bundle patch 装配
+  `dsh-lark-bot/plugin`（提供 `ctx.larkBridge` 服务，不阻塞 profile 启动）。
+- `./plugin`、`./invariant`、`./notify` 三个子路径导出随包发布：`plugin` 为 bundle 行对应的
+  cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方 dsh-lark-channel 同款契约）；
+  `notify` 为 `lark_notify` 工具插件，SDK / ACP runtime profile 自动装配。
+- `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.6 依赖链一致）。
+- pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报
+  `ERR_PNPM_IGNORED_BUILDS`，按官方 publish 指引在 profile 的 `pnpm-workspace.yaml` 加入
+  `allowBuilds: { protobufjs: true }` 后重试（与官方 dsh-lark-channel 行为一致）。
 
 ## 3. README 规范 · README Specification
 
@@ -75,7 +89,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 - 仓库保持 `dsh-plugin` topic（已添加），以便进入生态的自动发现。
 - 包名使用**自有命名空间**（`dsh-lark-bot`），不占用 `@dsh-external/*` 等组织或官方保留命名空间。
-- 已提交生态收录 PR：`AdamPlatin123/awesome-dsh-plugins#37`（`docs: 登记 dsh-lark-bot`）。
+- 已收录：`AdamPlatin123/awesome-dsh-plugins#37`（`docs: 登记 dsh-lark-bot`，已合并，运行级
+  实测 ✅）。
 
 ## 8. 许可一致性 · License Consistency
 

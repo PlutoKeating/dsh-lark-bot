@@ -126,6 +126,17 @@
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
 
+### 4.9 dsh profile bundle（0.6.0）
+
+- `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，可用
+  `dsh plugin --profile <name> add dsh-lark-bot` 标准安装（实测通过）。
+- `./plugin`：cordis 插件 `dsh-lark-bot`，提供 `ctx.larkBridge` 服务（status / start /
+  restart / stop），不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 时 profile 启动自动拉起 bridge。
+- `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
+- `./notify`：`lark_notify` 工具插件，SDK / ACP runtime 自动装配。
+- `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
+- 形态关系：standalone CLI 为主形态，dsh bundle 为生态标准安装入口，两者并存、不冲突。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints

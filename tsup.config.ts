@@ -4,6 +4,8 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
+    plugin: 'src/plugin.ts',
+    invariant: 'src/invariant.ts',
     notify: 'src/notify/tool.ts',
   },
   format: ['esm'],

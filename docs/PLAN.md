@@ -46,6 +46,7 @@
 - [x] scope 内并行 run（`ActiveRuns` 多 run / `PendingQueue` 并发上限 / `/concurrency`）
 - [x] 多角色 Agent（`RoleStore` + `/role` 命令：persona / 模型 / 工具指引 / 角色规则）
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
+- [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 墙钟超时看门狗
 - [x] 卡片审批（ACP `session/request_permission` + 审批卡）
 - [x] 问答卡（单选 / 多选 / 自由文本）
@@ -74,8 +75,9 @@
 9. ✅ scope 内并行 run 与异步任务队列（0.6.0）
 10. ✅ 多角色 Agent（0.6.0）：`/role save|set|clear|list|show|remove`
 11. ✅ 出站 @ 提及与跨会话通知（0.6.0）：`/notify` + `lark_notify` 工具 + 回环回调服务
-12. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
-13. ⏳ 稳定发布下一版本
+12. ✅ dsh profile bundle（0.6.0）：`dsh plugin --profile <name> add dsh-lark-bot` 实测通过
+13. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
+14. ⏳ 稳定发布下一版本
 
 ## 7. 当前阻塞 · Current blocker
 
@@ -95,6 +97,9 @@
 ### 8.1 关键决策
 
 1. **不转 cordis 插件形态**：保留独立 CLI 桥接形态，但预留未来可选 cordis 形态的钩子（`AgentAdapter` 抽象已满足）。
+   > **0.6.0 更新**：已进一步补齐 **dsh profile bundle 形态**（`dsh.bundle.patch` →
+   > `cordis.patch.yml`，`./plugin` / `./invariant` / `./notify` 导出），支持
+   > `dsh plugin --profile <name> add` 标准安装；standalone CLI 仍为主形态，两者并存。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
 3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
    （`@deepseek-ai/dsh-acp` + `@agentclientprotocol/sdk` 的 `ClientSideConnection` + `dsh-user-approval`）。

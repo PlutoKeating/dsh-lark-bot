@@ -20,6 +20,17 @@ dsh-lark-bot --version
 dsh-feishu-bot --version
 ```
 
+作为 dsh 插件安装（profile bundle）：
+
+```bash
+dsh plugin --profile <name> add dsh-lark-bot
+```
+
+profile 启动时装配 `dsh-lark-bot/plugin`：在 `ctx.larkBridge` 暴露 bridge 后台服务管理
+（status / start / restart / stop），不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 可在
+profile 启动时自动拉起 bridge。pnpm ≥ 10 若因 `ERR_PNPM_IGNORED_BUILDS`（protobufjs）失败，
+在 profile 目录 `pnpm-workspace.yaml` 加入 `allowBuilds: { protobufjs: true }` 后重试。
+
 ## 2. 后台服务与首次启动 · Background service & first start
 
 `dsh-lark-bot start` 会在本机安装后台服务：加入开机自启列表，并在进程退出、崩溃或出错时自动重启。

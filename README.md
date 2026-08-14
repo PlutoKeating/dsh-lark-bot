@@ -46,6 +46,33 @@ npm install -g dsh-feishu-bot
 
 After installation, the commands are `dsh-lark-bot` and `dsh-feishu-bot` respectively.
 
+也可以作为 **dsh 标准 profile bundle** 安装到任意 dsh profile（`dsh.bundle.patch` 已声明）：
+
+It is also installable as a **standard dsh profile bundle** (the package declares
+`dsh.bundle.patch`):
+
+```bash
+dsh plugin --profile <name> add dsh-lark-bot
+```
+
+安装后 profile 启动时会装配 `dsh-lark-bot/plugin`（在 `ctx.larkBridge` 暴露 bridge 后台服务的
+status / start / restart / stop，不阻塞 profile 启动；`DSH_LARK_AUTOSTART=1` 可在 profile
+启动时自动拉起 bridge）。SDK / ACP runtime 还会自动装配 `lark_notify` 工具（见下文）。
+
+The profile then mounts `dsh-lark-bot/plugin` on boot — it exposes `ctx.larkBridge`
+(status / start / restart / stop of the standalone bridge service) without blocking boot; set
+`DSH_LARK_AUTOSTART=1` to start the bridge when the profile boots. The SDK / ACP runtimes also
+auto-mount the `lark_notify` tool (see below).
+
+> pnpm ≥ 10 默认拒绝依赖构建脚本：若 `dsh plugin add` 报 `ERR_PNPM_IGNORED_BUILDS`
+> （protobufjs 等），按官方指引在 profile 目录的 `pnpm-workspace.yaml` 加
+> `allowBuilds:\n  protobufjs: true` 后重试（与官方 `dsh-lark-channel` 相同的处理方式）。
+
+> pnpm ≥ 10 blocks dependency build scripts by default: if `dsh plugin add` reports
+> `ERR_PNPM_IGNORED_BUILDS` (e.g. protobufjs), add `allowBuilds:\n  protobufjs: true` to the
+> profile's `pnpm-workspace.yaml` and retry — the same handling as the official
+> `dsh-lark-channel`.
+
 ### 2. 启动后台服务并绑定飞书 | Start the background service and bind Feishu
 
 ```bash

@@ -438,6 +438,20 @@ export interface ServiceController {
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。
 
+### 8.1 dsh bundle 导出 · Bundle exports
+
+包同时是 dsh profile bundle（`dsh.bundle.patch` → `./cordis.patch.yml`），额外导出：
+
+- `./plugin`（`src/plugin.ts`）：cordis 插件 `dsh-lark-bot`，提供 `ctx.larkBridge` 服务
+  （`status()` / `start()` / `restart()` / `stop()`，委托 `ServiceManager`）；配置
+  `{ profile?, autostart?, home? }`，`DSH_LARK_AUTOSTART=1` 时 profile 启动即拉起 bridge。
+- `./invariant`（`src/invariant.ts`）：`dsh-lark-bot-invariant` 伴生模块，向宿主
+  `invariants` 注册表登记包归属（与官方 dsh-lark-channel/invariant 同契约）。
+- `./notify`（`src/notify/tool.ts`）：`lark-notify` 工具插件（见 §9）。
+
+`dsh plugin --profile <name> add dsh-lark-bot` 后，profile 的 `dsh.profile.bundles` 会追加
+`dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层。
+
 ## 9. 桥接层 · Bridge
 
 - `src/bridge/channel.ts`：`startChannel(deps)` 建立飞书长连接，路由 `message` / `cardAction`
