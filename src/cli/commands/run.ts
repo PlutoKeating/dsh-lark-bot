@@ -32,6 +32,7 @@ import { SessionStore } from '../../session/store.js';
 import { SessionArchive } from '../../session/archive.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
+import { startHeartbeat } from '../../guardian/heartbeat.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -311,6 +312,11 @@ export async function startBridgeEngine(
   larkChannel = bridge.channel;
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
+  const heartbeat = startHeartbeat(
+    paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
+    process.pid,
+    env.heartbeatMs,
+  );
 
   const startedAt = new Date().toISOString();
   log.info('cli', 'started', {
@@ -337,6 +343,7 @@ export async function startBridgeEngine(
     stop: async () => {
       if (stopped) return;
       stopped = true;
+      heartbeat.stop();
       await notifyServer.stop();
       await bridge.disconnect();
       await adapter.dispose?.();
