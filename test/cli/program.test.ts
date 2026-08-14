@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildProgram } from '../../src/cli.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { buildProgram, isDirectInvocation } from '../../src/cli.js';
 
 describe('buildProgram', () => {
   it('registers the expected top-level commands', () => {
@@ -18,5 +22,20 @@ describe('buildProgram', () => {
     const supervise = program.commands.find((command) => command.name() === 'supervise');
     expect((run as unknown as { _hidden: boolean })._hidden).toBe(true);
     expect((supervise as unknown as { _hidden: boolean })._hidden).toBe(true);
+  });
+});
+
+describe('isDirectInvocation', () => {
+  it('matches when the entry is the module itself, otherwise false', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-lark-entry-'));
+    const file = join(dir, 'cli.js');
+    await writeFile(file, '');
+    try {
+      expect(isDirectInvocation(file, pathToFileURL(file).href)).toBe(true);
+      expect(isDirectInvocation(join(dir, 'bin.js'), pathToFileURL(file).href)).toBe(false);
+      expect(isDirectInvocation(undefined, pathToFileURL(file).href)).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

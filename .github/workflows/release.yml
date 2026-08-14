@@ -47,7 +47,9 @@ jobs:
         run: pnpm build
 
       - name: Smoke test built CLI
-        run: node bin/dsh-lark-bot.mjs --version
+        run: |
+          node bin/dsh-lark-bot.mjs --version
+          node dist/cli.js --version
 
       - name: Publish both npm packages and build release artifacts
         run: node scripts/publish-dual-packages.mjs --pack-dir release-artifacts

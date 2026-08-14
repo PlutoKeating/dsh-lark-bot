@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { runDoctor } from './cli/commands/doctor.js';
 import { runBot } from './cli/commands/run.js';
@@ -95,4 +96,25 @@ export function buildProgram(): Command {
 
 export async function main(argv: readonly string[] = process.argv): Promise<void> {
   await buildProgram().parseAsync([...argv]);
+}
+
+/**
+ * True when this module is being executed directly (e.g. `node dist/cli.js run`)
+ * rather than imported by a bin wrapper. The background service runs
+ * `node <package>/dist/cli.js run`, so the bundle must self-execute in that case.
+ */
+export function isDirectInvocation(
+  entry: string | undefined = process.argv[1],
+  metaUrl: string = import.meta.url,
+): boolean {
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === fileURLToPath(metaUrl);
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) {
+  await main();
 }
