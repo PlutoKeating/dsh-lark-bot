@@ -686,15 +686,15 @@ and relaunches the full profile on `/safemode exit`.
 
 **更新请求 / Update requests**：
 
-- awesome-dsh-plugins 收录条目更新：`https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/<PR>`（v0.8.0 描述同步）
-- dshfind 数据刷新请求（含快照条目名称异常修正）：`https://github.com/hikariming/dshfind/issues/<ISSUE>`
-- omdsh-dev/community 收录讨论更新：https://github.com/orgs/omdsh-dev/discussions/12
+- awesome-dsh-plugins 收录条目更新：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127)（v0.8.0 描述同步）
+- dshfind 数据刷新请求（含快照条目名称异常修正）：[#2](https://github.com/hikariming/dshfind/issues/2)
+- omdsh-dev/community 收录讨论更新：[Discussion #12 更新评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998)
 
 **Update requests**:
 
-- awesome-dsh-plugins entry refresh: `https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/<PR>` (v0.8.0 description)
-- dshfind data-refresh request (incl. fixing the snapshot entry name): `https://github.com/hikariming/dshfind/issues/<ISSUE>`
-- omdsh-dev/community listing update: https://github.com/orgs/omdsh-dev/discussions/12
+- awesome-dsh-plugins entry refresh: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) (v0.8.0 description)
+- dshfind data-refresh request (incl. fixing the snapshot entry name): [#2](https://github.com/hikariming/dshfind/issues/2)
+- omdsh-dev/community listing update: [Discussion #12 update comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998)
 
 ## 免责声明 | Disclaimer
 
