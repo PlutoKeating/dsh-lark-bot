@@ -26,29 +26,33 @@
 
 ---
 
-## 快速开始 | Quick Start（普通用户先看这里）
+## 快速开始 | Quick Start（普通用户先看这里 | for end users）
 
-### 1. 安装
+### 1. 安装 | Install
 
 两个包名内容完全一致，任选一个即可：
 
+Both package names ship identical content — pick either one:
+
 ```bash
-# 推荐
+# 推荐 | Recommended
 npm install -g dsh-lark-bot
 
-# 或飞书命名版本
+# 或飞书命名版本 | or the Feishu-named edition
 npm install -g dsh-feishu-bot
 ```
 
 安装完成后，对应命令分别为 `dsh-lark-bot` 和 `dsh-feishu-bot`。
 
-### 2. 启动后台服务并绑定飞书
+After installation, the commands are `dsh-lark-bot` and `dsh-feishu-bot` respectively.
+
+### 2. 启动后台服务并绑定飞书 | Start the background service and bind Feishu
 
 ```bash
 dsh-lark-bot start
 ```
 
-或：
+或： | or:
 
 ```bash
 dsh-feishu-bot start
@@ -56,15 +60,28 @@ dsh-feishu-bot start
 
 `start` 会自动在本机安装一个**后台服务**：加入系统开机自启列表，并在进程退出、崩溃或出错时自动重启。首次启动会：
 
+`start` automatically installs a **background service** locally: it joins the OS autostart
+list and restarts automatically whenever the process exits, crashes or errors. On first launch:
+
 1. 在终端显示二维码。
 2. 用飞书 / Lark App 扫码。
 3. 选择或创建 PersonalAgent 应用。
 4. 绑定成功后，bot 会向你的私聊发送欢迎卡片。
 5. 私聊直接发消息；群聊或话题里 `@bot`。
 
+1. A QR code is shown in the terminal.
+2. Scan it with the Feishu / Lark app.
+3. Choose or create a PersonalAgent app.
+4. Once bound, the bot sends a welcome card to your private chat.
+5. Message it directly in private chat; use `@bot` in group chats or topics.
+
 绑定完成后 bot 转入后台运行，终端可以随时关闭。
 
+After binding, the bot runs in the background; you can close the terminal anytime.
+
 如果你已经有 PersonalAgent 应用，也可以跳过扫码：
+
+If you already have a PersonalAgent app, you can skip the QR step:
 
 ```bash
 dsh-lark-bot start \
@@ -73,51 +90,61 @@ dsh-lark-bot start \
   --tenant feishu
 ```
 
-### 3. 服务管理命令
+### 3. 服务管理命令 | Service management commands
 
-| 命令 | 作用 |
+| 命令 Command | 作用 Description |
 | :--- | :--- |
-| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（首次运行会先扫码绑定） |
-| `dsh-lark-bot status` | 查看服务状态（退出码 0=运行中，1=未运行） |
-| `dsh-lark-bot restart` | 重启后台服务（保留开机自启） |
-| `dsh-lark-bot stop` | 停止后台服务并移出开机自启 |
+| `dsh-lark-bot start` | 安装后台服务、加入开机自启并启动（首次运行会先扫码绑定）<br>Install the background service, enable autostart and start it (first run prompts QR binding) |
+| `dsh-lark-bot status` | 查看服务状态（退出码 0=运行中，1=未运行）<br>Show service status (exit code 0=running, 1=not running) |
+| `dsh-lark-bot restart` | 重启后台服务（保留开机自启）<br>Restart the background service (keeps autostart) |
+| `dsh-lark-bot stop` | 停止后台服务并移出开机自启<br>Stop the background service and remove autostart |
 
 后台服务的运行日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`。
 
-### 4. 基本使用
+Background service logs are written to `~/.dsh-lark/profiles/<profile>/logs/bot.log`.
+
+### 4. 基本使用 | Basic usage
 
 在飞书里向 bot 发送普通消息即可开始工作，常用命令：
 
-| 命令 | 作用 |
+Just send a normal message to the bot in Feishu to get started. Common commands:
+
+| 命令 Command | 作用 Description |
 | --- | --- |
-| `/new` `/reset` | 开始新会话 |
-| `/cd <path>` | 切换工作目录并重置会话 |
-| `/ws list` | 查看命名工作空间 |
-| `/ws save <name>` | 保存当前工作空间 |
-| `/ws use <name>` | 切换到命名工作空间 |
-| `/ws remove <name>` | 删除命名工作空间 |
-| `/status` | 查看当前状态 |
-| `/resume` | 查看当前会话最近上下文 |
-| `/stop` | 终止当前任务 |
-| `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
-| `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
-| `/model` | 查看当前模型、dsh 默认模型与可用模型列表 |
-| `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启） |
-| `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
-| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
-| `/providers` | 查看 dsh 已配置 providers、模型与凭据状态 |
-| `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai） |
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
-| `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
-| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
-| `/help` | 查看帮助 |
+| `/new` `/reset` | 开始新会话<br>Start a new session |
+| `/cd <path>` | 切换工作目录并重置会话<br>Change working directory and reset the session |
+| `/ws list` | 查看命名工作空间<br>List named workspaces |
+| `/ws save <name>` | 保存当前工作空间<br>Save the current workspace |
+| `/ws use <name>` | 切换到命名工作空间<br>Switch to a named workspace |
+| `/ws remove <name>` | 删除命名工作空间<br>Remove a named workspace |
+| `/status` | 查看当前状态<br>Show current status |
+| `/resume` | 查看当前会话最近上下文<br>Show the session's recent context |
+| `/stop` | 终止当前任务<br>Stop the current task |
+| `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时<br>View or set the current session run timeout |
+| `/density [compact\|standard\|detailed]` | 查看或设置卡片密度<br>View or set card density |
+| `/model` | 查看当前模型、dsh 默认模型与可用模型列表<br>View current model, dsh default model and available models |
+| `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启）<br>Hot-switch the current session model (effective next message, no restart) |
+| `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）<br>Write the dsh default model `agent-default-model` (admin) |
+| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员）<br>Add / remove a provider model (admin) |
+| `/providers` | 查看 dsh 已配置 providers、模型与凭据状态<br>View configured dsh providers, models and credential status |
+| `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）<br>Manage providers (admin; deepseek-official and custom pi-ai) |
+| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）<br>Manage dsh credentials (set / remove require admin) |
+| `/ask <问题>` | 发送问答卡，回答写入会话上下文<br>Send a Q&A card; the answer is written back to session context |
+| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单<br>Manage the access allowlist |
+| `/help` | 查看帮助<br>Show help |
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
-### 模型 / Provider / 凭据管理
+Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+
+### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
 模型与 provider 的配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 页面完全相同的
 存储协议），改动在下一个请求生效，无需重启 bot：
+
+Model and provider configuration is persisted the official dsh way (the exact storage protocol
+used by the dsh Web **Settings → Models** page); changes take effect on the next request without
+restarting the bot:
 
 - `/model use <id>`：按会话热切换模型，下一轮消息即用新模型。
 - `/model default <id>`：写入 dsh 的 `agent-default-model`，作为新会话的默认模型。
@@ -128,10 +155,23 @@ dsh-lark-bot start \
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）。settings 只保存 `apiKeyEnv`
   引用，字面密钥不进入 settings 或聊天记录。
 
+- `/model use <id>`: hot-switch the model for this session; the next message uses it.
+- `/model default <id>`: write the dsh `agent-default-model` as the default for new sessions.
+- `/providers`: show configured providers, models and credential status (official DeepSeek + custom pi-ai).
+- `/provider add|update|remove`: manage custom providers (`llm-pi-ai`) or `deepseek-official`;
+  a custom provider needs `--api` (`openai-completions` / `openai-responses` / `anthropic-messages`),
+  `--base-url` and at least one `--model`, matching the official schema.
+- `/key set|remove|list`: read / write `~/.dsh/.credentials.yaml` (0600). Settings keep only
+  `apiKeyEnv` references; literal keys never enter settings or chat history.
+
 安全提醒：在飞书会话里输入密钥会对该会话的可见成员暴露密钥，建议仅在私聊中使用，或优先用
 `--api-key-env` 引用已配置的环境变量 / dsh Web 页面录入。bot 不会在任何回复中回显密钥值。
 
-### 5. 卸载
+Security note: typing a key in a Feishu conversation exposes it to everyone who can see that
+chat; prefer private chats, `--api-key-env` references to existing environment variables, or the
+dsh Web UI. The bot never echoes key values in any reply.
+
+### 5. 卸载 | Uninstall
 
 ```bash
 dsh-lark-bot stop
@@ -140,6 +180,9 @@ rm -rf ~/.dsh-lark
 ```
 
 更详细的安装、状态目录、日志和排障说明见 [`docs/QUICK_START.md`](docs/QUICK_START.md)。
+
+See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state directories,
+logs and troubleshooting.
 
 ---
 
@@ -175,6 +218,20 @@ rm -rf ~/.dsh-lark
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
   子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark`（或 `dsh-lark-acp`）创建 runtime profile。
 
+- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (2026-08-14: SDK JSON-RPC / ACP
+  runtime handshake + real streaming task verification), connected through the official
+  `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see
+  [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for pinned versions, the upgrade policy and
+  automated probing, and [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details.
+- **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
+- **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public
+  server, domain or tunneling required).
+- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with
+  native session continuation and token-level streaming events); `DSH_LARK_ADAPTER=acp` switches
+  to the official **ACP server** (approval cards); `headless` keeps the legacy subprocess
+  fallback. On first start the bot creates the runtime profile at
+  `~/.dsh/profiles/dsh-lark` (or `dsh-lark-acp`).
+
 ## 配置 | Configuration
 
 - 本地配置：`~/.dsh-lark/config.json`
@@ -182,34 +239,52 @@ rm -rf ~/.dsh-lark
 - 环境变量统一使用 `DSH_LARK_*` 前缀
 - 模板见 [`.env.example`](.env.example)
 
+- Local config: `~/.dsh-lark/config.json`
+- The state root can be overridden with `DSH_LARK_HOME`
+- Environment variables use the `DSH_LARK_*` prefix
+- Template: [`.env.example`](.env.example)
+
 会话运行在 Git 仓库中时，会自动在 `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` 创建隔离 worktree，并复制项目级 `AGENTS.md`。
+
+When the session runs inside a Git repository, an isolated worktree is created at
+`~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` and a project-level `AGENTS.md` is copied in.
 
 每个飞书 scope 会保存最近 40 条对话消息；SDK 模式下 dsh 原生 session 续跑，headless 模式
 则把历史注入下一次 prompt 实现近似记忆。
 
+Each Feishu scope keeps the last 40 conversation messages; the SDK mode continues the native dsh
+session, while headless mode approximates memory by injecting history into the next prompt.
+
 当前核心环境变量：
 
-| 变量 | 默认值 | 说明 |
+Core environment variables:
+
+| 变量 Variable | 默认值 Default | 说明 Description |
 | :--- | :--- | :--- |
-| `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
-| `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
-| `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
-| `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置 |
-| `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置 |
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
-| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
-| `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限 |
-| `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
-| `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭） |
-| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
-| `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期 |
+| `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录<br>Local state root directory |
+| `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark`<br>`feishu` or `lark` |
+| `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录<br>Default working directory for new sessions |
+| `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置<br>dsh launch command; usually not needed |
+| `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置<br>dsh launch args, comma-separated; usually not needed |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）<br>`sdk` (default) / `acp` (approval) / `headless` (legacy) |
+| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider<br>Model provider |
+| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型<br>Default model |
+| `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限<br>Per-request output token cap for SDK agents |
+| `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊<br>Reject private chats when no allowlist is configured |
+| `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）<br>Stale-message rejection window (0 disables) |
+| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时<br>Wall-clock timeout for a single run |
+| `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期<br>Grace period after SIGTERM before SIGKILL |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
+
+On startup the bot auto-discovers common local `@deepseek-ai/dsh` installations. Set these two
+variables only when auto-discovery fails or a special profile is required.
 
 ## 权限与数据 | Permissions & Data
 
 本工具在**本机**运行，安装前请知悉它会访问：
+
+This tool runs **locally**; before installing, be aware that it accesses:
 
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
@@ -219,21 +294,54 @@ rm -rf ~/.dsh-lark
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
   引用，凭据文件权限 0600、目录 0700，字面密钥不进入 settings 或聊天记录）。
 
+- **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at
+  `~/.dsh-lark/config.json` (file mode 600).
+- **File system**: reads / writes the working directories you choose with `/cd` and `/ws`
+  (including running shell commands and modifying files).
+- **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and
+  task context sent to the DeepSeek API.
+- **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp`
+  profiles) to run agent tasks.
+- **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write
+  `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol
+  (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600,
+  directory 0700; literal keys never enter settings or chat history).
+
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
+
+All data flows only between this machine, Feishu and DeepSeek; nothing is collected or uploaded
+as telemetry. Keys are never committed to the repository (see `.gitignore`).
 
 ## 排障 | Troubleshooting
 
 先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并对当前 adapter 做真实可用性探测
 （`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）。
 
+Run `dsh-lark-bot doctor` first; it checks the profile and working directory and performs a real
+availability probe for the current adapter (`sdk` / `acp` / `headless` runtime handshake).
+
 常见问题：
+
+Common issues:
 
 - **bot 静默 / 长连接失败**：查看 stderr 上的 JSONL 日志，关注 `channel` 与 `channel-command` 类别；SDK 会自动重连。
 - **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止。
 - **首次扫码失败**：确认本机时间准确、网络可访问飞书开放平台；已拿到 App ID/Secret 时可用 `--app-id` / `--app-secret` 跳过扫码。
 
+- **Silent bot / long-connection failure**: check the JSONL logs on stderr, focusing on the
+  `channel` and `channel-command` categories; the SDK reconnects automatically.
+- **Unresponsive agent**: send `/status` to view the scope, cwd and active run; send `/stop` to
+  terminate the current task; the watchdog terminates it automatically after
+  `DSH_LARK_RUN_TIMEOUT_MS`.
+- **First QR binding fails**: make sure the local clock is accurate and the Feishu open platform
+  is reachable; with an existing App ID/Secret you can skip scanning via `--app-id` /
+  `--app-secret`.
+
 以后台服务方式运行时，日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines，
 stdout 与 stderr 合并）；当前进程的 stderr 仍为 JSON Lines。
+
+When running as a background service, logs go to `~/.dsh-lark/profiles/<profile>/logs/bot.log`
+(JSON Lines, stdout and stderr merged); the current process's stderr is still JSON Lines.
 
 ## 开发 | Development
 
@@ -243,15 +351,23 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm ci:local
-pnpm release:check   # ci:local + 上游一致性检查
-pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手
-pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵
+pnpm release:check   # ci:local + 上游一致性检查 | ci:local + upstream consistency check
+pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手 | installs pinned dsh into a temp DSH_HOME and runs a real SDK handshake
+pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵 | compares npm upstream stable with the pinned matrix
 ```
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 兼容矩阵的升级政策与自动化见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)。
 
+See [`AGENTS.md`](AGENTS.md) for the development workflow, [`docs/API.md`](docs/API.md) for
+module contracts, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the architecture. See
+[`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the compatibility matrix, upgrade policy
+and automation.
+
 发布双包（`dsh-lark-bot` 与 `dsh-feishu-bot` 共享同一份 dist / 版本 / 依赖）：
+
+Publishing both packages (`dsh-lark-bot` and `dsh-feishu-bot` share the same dist / version /
+dependencies):
 
 ```bash
 pnpm publish:dual:dry-run
@@ -260,7 +376,15 @@ pnpm publish:dual
 
 `scripts/publish-dual-packages.mjs` 从根 `package.json` 生成两份仅 `name` / `bin` 不同的发布清单，避免两份源码漂移。GitHub tag `v*` 会触发 [`release.yml`](.github/workflows/release.yml) 自动发布两个 npm 包并创建 Release。
 
+`scripts/publish-dual-packages.mjs` generates two publish manifests from the root
+`package.json`, differing only in `name` / `bin`, so the two copies never drift. A GitHub tag
+`v*` triggers [`release.yml`](.github/workflows/release.yml) to publish both npm packages and
+create a Release automatically.
+
 同一份 dist 还会以 `@plutokeating/dsh-lark-bot` 和 `@plutokeating/dsh-feishu-bot` 发布到 GitHub Packages，便于在 GitHub Packages 页面查看。
+
+The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bot` and
+`@plutokeating/dsh-feishu-bot`, viewable on the GitHub Packages page.
 
 ## 许可与安全 | License & Security
 
@@ -268,6 +392,12 @@ pnpm publish:dual
 - **安全报告**：如发现安全漏洞，请通过 GitHub Security Advisory 私下报告，勿公开 issue。
 - **安全模型**：默认拒绝、密钥脱敏、路径 containment、SSRF 防护、过期事件拒绝与交互工具
   默认禁用——详见 [`SECURITY.md`](SECURITY.md)。
+
+- **License**: GNU Affero General Public License v3.0 (see `LICENSE`).
+- **Security reports**: report vulnerabilities privately via GitHub Security Advisory; do not
+  open a public issue.
+- **Security model**: default-deny, secret redaction, path containment, SSRF protection, stale
+  event rejection and default-disabled interactive tools — see [`SECURITY.md`](SECURITY.md).
 
 ## 文档 | Documentation
 
@@ -331,9 +461,9 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 
 | 项目 Project | 说明 About |
 | :--- | :--- |
-| [`zarazhangrui/lark-coding-agent-bridge`](https://github.com/zarazhangrui/lark-coding-agent-bridge) | 飞书 ↔ Claude Code / Codex 桥接，本项目的直接参照 |
-| [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) | DeepSeek Harness（`dsh`），agent 后端 |
-| [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | OpenCode 的 Telegram 手机端，另一参照 |
+| [`zarazhangrui/lark-coding-agent-bridge`](https://github.com/zarazhangrui/lark-coding-agent-bridge) | 飞书 ↔ Claude Code / Codex 桥接，本项目的直接参照<br>Feishu ↔ Claude Code / Codex bridge; the direct reference for this project |
+| [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) | DeepSeek Harness（`dsh`），agent 后端<br>DeepSeek Harness (`dsh`), the agent backend |
+| [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | OpenCode 的 Telegram 手机端，另一参照<br>Telegram mobile client for OpenCode; another reference |
 
 ## 免责声明 | Disclaimer
 
