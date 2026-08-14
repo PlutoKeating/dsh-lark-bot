@@ -16,6 +16,12 @@ describe('loadRuntimeEnv', () => {
     expect(env.model).toBe('deepseek-v4-flash');
     expect(env.runTimeoutMs).toBe(300_000);
     expect(env.stopGraceMs).toBe(5_000);
+    expect(env.heartbeatMs).toBe(5_000);
+    expect(env.guardianDisabled).toBe(false);
+    expect(env.guardianProfile).toBe('dsh-lark');
+    expect(env.guardianBridgeProfile).toBe('default');
+    expect(env.guardianPollMs).toBe(2_000);
+    expect(env.guardianStaleMs).toBe(15_000);
   });
 
   it('parses explicit command args and tenant', () => {
@@ -42,5 +48,25 @@ describe('loadRuntimeEnv', () => {
     expect(() => loadRuntimeEnv({ DSH_LARK_STOP_GRACE_MS: 'invalid' })).toThrow(
       /DSH_LARK_STOP_GRACE_MS/,
     );
+    expect(() => loadRuntimeEnv({ DSH_LARK_GUARDIAN_POLL_MS: '0' })).toThrow(
+      /DSH_LARK_GUARDIAN_POLL_MS/,
+    );
+  });
+
+  it('parses guardian tuning variables', () => {
+    const env = loadRuntimeEnv({
+      DSH_LARK_GUARDIAN_DISABLED: '1',
+      DSH_LARK_GUARDIAN_PROFILE: 'demo',
+      DSH_LARK_GUARDIAN_BRIDGE_PROFILE: 'bridge-a',
+      DSH_LARK_GUARDIAN_POLL_MS: '3000',
+      DSH_LARK_GUARDIAN_STALE_MS: '20000',
+      DSH_LARK_HEARTBEAT_MS: '10000',
+    });
+    expect(env.guardianDisabled).toBe(true);
+    expect(env.guardianProfile).toBe('demo');
+    expect(env.guardianBridgeProfile).toBe('bridge-a');
+    expect(env.guardianPollMs).toBe(3_000);
+    expect(env.guardianStaleMs).toBe(20_000);
+    expect(env.heartbeatMs).toBe(10_000);
   });
 });
