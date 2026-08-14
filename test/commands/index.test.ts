@@ -109,4 +109,21 @@ describe('command router', () => {
       { replyTo: 'msg-1' },
     );
   });
+
+  it('answers /help with the command index including the model/provider commands', async () => {
+    const ctx = makeContext();
+
+    const handled = await tryHandleCommand('/help', ctx);
+
+    expect(handled).toBe(true);
+    const call = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(call?.[0]).toBe('chat-a');
+    const body = call?.[1] as string;
+    expect(body).toContain('/model');
+    expect(body).toContain('/providers');
+    expect(body).toContain('/provider');
+    expect(body).toContain('/key');
+    expect(body).toContain('/help');
+  });
 });
