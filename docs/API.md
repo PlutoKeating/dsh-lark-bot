@@ -26,6 +26,12 @@ export interface RuntimeEnv {
   stopGraceMs: number;
   accessDefaultDeny: boolean;
   eventFreshnessMs: number;
+  heartbeatMs: number;
+  guardianDisabled: boolean;
+  guardianProfile: string;
+  guardianBridgeProfile: string;
+  guardianPollMs: number;
+  guardianStaleMs: number;
 }
 
 export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
@@ -46,6 +52,12 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_ARCHIVE_MAX`：每个 scope 最多保留的归档数，默认 `50`（`0` 关闭清理）。
 - `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
 - `DSH_LARK_DISABLED`：`1` 时保持桥接引擎停止（插件仍作为标准插件加载）。
+- `DSH_LARK_HEARTBEAT_MS`：桥接引擎心跳写入间隔，默认 `5000`（安全网守护的存活信号）。
+- `DSH_LARK_GUARDIAN_DISABLED`：`1` 时安全网守护进程保持停止。
+- `DSH_LARK_GUARDIAN_PROFILE`：守护监视 / 重启的 dsh profile，默认 `dsh-lark`。
+- `DSH_LARK_GUARDIAN_BRIDGE_PROFILE`：提供飞书凭据与白名单的桥接状态 profile，默认 `default`。
+- `DSH_LARK_GUARDIAN_POLL_MS`：守护看门狗轮询间隔，默认 `2000`。
+- `DSH_LARK_GUARDIAN_STALE_MS`：心跳超时阈值，默认 `15000`。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -72,6 +84,15 @@ export function resolveAppPaths(root?: string): AppPaths;
 默认根目录为 `~/.dsh-lark`，可通过 `DSH_LARK_HOME` 覆盖。
 
 桥接引擎日志：`profiles/<profile>/logs/bot.log`（JSON Lines）。
+
+安全网守护相关本地状态：
+
+- 守护状态：`~/.dsh-lark/guardian.json`（dsh profile / 桥接 profile / 安全 profile /
+  `profileSeenUp` / `mode` / `relaunchedPid`，0600）。
+- 桥接心跳：`profiles/<bridge-profile>/guardian/heartbeat.json`
+  （`{ pid, startedAt, ts }`，桥接引擎每 `DSH_LARK_HEARTBEAT_MS` 原子写入，0600）。
+- 仅核心安全 profile：`~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` + `dsh-headless`，
+  无第三方插件）。
 
 ### 2.1 Profile 配置 · Profile config
 
@@ -373,7 +394,9 @@ export interface Logger {
 - `dsh-lark-bot/notify`：`lark_notify` 工具（见 §9），配置缺省时在执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN` 环境变量。
 
-常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。
+常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是可选安装的
+「安全网守护」（见 §10）：它独立于 dsh / Cordis 常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
+启动后开始向 `profiles/<bridge-profile>/guardian/heartbeat.json` 写心跳，引擎停止时停止心跳。
 
 ## 8. CLI · Command line
 
@@ -385,13 +408,17 @@ export interface Logger {
 - `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）。
 - `dsh-lark-bot --version` / `-v`：版本号。
 - `dsh-lark-bot run`（隐藏）：直接运行桥接引擎（诊断用；插件模式下引擎在 dsh 进程内运行）。
+- `dsh-lark-bot setup --guardian`：安装 bundle 的同时安装安全网守护（见 §10）。
+- `dsh-lark-bot guardian run|install|uninstall|status`：安全网守护常驻 / 系统服务安装 /
+  卸载 / 状态查询（见 §10）。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
-`/invite user|admin|group|list|remove`、`/help`。
+`/invite user|admin|group|list|remove`、`/help`。安全网守护接管期间额外支持
+`/safemode`、`/safemode status|plugins|exit|help`。
 
 ### 8.1 dsh bundle 导出 · Bundle exports
 
@@ -437,3 +464,109 @@ SDK / ACP runtime profile（`src/adapters/dsh/sdk-runtime.ts` / `acp-runtime.ts`
 `cordis.patch.yml` 插入 `lark-notify` 行，并把当前 bridge 包以 `link:` 依赖加入 profile，
 因此 `lark_notify` 在 `sdk` 与 `acp` 两种 adapter 下都自动可用（`headless` 无 runtime profile，
 不提供该工具）。
+
+## 10. 安全网守护 · Safety-net guardian（issue #6）
+
+守护是一个**独立于 dsh / Cordis 的最小 Node 进程**（系统级常驻：Linux systemd user unit /
+macOS LaunchAgent / Windows 启动项），由 `dsh-lark-bot guardian run` 启动。它不导入任何 dsh
+代码，只依赖 `@larksuite/channel` 与 Node 内置模块。
+
+### 10.1 心跳 · Heartbeat
+
+`src/guardian/heartbeat.ts`：
+
+```ts
+export interface HeartbeatPayload { pid: number; startedAt: string; ts: number }
+export function startHeartbeat(file: string, pid: number, intervalMs?: number): { stop(): void };
+export function readHeartbeat(file: string): Promise<HeartbeatPayload | undefined>;
+export function isHeartbeatFresh(payload: HeartbeatPayload | undefined, maxAgeMs: number, now?: number): boolean;
+export function heartbeatAgeMs(payload: HeartbeatPayload, now?: number): number;
+```
+
+桥接引擎（`startBridgeEngine`，§3）启动后以 `DSH_LARK_HEARTBEAT_MS`（默认 5000）周期写入
+`~/.dsh-lark/profiles/<bridge-profile>/guardian/heartbeat.json`（0600 原子写），引擎停止时
+停止心跳。
+
+### 10.2 状态 · Guardian state
+
+`src/guardian/state.ts`：`GuardianState`
+（`dshProfile` / `bridgeProfile` / `safeProfile` / `profileSeenUp` / `mode` / `relaunchedPid`）
+持久化于 `~/.dsh-lark/guardian.json`（0600）。`mode` ∈ `standby`（静默）| `takeover`
+（已接管飞书通道）| `safe`（安全模式对话中）。
+
+### 10.3 仅核心安全 profile · Core-only safe profile
+
+`src/guardian/safe-profile.ts`：
+
+- `ensureSafeProfile({ home, dshProfile, env })`：在 `~/.dsh/profiles/<dsh-profile>-safe`
+  写入 `package.json`（`dsh.profile.bundles = ['@deepseek-ai/dsh-base',
+  '@deepseek-ai/dsh-headless']`）、空 `cordis.patch.yml`、空 `cordis.yml` 与
+  `pnpm-workspace.yaml`；已存在文件不覆盖。
+- `probeSafeProfile({ bin, dshProfile, home, env, run? })`：以 `dsh --profile <safe>
+  --dump-config`（boot-free）验证核心 bundle 可解析，失败返回 stderr 尾部供飞书展示。
+
+两个 bundle 均来自 dsh 安装自身的依赖闭包（dsh 启动时 heal `$DSH_HOME/profiles/node_modules`），
+无需 pnpm 安装，也不受故障 profile 的 node_modules / 第三方插件影响。
+
+### 10.4 进程观察 · Process watch
+
+`src/guardian/process.ts`：
+
+```ts
+export interface ProfileProcess { pid: number; cmdline: string }
+export function matchProfileProcess(cmdline: string, dshProfile: string): boolean;
+export async function findProfileProcess(dshProfile: string): Promise<ProfileProcess | undefined>;
+export function isProcessAlive(pid: number): boolean;
+export async function captureOutput(command, args, timeoutMs?): Promise<{ code; stdout; stderr }>;
+export function spawnDetached(command, args, env?): { pid?: number };
+```
+
+`matchProfileProcess` 匹配 `--profile <name>` 参数且命令行为 dsh launcher（包含
+`@deepseek-ai/dsh` 或独立 `dsh` 词元），不会把 `<name>-safe` 误判为完整 profile。
+
+### 10.5 控制信号 · Control signals
+
+`src/guardian/control.ts`：`parseGuardianCommand(text)` 解析 `/safemode`、
+`/safemode status|plugins|exit|help`（含大小写与别名）。
+
+### 10.6 接管状态机 · GuardianService
+
+`src/guardian/service.ts`：
+
+```ts
+export class GuardianService {
+  constructor(options: GuardianServiceOptions);
+  async start(): Promise<void>;
+  async stop(): Promise<void>;
+  snapshot(): GuardianSnapshot;
+}
+export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise<GuardianService>;
+```
+
+状态机（每 `DSH_LARK_GUARDIAN_POLL_MS` 轮询）：
+
+1. **standby**：dsh 在线（心跳新鲜 或 存在 `--profile <name>` 进程）→ 不连接飞书；记录
+   `profileSeenUp`。
+2. **takeover**：`profileSeenUp` 且 dsh 持续下线（`DSH_LARK_GUARDIAN_STALE_MS` 心跳过期 +
+   无进程，连续 `takeoverGracePolls` 次）→ 用桥接 profile 的凭据 / 白名单创建
+   `@larksuite/channel` 长连接；只有 admin（无 admin 时回退 allowedUsers）可触发控制命令。
+3. **safe**：`/safemode` 通过安全 profile 探测后，以 `DshAdapter`（`dsh --profile <safe>
+   "<prompt>"`）逐条执行对话，历史上下文拼接进 prompt（每 scope 上限 30 条）；`/safemode
+   plugins` 执行 `dsh plugin --profile <name> list`；`/safemode exit` 以 detached 方式重启
+   完整 profile，短暂延迟后断开飞书连接并回到 standby。
+
+dsh 重新在线时（用户手动启动或退出安全模式后），守护立即断开飞书连接并清空安全模式上下文。
+守护进程可随时用 `DSH_LARK_GUARDIAN_DISABLED=1` 停止；`guardian status` 只读输出当前状态。
+
+### 10.7 系统服务安装 · Service install
+
+`src/guardian/install.ts`：
+
+- `installGuardian({ env, dshProfile?, bridgeProfile?, dryRun?, run?, rootOverride? })`：
+  写入 `~/.dsh-lark/guardian.json`，并按平台写 systemd user unit / LaunchAgent plist /
+  Windows 启动项，尝试激活（`systemctl --user enable --now` / `launchctl bootstrap`），失败时
+  打印手动命令。
+- `uninstallGuardian({ env, run?, rootOverride? })`：停用并删除服务文件，保留状态文件。
+- `systemdUnit` / `launchdPlist` / `windowsStartupCmd`：纯函数生成单元文件内容（可测试）。
+
+CLI：`dsh-lark-bot setup --guardian`、`dsh-lark-bot guardian run|install|uninstall|status`。

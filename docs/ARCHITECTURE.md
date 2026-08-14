@@ -52,6 +52,16 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 
 ```
 ┌──────────────────────────────────────────┐
+│  guardian/（可选 · 独立于 dsh 的进程）      │
+│  · 心跳看门狗（读 bridge 心跳 + ps 观察）  │
+│  · dsh 下线后接管飞书通道，接收 /safemode  │
+│  · 仅核心安全 profile（dsh-base+headless） │
+│  · 受限对话自愈 + 退出重启完整 profile      │
+└──────────────────────────────────────────┘
+```
+
+```
+┌──────────────────────────────────────────┐
 │  dsh profile（cordis 组合）                │
 │  · dsh-lark-bot/plugin  桥接引擎（进程内） │
 │  · dsh-lark-bot/notify  lark_notify 工具  │
@@ -63,7 +73,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 `dsh-lark-bot setup`）把包装进 profile，dsh 启动时以标准插件方式加载
 `dsh-lark-bot/plugin` —— 桥接引擎**在 dsh 进程内**运行（飞书 WebSocket 通道、会话/工作区、
 卡片、通知回调），并按需拉起官方 dsh SDK runtime 子进程执行 agent 任务。常驻 / 守护 / 重启
-由 dsh 宿主负责，不再有独立后台服务层。首次启动无凭据时打印二维码完成一次性绑定。
+由 dsh 宿主负责，不再有独立后台服务层（唯一进程级例外是可选安装的「安全网守护」，见关键决策 8）。
+首次启动无凭据时打印二维码完成一次性绑定。
 
 ## 关键决策 · Key Decisions
 
@@ -89,7 +100,17 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
-   `doctor` / 隐藏 `run`（诊断），README 只记录这一条路径。
+   `doctor` / 隐藏 `run`（诊断）以及安全网守护的 `guardian run|install|uninstall|status`，
+   README 只记录这一条路径。
+8. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
+   boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
+   进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
+   heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
+   （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
+   安全模式：创建 `~/.dsh/profiles/<profile>-safe`（仅 `dsh-base` + `dsh-headless`，无第三方
+   插件），以官方 headless 子进程逐条对话（含上下文拼接）供自愈；`/safemode exit` 重启完整
+   profile 并交还通道。守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程
+   本身不依赖任何 dsh / Cordis 代码。
 
 ## 目录映射 · Directory Mapping
 
@@ -109,3 +130,4 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/media/` | 附件下载与文本注入 |
 | `src/notify/` | 进程内通知回调服务与 `lark_notify` 工具插件 |
 | `src/platform/` | 跨平台原子写入 |
+| `src/guardian/` | 安全网守护（可选）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |

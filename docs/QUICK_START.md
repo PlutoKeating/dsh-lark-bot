@@ -37,7 +37,8 @@ dsh 以标准插件方式加载桥接引擎；首次启动（无凭据时）终�
 
 在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
 
-常驻 / 守护由 dsh 宿主负责（profile 在则引擎在）。已经有一个 PersonalAgent 应用时，
+常驻 / 守护由 dsh 宿主负责（profile 在则引擎在；可选安装的「安全网守护」除外，见第 6 节）。
+已经有一个 PersonalAgent 应用时，
 可在启动命令的环境变量中提供凭据跳过扫码：
 
 ```bash
@@ -99,9 +100,39 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
 
-## 6. 本地状态
+## 6. 安全网守护（可选）· Safety-net guardian
+
+dsh 采用「一切皆插件」架构，任何第三方插件都可能让整个 profile boot 失败。此时桥接引擎与
+dsh 一起下线，飞书入口不可用。可选安装一个**独立于 dsh 进程**的最小守护，在最坏情况下仍
+保留飞书救援入口：
+
+```bash
+# 安装（与 setup 一起，或单独安装）
+npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
+dsh-lark-bot guardian install --dsh-profile dsh-lark
+
+# 状态查看 / 卸载
+dsh-lark-bot guardian status
+dsh-lark-bot guardian uninstall
+```
+
+dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或无法 boot 后，守护自动接管通道，
+在飞书里向 bot 发送控制信号即可全程自救，无需命令行：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/safemode` | 进入仅核心安全模式（`dsh-base` + `dsh-headless`，无第三方插件），后续消息与 dsh 核心对话 |
+| `/safemode status` | 查看守护 / dsh / 安全模式状态 |
+| `/safemode plugins` | 列出故障 profile 已安装的插件清单 |
+| `/safemode exit` | 退出安全模式，重启完整 profile 并交还飞书通道 |
+
+安全模式下 agent 具备代码执行能力，可配合上述命令定位 / 修复 / 禁用损坏插件。dsh 恢复后
+守护自动断开并回归静默。守护相关本地状态见下节。
+
+## 7. 本地状态
 
 - 配置文件：`~/.dsh-lark/config.json`
+- 守护状态：`~/.dsh-lark/guardian.json`
 - 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
@@ -110,18 +141,21 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
 - 运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（桥接引擎 JSON Lines）
+- 守护心跳：`~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（桥接引擎周期写入）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
 
 - `dsh-lark`：SDK JSON-RPC runtime（`DSH_LARK_ADAPTER=sdk`，默认）
 - `dsh-lark-acp`：ACP runtime（`DSH_LARK_ADAPTER=acp`，审批）
+- `dsh-lark-safe`：仅核心安全 profile（`/safemode` 时由守护创建，`dsh-base` + `dsh-headless`）
 
 可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行墙钟超时，`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。
 
-## 7. 卸载
+## 8. 卸载
 
 ```bash
-dsh-lark-bot stop
-npm uninstall -g dsh-lark-bot
-rm -rf ~/.dsh-lark
+dsh-lark-bot guardian uninstall   # 仅安装过守护时需要
+dsh plugin --profile dsh-lark remove dsh-lark-bot
 ```
+
+卸载后 profile 不再加载插件；本地状态保留在 `~/.dsh-lark`，如需清除请先备份再删除该目录。

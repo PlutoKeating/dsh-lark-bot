@@ -79,6 +79,16 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/invite remove user\|group <id>` | 移除白名单 |
 | `/help` | 查看帮助 |
 
+安全网守护接管期间（dsh 下线后）的额外命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/safemode` | 进入仅核心安全模式（`dsh-base` + `dsh-headless`，无第三方插件） |
+| `/safemode status` | 查看守护 / dsh / 安全模式状态 |
+| `/safemode plugins` | 列出故障 profile 已安装的插件清单 |
+| `/safemode exit` | 退出安全模式，重启完整 profile 并交还飞书通道 |
+| `/safemode help` | 查看上述命令帮助 |
+
 ### 模型 / Provider / 凭据管理
 
 模型与 provider 的配置直接读写 dsh 官方配置存储（`~/.dsh/settings.yaml` 与
@@ -117,6 +127,40 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
+
+### 安全网守护 · Safety-net guardian
+
+背景：dsh 采用「一切皆插件」架构，单个第三方插件报错即可让整个 profile boot 失败，此时桥接
+引擎随 dsh 一起下线，飞书入口不可用。为保留最坏情况下的救援通道，可安装**独立于 dsh 进程**
+的最小「安全网守护」：
+
+```bash
+# 安装（两种方式等价，安装后系统级常驻）
+npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
+# 或：dsh-lark-bot guardian install --dsh-profile dsh-lark
+
+# 状态 / 卸载
+dsh-lark-bot guardian status
+dsh-lark-bot guardian uninstall
+```
+
+工作方式：
+
+- 桥接引擎启动后每 5 秒向 `~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json` 写入心跳。
+- 守护（`DSH_LARK_GUARDIAN_POLL_MS=2000` 轮询）在心跳新鲜或存在 `dsh --profile <name>`
+  进程时判定 dsh 在线，保持静默、不占用飞书通道（同 app 飞书长连接仅允许单连接）。
+- 曾观察到 dsh 在线且心跳过期 / 无进程（`DSH_LARK_GUARDIAN_STALE_MS=15000`）后，守护接管
+  飞书通道；只有管理员（无管理员时回退白名单用户）能触发控制命令。
+- `/safemode` 创建 `~/.dsh/profiles/<dsh-profile>-safe`（仅 `dsh-base` + `dsh-headless`，
+  不加载任何第三方插件），后续消息以 `dsh --profile <safe> "<prompt>"` 逐条对话（历史上下文
+  自动拼接，每 scope 上限 30 条），可让 agent 配合代码执行能力定位 / 修复 / 禁用损坏插件。
+- `/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示插件清单。
+- `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并交还通道；
+  用户已有会话 / 工作区数据不受影响。
+- dsh 重新在线（手动启动或退出安全模式）时，守护自动回归静默。
+
+停止守护：在服务单元环境或启动命令中设 `DSH_LARK_GUARDIAN_DISABLED=1`，或
+`dsh-lark-bot guardian uninstall`。
 
 ## 5. 会话与工作区 · Sessions & workspaces
 
@@ -159,15 +203,17 @@ dsh-lark-bot doctor
 - adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
 
 桥接引擎日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines）。
-服务状态可用 `dsh-lark-bot status` 查看；服务未运行时先检查该日志再运行 `doctor`。
+守护状态可用 `dsh-lark-bot guardian status` 查看；服务未运行时先检查该日志再运行 `doctor`。
 
 ## 8. 卸载 · Uninstall
 
 ```bash
-dsh-lark-bot stop
-npm uninstall -g dsh-lark-bot
-rm -rf ~/.dsh-lark
+dsh-lark-bot guardian uninstall        # 仅安装过安全网守护时需要
+dsh plugin --profile dsh-lark remove dsh-lark-bot
 ```
+
+卸载后 profile 不再加载插件；本地状态（配置 / 会话 / 归档 / 角色 / 守护状态）保留在
+`~/.dsh-lark`，如需彻底清除请先备份再删除该目录。
 
 ## 9. 环境变量 · Environment
 
@@ -190,6 +236,12 @@ rm -rf ~/.dsh-lark
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |
 | `DSH_LARK_DISABLED` | 未设置 | `1` 时保持桥接引擎停止（插件仍加载） |
+| `DSH_LARK_HEARTBEAT_MS` | `5000` | 桥接引擎心跳写入间隔（守护存活信号） |
+| `DSH_LARK_GUARDIAN_DISABLED` | `false` | `1` 时安全网守护进程保持停止 |
+| `DSH_LARK_GUARDIAN_PROFILE` | `dsh-lark` | 守护监视 / 重启的 dsh profile |
+| `DSH_LARK_GUARDIAN_BRIDGE_PROFILE` | `default` | 提供飞书凭据与白名单的桥接状态 profile |
+| `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔 |
+| `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值（超时且无 dsh 进程则接管） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
 桥接引擎）；无需任何独立服务环境快照。

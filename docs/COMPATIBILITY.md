@@ -48,7 +48,8 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
    上游一致性检查）。
 5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走真实 SDK runtime 初始化握手。
-6. **实机回归**：`dsh-lark-bot restart` 后 `dsh-lark-bot status` + `doctor`，
+6. **实机回归**：重启 profile（`dsh --profile <name>`，或守护模式下
+   `dsh-lark-bot guardian status` 观察接管/交还）后运行 `dsh-lark-bot doctor`，
    确认 dsh profile 中插件装载正常（`dsh --profile <name>` 内引擎启动）；飞书会话内跑一轮真实任务。
 7. **更新验证日期**：把 `verifiedAt` 改为当天，同步本文矩阵表与
    `README.md`「兼容性」章节。

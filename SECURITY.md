@@ -11,6 +11,8 @@
 - **SSRF**：agent 或桥接层被诱导访问内网 / 环回地址。
 - **消息重放 / 过期事件**：旧消息或重复事件被当作新指令处理。
 - **交互工具不可达**：`ask_user_question`、终端类工具在 IM 场景下无法回达，应默认禁用。
+- **救援通道被滥用**：dsh 下线后由守护接管飞书通道，若控制信号无鉴权，任何能私聊 bot 的人
+  都能触发安全模式或重启完整 profile。
 
 ## 安全姿态 · Security posture
 
@@ -35,6 +37,16 @@
    `/invite admin <open_id>` 定义）；查看类命令（`/model`、`/providers`、`/key list`）开放。
 10. **本地回调隔离**：`lark_notify` 工具的回调服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
+11. **安全网守护（可选安装）**：
+    - 守护是独立于 dsh / Cordis 的最小进程，只读取本地状态与进程命令行（`ps`，不读内存），
+      不导入任何 dsh 代码、不监听公网端口；
+    - dsh 在线时守护**不连接飞书**（同 app 长连接仅允许单连接，避免抢占正常通道）；仅在
+      「曾观察 dsh 在线 且 心跳过期 + 无 dsh 进程」时接管通道；
+    - 控制信号默认拒绝：仅管理员（`access.admins`，无管理员时回退 `allowedUsers`）可触发
+      `/safemode` 系列命令，未授权消息静默丢弃；
+    - 过期事件复用 `DSH_LARK_EVENT_FRESHNESS_MS` 窗口拒绝；
+    - 心跳 / 守护状态文件以 `0600` 写入；安全模式仅挂载官方核心 bundle（`dsh-base` +
+      `dsh-headless`），不加载任何第三方插件，避免把故障面带进救援通道。
 
 ## 数据与凭据 · Data & credentials
 
@@ -47,6 +59,9 @@
   引用，不落字面密钥）与 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）。bot 永不回显
   密钥值；群聊中粘贴密钥会对群成员可见，建议私聊使用或改用环境变量 / dsh Web 页面录入。
 - 所有数据仅在本机、飞书开放平台与 DeepSeek API 之间流转；无遥测。
+- 安全网守护相关文件：`~/.dsh-lark/guardian.json` 与
+  `~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（均 `0600`）；守护读取的飞书凭据
+  来自 `~/.dsh-lark/config.json`（`0600`），日志按既有规则脱敏。
 
 ## 报告渠道 · Reporting
 

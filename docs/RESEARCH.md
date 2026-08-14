@@ -98,3 +98,32 @@
 3. 工作区管理做增量：先 git worktree 隔离 + 项目级规则注入，再逐步加调度、沙箱。
 4. dsh 是 day-1 preview，SDK / ACP 接口会变——**dsh adapter 与 bridge 核心保持隔离**，
    dsh 一变只动 `src/adapters/dsh/`。
+
+## 8. 安全网守护调研（issue #6，2026-08-15）
+
+**背景**：dsh 基于 Cordis「一切皆插件」，插件间无进程级隔离；生态雷达
+（awesome-dsh-plugins）运行级实测 1076 个插件中 138 个不兼容（约 13%），单个坏插件即可让
+整个 profile boot 失败。自 v0.7.0 桥接引擎在 dsh 进程内运行后，最坏情况下用户没有任何
+飞书救援入口。
+
+**关键调研结论**：
+
+1. **飞书长连接同 app 单连接**：飞书开放平台长连接为集群模式，同一应用部署多个客户端时只有
+   随机一个收到消息；社区实测两个 gateway 共享一个 app_id 会互相争抢连接（“system busy”）。
+   因此守护**必须**在 dsh 在线时静默、仅在下线后接管通道（与 issue 的「不抢占飞书通道」
+   验收一致）。
+2. **仅核心 = 官方 headless 模板**：dsh 内置 `PROFILE_TEMPLATES.headless =
+   ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless']`；`dsh --profile headless
+   "<task>"` 走官方一次性任务（新会话、打印最终答案后退出），headless bundle 自带
+   code-runtime（worker-thread 代码执行），足以支撑「定位 / 修复 / 禁用插件」的自愈操作。
+   守护为 `<profile>-safe` 专用 profile 写入同一 bundle 组合，**不加载任何第三方插件**；
+   两个 bundle 从 dsh 安装自身依赖闭包解析（`healProfilesModuleFallback`），无需 pnpm 安装，
+   也不受故障 profile 的 node_modules 影响。
+3. **dsh CLI 提供 boot-free 探测**：`dsh --profile <name> --dump-config` 只组合 bundle 层 +
+   patch 层、不挂载任何插件，是「核心能否解析」的安全探测手段；安全模式进入前用它对 safe
+   profile 做就绪检查，失败原因直接展示给用户。
+4. **实现形态**：守护为独立 Node 进程（`guardian run`），复用 `@larksuite/channel` 与
+   `DshAdapter`（headless 子进程翻译），不导入任何 dsh 代码；以 systemd user unit /
+   LaunchAgent / Windows 启动项系统级常驻。桥接引擎写心跳文件作为存活信号，守护以
+   「心跳新鲜 或 存在 `--profile <name>` 进程」判定 dsh 在线，以
+   「曾在线 且 心跳过期 + 无进程」判定接管。

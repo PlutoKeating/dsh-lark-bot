@@ -153,6 +153,47 @@ runtime profiles): after a task finishes it can push messages to other groups/to
 members. The bridge listens on 127.0.0.1 with a random per-boot token — nothing is exposed to the
 public network.
 
+**安全网守护（Safe-mode guardian）**：可选安装一个独立于 dsh 进程、系统级常驻的最小守护进程
+（Linux systemd user unit / macOS LaunchAgent / Windows 启动项）。dsh 正常运行时守护保持静默；
+一旦 dsh 进程下线或无法 boot（例如某个第三方插件破坏了整个 profile 组合），守护自动接管飞书
+通道，用户无需接触命令行即可发送控制信号自救：
+
+- `/safemode`：进入**仅核心安全模式**——守护创建 `~/.dsh/profiles/<profile>-safe`（仅
+  `dsh-base` + `dsh-headless` 两个官方核心 bundle，**不加载任何第三方插件**），后续消息经
+  守护转发给该核心 dsh 逐条对话，配合代码执行能力定位 / 修复 / 禁用损坏插件；
+- `/safemode plugins`：列出故障 profile 已安装的插件清单（自愈诊断）；
+- `/safemode status`：查看守护 / dsh / 安全模式状态；
+- `/safemode exit`：退出安全模式，守护重启完整 profile 并把飞书通道交还给正常形态；
+
+全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
+
+```bash
+npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
+# 或已安装后单独安装：dsh-lark-bot guardian install
+```
+
+**Safety-net guardian**: optionally install a minimal system-level resident process that is
+independent of the dsh process. While dsh runs, the guardian stays silent; once dsh goes down or
+fails to boot (e.g. a third-party plugin breaks the whole profile composition), the guardian
+takes over the Feishu channel so you can self-heal without touching the command line:
+
+- `/safemode`: enter **core-only safe mode** — the guardian provisions
+  `~/.dsh/profiles/<profile>-safe` with only the two official core bundles (`dsh-base` +
+  `dsh-headless`, **no third-party plugins**) and proxies a restricted conversation to that core
+  dsh so you can locate / fix / disable the offending plugin;
+- `/safemode plugins`: list the plugins installed into the broken profile;
+- `/safemode status`: show guardian / dsh / safe-mode state;
+- `/safemode exit`: leave safe mode — the guardian relaunches the full profile and hands the
+  Feishu channel back;
+
+No command line is needed for the whole rescue flow; once dsh is back, the guardian releases the
+channel automatically. Install:
+
+```bash
+npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
+# or later: dsh-lark-bot guardian install
+```
+
 ### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
 模型与 provider 的配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 页面完全相同的
@@ -200,10 +241,12 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
 `setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
-`dsh plugin --profile dsh-lark add dsh-lark-bot`。已安装时重复执行即升级到最新版。
+`dsh plugin --profile dsh-lark add dsh-lark-bot`。加 `--guardian` 会同时安装「安全网守护」
+（见「安全网守护」一节）。已安装时重复执行即升级到最新版。
 
 `setup` locates your dsh, pre-approves pnpm's build policy (protobufjs) and runs the standard
-`dsh plugin --profile dsh-lark add dsh-lark-bot`. Re-running it upgrades to the latest version.
+`dsh plugin --profile dsh-lark add dsh-lark-bot`. Adding `--guardian` also installs the
+safety-net guardian (see "Safety-net guardian" above). Re-running it upgrades to the latest version.
 
 ### 升级 | Upgrade
 
@@ -304,6 +347,8 @@ tasks and session archival.
   对应 runtime 并自动重建。
 - 桥接引擎作为 dsh 插件在 dsh 进程内运行，agent 执行使用官方 dsh SDK runtime 子进程
   （嵌套 runtime 是有意取舍，用于按工作区隔离的 runtime 池与 scope 内并行 run）。
+  唯一的进程级例外是可选安装的「安全网守护」——它独立于 dsh / Cordis 常驻，仅在 dsh
+  下线后接管飞书通道，正常运行时保持静默。
 - 飞书文档评论、富文本回复为规划中能力，尚未实现。
 - pnpm ≥ 10 的构建脚本策略由 `setup` 自动处理；手动 `dsh plugin add` 时若报
   `ERR_PNPM_IGNORED_BUILDS`，按官方指引在 profile 的 `pnpm-workspace.yaml` 加
@@ -313,7 +358,9 @@ tasks and session archival.
   so `/stop` closes and recreates the runtime.
 - The engine runs in-process as a dsh plugin; agent execution uses the official dsh SDK runtime
   subprocess — a deliberate nested-runtime design for per-workspace runtime pools and parallel
-  runs.
+  runs. The one process-level exception is the optional safety-net guardian — a minimal
+  resident process independent of dsh / Cordis that only takes over the Feishu channel after
+  dsh goes down and stays silent otherwise.
 - Feishu doc comments and rich-text replies are planned, not yet implemented.
 - pnpm ≥ 10 build policy is handled by `setup`; when installing manually and
   `ERR_PNPM_IGNORED_BUILDS` appears, add `allowBuilds: { protobufjs: true }` to the profile's
@@ -374,6 +421,12 @@ Core environment variables:
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留）<br>Messages kept per scope (0 keeps everything) |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理）<br>Max archives kept per scope (0 disables pruning) |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理）<br>Max archive age in days (0 disables pruning) |
+| `DSH_LARK_HEARTBEAT_MS` | `5000` | 桥接引擎心跳写入间隔（守护存活信号）<br>Bridge heartbeat write interval (guardian liveness signal) |
+| `DSH_LARK_GUARDIAN_DISABLED` | `false` | `1` 时安全网守护进程保持停止<br>`1` keeps the safety-net guardian stopped |
+| `DSH_LARK_GUARDIAN_PROFILE` | `dsh-lark` | 守护监视 / 重启的 dsh profile（首次安装时写入状态）<br>dsh profile the guardian watches / relaunches (persisted on install) |
+| `DSH_LARK_GUARDIAN_BRIDGE_PROFILE` | `default` | 提供飞书凭据与白名单的桥接状态 profile<br>Bridge state profile providing Feishu credentials / allowlist |
+| `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔<br>Guardian watchdog poll interval |
+| `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值，超过且无 dsh 进程则接管飞书通道<br>Heartbeat staleness threshold before channel takeover |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
@@ -395,6 +448,10 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
   引用，凭据文件权限 0600、目录 0700，字面密钥不进入 settings 或聊天记录）。
+- **安全网守护（可选）**：安装后为系统级常驻进程，读取 `~/.dsh-lark/config.json` 中的飞书
+  凭据；dsh 下线时接管同一 bot 的飞书长连接并扫描本机进程（仅 `ps` 命令行，不读内存）；
+  `/safemode` 时在 `~/.dsh/profiles/<profile>-safe` 创建仅核心的 dsh profile 并逐条执行
+  `dsh --profile <safe> "<prompt>"` 子进程。
 
 - **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at
   `~/.dsh-lark/config.json` (file mode 600).
@@ -410,6 +467,11 @@ This tool runs **locally**; before installing, be aware that it accesses:
   `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol
   (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600,
   directory 0700; literal keys never enter settings or chat history).
+- **Safety-net guardian (optional)**: when installed, a system-level resident process reads the
+  Feishu credentials from `~/.dsh-lark/config.json`; it takes over the same bot's Feishu long
+  connection only after dsh goes down and scans local processes (command lines via `ps` only, no
+  memory access). On `/safemode` it provisions a core-only dsh profile at
+  `~/.dsh/profiles/<profile>-safe` and runs `dsh --profile <safe> "<prompt>"` per message.
 
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
 
@@ -566,7 +628,16 @@ The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bo
 
 核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接官方 DeepSeek Harness SDK（`DSH_LARK_ADAPTER=sdk`），可选 ACP 审批模式与 legacy headless。
 
+可选「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
+通道接收 `/safemode` 控制信号，以仅核心 profile（`dsh-base` + `dsh-headless`）拉起受限对话
+用于自愈，`/safemode exit` 重启完整 profile 并交还通道。
+
 The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to the official DeepSeek Harness SDK (`DSH_LARK_ADAPTER=sdk`), with an optional ACP approval mode and the legacy headless fallback.
+
+The optional safety-net guardian (`src/guardian/`) runs as a separate resident process: silent
+while dsh is up, it takes over the Feishu channel when dsh goes down, accepts `/safemode` control
+signals, runs a restricted core-only conversation (`dsh-base` + `dsh-headless`) for self-healing,
+and relaunches the full profile on `/safemode exit`.
 
 ## 目录结构 | Directory Structure
 
@@ -581,6 +652,7 @@ The core idea: **decouple the Feishu channel from the agent backend**. The bridg
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ 隐藏 `run`<br>CLI entry: setup / doctor / hidden run |
+| `src/guardian/` | 安全网守护：心跳、进程观察、仅核心安全 profile、接管状态机、系统服务安装<br>Safety-net guardian: heartbeat, process watch, core-only safe profile, takeover state machine, service install |
 | `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理<br>Profile, config, access & dsh config management |
 | `src/core/` | 结构化日志<br>Structured logging |
 | `src/media/` | 附件下载与文本注入<br>Attachment download & text injection |

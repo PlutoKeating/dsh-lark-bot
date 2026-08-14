@@ -16,6 +16,7 @@
 | P7 | 兼容矩阵与自动化（单一事实来源 / 上游雷达 / 真实探测） | ✅ 完成（0.5.1） |
 | P8 | 会话 / 任务归档（保留窗口 + 文件 / Git 归档） | ✅ 完成（0.6.0） |
 | P13 | 唯一安装-部署-使用路径：dsh profile bundle 内嵌运行 | ✅ 完成（0.7.0） |
+| P14 | 安全网守护（issue #6）：独立于 dsh 进程的飞书救援通道 + 仅核心安全模式自愈 | ✅ 完成 |
 
 ## 2. P1 验收标准
 
@@ -80,6 +81,23 @@
 13. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
 14. ⏳ 稳定发布下一版本
     - ✅ 0.6.0：P8 归档 / P9 并行 / P10 角色 / P11 出站通知 / P12 dsh bundle
+15. ✅ 安全网守护（issue #6）：`src/guardian/` 独立进程 + 心跳 + 仅核心安全模式 +
+    `/safemode` 控制信号 + `guardian install|uninstall|status|run` + `setup --guardian`
+
+## 9. P14 安全网守护 · 验收标准（issue #6）
+
+- [x] 独立存活：守护为与 dsh / Cordis 无耦合的最小进程，系统级常驻（systemd user unit /
+      LaunchAgent / Windows 启动项），不导入任何 dsh 代码。
+- [x] 静默守护：dsh 正常运行时（心跳新鲜或有 `--profile <name>` 进程）不连接飞书、不抢占通道。
+- [x] 接收飞书控制信号：曾观察到 dsh 在线后，dsh 下线（心跳过期 + 无进程）时守护接管同一 bot
+      的飞书长连接，接收 `/safemode` 系列命令；仅管理员可触发。
+- [x] 仅核心重启：`/safemode` 创建 `~/.dsh/profiles/<profile>-safe`（仅 `dsh-base` +
+      `dsh-headless`，无第三方插件），并以 `--dump-config` 探测通过后进入安全模式。
+- [x] 受限对话自愈：安全模式下普通消息经 `dsh --profile <safe> "<prompt>"` 与 dsh 核心逐条
+      对话（历史上下文拼接），支持定位 / 修复 / 禁用损坏插件；`/safemode plugins` 列出插件。
+- [x] 可退出、可回退：`/safemode exit` 以 detached 方式重启完整 profile 并交还飞书通道；
+      全程不删除用户已有会话 / 工作区数据（恢复后原数据仍在）。
+- [x] 无需命令行：安装后全流程（接管 → 安全模式 → 自愈 → 退出恢复）只在飞书会话内完成。
 
 ## 7. 当前阻塞 · Current blocker
 

@@ -141,7 +141,40 @@
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
 - 形态关系（0.7.0 定稿）：**dsh profile bundle 即产品形态**——`dsh-lark-bot/plugin` 在 dsh
   进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
-  `doctor` / 隐藏 `run`。独立后台服务路径已移除，不再存在双安装路径。
+  `doctor` / 隐藏 `run`，并额外提供 `guardian run|install|uninstall|status`（安全网守护）。
+  独立后台服务路径已移除，不再存在双安装路径；唯一进程级例外是可选安装的安全网守护
+  （见 4.10）。
+
+### 4.10 安全网守护（safety-net guardian，issue #6）
+
+背景：dsh 基于 Cordis「一切皆插件」，任一第三方插件报错都可能让整个 profile boot 失败；桥接
+引擎运行在 dsh 进程内，dsh 下线时飞书入口随之不可用。需求是在维持插件托管架构的前提下，
+额外提供一个**独立于 dsh 进程、系统级常驻的最小「安全网守护」**，让用户在最坏情况下无需
+接触命令行即可自救。
+
+- **独立存活**：守护是与 dsh / Cordis 无耦合的最小 Node 进程（不导入任何 dsh 代码），以
+  systemd user unit / LaunchAgent / Windows 启动项系统级常驻，由 `dsh-lark-bot guardian run`
+  启动。
+- **静默守护**：桥接引擎每 `DSH_LARK_HEARTBEAT_MS`（默认 5000）向
+  `~/.dsh-lark/profiles/<bridge-profile>/guardian/heartbeat.json` 写心跳；守护在心跳新鲜或
+  存在 `dsh --profile <name>` 进程时判定 dsh 在线，不连接飞书、不抢占通道（同 app 长连接
+  仅允许单连接）。
+- **接收飞书控制信号**：曾观察到 dsh 在线且 dsh 持续下线（心跳过期
+  `DSH_LARK_GUARDIAN_STALE_MS`=15000 + 无进程）后，守护用桥接 profile 的凭据 / 白名单接管
+  同一 bot 的飞书长连接，接收 `/safemode`、`/safemode status|plugins|exit|help`；仅管理员
+  （无管理员时回退白名单用户）可触发。
+- **仅核心重启**：`/safemode` 创建 `~/.dsh/profiles/<profile>-safe`，bundles 仅为
+  `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-headless`（官方核心，无第三方插件；两个 bundle
+  从 dsh 安装自身的依赖闭包解析，无需 pnpm 安装），以 `dsh --profile <safe> --dump-config`
+  探测通过后进入安全模式。
+- **受限对话自愈**：安全模式下普通消息经 `dsh --profile <safe> "<prompt>"` 与 dsh 核心逐条
+  对话（每 scope 最近 30 条上下文自动拼接，近似记忆），配合 headless 自带代码执行能力定位 /
+  修复 / 禁用损坏插件；`/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示清单。
+- **可退出、可回退**：`/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书
+  连接并交还通道；守护状态持久化在 `~/.dsh-lark/guardian.json`（0600），重启不丢
+  `profileSeenUp` / `mode`；全程不删除用户已有会话 / 工作区数据。
+- **安全约束**：守护进程只读本地状态与进程命令行（`ps`），不读内存；控制命令默认拒绝未授权
+  用户；过期事件复用 `DSH_LARK_EVENT_FRESHNESS_MS` 窗口拒绝；心跳 / 状态文件 0600。
 
 ---
 
