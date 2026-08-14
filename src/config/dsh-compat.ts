@@ -27,5 +27,5 @@ export const DSH_COMPATIBILITY: DshCompatibility = {
   sdkServer: '0.1.0-rc.6',
   acp: '0.1.0-rc.6',
   node: '>=22.19.0',
-  verifiedAt: '2026-08-14',
+  verifiedAt: '2026-08-15',
 };

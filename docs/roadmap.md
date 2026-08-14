@@ -16,7 +16,7 @@
 | **P11 出站通知** Outbound notify | `SendOptions.mentions`、跨会话 `/notify`、`lark_notify` dsh 工具（127.0.0.1 回环回调 + token 鉴权） | ✅ 已完成 Done（0.6.0） |
 | **P12 dsh bundle** DSH plugin bundle | `dsh.bundle.patch` + `cordis.patch.yml`、`./plugin` / `./invariant` / `./notify` 导出、`dsh plugin add` 实测 | ✅ 已完成 Done（0.6.0） |
 | **P13 唯一路径** Single install path | `dsh-lark-bot setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；移除独立后台服务层 | ✅ 已完成 Done（0.7.0） |
-| **P14 安全网守护** Safety-net guardian | 独立于 dsh 进程的系统级最小守护：dsh 下线后接管飞书通道、`/safemode` 仅核心（dsh-base + headless）重启与受限对话自愈、`/safemode exit` 恢复完整 profile | ✅ 已完成 Done |
+| **P14 安全网守护** Safety-net guardian | 独立于 dsh 进程的系统级最小守护：dsh 下线后接管飞书通道、`/safemode` 仅核心（dsh-base + headless）重启与受限对话自愈、`/safemode exit` 恢复完整 profile | ✅ 已完成 Done（0.8.0） |
 
 ## 里程碑 · Milestones
 
@@ -61,6 +61,8 @@
   `/safemode` 以仅核心 profile（`dsh-base` + `dsh-headless`，无第三方插件）逐条对话自愈，
   `/safemode exit` 重启完整 profile 并交还通道；`setup --guardian` / `guardian
   install|uninstall|status|run`。
+- **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
+  双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

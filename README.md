@@ -572,14 +572,14 @@ The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bo
 
 - 状态：**活跃维护（Active）**。主维护者：**PlutoKeating**。
 - 问题 / 建议：优先在 GitHub Issues 提交；安全漏洞请走 [`SECURITY.md`](SECURITY.md) 的私下报告渠道。
-- 生态收录：awesome-dsh-plugins（`✅ 运行级可用`）已登记；omdsh-dev/community `[Plugin]` 收录
-  申请见 https://github.com/orgs/omdsh-dev/discussions/12 。
 
 - Status: **active**. Primary maintainer: **PlutoKeating**.
 - Bugs / feature requests: GitHub Issues; security issues via the private channel in
   [`SECURITY.md`](SECURITY.md).
-- Ecosystem: listed as `✅ 运行级可用` in awesome-dsh-plugins; omdsh-dev/community `[Plugin]`
-  submission at https://github.com/orgs/omdsh-dev/discussions/12 .
+
+社区收录情况见下节「社区收录情况 | Community Listings」。
+
+See "Community Listings" in the next section for ecosystem registration status.
 
 ## 许可与安全 | License & Security
 
@@ -672,6 +672,29 @@ and relaunches the full profile on `/safemode exit`.
 | [`zarazhangrui/lark-coding-agent-bridge`](https://github.com/zarazhangrui/lark-coding-agent-bridge) | 飞书 ↔ Claude Code / Codex 桥接，本项目的直接参照<br>Feishu ↔ Claude Code / Codex bridge; the direct reference for this project |
 | [`deepseek-ai/deepseek-harness`](https://github.com/deepseek-ai/deepseek-harness) | DeepSeek Harness（`dsh`），agent 后端<br>DeepSeek Harness (`dsh`), the agent backend |
 | [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | OpenCode 的 Telegram 手机端，另一参照<br>Telegram mobile client for OpenCode; another reference |
+
+## 社区收录情况 | Community Listings
+
+> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.8.0：
+> Community listing & recommendation status, kept current as update requests land. As of v0.8.0:
+
+| 平台 Platform | 状态 Status | 说明 Notes |
+| :--- | :--- | :--- |
+| [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`，2026-08-14 agent 实测通过；v0.8.0 更新已提交（见下文链接）<br>Shown as `✅ 运行级可用` in the community leaderboard; agent-tested on 2026-08-14; v0.8.0 update submitted (see below) |
+| [dshfind](https://github.com/hikariming/dshfind) | ✅ 已收录（自动聚合）<br>Listed (auto-aggregated) | 插件市场从 GitHub `dsh-plugin` topic 自动聚合；本仓库已带该 topic，刷新后展示最新版本与数据<br>Marketplace auto-aggregates from the GitHub `dsh-plugin` topic; this repo carries the topic, so the latest version shows after the next refresh |
+| [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/12) | ✅ 已提交收录申请<br>Submission submitted | `[Plugin]` 收录申请（Discussion #12）已通过；v0.8.0 更新说明已发布在该讨论<br>`[Plugin]` submission (Discussion #12) accepted; v0.8.0 update posted there |
+
+**更新请求 / Update requests**：
+
+- awesome-dsh-plugins 收录条目更新：`https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/<PR>`（v0.8.0 描述同步）
+- dshfind 数据刷新请求（含快照条目名称异常修正）：`https://github.com/hikariming/dshfind/issues/<ISSUE>`
+- omdsh-dev/community 收录讨论更新：https://github.com/orgs/omdsh-dev/discussions/12
+
+**Update requests**:
+
+- awesome-dsh-plugins entry refresh: `https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/<PR>` (v0.8.0 description)
+- dshfind data-refresh request (incl. fixing the snapshot entry name): `https://github.com/hikariming/dshfind/issues/<ISSUE>`
+- omdsh-dev/community listing update: https://github.com/orgs/omdsh-dev/discussions/12
 
 ## 免责声明 | Disclaimer
 
