@@ -47,6 +47,8 @@
   `./plugin`（`ctx.larkBridge` 服务）、`./invariant`（invariants 伴生）、`./notify`
   （lark_notify 工具）导出；`dsh plugin --profile demo add` 实测通过（含 dump-config 层验证
   与真实 SDK runtime 握手）。
+- **0.6.0 released**：`dsh-lark-bot@0.6.0` / `dsh-feishu-bot@0.6.0`（npm + GitHub Packages +
+  GitHub Release），双包均带 dsh bundle 清单。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

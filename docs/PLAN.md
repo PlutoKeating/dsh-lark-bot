@@ -78,6 +78,7 @@
 12. ✅ dsh profile bundle（0.6.0）：`dsh plugin --profile <name> add dsh-lark-bot` 实测通过
 13. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
 14. ⏳ 稳定发布下一版本
+    - ✅ 0.6.0：P8 归档 / P9 并行 / P10 角色 / P11 出站通知 / P12 dsh bundle
 
 ## 7. 当前阻塞 · Current blocker
 
