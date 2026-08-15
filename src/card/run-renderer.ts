@@ -9,13 +9,25 @@ function noteMd(content: string): object {
   return { tag: 'markdown', content, text_size: 'notation' };
 }
 
-function footerStatus(status: Exclude<FooterStatus, null>): object {
-  const text =
+function footerStatus(
+  status: Exclude<FooterStatus, null>,
+  state: RunState,
+  now: number,
+): object {
+  let text =
     status === 'thinking'
       ? '🧠 正在思考'
       : status === 'tool_running'
         ? '🧰 正在调用工具'
         : '✍️ 正在输出';
+  if (state.startedAtMs !== undefined) {
+    const elapsed = Math.max(0, Math.round((now - state.startedAtMs) / 1000));
+    text += ` ⏱ ${elapsed}s`;
+  }
+  if (state.lastActivityMs !== undefined) {
+    const idle = Math.max(0, Math.round((now - state.lastActivityMs) / 1000));
+    if (idle >= 60) text += ` · ⏸ 无响应 ${idle}s`;
+  }
   return noteMd(text);
 }
 
@@ -55,7 +67,7 @@ function usageLine(state: RunState): string {
   return parts.length ? `（tokens ${parts.join(' · ')}）` : '';
 }
 
-function renderStandard(state: RunState): object {
+function renderStandard(state: RunState, now: number): object {
   const elements: object[] = [];
 
   if (state.reasoning.content) {
@@ -90,7 +102,7 @@ function renderStandard(state: RunState): object {
   }
 
   if (state.terminal === 'running') {
-    if (state.footer) elements.push(footerStatus(state.footer));
+    if (state.footer) elements.push(footerStatus(state.footer, state, now));
     elements.push(stopButton());
   }
 
@@ -104,10 +116,10 @@ function renderStandard(state: RunState): object {
   };
 }
 
-function renderCompact(state: RunState): object {
+function renderCompact(state: RunState, now: number): object {
   const elements: object[] = [noteMd(summaryText(state))];
   if (state.terminal === 'running' && state.footer) {
-    elements.push(footerStatus(state.footer));
+    elements.push(footerStatus(state.footer, state, now));
   }
   if (state.terminal === 'running') {
     elements.push(stopButton());
@@ -122,7 +134,7 @@ function renderCompact(state: RunState): object {
   };
 }
 
-function renderDetailed(state: RunState): object {
+function renderDetailed(state: RunState, now: number): object {
   const elements: object[] = [];
 
   if (state.reasoning.content) {
@@ -164,7 +176,7 @@ function renderDetailed(state: RunState): object {
   }
 
   if (state.terminal === 'running') {
-    if (state.footer) elements.push(footerStatus(state.footer));
+    if (state.footer) elements.push(footerStatus(state.footer, state, now));
     elements.push(stopButton());
   }
 
@@ -188,8 +200,12 @@ function safeJsonPreview(value: unknown): string {
 }
 
 /** Render the run card at the requested density (compact / standard / detailed). */
-export function renderCard(state: RunState, density: CardDensity = 'standard'): object {
-  if (density === 'compact') return renderCompact(state);
-  if (density === 'detailed') return renderDetailed(state);
-  return renderStandard(state);
+export function renderCard(
+  state: RunState,
+  density: CardDensity = 'standard',
+  now: number = Date.now(),
+): object {
+  if (density === 'compact') return renderCompact(state, now);
+  if (density === 'detailed') return renderDetailed(state, now);
+  return renderStandard(state, now);
 }

@@ -25,6 +25,10 @@ export interface RunState {
   terminal: Terminal;
   errorMsg: string | undefined;
   idleTimeoutMinutes: number | undefined;
+  /** Wall-clock start of the run (ms epoch); set by the runner, not reduce(). */
+  startedAtMs: number | undefined;
+  /** Last moment an agent event arrived (ms epoch); drives the stall hint. */
+  lastActivityMs: number | undefined;
 }
 
 export const initialState: RunState = {
@@ -35,6 +39,8 @@ export const initialState: RunState = {
   terminal: 'running',
   errorMsg: undefined,
   idleTimeoutMinutes: undefined,
+  startedAtMs: undefined,
+  lastActivityMs: undefined,
 };
 
 function closeStreamingText(blocks: Block[]): Block[] {

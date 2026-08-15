@@ -103,7 +103,12 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   });
   input.activeRuns.set(input.scope, { runId, stop: run.stop });
 
-  let state: RunState = initialState;
+  const now = Date.now();
+  let state: RunState = {
+    ...initialState,
+    startedAtMs: now,
+    lastActivityMs: now,
+  };
   const stopRequested = { value: false };
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
   let timedOut = false;
@@ -115,10 +120,18 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       input.chatId,
       renderCard(state, density),
       async (controller) => {
+        const ticker = setInterval(() => {
+          void controller.update(renderCard(state, density, Date.now())).catch(() => {
+            // The card may already be closed; the event loop still owns the
+            // final state transition below.
+          });
+        }, 5_000);
+        ticker.unref?.();
         const consume = async (): Promise<void> => {
           for await (const event of run.events) {
             if (timedOut) return;
             state = applyEvent(state, event, stopRequested);
+            state = { ...state, lastActivityMs: Date.now() };
             if (event.type === 'final_text') {
               assistantOutput = event.content;
             } else if (event.type === 'text') {
@@ -173,8 +186,9 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           state = timedOut
             ? markIdleTimeout(state, timeoutMs / 60_000)
             : finalizeIfRunning(state);
-          await controller.update(renderCard(state, density));
+          await controller.update(renderCard(state, density, Date.now()));
         } finally {
+          clearInterval(ticker);
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           unsubscribeSettled?.();
         }

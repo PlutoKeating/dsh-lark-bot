@@ -60,6 +60,11 @@ export class PendingQueue<T> {
     return (this.pending.get(scope)?.length ?? 0) > 0;
   }
 
+  /** Number of messages waiting in the queue for a scope (not yet flushing). */
+  size(scope: string): number {
+    return this.pending.get(scope)?.length ?? 0;
+  }
+
   isBlocked(scope: string): boolean {
     return this.blocked.has(scope);
   }

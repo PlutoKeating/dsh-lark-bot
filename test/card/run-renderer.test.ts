@@ -11,4 +11,17 @@ describe('renderCard', () => {
     expect(card.config.streaming_mode).toBe(true);
     expect(card.body.elements.some((element) => JSON.stringify(element).includes('终止'))).toBe(true);
   });
+
+  it('shows elapsed time and a stall hint while running', () => {
+    const now = 1_000_000;
+    const state = {
+      ...initialState,
+      startedAtMs: now - 65_000,
+      lastActivityMs: now - 65_000,
+    };
+    const card = renderCard(state, 'standard', now) as { body: { elements: unknown[] } };
+    const text = JSON.stringify(card.body.elements);
+    expect(text).toContain('⏱ 65s');
+    expect(text).toContain('无响应 65s');
+  });
 });

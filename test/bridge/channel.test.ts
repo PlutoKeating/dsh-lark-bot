@@ -102,7 +102,12 @@ describe('startChannel', () => {
     const sessions = new SessionStore(':memory:');
     const workspaces = new WorkspaceStore(':memory:');
     const activeRuns = new ActiveRuns();
-    const pending = { push: vi.fn() };
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
 
     await startChannel({
       appId: 'cli_test',
@@ -157,7 +162,12 @@ describe('startChannel', () => {
     const workspaces = new WorkspaceStore(':memory:');
     const activeRuns = new ActiveRuns();
     const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(1);
-    const pending = { push: vi.fn() };
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
 
     await startChannel({
       appId: 'cli_test',
@@ -203,5 +213,62 @@ describe('startChannel', () => {
     });
 
     expect(interrupt).toHaveBeenCalledWith('chat-1:thread-9');
+  });
+
+  it('acknowledges the queue position when the scope is already busy', async () => {
+    const fake = makeChannel();
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(2),
+      isFlushing: vi.fn().mockReturnValue(true),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions,
+      workspaces,
+      activeRuns,
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+      message({ messageId: 'm2', content: 'another task' }),
+    );
+    const ack = fake.sent.at(-1);
+    expect(JSON.stringify(ack?.input)).toContain('排队中');
+    expect(ack?.options).toEqual({ replyTo: 'm2' });
+    expect(pending.push).toHaveBeenCalledWith(
+      'chat-1',
+      expect.objectContaining({ content: 'another task' }),
+    );
   });
 });

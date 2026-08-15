@@ -148,7 +148,24 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         log.fail('channel-command', error, { scope });
         return false;
       });
-      if (!handled) deps.pending.push(scope, msg);
+      if (!handled) {
+        // While a run is flushing or the scope is blocked, a new message is
+        // not processed immediately. Acknowledge the queue position so the
+        // user always knows the message was received and will be worked on.
+        const queued = deps.pending.size(scope);
+        const busy =
+          queued > 0 ||
+          deps.pending.isFlushing(scope) ||
+          deps.pending.isBlocked(scope);
+        if (busy) {
+          await commandChannel.sendMarkdown(
+            msg.chatId,
+            `⏳ 已收到，当前排队中（队列 ${queued + 1} 条）。任务开始后会在这里实时显示进度。`,
+            { replyTo: msg.messageId },
+          );
+        }
+        deps.pending.push(scope, msg);
+      }
     },
     cardAction: async (event) => {
       const value =
