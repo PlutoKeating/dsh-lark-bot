@@ -761,8 +761,8 @@ and relaunches the full profile on `/safemode exit`.
 
 ## 社区收录情况 | Community Listings
 
-> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.10.1：
-> Community listing & recommendation status, kept current as update requests land. As of v0.10.1:
+> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.10.2：
+> Community listing & recommendation status, kept current as update requests land. As of v0.10.2:
 
 | 平台 Platform | 状态 Status | 说明 Notes |
 | :--- | :--- | :--- |

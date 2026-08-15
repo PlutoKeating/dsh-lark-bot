@@ -81,6 +81,11 @@
   不再重放历史（避免与 dsh 持久化日志漂移），恢复失败自动清 session 并以新会话重试一次
   （id collision 自愈）；发布脚本直接引用仓库 `cordis.patch.yml`，消除发布版与仓库文件的
   注释 / 内容漂移。
+- **0.10.2 released（恢复自愈补全）**：SDK 适配器把被拒绝的 session 恢复（如 dsh 持久化层
+  的 `id collision`）以 **error 事件**送达而不是抛异常，0.10.1 的降级路径因此没有触发。
+  现在恢复中的 run 若**零活动即以 error 终止**，同样判定为会话级失败：清 session 绑定并以
+  新会话重试一次（转写重放）；有实际活动后的运行中错误仍正常展示、不重试。安全模式任务在
+  同类零活动错误后也会丢弃存储的 session 绑定，下一次安全任务从新会话开始。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
 
