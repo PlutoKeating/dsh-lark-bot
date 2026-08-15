@@ -18,7 +18,11 @@ export interface RuntimeEnv {
   dshArgs: string[];
   /** True when DSH_LARK_DSH_COMMAND / DSH_LARK_DSH_ARGS were set explicitly. */
   dshExplicit: boolean;
-  adapterMode: 'sdk' | 'acp' | 'headless';
+  adapterMode: 'sdk' | 'acp' | 'headless' | 'web';
+  /** Base URL of the local dsh web agent used by the `web` adapter (default http://127.0.0.1:3080). */
+  webBaseUrl: string;
+  /** Push web-GUI turn completions to Feishu in `web` adapter mode (default true; DSH_LARK_WEB_PUSH=0 disables). */
+  webPush: boolean;
   provider: string;
   model: string;
   maxTokens: number | undefined;
@@ -41,7 +45,10 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 环境变量前缀统一为 `DSH_LARK_*`，敏感值只保留在运行时对象中，不写入日志或提交。完整清单见
 `README.md` 与 `.env.example`；本节仅列关键项：
 
-- `DSH_LARK_ADAPTER`：`sdk`（默认，官方 SDK client）/ `acp`（ACP 审批）/ `headless`（legacy）。
+- `DSH_LARK_ADAPTER`：`sdk`（默认，官方 SDK client）/ `acp`（ACP 审批）/ `headless`（legacy）/
+  `web`（本地 dsh web agent，单写者）。
+- `DSH_LARK_WEB_URL` / `DSH_LARK_WEB_PUSH`：`web` 适配器的本地 dsh web base URL（默认
+  `http://127.0.0.1:3080`）与网页端回合推送开关（默认开，`0` 关闭）。
 - `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径。
 - `DSH_LARK_MAX_TOKENS`：可选，SDK-created agent 的每请求输出 token 上限。
 - `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
@@ -349,6 +356,10 @@ export async function buildAgentAdapter(
   `~/.dsh/profiles/dsh-lark-acp`（`dsh-base` + `dsh-acp`），以 `ClientSideConnection` 连接
   ACP server，`session/request_permission` 映射审批卡；会话每次全新。
 - `headless`：`DshAdapter`（`src/adapters/dsh/adapter.ts`），legacy 子进程 JSONL 翻译。
+- `web`：`WebDshAdapter`（`src/adapters/dsh/web-adapter.ts`），驱动本地 dsh web agent
+  （`session.create` / `session.prompt` + `/api/events.mux` WebSocket），网页端成为**唯一写者**，
+  从根上消除多写者会话损坏，跨实例续接天然可用；`web-watcher.ts` 在 `web` 模式下把网页端回合
+  完成推送到飞书并自动切换会话映射与工作区 cwd。
 
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
 `AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、

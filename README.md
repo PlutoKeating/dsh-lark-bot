@@ -406,7 +406,9 @@ tasks and session archival.
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
-  子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark-sdk`（或 `dsh-lark-acp`）创建 runtime profile。
+  子进程 fallback；`DSH_LARK_ADAPTER=web` 驱动**本地 dsh web agent**（`session.prompt` +
+  `/api/events.mux`，网页端成为唯一写者，从根上消除多写者会话损坏）。首次启动自动在
+  `~/.dsh/profiles/dsh-lark-sdk`（或 `dsh-lark-acp`）创建 runtime profile。
 
 - **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (last verified 2026-08-15: SDK JSON-RPC / ACP
   runtime handshake + real streaming task verification), connected through the official
@@ -419,7 +421,9 @@ tasks and session archival.
 - The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with
   native session continuation and token-level streaming events); `DSH_LARK_ADAPTER=acp` switches
   to the official **ACP server** (approval cards); `headless` keeps the legacy subprocess
-  fallback. On first start the bot creates the runtime profile at
+  fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` +
+  `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer
+  session-log corruption at the root). On first start the bot creates the runtime profile at
   `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## 已知限制 | Known limitations
@@ -490,10 +494,12 @@ Core environment variables:
 | `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录<br>Default working directory for new sessions |
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置<br>dsh launch command; usually not needed |
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置<br>dsh launch args, comma-separated; usually not needed |
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）<br>`sdk` (default) / `acp` (approval) / `headless` (legacy) |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者）<br>`sdk` (default) / `acp` (approval) / `headless` (legacy) / `web` (local dsh web agent, single writer) |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider<br>Model provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型<br>Default model |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限<br>Per-request output token cap for SDK agents |
+| `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent 的 base URL<br>`web` adapter: base URL of the local dsh web agent |
+| `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成时推送到飞书并自动切换会话映射（`0` 关闭）<br>`web` adapter: push web-GUI turn completions to Feishu and auto-switch the chat mapping (`0` disables) |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊<br>Reject private chats when no allowlist is configured |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）<br>Stale-message rejection window (0 disables) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）<br>Idle timeout for a single run: stops only after the run has been silent for this long |

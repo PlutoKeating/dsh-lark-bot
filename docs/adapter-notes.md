@@ -137,6 +137,20 @@ approval 流未实现（需 ACP 模式）。
 
 - 现有 `DshAdapter`（`src/adapters/dsh/adapter.ts`）保留，`DSH_LARK_ADAPTER=headless` 使用。
 
+### 路线 D：web（本地 dsh web agent，单写者）
+
+- `WebDshAdapter`（`src/adapters/dsh/web-adapter.ts`），`DSH_LARK_ADAPTER=web` 使用。
+- 输入走 `POST /api/session.create` / `session.prompt`（本地 dsh web，默认
+  `http://127.0.0.1:3080`，`DSH_LARK_WEB_URL` 可改），输出走 `/api/events.mux` WebSocket
+  （SSE 会 426），翻译为既有 `AgentEvent` 词汇。
+- **网页端 agent 成为唯一写者**：不再 spawn 自己的 agent runtime，多写者（bridge 子进程、
+  守护重启、陈旧 live session 双写）导致的 `corrupt session log: seq gap` 从根上消失，
+  旧会话天然可续接。
+- `web-watcher.ts`（`src/adapters/dsh/web-watcher.ts`）在 `web` 模式下监听网页端回合完成：
+  推送到飞书 + 自动切换聊天会话映射与工作区 cwd（`resumeFor` 要求两者一致）；
+  `DSH_LARK_WEB_PUSH=0` 关闭推送。
+- 回退：`DSH_LARK_ADAPTER=sdk`（默认）一行切回。
+
 ## 4.1 Runtime profile（自动维护）
 
 SDK / ACP 模式需要对应 runtime profile：
