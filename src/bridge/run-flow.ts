@@ -78,28 +78,83 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     activeBefore === 0
       ? input.sessions.resumeFor(input.scope, cwd)
       : undefined;
-  const history = input.sessions.historyFor(input.scope, cwd);
+  const resuming = sessionId !== undefined && input.adapter.resumeCapable === true;
+
+  try {
+    await runAttempt(input, cwd, sessionId, resuming, replyOptions);
+  } catch (error) {
+    if (resuming) {
+      // A native-session resume can be rejected by the dsh runtime when its
+      // persisted log no longer matches the live session (e.g. the previous
+      // run was interrupted mid-stream). Fall back to a fresh session so the
+      // user's message is still handled; the scope transcript is replayed.
+      log.warn('run-flow', 'resume-fallback', { scope: input.scope, sessionId });
+      input.sessions.clearSession(input.scope);
+      try {
+        await runAttempt(input, cwd, undefined, false, replyOptions);
+        return;
+      } catch (retryError) {
+        log.fail('run-flow', retryError, {
+          scope: input.scope,
+          step: 'resume-fallback',
+        });
+        await reportRunFailure(input, retryError, replyOptions);
+        return;
+      }
+    }
+    await reportRunFailure(input, error, replyOptions);
+  }
+}
+
+async function reportRunFailure(
+  input: RunFlowInput,
+  error: unknown,
+  replyOptions: Record<string, unknown>,
+): Promise<void> {
+  log.fail('run-flow', error, { scope: input.scope });
+  try {
+    await input.channel.sendMarkdown(
+      input.chatId,
+      `⚠️ agent 运行失败：${errorMessage(error)}`,
+      replyOptions,
+    );
+  } catch {
+    // best effort; the card may already have failed
+  }
+}
+
+async function runAttempt(
+  input: RunFlowInput,
+  cwd: string,
+  sessionId: string | undefined,
+  resuming: boolean,
+  replyOptions: Record<string, unknown>,
+): Promise<void> {
+  // A native-resuming adapter (SDK) already has the conversation persisted in
+  // the dsh session; replaying the transcript would duplicate it and can drift
+  // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
+  const history = resuming ? [] : input.sessions.historyFor(input.scope, cwd);
   const prompt = buildPrompt(history, input.messages, input.role);
   const runId = randomUUID();
 
   const run = input.adapter.run({
     runId,
-      prompt,
-      cwd,
-      sessionId,
-      model: input.model,
-      images: input.images,
-      stopGraceMs: input.stopGraceMs,
-      ...(input.approvals
-        ? {
-            onApprovalRequest: approvalHandlerFor({
-              approvals: input.approvals,
-              channel: input.channel,
-              chatId: input.chatId,
-              scope: input.scope,
-            }),
-          }
-        : {}),
+    prompt,
+    cwd,
+    sessionId,
+    model: input.model,
+    images: input.images,
+    stopGraceMs: input.stopGraceMs,
+    ...(input.approvals
+      ? {
+          onApprovalRequest: approvalHandlerFor({
+            approvals: input.approvals,
+            channel: input.channel,
+            chatId: input.chatId,
+            scope: input.scope,
+          }),
+        }
+      : {}),
   });
   input.activeRuns.set(input.scope, { runId, stop: run.stop });
 
@@ -120,6 +175,8 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       input.chatId,
       renderCard(state, density),
       async (controller) => {
+        let timeoutTimer: NodeJS.Timeout | undefined;
+        let armTimeout: (() => void) | undefined;
         const ticker = setInterval(() => {
           void controller.update(renderCard(state, density, Date.now())).catch(() => {
             // The card may already be closed; the event loop still owns the
@@ -140,21 +197,26 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
             if (event.type === 'system' && event.sessionId) {
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
             }
+            // Every agent event counts as activity: restart the idle window so
+            // a long but responsive run is never killed by the wall clock.
+            armTimeout?.();
             await controller.update(renderCard(state, density));
           }
         };
 
-        let timeoutTimer: NodeJS.Timeout | undefined;
-        let armTimeout: (() => void) | undefined;
+        // Idle watchdog: armed once, then re-armed on every agent event (and
+        // after a question card is answered). Only a run that goes silent for
+        // the configured window is stopped — active work is never cut short.
         const timeoutPromise =
           timeoutMs > 0
             ? new Promise<void>((resolve) => {
                 armTimeout = (): void => {
+                  if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
                   timeoutTimer = setTimeout(() => {
                     if (timedOut) return;
                     if (input.questions?.pendingCount(input.scope)) {
-                      // A question card is awaiting the user: pause the
-                      // run-timeout watchdog instead of killing the task.
+                      // A question card is awaiting the user: keep the task
+                      // alive; the onSettled handler re-arms once answered.
                       armTimeout?.();
                       return;
                     }
@@ -166,8 +228,8 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
                 armTimeout();
               })
             : undefined;
-        // The user answered a card: restart a full run-timeout window so the
-        // remaining work is not cut short by time spent waiting for input.
+        // The user answered a card: restart a full idle window so time spent
+        // waiting for input never eats into the next stretch of work.
         const unsubscribeSettled = timeoutPromise
           ? input.questions?.onSettled(input.scope, () => {
               if (timedOut) return;
@@ -209,16 +271,6 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           }
         : {}),
     });
-  } catch (error) {
-    log.fail('run-flow', error, { scope: input.scope, runId });
-    state = markInterrupted(state);
-    try {
-      await input.channel.sendMarkdown(input.chatId, `⚠️ agent 运行失败：${errorMessage(error)}`, {
-        ...replyOptions,
-      });
-    } catch {
-      // best effort; the card may already have failed
-    }
   } finally {
     input.activeRuns.delete(input.scope, runId);
     if (input.approvals) {

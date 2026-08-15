@@ -53,6 +53,7 @@ function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<
 export class SdkDshAdapter implements AgentAdapter {
   readonly id = 'dsh-sdk';
   readonly displayName = 'DeepSeek Harness (SDK)';
+  readonly resumeCapable = true;
 
   private readonly launch: SdkLaunchSpec;
   private readonly provider: string;

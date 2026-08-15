@@ -486,6 +486,69 @@ describe('GuardianService', () => {
     expect(harness.service.snapshot().safeRuns).toBe(0);
   });
 
+  it('keeps a safe task alive while events keep streaming past the timeout', async () => {
+    let stopCalls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const adapter: AgentAdapter = {
+      id: 'fake-stream',
+      displayName: 'Fake Stream',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability(): Promise<AgentAvailability> {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options: AgentRunOptions): AgentRun {
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            // Stream activity for several timeout windows: the idle watchdog
+            // must keep re-arming instead of killing an active task.
+            const untilMs = Date.now() + 120;
+            while (Date.now() < untilMs) {
+              yield { type: 'text', delta: 'streaming…' };
+              await new Promise((resolve) => setTimeout(resolve, 5));
+            }
+            await gate;
+            yield { type: 'final_text', content: 'done' };
+            yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+          })(),
+          stop: async () => {
+            stopCalls += 1;
+            release();
+          },
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      adapter,
+      safeTimeoutMs: 40,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    const task = harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'long task' }) as never,
+    );
+    await until(() => harness.streamed.length > 2);
+
+    // Still streaming well past several 40 ms timeout windows: the watchdog
+    // must not have fired.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(stopCalls).toBe(0);
+    expect(JSON.stringify(harness.streamed.at(-1))).not.toContain('已超时');
+
+    release();
+    await task;
+    expect(stopCalls).toBe(0);
+    expect(harness.service.snapshot().safeRuns).toBe(0);
+  });
+
   it('stops a running safe task from the card stop button', async () => {
     const hang = makeHangingAdapter();
     const harness = await makeHarness({

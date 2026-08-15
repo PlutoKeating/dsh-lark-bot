@@ -80,7 +80,7 @@ const HELP = [
   '- `/status` — 查看当前状态',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
-  '- `/timeout [N|off|default]` — 查看或设置当前会话运行超时',
+  '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
   '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
   '- `/role list|show <id>|set <id>|clear` — 查看 / 绑定角色',
   '- `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` — 创建/更新角色（管理员）',
@@ -254,21 +254,21 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
     await reply(
       ctx,
       minutes > 0
-        ? `当前会话运行超时：${minutes} 分钟。可用 \`/timeout <N|off|default>\` 调整。`
-        : '当前会话运行超时：关闭。',
+        ? `当前会话空闲超时：持续无活动事件 ${minutes} 分钟才终止。可用 \`/timeout <N|off|default>\` 调整。`
+        : '当前会话空闲超时：关闭。',
     );
     return;
   }
 
   if (input === 'off') {
     ctx.runPolicies.set(ctx.scope, 0);
-    await reply(ctx, '已关闭当前会话运行超时。');
+    await reply(ctx, '已关闭当前会话空闲超时。');
     return;
   }
 
   if (input === 'default') {
     ctx.runPolicies.clear(ctx.scope);
-    await reply(ctx, '已恢复默认运行超时。');
+    await reply(ctx, '已恢复默认空闲超时。');
     return;
   }
 
@@ -279,7 +279,7 @@ async function handleTimeout(args: string, ctx: CommandContext): Promise<void> {
   }
 
   ctx.runPolicies.set(ctx.scope, minutes * 60_000);
-  await reply(ctx, `已设置当前会话运行超时：${minutes} 分钟。`);
+  await reply(ctx, `已设置当前会话空闲超时：持续无活动事件 ${minutes} 分钟才终止。`);
 }
 
 async function handleConcurrency(args: string, ctx: CommandContext): Promise<void> {

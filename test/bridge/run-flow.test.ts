@@ -148,6 +148,201 @@ describe('runAgentBatch', () => {
     expect(activeRuns.get('chat-timeout')).toBeUndefined();
   });
 
+  it('keeps a run alive while events keep arriving and only stops after idle', async () => {
+    const stop = vi.fn(async () => {});
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(): AgentRun {
+        return {
+          runId: 'run-busy',
+          events: (async function* () {
+            // Stream activity for several timeout windows: the watchdog must
+            // keep re-arming instead of killing an active run.
+            const untilMs = Date.now() + 90;
+            while (Date.now() < untilMs) {
+              yield { type: 'text', delta: 'working…' };
+              await new Promise((resolve) => setTimeout(resolve, 5));
+            }
+            // Then go quiet: the idle watchdog should fire shortly after.
+            await new Promise(() => {});
+          })(),
+          stop,
+          waitForExit: async () => true,
+        };
+      },
+    };
+
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const fake = makeChannel();
+
+    const started = Date.now();
+    await runAgentBatch({
+      scope: 'chat-busy',
+      chatId: 'chat-busy',
+      messages: ['long task'],
+      adapter,
+      sessions,
+      workspaces,
+      activeRuns,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 15,
+    });
+    const durationMs = Date.now() - started;
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    // Survived multiple 15 ms timeout windows thanks to activity resets.
+    expect(durationMs).toBeGreaterThanOrEqual(60);
+    const lastCard = fake.updates[fake.updates.length - 1] as {
+      body?: { elements?: Array<{ content?: string }> };
+    };
+    const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
+    expect(lastText).toContain('无响应');
+    expect(activeRuns.get('chat-busy')).toBeUndefined();
+  });
+
+  it('does not replay history when resuming a native session', async () => {
+    let observedPrompt: string | undefined;
+    let observedSessionId: string | undefined;
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        observedPrompt = options.prompt;
+        observedSessionId = options.sessionId;
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield {
+              type: 'system',
+              sessionId: 'session-1',
+              cwd: '/tmp/project',
+              model: undefined,
+            };
+            yield { type: 'final_text', content: 'I remember.' };
+            yield { type: 'done', sessionId: 'session-1', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['what did I just say?'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(observedSessionId).toBe('session-1');
+    expect(observedPrompt).not.toContain('my name is Bob');
+    expect(observedPrompt).not.toContain('Nice to meet you.');
+    expect(observedPrompt).toContain('what did I just say?');
+  });
+
+  it('falls back to a fresh session when a native resume fails', async () => {
+    const calls: Array<{ prompt: string; sessionId: string | undefined }> = [];
+    let first = true;
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        calls.push({ prompt: options.prompt, sessionId: options.sessionId });
+        if (first) {
+          first = false;
+          return {
+            runId: options.runId,
+            events: (async function* () {
+              yield {
+                type: 'system',
+                sessionId: 'session-1',
+                cwd: '/tmp/project',
+                model: undefined,
+              };
+              throw new Error(
+                'session "session-1" already has a persisted log on disk that does not match this live session (id collision)',
+              );
+            })(),
+            stop: vi.fn().mockResolvedValue(undefined),
+            waitForExit: async () => true,
+          };
+        }
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield { type: 'final_text', content: 'recovered' };
+            yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['new message'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.sessionId).toBe('session-1');
+    expect(calls[1]?.sessionId).toBeUndefined();
+    // The fresh-session attempt replays the transcript.
+    expect(calls[1]?.prompt).toContain('my name is Bob');
+    // No failure message was surfaced to the user.
+    expect(fake.messages).toHaveLength(0);
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
+    expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
+      { role: 'user', content: 'my name is Bob' },
+      { role: 'assistant', content: 'Nice to meet you.' },
+      { role: 'user', content: 'new message' },
+      { role: 'assistant', content: 'recovered' },
+    ]);
+  });
+
   it('resolves the run cwd through the workspace manager when present', async () => {
     let observedCwd: string | undefined;
     const adapter: AgentAdapter = {

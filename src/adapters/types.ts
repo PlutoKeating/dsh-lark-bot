@@ -55,6 +55,13 @@ export interface AgentAvailability {
 export interface AgentAdapter {
   readonly id: string;
   readonly displayName: string;
+  /**
+   * Whether `run()` natively resumes the session identified by
+   * `options.sessionId` (the SDK adapter does). ACP / headless always start a
+   * fresh session, so the bridge replays the scope transcript into the prompt
+   * for them instead.
+   */
+  resumeCapable?: boolean;
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
   run(options: AgentRunOptions): AgentRun;

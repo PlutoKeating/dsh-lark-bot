@@ -162,6 +162,17 @@ export class SessionStore {
     return record && record.cwd === cwd ? record.sessionId : undefined;
   }
 
+  /**
+   * Drop the native dsh session binding for a scope. The transcript is kept so
+   * the next run can start a fresh session and replay history from the store.
+   */
+  clearSession(scopeId: string): void {
+    const existing = this.data.chats[scopeId];
+    if (!existing) return;
+    this.data.chats[scopeId] = { ...existing, sessionId: undefined };
+    this.schedulePersist();
+  }
+
   async flush(): Promise<void> {
     await this.pendingArchive;
     await this.saving;

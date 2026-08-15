@@ -54,6 +54,34 @@ describe('SessionStore', () => {
     }
   });
 
+  it('clears the native session binding while keeping the transcript', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
+    const path = join(root, 'sessions.json');
+
+    try {
+      const store = new SessionStore(path);
+      store.set('chat-a', 'session-1', '/tmp/project-a');
+      store.recordExchange('chat-a', '/tmp/project-a', ['hello'], 'hi there');
+      await store.flush();
+
+      store.clearSession('chat-a');
+      await store.flush();
+
+      expect(store.resumeFor('chat-a', '/tmp/project-a')).toBeUndefined();
+      expect(store.historyFor('chat-a', '/tmp/project-a')).toEqual([
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi there' },
+      ]);
+
+      const reloaded = new SessionStore(path);
+      await reloaded.load();
+      expect(reloaded.resumeFor('chat-a', '/tmp/project-a')).toBeUndefined();
+      expect(reloaded.historyFor('chat-a', '/tmp/project-a')).toHaveLength(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('archives overflow beyond the retention window', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
     const path = join(root, 'sessions.json');

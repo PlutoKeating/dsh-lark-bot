@@ -839,6 +839,7 @@ export class GuardianService {
           }, SAFE_CARD_TICK_MS);
           ticker.unref?.();
           let timeoutTimer: NodeJS.Timeout | undefined;
+          let armTimeout: (() => void) | undefined;
           try {
             const consume = async (): Promise<void> => {
               for await (const event of run.events) {
@@ -855,22 +856,31 @@ export class GuardianService {
                   this.sessionIds.set(scope, event.sessionId);
                 }
                 if (event.type === 'error') errorText = event.message;
+                // Every agent event counts as activity: restart the idle
+                // window so a long but responsive task is never cut short.
+                armTimeout?.();
                 await controller.update(renderCard(state, density, Date.now()));
               }
             };
+            // Idle watchdog: only a task that goes silent for the configured
+            // window is stopped (active streaming work keeps re-arming it).
             const timeoutPromise =
               timeoutMs > 0
                 ? new Promise<void>((resolve) => {
-                    timeoutTimer = setTimeout(() => {
-                      if (timedOut) return;
-                      timedOut = true;
-                      state = markIdleTimeout(
-                        state,
-                        Math.round(timeoutMs / 60_000),
-                      );
-                      void run.stop();
-                      resolve();
-                    }, timeoutMs);
+                    armTimeout = (): void => {
+                      if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+                      timeoutTimer = setTimeout(() => {
+                        if (timedOut) return;
+                        timedOut = true;
+                        state = markIdleTimeout(
+                          state,
+                          Math.round(timeoutMs / 60_000),
+                        );
+                        void run.stop();
+                        resolve();
+                      }, timeoutMs);
+                    };
+                    armTimeout();
                   })
                 : undefined;
             if (timeoutPromise) {
