@@ -1,11 +1,38 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createLarkChannel, type LarkChannel, type NormalizedMessage } from '@larksuite/channel';
+import {
+  createLarkChannel,
+  type CardActionEvent,
+  type CardStreamController,
+  type LarkChannel,
+  type NormalizedMessage,
+} from '@larksuite/channel';
+import { parse } from 'yaml';
 import { DshAdapter } from '../adapters/dsh/adapter.js';
+import { SdkDshAdapter } from '../adapters/dsh/sdk-adapter.js';
+import {
+  DEFAULT_SAFE_SDK_PROFILE,
+  ensureSdkProfile,
+  resolveSdkLaunch,
+  type SdkLaunchSpec,
+  type SdkProfileEnsureResult,
+} from '../adapters/dsh/sdk-runtime.js';
 import type { AgentAdapter } from '../adapters/types.js';
+import type { CardDensity } from '../card/density.js';
+import { parseCardDensity } from '../card/density.js';
+import {
+  finalizeIfRunning,
+  initialState,
+  markIdleTimeout,
+  markInterrupted,
+  reduce,
+  type RunState,
+} from '../card/run-state.js';
+import { renderCard } from '../card/run-renderer.js';
 import { resolveAppPaths, type AppPaths } from '../config/app-paths.js';
-import { discoverDshBin } from '../config/dsh-runtime.js';
+import { discoverDshBin, resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
 import { ConfigStore, type ProfileConfig } from '../config/profile-store.js';
 import { isEventFresh } from '../config/security.js';
@@ -87,6 +114,16 @@ export interface GuardianServiceOptions {
       env?: NodeJS.ProcessEnv;
     },
   ) => Promise<SafeProfileProbeResult>;
+  /** Adapter engine selection for safe-mode tasks. */
+  safeAdapterMode?: 'auto' | 'sdk' | 'headless';
+  /** Safe-mode task wall-clock timeout before the run is stopped. */
+  safeTimeoutMs?: number;
+  /** Card density used for safe-mode run cards. */
+  safeDensity?: CardDensity;
+  /** Injectable SDK runtime provisioning (tests). */
+  ensureSdkProfile?: (
+    options: Parameters<typeof ensureSdkProfile>[0],
+  ) => Promise<SdkProfileEnsureResult>;
   runPluginList?: (
     bin: string,
     dshProfile: string,
@@ -104,6 +141,8 @@ export interface GuardianSnapshot {
   dshUp: boolean;
   heartbeatAgeMs: number | undefined;
   channelConnected: boolean;
+  safeEngine: 'sdk' | 'headless' | 'test' | undefined;
+  safeRuns: number;
   pid: number;
   dshBin: string | undefined;
   relaunchedPid: number | undefined;
@@ -117,6 +156,18 @@ interface TranscriptEntry {
 
 const MAX_TRANSCRIPT_ENTRIES = 30;
 const SAFE_RUN_TIMEOUT_MS = 10 * 60_000;
+const SAFE_SDK_PROVISION_TIMEOUT_MS = 3 * 60_000;
+const SAFE_CARD_TICK_MS = 5_000;
+
+interface SafeEngine {
+  adapter: AgentAdapter;
+  kind: 'sdk' | 'headless' | 'test';
+}
+
+interface SafeRun {
+  stop: () => Promise<void>;
+  startedAt: number;
+}
 
 export class GuardianService {
   private readonly options: Required<
@@ -134,6 +185,9 @@ export class GuardianService {
       | 'engineDeadMs'
       | 'takeoverGracePolls'
       | 'sendDelayMs'
+      | 'safeAdapterMode'
+      | 'safeTimeoutMs'
+      | 'safeDensity'
     >
   > &
     Pick<
@@ -144,6 +198,7 @@ export class GuardianService {
       | 'findProcess'
       | 'spawnDetachedFn'
       | 'probeSafeProfileFn'
+      | 'ensureSdkProfile'
       | 'runPluginList'
       | 'dshBin'
       | 'saveState'
@@ -153,7 +208,9 @@ export class GuardianService {
 
   private state: GuardianState;
   private channel: LarkChannel | undefined;
-  private safeAdapter: AgentAdapter | undefined;
+  private safeEngine: SafeEngine | undefined;
+  private readonly safeRuns = new Map<string, SafeRun>();
+  private readonly sessionIds = new Map<string, string>();
   private readonly transcripts = new Map<string, TranscriptEntry[]>();
   private downStreak = 0;
   private lastHeartbeatFreshAt: number | undefined;
@@ -172,6 +229,9 @@ export class GuardianService {
       engineDeadMs: options.engineDeadMs ?? 120_000,
       takeoverGracePolls: options.takeoverGracePolls ?? 2,
       sendDelayMs: options.sendDelayMs ?? 600,
+      safeAdapterMode: options.safeAdapterMode ?? 'auto',
+      safeTimeoutMs: options.safeTimeoutMs ?? SAFE_RUN_TIMEOUT_MS,
+      safeDensity: options.safeDensity ?? 'detailed',
       stateFile: options.stateFile,
       configFile: options.configFile,
       heartbeatFile: options.heartbeatFile,
@@ -186,6 +246,7 @@ export class GuardianService {
         findProcess: options.findProcess,
         spawnDetachedFn: options.spawnDetachedFn,
         probeSafeProfileFn: options.probeSafeProfileFn,
+        ensureSdkProfile: options.ensureSdkProfile,
         runPluginList: options.runPluginList,
         dshBin: options.dshBin,
         saveState: options.saveState,
@@ -233,9 +294,11 @@ export class GuardianService {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    await this.stopAllSafeRuns();
+    this.sessionIds.clear();
     await Promise.allSettled([...this.activeMessages]);
     await this.disconnectChannel();
-    await this.safeAdapter?.dispose?.();
+    await this.disposeSafeEngine();
     this.log().info('guardian', 'stopped', {});
   }
 
@@ -247,9 +310,11 @@ export class GuardianService {
       safeProfile: this.state.safeProfile,
       profileSeenUp: this.state.profileSeenUp,
       dshUp: this.dshUp,
-      heartbeatAgeMs: this.lastHeartbeatAgeMs,
-      channelConnected: this.channel !== undefined,
-      pid: process.pid,
+    heartbeatAgeMs: this.lastHeartbeatAgeMs,
+    channelConnected: this.channel !== undefined,
+    safeEngine: this.safeEngine?.kind,
+    safeRuns: this.safeRuns.size,
+    pid: process.pid,
       dshBin: this.dshBin,
       relaunchedPid: this.state.relaunchedPid,
       updatedAt: this.state.updatedAt,
@@ -320,8 +385,11 @@ export class GuardianService {
         if (this.state.mode !== 'standby' || this.channel !== undefined) {
           // The full profile came back (or the user started it manually):
           // release the Feishu channel and leave safe mode immediately.
+          await this.stopAllSafeRuns();
+          this.sessionIds.clear();
           await this.disconnectChannel();
           this.transcripts.clear();
+          await this.disposeSafeEngine();
           await this.setMode('standby');
         }
         return;
@@ -381,6 +449,7 @@ export class GuardianService {
 
     channel.on({
       message: (msg) => this.track(this.handleMessage(msg)),
+      cardAction: (event) => this.track(this.handleCardAction(event)),
       error: (error) => {
         this.log().fail('guardian-channel', error);
       },
@@ -517,6 +586,9 @@ export class GuardianService {
       case 'safemode-exit':
         await this.exitSafeMode(msg);
         return;
+      case 'safemode-stop':
+        await this.handleStop(msg);
+        return;
       case 'safemode-help':
         await this.sendMarkdown(msg.chatId, safemodeHelpText(), msg.messageId);
         return;
@@ -524,7 +596,7 @@ export class GuardianService {
   }
 
   private async enterSafeMode(msg: NormalizedMessage): Promise<void> {
-    if (this.state.mode === 'safe') {
+    if (this.state.mode === 'safe' && this.safeEngine) {
       await this.sendMarkdown(
         msg.chatId,
         '已在安全模式中。发送普通消息与 dsh 核心对话；`/safemode exit` 退出。',
@@ -572,18 +644,31 @@ export class GuardianService {
         );
         return;
       }
-      this.safeAdapter ??=
-        this.options.adapter ??
-        new DshAdapter({
-          command: 'node',
-          args: [bin, '--profile', this.state.safeProfile],
-          stopGraceMs: 5_000,
-        });
+      const engine = await this.resolveSafeEngine();
+      if (!engine) {
+        await this.sendMarkdown(
+          msg.chatId,
+          [
+            '安全模式引擎不可用：SDK runtime 未就绪且 headless 也无法启动。',
+            '请检查本机 dsh 安装与 pnpm 可用性后重试。',
+          ].join('\n'),
+          msg.messageId,
+        );
+        return;
+      }
+      this.safeEngine = engine;
       await this.setMode('safe');
+      const engineLabel =
+        engine.kind === 'sdk'
+          ? 'SDK 流式引擎（实时思考 / 工具调用 / 文字输出）'
+          : engine.kind === 'headless'
+            ? 'headless 回退引擎（完成后一次性输出，任务期间卡片实时显示活动状态）'
+            : '测试引擎';
       await this.sendMarkdown(
         msg.chatId,
         [
-          '安全模式已就绪：dsh 主核心运行中，第三方插件未加载。',
+          `安全模式已就绪：dsh 主核心运行中，第三方插件未加载。`,
+          `引擎：${engineLabel}`,
           '',
           '现在可以直接对话进行自愈（定位 / 修复 / 禁用损坏插件），例如：',
           '- “列出当前 profile 安装的插件并检查哪个最近变坏”',
@@ -612,6 +697,8 @@ export class GuardianService {
         `dsh 是否在线：${snapshot.dshUp ? '是' : '否'}`,
         `心跳龄：${snapshot.heartbeatAgeMs === undefined ? '无' : `${snapshot.heartbeatAgeMs}ms`}`,
         `飞书通道：${snapshot.channelConnected ? '守护已接管' : '未连接'}`,
+        `安全引擎：${snapshot.safeEngine ?? '未就绪'}`,
+        `安全模式运行中任务：${snapshot.safeRuns}`,
         `dsh bin：${snapshot.dshBin ?? '未发现'}`,
         `守护 pid：${snapshot.pid}`,
         `已观察过 dsh 运行：${snapshot.profileSeenUp ? '是' : '否'}`,
@@ -678,13 +765,16 @@ export class GuardianService {
     );
     // Give the reply a moment to flush before releasing the channel.
     await delay(this.options.sendDelayMs);
+    await this.stopAllSafeRuns();
+    this.sessionIds.clear();
     this.transcripts.clear();
+    await this.disposeSafeEngine();
     await this.disconnectChannel();
   }
 
   private async runSafeTask(scope: string, msg: NormalizedMessage): Promise<void> {
-    const adapter = this.safeAdapter;
-    if (!adapter) {
+    const engine = this.safeEngine;
+    if (!engine) {
       await this.sendMarkdown(
         msg.chatId,
         '安全模式未就绪，请先发送 `/safemode`。',
@@ -692,68 +782,286 @@ export class GuardianService {
       );
       return;
     }
+    const active = this.safeRuns.get(scope);
+    if (active) {
+      const elapsed = Math.round((Date.now() - active.startedAt) / 1000);
+      await this.sendMarkdown(
+        msg.chatId,
+        `（安全模式）上一条任务仍在处理中，已运行 ${elapsed}s。发送 \`/safemode stop\` 或点击卡片 ⏹ 按钮可终止。`,
+        msg.messageId,
+      );
+      return;
+    }
     const transcript = this.transcripts.get(scope) ?? [];
     const prompt = buildSafePrompt(transcript, msg.content);
-    await this.sendMarkdown(
-      msg.chatId,
-      '（安全模式 · dsh 核心处理中…）',
-      msg.messageId,
-    );
+    const runId = randomUUID();
+    const density = this.options.safeDensity;
+    const timeoutMs = this.options.safeTimeoutMs;
+    const now = Date.now();
+    let state: RunState = {
+      ...initialState,
+      startedAtMs: now,
+      lastActivityMs: now,
+    };
+    let assistantOutput = '';
+    let finalText: string | undefined;
+    let errorText: string | undefined;
+    let timedOut = false;
+    let events = 0;
 
-    const run = adapter.run({
-      runId: randomUUID(),
+    const run = engine.adapter.run({
+      runId,
       prompt,
       cwd: this.config?.workspaces.default,
-      sessionId: undefined,
+      sessionId: this.sessionIds.get(scope),
       model: undefined,
       images: undefined,
       stopGraceMs: 5_000,
     });
-    const textParts: string[] = [];
-    let finalText: string | undefined;
-    let errorText: string | undefined;
-    let terminal = false;
+    this.safeRuns.set(scope, { stop: () => run.stop(), startedAt: now });
+    this.log().info('guardian-safe', 'task-start', {
+      runId,
+      scope,
+      engine: engine.kind,
+      timeoutMs,
+    });
+
     try {
-      for await (const event of run.events) {
-        if (event.type === 'text' && event.delta) textParts.push(event.delta);
-        if (event.type === 'final_text') finalText = event.content;
-        if (event.type === 'error') {
-          errorText = event.message;
-          terminal = true;
-        }
-        if (event.type === 'done') terminal = true;
-      }
+      await this.streamCard(
+        msg.chatId,
+        renderCard(state, density, Date.now()),
+        async (controller) => {
+          const ticker = setInterval(() => {
+            void controller.update(renderCard(state, density, Date.now())).catch(() => {
+              // Best-effort heartbeat; the event loop below owns the final
+              // state transition.
+            });
+          }, SAFE_CARD_TICK_MS);
+          ticker.unref?.();
+          let timeoutTimer: NodeJS.Timeout | undefined;
+          try {
+            const consume = async (): Promise<void> => {
+              for await (const event of run.events) {
+                if (timedOut) return;
+                events += 1;
+                state = reduce(state, event);
+                state = { ...state, lastActivityMs: Date.now() };
+                if (event.type === 'final_text') {
+                  finalText = event.content;
+                } else if (event.type === 'text') {
+                  assistantOutput += event.delta;
+                }
+                if (event.type === 'system' && event.sessionId) {
+                  this.sessionIds.set(scope, event.sessionId);
+                }
+                if (event.type === 'error') errorText = event.message;
+                await controller.update(renderCard(state, density, Date.now()));
+              }
+            };
+            const timeoutPromise =
+              timeoutMs > 0
+                ? new Promise<void>((resolve) => {
+                    timeoutTimer = setTimeout(() => {
+                      if (timedOut) return;
+                      timedOut = true;
+                      state = markIdleTimeout(
+                        state,
+                        Math.round(timeoutMs / 60_000),
+                      );
+                      void run.stop();
+                      resolve();
+                    }, timeoutMs);
+                  })
+                : undefined;
+            if (timeoutPromise) {
+              await Promise.race([consume(), timeoutPromise]);
+            } else {
+              await consume();
+            }
+            if (!timedOut && state.terminal === 'running') {
+              state = finalizeIfRunning(state);
+            }
+            await controller.update(renderCard(state, density, Date.now()));
+          } finally {
+            clearInterval(ticker);
+            if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+          }
+        },
+        { replyTo: msg.messageId },
+      );
     } catch (error) {
-      errorText = error instanceof Error ? error.message : String(error);
-      terminal = true;
+      this.log().fail('guardian-safe', error, { runId, scope });
+      state = markInterrupted(state);
+      try {
+        await this.sendMarkdown(
+          msg.chatId,
+          `⚠️ 安全模式任务失败：${error instanceof Error ? error.message : String(error)}`,
+          msg.messageId,
+        );
+      } catch {
+        // best effort; the card may already have failed
+      }
+      return;
+    } finally {
+      this.safeRuns.delete(scope);
     }
 
-    if (!terminal) {
-      await run.waitForExit(SAFE_RUN_TIMEOUT_MS);
-    }
+    const durationMs = Date.now() - now;
+    const terminal = state.terminal;
+    this.log().info('guardian-safe', 'task-end', {
+      runId,
+      scope,
+      engine: engine.kind,
+      terminal,
+      events,
+      durationMs,
+      ...(errorText === undefined ? {} : { errorText }),
+      outputLength: (finalText ?? assistantOutput).trim().length,
+    });
 
-    if (errorText) {
-      await this.sendMarkdown(
-        msg.chatId,
-        `（安全模式 · dsh 核心错误）\n${errorText.slice(0, 2_000)}`,
-        msg.messageId,
-      );
+    // Terminal states are already visible on the card; only successful
+    // answers are folded into the next-turn transcript.
+    if (timedOut || terminal === 'interrupted' || terminal === 'error' || terminal === 'idle_timeout') {
       return;
     }
-    const answer = finalText ?? textParts.join('').trim();
+    const answer = finalText ?? assistantOutput.trim();
     if (!answer) {
-      await this.sendMarkdown(
-        msg.chatId,
-        '（安全模式 · dsh 核心未返回内容）',
-        msg.messageId,
-      );
+      this.log().warn('guardian-safe', 'task-empty', { runId, scope });
       return;
     }
-    await this.sendMarkdown(msg.chatId, answer, msg.messageId);
     this.transcripts.set(scope, pushTranscript(transcript, [
       { role: 'user', content: msg.content },
       { role: 'assistant', content: answer },
     ]));
+  }
+
+  private async streamCard(
+    chatId: string,
+    initial: object,
+    producer: (controller: CardStreamController) => Promise<void>,
+    options?: { replyTo?: string },
+  ): Promise<void> {
+    if (!this.channel) return;
+    await this.channel.stream(chatId, { card: { initial, producer } }, options);
+  }
+
+  private async handleCardAction(event: CardActionEvent): Promise<void> {
+    const value = isRecord(event.action.value) ? event.action.value : undefined;
+    if (value?.cmd !== 'stop') return;
+    const scope = safeScopeForAction(event);
+    const run = this.safeRuns.get(scope);
+    if (!run) return;
+    this.log().info('guardian-safe', 'stop-requested', { scope });
+    await run.stop();
+  }
+
+  private async handleStop(msg: NormalizedMessage): Promise<void> {
+    const scope = this.scopeFor(msg);
+    const run = this.safeRuns.get(scope);
+    if (!run) {
+      await this.sendMarkdown(
+        msg.chatId,
+        '当前没有正在运行的安全模式任务。',
+        msg.messageId,
+      );
+      return;
+    }
+    await this.sendMarkdown(
+      msg.chatId,
+      '已请求终止当前任务，正在停止 dsh 进程…',
+      msg.messageId,
+    );
+    await run.stop();
+  }
+
+  private async resolveSafeEngine(): Promise<SafeEngine | undefined> {
+    if (this.options.adapter) {
+      return { adapter: this.options.adapter, kind: 'test' };
+    }
+    const mode = this.options.safeAdapterMode;
+    if (mode === 'sdk' || mode === 'auto') {
+      const launch = await this.provisionSafeSdk();
+      if (launch) {
+        this.log().info('guardian-safe', 'engine-selected', { engine: 'sdk' });
+        return {
+          adapter: new SdkDshAdapter({
+            launch,
+            provider: this.options.env?.DSH_LARK_PROVIDER ?? 'deepseek-official',
+            model: this.safeModel(),
+          }),
+          kind: 'sdk',
+        };
+      }
+      if (mode === 'sdk') return undefined;
+    }
+    if (!this.dshBin) return undefined;
+    this.log().info('guardian-safe', 'engine-selected', { engine: 'headless' });
+    return {
+      adapter: new DshAdapter({
+        command: 'node',
+        args: [this.dshBin, '--profile', this.state.safeProfile],
+        stopGraceMs: 5_000,
+      }),
+      kind: 'headless',
+    };
+  }
+
+  private async provisionSafeSdk(): Promise<SdkLaunchSpec | undefined> {
+    if (!this.dshBin) return undefined;
+    const ensure = this.options.ensureSdkProfile ?? ensureSdkProfile;
+    const result = await withTimeout(
+      ensure({
+        home: this.options.home,
+        env: this.options.env ?? process.env,
+        profile: DEFAULT_SAFE_SDK_PROFILE,
+        bridgeTools: false,
+      }),
+      SAFE_SDK_PROVISION_TIMEOUT_MS,
+    );
+    if (!result) {
+      this.log().warn('guardian-safe', 'sdk-provision-timeout', {
+        profile: DEFAULT_SAFE_SDK_PROFILE,
+      });
+      return undefined;
+    }
+    if (!result.ok) {
+      this.log().warn('guardian-safe', 'sdk-provision-failed', {
+        profile: DEFAULT_SAFE_SDK_PROFILE,
+        error: result.error,
+      });
+      return undefined;
+    }
+    return resolveSdkLaunch({
+      home: this.options.home,
+      env: this.options.env ?? process.env,
+      profile: DEFAULT_SAFE_SDK_PROFILE,
+    });
+  }
+
+  private safeModel(): string {
+    const explicit = this.options.env?.DSH_LARK_MODEL;
+    if (explicit) return explicit;
+    return (
+      readDshDefaultModel(this.options.home, this.options.env ?? process.env) ??
+      'deepseek-v4-flash'
+    );
+  }
+
+  private async stopAllSafeRuns(): Promise<void> {
+    const runs = [...this.safeRuns.values()];
+    this.safeRuns.clear();
+    await Promise.allSettled(runs.map((run) => run.stop()));
+  }
+
+  private async disposeSafeEngine(): Promise<void> {
+    const engine = this.safeEngine;
+    this.safeEngine = undefined;
+    if (!engine) return;
+    try {
+      await engine.adapter.dispose?.();
+    } catch (error) {
+      this.log().fail('guardian-safe', error);
+    }
   }
 }
 
@@ -792,11 +1100,71 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    timer.unref?.();
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(undefined);
+      },
+    );
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function safeScopeForAction(event: CardActionEvent): string {
+  const raw = isRecord(event.raw) ? event.raw : undefined;
+  const message = isRecord(raw?.message) ? raw.message : undefined;
+  const threadId =
+    typeof message?.thread_id === 'string' ? message.thread_id : undefined;
+  return threadId ? `${event.chatId}:${threadId}` : event.chatId;
+}
+
+/**
+ * Read the dsh default model from the official settings store without
+ * importing dsh code (mirrors the bridge's `agent-default-model` namespace).
+ */
+function readDshDefaultModel(
+  home: string,
+  env: NodeJS.ProcessEnv,
+): string | undefined {
+  try {
+    const file = join(resolveDshHome(home, env), 'settings.yaml');
+    const doc = parse(readFileSync(file, 'utf8')) as Record<string, unknown> | undefined;
+    const value = doc?.['agent-default-model'];
+    return typeof value === 'string' && value ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function parseFreshness(value: string | undefined): number {
   const raw = value?.trim();
   if (!raw) return 600_000;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 600_000;
+}
+
+function parseSafeAdapterMode(value: string | undefined): 'auto' | 'sdk' | 'headless' {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'sdk' || normalized === 'headless') return normalized;
+  return 'auto';
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 type DefinedValues<T> = { [K in keyof T]: Exclude<T[K], undefined> };
@@ -854,6 +1222,12 @@ export async function buildGuardianService(
     pollMs: env.guardianPollMs,
     staleMs: env.guardianStaleMs,
     engineDeadMs: env.guardianEngineDeadMs,
+    safeAdapterMode: parseSafeAdapterMode(process.env.DSH_LARK_GUARDIAN_SAFE_ADAPTER),
+    safeTimeoutMs: parsePositiveInt(
+      process.env.DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS,
+      SAFE_RUN_TIMEOUT_MS,
+    ),
+    safeDensity: parseCardDensity(process.env.DSH_LARK_GUARDIAN_CARD_DENSITY) ?? 'detailed',
     ...overrides,
   });
 }

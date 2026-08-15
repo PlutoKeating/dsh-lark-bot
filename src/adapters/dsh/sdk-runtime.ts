@@ -12,6 +12,8 @@ export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
 export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
 export const SDK_BASE_BUNDLE = '@deepseek-ai/dsh-base';
 export const DEFAULT_SDK_PROFILE = 'dsh-lark-sdk';
+/** Core-only SDK profile used by the safety-net guardian's safe mode. */
+export const DEFAULT_SAFE_SDK_PROFILE = 'dsh-lark-safe-sdk';
 
 export interface SdkRuntimeOptions {
   /** OS home directory used to resolve the shared dsh installation. */
@@ -26,6 +28,12 @@ export interface SdkRuntimeOptions {
   bin?: string;
   /** Profile name for the SDK runtime composition. */
   profile?: string;
+  /**
+   * Mount the bridge callback tools (`lark_notify` / `lark_ask_user`) in the
+   * runtime overlay. The full bridge needs them; the guardian's core-only
+   * safe profile must not (it has no notify server). Defaults to `true`.
+   */
+  bridgeTools?: boolean;
   /** Injectable installer for tests. */
   install?: (profileRoot: string) => Promise<void>;
 }
@@ -67,9 +75,10 @@ function packageJsonFor(profile: string): string {
   )}\n`;
 }
 
-export function patchYamlFor(): string {
+export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
   const own = ownPackageInfo();
-  return [
+  const bridgeTools = options?.bridgeTools ?? true;
+  const lines = [
     '# dsh-lark SDK JSON-RPC runtime overlay (managed by dsh-lark-bot).',
     '# stdout is reserved for SDK JSON-RPC frames; no console logger may load.',
     '- insert:',
@@ -91,25 +100,30 @@ export function patchYamlFor(): string {
     '- id: hmr',
     '  disabled: true',
     '',
-    // In-process bridge callback tool: lets the agent mention users and push
-    // messages to other chats/topics through the running bridge process.
-    '- insert:',
-    '    - id: lark-notify',
-    `      name: '${own.name}/notify'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-    // Question-card tool: the agent asks the user for decisions / missing
-    // information; the bridge shows a card and returns the answer.
-    '- insert:',
-    '    - id: lark-ask',
-    `      name: '${own.name}/ask'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-  ].join('\n');
+  ];
+  if (bridgeTools) {
+    lines.push(
+      // In-process bridge callback tool: lets the agent mention users and push
+      // messages to other chats/topics through the running bridge process.
+      '- insert:',
+      '    - id: lark-notify',
+      `      name: '${own.name}/notify'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+      // Question-card tool: the agent asks the user for decisions / missing
+      // information; the bridge shows a card and returns the answer.
+      '- insert:',
+      '    - id: lark-ask',
+      `      name: '${own.name}/ask'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+    );
+  }
+  return lines.join('\n');
 }
 
 function sdkServerInstalled(profileRoot: string): boolean {
@@ -198,7 +212,15 @@ export async function ensureSdkProfile(
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
-    await writeFile(join(root, 'cordis.patch.yml'), patchYamlFor(), 'utf8');
+    await writeFile(
+      join(root, 'cordis.patch.yml'),
+      patchYamlFor(
+        options.bridgeTools === undefined
+          ? {}
+          : { bridgeTools: options.bridgeTools },
+      ),
+      'utf8',
+    );
     const install = options.install ?? runPnpmInstall;
     if (!isSdkProfileReady(root)) {
       await install(root);

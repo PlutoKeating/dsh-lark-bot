@@ -28,6 +28,14 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
   });
 
+  it('omits the bridge tools from the core-only safe SDK overlay', () => {
+    const patch = patchYamlFor({ bridgeTools: false });
+    expect(patch).toContain("id: sdk-jsonrpc-server");
+    expect(patch).toContain('id: user-questions');
+    expect(patch).not.toContain('id: lark-notify');
+    expect(patch).not.toContain('id: lark-ask');
+  });
+
   it('uses the discovered bin with the SDK profile', () => {
     const launch = resolveSdkLaunch({ home: '/home/x', bin: '/home/x/bin.js' });
     expect(launch.command).toBe('node');

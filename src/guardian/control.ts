@@ -13,6 +13,7 @@
  *                          (diagnostics for self-healing);
  * - `/safemode exit`       leave safe mode, relaunch the full profile and
  *                          hand the Feishu channel back;
+ * - `/safemode stop`       interrupt the currently running safe-mode task;
  * - `/safemode help`       print the above.
  */
 
@@ -21,6 +22,7 @@ export type GuardianControlKind =
   | 'safemode-status'
   | 'safemode-plugins'
   | 'safemode-exit'
+  | 'safemode-stop'
   | 'safemode-help';
 
 export interface GuardianControl {
@@ -51,6 +53,11 @@ export function parseGuardianCommand(text: string): GuardianControl | undefined 
     case 'leave':
     case 'restore':
       return { kind: 'safemode-exit', argument };
+    case 'stop':
+    case 'cancel':
+    case 'abort':
+    case 'kill':
+      return { kind: 'safemode-stop', argument };
     case 'help':
     case '?':
       return { kind: 'safemode-help', argument };
@@ -65,6 +72,7 @@ export const SAFEMODE_HELP = [
   '/safemode status — 查看守护状态',
   '/safemode plugins — 列出故障 profile 已安装的插件',
   '/safemode exit — 退出安全模式，重启完整 profile 并交还飞书通道',
+  '/safemode stop — 终止当前正在运行的安全模式任务',
   '',
   '安全模式下发送普通消息即可与 dsh 核心对话，进行定位 / 修复 / 禁用损坏插件的自愈操作。',
 ].join('\n');
@@ -74,6 +82,7 @@ export const SAFEMODE_HELP_EN = [
   '/safemode status — show guardian state',
   '/safemode plugins — list plugins installed into the broken profile',
   '/safemode exit — leave safe mode, relaunch the full profile and hand the channel back',
+  '/safemode stop — interrupt the currently running safe-mode task',
   '',
   'In safe mode, send normal messages to converse with the dsh core for self-healing.',
 ].join('\n');

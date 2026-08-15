@@ -17,7 +17,10 @@ import type {
 } from '../../src/adapters/types.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import { startHeartbeat } from '../../src/guardian/heartbeat.js';
-import { GuardianService } from '../../src/guardian/service.js';
+import {
+  GuardianService,
+  type GuardianServiceOptions,
+} from '../../src/guardian/service.js';
 import {
   newGuardianState,
   saveGuardianState,
@@ -38,6 +41,12 @@ type Handlers = Record<string, (...args: never[]) => unknown>;
 function makeChannel() {
   const handlers: Handlers = {};
   const sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }> = [];
+  const streamed: object[] = [];
+  const streamCalls: Array<{
+    chatId: string;
+    input: unknown;
+    options: SendOptions | undefined;
+  }> = [];
   let createOptions: Record<string, unknown> | undefined;
   const channel = {
     on(next: Handlers) {
@@ -51,12 +60,33 @@ function makeChannel() {
         return { messageId: 'sent-' + sent.length };
       },
     ),
-    stream: vi.fn().mockResolvedValue(undefined),
+    stream: vi.fn().mockImplementation(
+      async (chatId: string, input: unknown, options?: SendOptions) => {
+        streamCalls.push({ chatId, input, options });
+        const card = (input as {
+          card?: {
+            initial: object;
+            producer: (controller: { update: (card: object) => Promise<void> }) => Promise<void>;
+          };
+        }).card;
+        if (card) {
+          streamed.push(card.initial);
+          await card.producer({
+            update: async (next: object) => {
+              streamed.push(next);
+            },
+          });
+        }
+        return { messageId: 'stream-' + streamed.length };
+      },
+    ),
   } as unknown as LarkChannel;
   return {
     channel,
     handlers,
     sent,
+    streamed,
+    streamCalls,
     get createOptions() {
       return createOptions;
     },
@@ -97,6 +127,46 @@ function makeAdapter(prompts: string[]): AgentAdapter {
   };
 }
 
+function makeHangingAdapter(): {
+  adapter: AgentAdapter;
+  release: () => void;
+  stopCalls: () => number;
+} {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let stopCalls = 0;
+  const adapter: AgentAdapter = {
+    id: 'fake-hang',
+    displayName: 'Fake Hang',
+    async isAvailable() {
+      return true;
+    },
+    async checkAvailability(): Promise<AgentAvailability> {
+      return { ok: true, error: undefined, version: 'test' };
+    },
+    run(options: AgentRunOptions): AgentRun {
+      return {
+        runId: options.runId,
+        events: (async function* () {
+          yield { type: 'system', sessionId: undefined, cwd: undefined, model: undefined };
+          yield { type: 'text', delta: 'working…' };
+          await gate;
+          yield { type: 'final_text', content: 'done' };
+          yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+        })(),
+        stop: async () => {
+          stopCalls += 1;
+          release();
+        },
+        waitForExit: async () => true,
+      };
+    },
+  };
+  return { adapter, release, stopCalls: () => stopCalls };
+}
+
 function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage {
   return {
     messageId: 'msg-1',
@@ -120,6 +190,10 @@ async function makeHarness(
     admins?: string[];
     allowedUsers?: string[];
     adapter?: AgentAdapter;
+    noAdapter?: boolean;
+    safeAdapterMode?: 'auto' | 'sdk' | 'headless';
+    safeTimeoutMs?: number;
+    ensureSdkProfile?: GuardianServiceOptions['ensureSdkProfile'];
     engineDeadMs?: number;
     findProcess?: (dshProfile: string) => Promise<{ pid: number; cmdline: string } | undefined>;
   } = {},
@@ -149,7 +223,9 @@ async function makeHarness(
   await saveGuardianState(stateFile, state);
 
   const channelMock = makeChannel();
-  const adapter = overrides.adapter ?? makeAdapter(prompts);
+  const adapter = overrides.noAdapter
+    ? undefined
+    : (overrides.adapter ?? makeAdapter(prompts));
   const spawnDetachedFn = vi.fn().mockReturnValue({ pid: 777 });
   const probeSafeProfileFn = vi
     .fn()
@@ -174,11 +250,20 @@ async function makeHarness(
     sendDelayMs: 0,
     dshBin: '/fake/dsh/bin.js',
     createChannel: channelMock.createChannel,
-    adapter,
+    ...(adapter === undefined ? {} : { adapter }),
     findProcess: overrides.findProcess ?? (async () => undefined),
     spawnDetachedFn,
     probeSafeProfileFn,
     saveState,
+    ...(overrides.safeAdapterMode === undefined
+      ? {}
+      : { safeAdapterMode: overrides.safeAdapterMode }),
+    ...(overrides.safeTimeoutMs === undefined
+      ? {}
+      : { safeTimeoutMs: overrides.safeTimeoutMs }),
+    ...(overrides.ensureSdkProfile === undefined
+      ? {}
+      : { ensureSdkProfile: overrides.ensureSdkProfile }),
   });
   services.push(service);
   return {
@@ -189,6 +274,8 @@ async function makeHarness(
     channel: channelMock.channel,
     handlers: channelMock.handlers,
     sent: channelMock.sent,
+    streamed: channelMock.streamed,
+    streamCalls: channelMock.streamCalls,
     prompts,
     adapter,
     spawnDetachedFn,
@@ -282,15 +369,19 @@ describe('GuardianService', () => {
       expect.objectContaining({ bin: '/fake/dsh/bin.js', dshProfile: 'dsh-lark' }),
     );
     expect(harness.service.snapshot().mode).toBe('safe');
+    expect(harness.service.snapshot().safeEngine).toBe('test');
     const enterReply = JSON.stringify(harness.sent.at(-1)?.input);
     expect(enterReply).toContain('安全模式已就绪');
+    expect(enterReply).toContain('引擎：');
 
     await harness.handlers.message?.(
       message({ messageId: 'm2', content: 'which plugin looks broken?' }) as never,
     );
     expect(harness.prompts[0]).toContain('which plugin looks broken?');
-    const answerReply = harness.sent.at(-1)?.input;
-    expect(JSON.stringify(answerReply)).toContain('fake answer');
+    // The answer streams into the run card instead of a one-shot markdown.
+    expect(harness.streamCalls.at(-1)?.options).toEqual({ replyTo: 'm2' });
+    expect(JSON.stringify(harness.streamed.at(-1))).toContain('fake answer');
+    expect(JSON.stringify(harness.streamed.at(-1))).toContain('已完成');
 
     await harness.handlers.message?.(
       message({ messageId: 'm3', content: 'disable it' }) as never,
@@ -353,5 +444,145 @@ describe('GuardianService', () => {
     expect(text).toContain('就绪检查失败');
     expect(text).toContain('cannot resolve bundle');
     expect(harness.service.snapshot().mode).not.toBe('safe');
+  });
+
+  it('replies that a safe task is busy while another one is running', async () => {
+    const hang = makeHangingAdapter();
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      adapter: hang.adapter,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+
+    const first = harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'first task' }) as never,
+    );
+    await until(() => harness.streamed.length > 1);
+    await harness.handlers.message?.(
+      message({ messageId: 'm3', content: 'second task' }) as never,
+    );
+    expect(JSON.stringify(harness.sent.at(-1)?.input)).toContain('仍在处理中');
+    hang.release();
+    await first;
+  });
+
+  it('stops a safe task that exceeds the run timeout and renders a timeout card', async () => {
+    const hang = makeHangingAdapter();
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      adapter: hang.adapter,
+      safeTimeoutMs: 60,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    await harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'slow task' }) as never,
+    );
+    await until(() => JSON.stringify(harness.streamed.at(-1)).includes('已超时'));
+    expect(hang.stopCalls()).toBeGreaterThan(0);
+    expect(harness.service.snapshot().safeRuns).toBe(0);
+  });
+
+  it('stops a running safe task from the card stop button', async () => {
+    const hang = makeHangingAdapter();
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      adapter: hang.adapter,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    const first = harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'long task' }) as never,
+    );
+    await until(() => harness.streamed.length > 1);
+    await harness.handlers.cardAction?.({
+      messageId: 'card-1',
+      chatId: 'chat-1',
+      operator: { openId: 'ou_admin' },
+      action: { value: { cmd: 'stop' }, tag: 'button' },
+    } as never);
+    expect(hang.stopCalls()).toBeGreaterThan(0);
+    hang.release();
+    await first;
+  });
+
+  it('interrupts the active safe task via /safemode stop', async () => {
+    const hang = makeHangingAdapter();
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      adapter: hang.adapter,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    const first = harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'long task' }) as never,
+    );
+    await until(() => harness.streamed.length > 1);
+    await harness.handlers.message?.(
+      message({ messageId: 'm3', content: '/safemode stop' }) as never,
+    );
+    expect(hang.stopCalls()).toBeGreaterThan(0);
+    expect(JSON.stringify(harness.sent.at(-1)?.input)).toContain('已请求终止');
+    hang.release();
+    await first;
+  });
+
+  it('falls back to headless when the safe SDK runtime cannot be provisioned', async () => {
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      noAdapter: true,
+      ensureSdkProfile: async () => ({
+        ok: false,
+        created: false,
+        error: 'pnpm missing',
+      }),
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    expect(harness.service.snapshot().mode).toBe('safe');
+    expect(harness.service.snapshot().safeEngine).toBe('headless');
+    expect(JSON.stringify(harness.sent.at(-1)?.input)).toContain('headless 回退引擎');
+  });
+
+  it('refuses to enter safe mode when sdk is forced and unavailable', async () => {
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      noAdapter: true,
+      safeAdapterMode: 'sdk',
+      ensureSdkProfile: async () => ({
+        ok: false,
+        created: false,
+        error: 'no pnpm',
+      }),
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    expect(harness.service.snapshot().mode).not.toBe('safe');
+    expect(JSON.stringify(harness.sent.at(-1)?.input)).toContain('引擎不可用');
+  });
+
+  it('re-provisions the engine when safe mode survived a guardian restart', async () => {
+    const harness = await makeHarness({
+      state: { profileSeenUp: true, mode: 'safe' },
+      noAdapter: true,
+      ensureSdkProfile: async () => ({
+        ok: false,
+        created: false,
+        error: 'pnpm missing',
+      }),
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    expect(harness.service.snapshot().mode).toBe('safe');
+    expect(harness.service.snapshot().safeEngine).toBe('headless');
+    expect(JSON.stringify(harness.sent.at(-1)?.input)).toContain('安全模式已就绪');
   });
 });
