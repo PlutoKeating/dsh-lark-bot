@@ -37,6 +37,20 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+const FAKE_PATCH = [
+  '# dsh-lark-bot as a profile bundle.',
+  '',
+  '- insert:',
+  '    - id: dsh-lark-bot',
+  "      name: 'dsh-lark-bot/plugin'",
+  '      config: {}',
+  '',
+  '    - id: lark-notify',
+  "      name: 'dsh-lark-bot/notify'",
+  '      config: {}',
+  '',
+].join('\n');
+
 function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
   return {
     name,
@@ -66,6 +80,7 @@ async function makeFakeRoot(distFiles: readonly string[] = DIST_FILES, name = 'd
     writeFile(join(root, 'README.md'), '# fixture\n'),
     writeFile(join(root, 'SECURITY.md'), 'security\n'),
     writeFile(join(root, 'LICENSE'), 'AGPL-3.0\n'),
+    writeFile(join(root, 'cordis.patch.yml'), FAKE_PATCH),
     writeFile(join(root, 'package.json'), `${JSON.stringify(manifestFor(name), null, 2)}\n`),
   ]);
   return root;
@@ -90,6 +105,9 @@ describe('publish bundle', () => {
     const patch = await readFile(join(dir, 'cordis.patch.yml'), 'utf8');
     expect(patch).toContain("name: 'dsh-lark-bot/plugin'");
     expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    // The primary package ships the repository file verbatim: the published
+    // patch can never drift from the tracked cordis.patch.yml.
+    expect(patch).toBe(FAKE_PATCH);
   });
 
   it('requires the ask entry that was missing from the v0.9.0 publish', async () => {
@@ -119,5 +137,9 @@ describe('publish bundle', () => {
     expect(existsSync(join(dir, 'bin', 'dsh-feishu-bot.mjs'))).toBe(true);
     const patch = await readFile(join(dir, 'cordis.patch.yml'), 'utf8');
     expect(patch).toContain("name: 'dsh-feishu-bot/plugin'");
+    expect(patch).toContain("name: 'dsh-feishu-bot/notify'");
+    // The plugin id stays dsh-lark-bot for the aliased package.
+    expect(patch).toContain('- id: dsh-lark-bot');
+    expect(patch).not.toContain("name: 'dsh-lark-bot/plugin'");
   });
 });

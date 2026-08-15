@@ -8,7 +8,11 @@ export interface PublishManifest {
 
 export const PUBLISH_FILES: string[];
 
-export function bundlePatchFor(name: string, packageName?: string): string;
+export function bundlePatchFor(
+  root: string,
+  name: string,
+  packageName?: string,
+): Promise<string>;
 
 export function copyDirRecursive(src: string, dest: string): Promise<void>;
 
