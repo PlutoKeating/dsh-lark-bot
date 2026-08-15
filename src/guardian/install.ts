@@ -65,6 +65,29 @@ function serviceDirectory(platform: NodeJS.Platform, root: string): string {
   }
 }
 
+/**
+ * The exact service-entry file for the current platform (systemd unit,
+ * launchd plist, Windows startup .cmd or fallback shell script). Used both by
+ * install/uninstall and by the upgrade command to detect whether the guardian
+ * is installed.
+ */
+export function guardianServiceFilePath(
+  platform: NodeJS.Platform,
+  root: string,
+): string {
+  const directory = serviceDirectory(platform, root);
+  switch (platform) {
+    case 'linux':
+      return join(directory, `${GUARDIAN_LABEL}.service`);
+    case 'darwin':
+      return join(directory, `io.dsh-lark.${GUARDIAN_LABEL}.plist`);
+    case 'win32':
+      return join(directory, `${GUARDIAN_LABEL}.cmd`);
+    default:
+      return join(directory, `${GUARDIAN_LABEL}.sh`);
+  }
+}
+
 export function systemdUnit(
   nodeBin: string,
   cliEntry: string,
@@ -170,7 +193,7 @@ export async function installGuardian(
   await mkdir(directory, { recursive: true });
 
   if (process.platform === 'linux') {
-    const unitPath = join(directory, `${GUARDIAN_LABEL}.service`);
+    const unitPath = guardianServiceFilePath(process.platform, root);
     await writeFile(
       unitPath,
       systemdUnit(nodeBin, cliEntry, { DSH_LARK_GUARDIAN_DISABLED: '0' }),
@@ -190,8 +213,7 @@ export async function installGuardian(
       return { ok: false, messages };
     }
   } else if (process.platform === 'darwin') {
-    const label = `io.dsh-lark.${GUARDIAN_LABEL}`;
-    const plistPath = join(directory, `${label}.plist`);
+    const plistPath = guardianServiceFilePath(process.platform, root);
     await writeFile(plistPath, launchdPlist(nodeBin, cliEntry), 'utf8');
     messages.push(`launchd LaunchAgent 已写入 ${plistPath}`);
     const run = options.run ?? defaultRun;
@@ -207,11 +229,11 @@ export async function installGuardian(
       return { ok: false, messages };
     }
   } else if (process.platform === 'win32') {
-    const cmdPath = join(directory, `${GUARDIAN_LABEL}.cmd`);
+    const cmdPath = guardianServiceFilePath(process.platform, root);
     await writeFile(cmdPath, windowsStartupCmd(nodeBin, cliEntry), 'utf8');
     messages.push(`Windows 启动项已写入 ${cmdPath}（登录后自动常驻）。`);
   } else {
-    const fallbackPath = join(directory, `${GUARDIAN_LABEL}.sh`);
+    const fallbackPath = guardianServiceFilePath(process.platform, root);
     await writeFile(
       fallbackPath,
       `#!/bin/sh\nexec "${nodeBin}" "${cliEntry}" guardian run\n`,
