@@ -136,8 +136,9 @@ dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或
 安全模式下 agent 具备代码执行能力，可配合上述命令定位 / 修复 / 禁用损坏插件。安全模式优先使用
 官方 SDK 流式引擎（实时思考 / 工具调用 / web search / 打字机式文字，同一张卡片持续更新）；
 SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务期间卡片仍实时显示
-“正在思考 / 已运行 Ns / 无响应 Ns”，任务结束、出错或超时都有明确终态。单任务墙钟超时默认
-10 分钟（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`）。dsh 恢复后守护自动断开并回归静默。
+“正在思考 / 已运行 Ns / 无响应 Ns”，任务结束、出错或超时都有明确终态。单任务**空闲超时**
+默认 10 分钟（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，任务持续无活动事件才被终止，活跃任务
+不会被误杀）。dsh 恢复后守护自动断开并回归静默。
 守护相关本地状态见下节。
 
 ## 7. 本地状态
@@ -163,7 +164,8 @@ dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）�
 - `dsh-lark-safe-sdk`：安全模式的 SDK 流式 runtime（`/safemode` 时由守护优先创建，
   `dsh-base` + `dsh-sdk-jsonrpc-server`，无第三方插件；失败自动回退 `dsh-lark-safe`）
 
-可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行墙钟超时，`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。
+可通过 `DSH_LARK_HOME` 修改状态根目录；`DSH_LARK_RUN_TIMEOUT_MS` 控制单次运行空闲超时
+（持续无活动事件才终止），`DSH_LARK_STOP_GRACE_MS` 控制优雅退出宽限期。
 
 ## 8. 卸载
 

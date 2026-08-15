@@ -160,8 +160,9 @@ dsh-lark-bot guardian uninstall
   以 SDK 流式引擎实时展示思考 / 工具调用 / web search / 打字机式文字，并支持原生会话续跑；
   SDK 预置失败（如缺 pnpm）时回退 `~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` +
   `dsh-headless`），历史上下文自动拼接（每 scope 上限 30 条）。任一引擎下任务卡片都实时显示
-  “正在思考 / 已运行 Ns / 无响应 Ns”，任务结束 / 出错 / 超时都有明确终态；单任务墙钟超时默认
-  10 分钟（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，超时会真正停止 dsh 子进程）。
+  “正在思考 / 已运行 Ns / 无响应 Ns”，任务结束 / 出错 / 超时都有明确终态；单任务空闲超时默认
+  10 分钟（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`：任务持续无活动事件才被终止并真正停止 dsh
+  子进程，活跃的流式任务不会被误杀）。
 - `/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示插件清单。
 - `/safemode stop`（或卡片 ⏹ 按钮）终止当前安全模式任务；同一会话同时只允许一个任务，
   忙碌时新消息会立即收到“仍在处理中”回执。
@@ -241,8 +242,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
-| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时 |
+| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时（持续无活动事件才终止） |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
+| `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行） |
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留） |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |
@@ -254,6 +256,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔 |
 | `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值（超时且无 dsh 进程则接管） |
 | `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` | `120000` | dsh 进程存活但心跳持续超时该时长即判定引擎已死并接管 |
+| `DSH_LARK_GUARDIAN_SAFE_ADAPTER` | `auto` | 安全模式引擎：`auto` 优先 SDK 流式、失败回退 headless；`sdk` 强制 SDK；`headless` 跳过预置 |
+| `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡） |
+| `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
 桥接引擎）；无需任何独立服务环境快照。

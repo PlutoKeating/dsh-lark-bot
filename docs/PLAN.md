@@ -50,7 +50,7 @@
 - [x] 多角色 Agent（`RoleStore` + `/role` 命令：persona / 模型 / 工具指引 / 角色规则）
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
-- [x] 墙钟超时看门狗
+- [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
 - [x] 卡片审批（ACP `session/request_permission` + 审批卡）
 - [x] 问答卡（单选 / 多选 / 自由文本）
 - [x] 异步任务队列（scope 内并行 run + 消息批量合并；workflow 编排仍待上游能力）
@@ -172,7 +172,8 @@
 ### 8.6 P2：测试密度提升（借鉴 Roy-oss1）
 
 - 新增模块全部配套单元测试（sdk-translate / sdk-adapter / sdk-runtime / acp-adapter / approval-card / question-card / approvals / security / density）。
-- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿（现状：137 用例 + 3 门控真实 runtime E2E，2026-08-14）。
+- 目标：核心模块测试/源码比 ≥ 1:1；`pnpm test` 全绿（现状：214 用例，含 3 门控真实 runtime
+  E2E，2026-08-16）。
 
 ### 8.7 P2：License 决策项
 

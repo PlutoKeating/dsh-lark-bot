@@ -8,7 +8,7 @@
 ## 1. 核心结论 · TL;DR
 
 - 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
-- **两条官方接入路线均已实测**（2026-08-14）：
+- **两条官方接入路线均已实测**（2026-08-15 最后验证）：
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
     runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
     **reasoning-delta / text-delta token 级流式**，支持 thinking 展示与 typewriter 卡片。

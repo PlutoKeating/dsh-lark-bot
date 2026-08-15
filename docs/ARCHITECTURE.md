@@ -111,7 +111,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
    `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致的实时流式卡片（思考 / 工具 /
    web search / 打字机文字），SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
-   （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务墙钟超时（默认 10 分钟）、
+   （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务空闲超时（默认 10 分钟，
+   持续无活动事件才终止，活跃的流式任务不会被误杀）、
    `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。
    守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程本身不依赖任何 dsh /
    Cordis 代码。

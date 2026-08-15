@@ -127,7 +127,7 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 > 卸载：`dsh plugin --profile dsh-lark remove dsh-lark-bot`。
 > Uninstall: `dsh plugin --profile dsh-lark remove dsh-lark-bot`.
 
-### 4. 基本使用 | Basic usage
+### 3. 基本使用 | Basic usage
 
 在飞书里向 bot 发送普通消息即可开始工作，常用命令：
 
@@ -231,8 +231,9 @@ you answer — no extra command needed. The run-timeout watchdog pauses while a 
 - `/safemode stop`：终止当前正在运行的安全模式任务（也可点击任务卡片上的 ⏹ 按钮）；
 - `/safemode exit`：退出安全模式，守护重启完整 profile 并把飞书通道交还给正常形态；
 
-安全模式任务有墙钟超时（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟），超时或失败都会
-在卡片上给出明确终态，不会无声挂起。全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
+安全模式任务有**空闲超时**（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟：任务持续无
+活动事件才被终止，活跃的流式任务不会被误杀），超时或失败都会在卡片上给出明确终态，不会无声
+挂起。全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
 
 ```bash
 # 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
@@ -258,8 +259,9 @@ takes over the Feishu channel so you can self-heal without touching the command 
 - `/safemode exit`: leave safe mode — the guardian relaunches the full profile and hands the
   Feishu channel back;
 
-Safe-mode tasks are bounded by a wall-clock timeout
-(`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`, default 10 minutes); timeouts and failures always surface a
+Safe-mode tasks are bounded by an **idle timeout**
+(`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`, default 10 minutes: a task is stopped only after it has
+been silent for the whole window, so active streaming work is never cut short); timeouts and failures always surface a
 clear terminal state on the card instead of hanging silently. No command line is needed for the
 whole rescue flow; once dsh is back, the guardian releases the channel automatically. Install:
 
@@ -494,7 +496,7 @@ Core environment variables:
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限<br>Per-request output token cap for SDK agents |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊<br>Reject private chats when no allowlist is configured |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）<br>Stale-message rejection window (0 disables) |
-| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行墙钟超时<br>Wall-clock timeout for a single run |
+| `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）<br>Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期<br>Grace period after SIGTERM before SIGKILL |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行）<br>Concurrent runs per scope (1 = strictly serial) |
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留）<br>Messages kept per scope (0 keeps everything) |
@@ -508,7 +510,7 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值，超过且无 dsh 进程则接管飞书通道<br>Heartbeat staleness threshold before channel takeover |
 | `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` | `120000` | dsh 进程存活但心跳持续超时该时长，判定桥接引擎已死并接管<br>Live dsh process with heartbeat stale this long is treated as engine-dead (takeover) |
 | `DSH_LARK_GUARDIAN_SAFE_ADAPTER` | `auto` | 安全模式引擎：`auto` 优先 SDK 流式、失败回退 headless；`sdk` 强制 SDK；`headless` 跳过预置<br>Safe-mode engine: `auto` tries the SDK streaming runtime then falls back to headless; `sdk` requires it; `headless` skips provisioning |
-| `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务墙钟超时（到时停止并出超时卡）<br>Safe-mode per-task wall-clock timeout (stops the run and renders a timeout card) |
+| `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡）<br>Safe-mode per-task idle timeout (stops the run after it has been silent this long and renders a timeout card) |
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed）<br>Card density for safe-mode run cards |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
@@ -574,14 +576,14 @@ availability probe for the current adapter (`sdk` / `acp` / `headless` runtime h
 Common issues:
 
 - **bot 静默 / 长连接失败**：查看 stderr 上的 JSONL 日志，关注 `channel` 与 `channel-command` 类别；SDK 会自动重连。
-- **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止。
+- **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；持续无响应超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。
 - **首次扫码失败**：确认本机时间准确、网络可访问飞书开放平台；已拿到 App ID/Secret 时可用 `--app-id` / `--app-secret` 跳过扫码。
 
 - **Silent bot / long-connection failure**: check the JSONL logs on stderr, focusing on the
   `channel` and `channel-command` categories; the SDK reconnects automatically.
 - **Unresponsive agent**: send `/status` to view the scope, cwd and active run; send `/stop` to
-  terminate the current task; the watchdog terminates it automatically after
-  `DSH_LARK_RUN_TIMEOUT_MS`.
+  terminate the current task; the idle watchdog terminates it automatically after it has been
+  silent for `DSH_LARK_RUN_TIMEOUT_MS` (active streaming work is never cut short).
 - **First QR binding fails**: make sure the local clock is accurate and the Feishu open platform
   is reachable; with an existing App ID/Secret you can skip scanning via `--app-id` /
   `--app-secret`.

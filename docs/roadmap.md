@@ -17,6 +17,7 @@
 | **P12 dsh bundle** DSH plugin bundle | `dsh.bundle.patch` + `cordis.patch.yml`、`./plugin` / `./invariant` / `./notify` 导出、`dsh plugin add` 实测 | ✅ 已完成 Done（0.6.0） |
 | **P13 唯一路径** Single install path | `dsh-lark-bot setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；移除独立后台服务层 | ✅ 已完成 Done（0.7.0） |
 | **P14 安全网守护** Safety-net guardian | 独立于 dsh 进程的系统级最小守护：dsh 下线后接管飞书通道、`/safemode` 仅核心（dsh-base + headless）重启与受限对话自愈、`/safemode exit` 恢复完整 profile | ✅ 已完成 Done（0.8.0） |
+| **P15 安全模式实时可见性** Safe-mode live visibility | 安全模式优先预置官方 SDK 流式 runtime（`dsh-lark-safe-sdk`）、headless 活动卡回退、单任务空闲超时看门狗、`/safemode stop` 与卡片 ⏹、忙碌回执、正常模式排队回执与卡住提示 | ✅ 已完成 Done（0.10.0） |
 
 ## 里程碑 · Milestones
 
@@ -64,9 +65,22 @@
 - **P15 done（安全模式实时可见性，0.10.0）**：安全模式优先预置官方 SDK 流式 runtime
   （`dsh-lark-safe-sdk`，无第三方插件、不挂载 bridge 回调工具），复用正常模式的
   `RunState` / `renderCard` / `streamCard` 实时展示思考 / 工具 / web search / 打字机文字；
-  SDK 预置失败自动回退 headless 活动卡；新增单任务墙钟超时看门狗（真正 stop 子进程）、
+  SDK 预置失败自动回退 headless 活动卡；新增单任务空闲超时看门狗（真正 stop 子进程）、
   `/safemode stop`、卡片 ⏹ 按钮、同 scope 忙碌回执与 `guardian-safe` 结构化日志；正常模式
   补充排队回执与“已运行 Ns / 无响应 Ns”卡片提示。
+- **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
+  用户回答期间超时看门狗暂停。
+- **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
+  子路径与 CLI 入口，杜绝 v0.9.0 的 `ask` 入口漏拷类问题；GitHub Release 显式标记 Latest。
+- **0.9.2 released**：`setup` 固定安装当前包的精确版本（`dsh plugin add
+  dsh-lark-bot@<版本>`），安装可复现。
+- **0.10.0 released**：P15 安全模式实时可见性发布；npm / GitHub Packages / GitHub Release
+  双包同步。
+- **0.10.1 released（稳定性修复）**：运行看门狗从“墙钟超时”改为“空闲超时”——只在任务持续
+  无活动事件时才终止，活跃的流式任务不再被 5 分钟总时长上限误杀；SDK 原生 session 续跑时
+  不再重放历史（避免与 dsh 持久化日志漂移），恢复失败自动清 session 并以新会话重试一次
+  （id collision 自愈）；发布脚本直接引用仓库 `cordis.patch.yml`，消除发布版与仓库文件的
+  注释 / 内容漂移。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
 

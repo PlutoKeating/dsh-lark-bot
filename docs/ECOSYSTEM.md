@@ -101,8 +101,12 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 - 仓库保持 `dsh-plugin` topic（已添加），以便进入生态的自动发现。
 - 包名使用**自有命名空间**（`dsh-lark-bot`），不占用 `@dsh-external/*` 等组织或官方保留命名空间。
-- 已收录：`AdamPlatin123/awesome-dsh-plugins#37`（`docs: 登记 dsh-lark-bot`，已合并，运行级
-  实测 ✅）。
+- 已收录：`AdamPlatin123/awesome-dsh-plugins`（收录条目 v0.8.0 更新
+  [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 已合并，运行级
+  实测 ✅；榜单行同步与 agent-test 名称异常跟进见
+  [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139)）。
+- 其他平台（dshfind / omdsh-dev/community）的收录与更新状态见根目录
+  `README.md`「社区收录情况」。
 
 ## 8. 许可一致性 · License Consistency
 
@@ -115,7 +119,7 @@ P1 代码完成后，实现工程师在提交前逐项确认：
 
 - [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
 - [x] README 九章节均已填实（无遗留 `🚧` 占位）
-- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.6，2026-08-14）
+- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.6，2026-08-15）
 - [x] 「权限与数据」章节完整披露风险
 - [x] `pnpm typecheck` 通过（L3）
 - [x] 至少完成一次最小任务的运行实测并记录环境（L4：SDK / ACP runtime 握手 + 真实任务流式，

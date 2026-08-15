@@ -80,7 +80,8 @@
 - 用户白名单 + 访问控制（`/invite user/admin/group`）。
 - 逐操作审批（卡片按钮回调 / 命令式确认兜底）。
 - 沙箱隔离（dsh 自带 sandbox capability，含 landlock）。
-- 幂等看门狗 `/timeout`（agent 无输出 N 分钟自动 kill）。
+- 空闲超时看门狗 `/timeout`（agent 持续 N 分钟无输出 / 无活动事件自动终止；活跃的流式任务
+  不会被误杀）。
 
 ### 4.5 任务调度（scheduling）
 - 异步任务队列（0.6.0）：同一 scope 默认 2 个 run 并行（`/concurrency` /
@@ -173,8 +174,9 @@
   `RunState` / `renderCard` / `streamCard`，实时展示思考、工具调用（含 web search）、打字机式
   文字与 token 用量，并支持原生 `session(id)` 续跑；SDK 不可用时回退
   `dsh --profile <safe> "<prompt>"` 逐条对话（每 scope 最近 30 条上下文自动拼接，近似记忆），
-  任务期间卡片仍实时显示“正在思考 / 已运行 Ns / 无响应 Ns”。任一模式都有墙钟超时
-  （`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟，超时调用 `run.stop()` 并渲染超时卡）、
+  任务期间卡片仍实时显示“正在思考 / 已运行 Ns / 无响应 Ns”。任一模式都有空闲超时
+  （`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟：任务持续无活动事件才调用 `run.stop()`
+  并渲染超时卡，活跃任务不会被误杀）、
   `/safemode stop` 与卡片 ⏹ 按钮可终止；同一 scope 同时只允许一个安全任务，忙碌时新消息立即
   回执；“/safemode plugins”执行 `dsh plugin --profile <name> list` 展示清单。
 - **可退出、可回退**：`/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书

@@ -46,7 +46,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_MAX_TOKENS`：可选，SDK-created agent 的每请求输出 token 上限。
 - `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
 - `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
-- `DSH_LARK_RUN_TIMEOUT_MS`：单次运行墙钟超时，默认 `300000`。
+- `DSH_LARK_RUN_TIMEOUT_MS`：单次运行空闲超时（持续无活动事件才终止，活跃任务不会被误杀），
+  默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
 - `DSH_LARK_SCOPE_CONCURRENCY`：每个 scope 允许的并行 run 数，默认 `2`（`1` 为严格串行）。
 - `DSH_LARK_RETENTION_MSGS`：每个 scope 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
@@ -63,8 +64,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   并接管，默认 `120000`。
 - `DSH_LARK_GUARDIAN_SAFE_ADAPTER`：安全模式引擎选择，`auto`（默认，SDK 流式优先、失败回退
   headless）/ `sdk`（强制 SDK）/ `headless`（跳过预置）。
-- `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`：安全模式单任务墙钟超时，默认 `600000`；到时停止运行并
-  渲染超时卡。
+- `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`：安全模式单任务空闲超时（持续无活动事件才终止），默认
+  `600000`；到时停止运行并渲染超时卡。
 - `DSH_LARK_GUARDIAN_CARD_DENSITY`：安全模式任务卡片密度，默认 `detailed`
   （`compact` / `standard` / `detailed`）。
 
@@ -309,6 +310,9 @@ export interface AgentRun {
 export interface AgentAdapter {
   readonly id: string;
   readonly displayName: string;
+  /** True for the SDK adapter: `run()` natively resumes `options.sessionId`.
+   *  ACP / headless 每次全新，桥接层会为其把 scope 转写重放进 prompt。 */
+  resumeCapable?: boolean;
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
   run(options: AgentRunOptions): AgentRun;
@@ -585,7 +589,8 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    思考 / 工具 / 文字）逐条执行对话；SDK 模式以原生 `session(id)` 续跑，headless 模式把历史
    上下文拼接进 prompt（每 scope 上限 30 条）。任务期间守护通过 `streamCard` 渲染实时卡片
    （`renderCard` / `RunState`，含已运行秒数、无响应提示、⏹ 终止按钮），并受
-   `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` 墙钟看门狗约束（超时调用 `run.stop()` 并渲染超时卡）；
+   `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` 空闲看门狗约束（任务持续无活动事件才调用
+   `run.stop()` 并渲染超时卡，活跃任务不会被误杀）；
    同一 scope 同时只允许一个安全任务，忙碌时新消息立即回执；“/safemode stop”与卡片按钮均可
    终止当前任务。`/safemode plugins` 执行 `dsh plugin --profile <name> list`；
    `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并回到 standby。
