@@ -11,7 +11,7 @@ describe('buildProgram', () => {
 
     expect(program.name()).toBe('dsh-lark-bot');
     const names = program.commands.map((command) => command.name());
-    expect(names).toEqual(expect.arrayContaining(['setup', 'doctor', 'guardian']));
+    expect(names).toEqual(expect.arrayContaining(['setup', 'upgrade', 'doctor', 'guardian']));
   });
 
   it('keeps the internal run command hidden from help', () => {

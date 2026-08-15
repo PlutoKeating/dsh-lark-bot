@@ -328,17 +328,59 @@ to the latest version.
 
 ### 升级 | Upgrade
 
+**推荐：一行命令彻底升级（v0.11.0+ 新增，issue #10）**
+
+```bash
+npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
+```
+
+`upgrade` 自动完成：检测当前已装版本 / 运行中 CLI / npm 最新版 → 升级**包本体**
+（`dsh plugin add <name>@<latest>`）→ **幂等重装并重启 guardian 服务** → 升级后运行
+`doctor` 验证。覆盖运行中实例的安全处理：
+
+- 默认不打断运行中的 dsh profile，只提示重启命令（升级不影响配置 / 会话 / 凭据）；
+- `--restart`：升级后自动重启 guardian 服务与（受管/后台的）dsh profile 进程；
+- `--check`：只报告版本与运行状态，零改动；
+- `--rollback`：回滚到上一次升级前的版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
+- `--force`：无法访问 npm（离线）时按当前运行版本重装；
+- `--no-guardian`：跳过守护升级。
+
+无需交互确认时加 `--yes`（非交互环境不带 `--yes` 会安全中止）。其余方式：
+
 - 插件本体：重跑 `setup`（或 `dsh plugin --profile <name> add dsh-lark-bot`）拉取 npm 最新版。
-- 安全网守护：随 `setup` 一起安装 / 升级（幂等重装），也可单独 `dsh-lark-bot guardian install`。
+- 安全网守护：随 `upgrade` / `setup` 一起安装 / 升级（幂等重装），也可单独
+  `dsh-lark-bot guardian install`。
 - CLI 工具（可选）：`npm i -g dsh-lark-bot@latest`；使用 `npx` 时无需全局安装。
-- 升级后重启 profile：`dsh --profile dsh-lark`。
+- 升级后重启 profile（未用 `--restart` 时）：`dsh --profile dsh-lark`。
+
+- **Recommended: one-command full upgrade (new in v0.11.0, issue #10)**
+
+```bash
+npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
+```
+
+`upgrade` detects the installed / running / npm-latest versions, upgrades the **package**
+(`dsh plugin add <name>@<latest>`), **idempotently reinstalls and restarts the guardian
+service**, then runs `doctor` verification. Running instances are handled safely:
+
+- By default the running dsh profile is never interrupted — you only get the restart command
+  (config / sessions / credentials are untouched);
+- `--restart`: also restarts the guardian service and (managed/detached) dsh profile processes;
+- `--check`: report versions and running state only, no changes;
+- `--rollback`: reinstall the version recorded before the last upgrade
+  (`~/.dsh-lark/upgrade-state.json`);
+- `--force`: reinstall the running version when npm is unreachable (offline);
+- `--no-guardian`: skip the guardian upgrade.
+
+Pass `--yes` to skip the interactive confirmation (non-interactive runs fail closed without it).
+Alternatives:
 
 - Plugin: re-run `setup` (or `dsh plugin --profile <name> add dsh-lark-bot`) to pull the latest
   npm release.
-- Safety-net guardian: installed / upgraded together with `setup` (idempotent), or standalone via
-  `dsh-lark-bot guardian install`.
+- Safety-net guardian: installed / upgraded together with `upgrade` / `setup` (idempotent), or
+  standalone via `dsh-lark-bot guardian install`.
 - CLI tool (optional): `npm i -g dsh-lark-bot@latest`; not needed when using `npx`.
-- Restart the profile after upgrading: `dsh --profile dsh-lark`.
+- Restart the profile after upgrading (when not using `--restart`): `dsh --profile dsh-lark`.
 
 ### 禁用 | Disable
 

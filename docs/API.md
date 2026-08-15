@@ -435,6 +435,13 @@ export interface Logger {
 - `dsh-lark-bot setup --profile <name>`：唯一安装-部署命令——定位 dsh、预批准 pnpm 构建策略、
   执行标准 `dsh plugin --profile <name> add dsh-lark-bot`，并打印下一步
   （`dsh --profile <name>`）。默认 profile 名 `dsh-lark`。
+- `dsh-lark-bot upgrade [--profile <name>] [--check] [--yes] [--no-guardian] [--restart]
+  [--rollback] [--force] [--package <spec>]`：一行命令彻底升级（issue #10）——检测已装 /
+  运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → 幂等重装并
+  重启 guardian 服务 → `doctor` 验证。运行中实例默认只提示重启命令（不中断会话）；
+  `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
+  `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
+  `--force` 离线时按当前版本重装；非交互环境不带 `--yes` 会安全中止。
 - `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）。
 - `dsh-lark-bot --version` / `-v`：版本号。
 - `dsh-lark-bot run`（隐藏）：直接运行桥接引擎（诊断用；插件模式下引擎在 dsh 进程内运行）。

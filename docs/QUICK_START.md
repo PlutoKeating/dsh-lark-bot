@@ -22,6 +22,15 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 `DSH_LARK_SETUP_PACKAGE=/path/to/dsh-lark-bot-x.y.z.tgz node dist/cli.js setup --profile dsh-lark`
 安装本地构建产物（可选，不面向普通用户）。
 
+**升级（v0.11.0+ 推荐）：** 一行命令彻底升级包 + guardian + 升级后验证：
+
+```bash
+npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
+```
+
+`--check` 只报告版本与运行状态；`--restart` 升级后自动重启 guardian 与受管 profile；
+`--rollback` 回滚到上次升级前版本；详见 README「升级」与 docs/MANUAL.md §1.1。
+
 ## 3. 启动并扫码（首次一次性绑定）
 
 ```bash

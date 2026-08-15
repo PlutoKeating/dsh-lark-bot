@@ -15,6 +15,28 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 `dsh plugin --profile dsh-lark add dsh-lark-bot`。安装后包名 `dsh-lark-bot` /
 `dsh-feishu-bot` 内容一致，`dsh-lark-bot --version` 可查看版本。
 
+### 1.1 升级 · Upgrade（v0.11.0+）
+
+**一行命令彻底升级（包本体 + guardian + 升级后验证）：**
+
+```bash
+npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
+```
+
+- 默认不打断运行中的 dsh profile（只提示重启命令；配置 / 会话 / 凭据不受影响）；
+- `--check`：只报告已装 / 运行中 CLI / npm 最新版本与进程状态，零改动；
+- `--restart`：升级后自动重启 guardian 服务，并重启受管 / 后台的 dsh profile 进程；
+- `--rollback`：回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
+- `--force`：npm 不可达（离线）时按当前运行版本重装；
+- `--no-guardian`：跳过守护升级；
+- 非交互环境不带 `--yes` 会安全中止（不产生任何变更）。
+
+未使用 `--restart` 时，升级后手动重启 profile 使新版本生效：
+
+```bash
+dsh --profile dsh-lark
+```
+
 ## 2. 启动与首次扫码 · Start & first scan
 
 ```bash
