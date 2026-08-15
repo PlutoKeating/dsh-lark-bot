@@ -18,6 +18,7 @@ import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import type { StreamingChannel } from '../../bridge/types.js';
+import { startWebSessionWatcher, type WebMuxProvider, type WebSessionWatcher } from '../../adapters/dsh/web-watcher.js';
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
 import type { StartOptions } from '../../cli.js';
@@ -323,6 +324,19 @@ export async function startBridgeEngine(
   const bridge = await startChannel(channelInput);
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
+  // In `web` adapter mode, watch web-GUI turn completions: push them to Feishu
+  // and auto-switch the chat's session mapping (single writer = web agent).
+  let webWatcher: WebSessionWatcher | undefined;
+  if (adapter.id === 'dsh-web' && env.webPush) {
+    webWatcher = startWebSessionWatcher({
+      adapter: adapter as unknown as WebMuxProvider,
+      channel: streaming,
+      sessions,
+      workspaces,
+      scopeDirectory,
+    });
+    log.info('cli', 'web-watcher-started', {});
+  }
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
   process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
@@ -357,6 +371,7 @@ export async function startBridgeEngine(
     stop: async () => {
       if (stopped) return;
       stopped = true;
+      webWatcher?.close();
       heartbeat.stop();
       await notifyServer.stop();
       await bridge.disconnect();

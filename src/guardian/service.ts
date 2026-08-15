@@ -213,6 +213,7 @@ export class GuardianService {
   private readonly sessionIds = new Map<string, string>();
   private readonly transcripts = new Map<string, TranscriptEntry[]>();
   private downStreak = 0;
+  private lastRelaunchAt: number | undefined;
   private lastHeartbeatFreshAt: number | undefined;
   private timer: NodeJS.Timeout | undefined;
   private ticking = false;
@@ -399,7 +400,36 @@ export class GuardianService {
       if (!this.state.profileSeenUp) return; // never observed up: stay silent
       this.downStreak += 1;
       if (this.downStreak < this.options.takeoverGracePolls) return;
-      await this.ensureChannel();
+      // Auto-relaunch the bridge so Feishu keeps working without a manual
+      // restart. The spawned process inherits this guardian's env, so run the
+      // guardian with DSH_LARK_ADAPTER=web and the bridge comes back in web
+      // mode (single writer). 60s cooldown prevents a spawn loop.
+      let relaunchedNow = false;
+      try {
+        const now = (this.options.now ?? Date.now)();
+        if (this.lastRelaunchAt === undefined || now - this.lastRelaunchAt > 60_000) {
+          const bin = this.dshBin;
+          if (bin && !processAlive) {
+            const spawn = this.options.spawnDetachedFn ?? spawnDetached;
+            const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
+            if (spawned.pid !== undefined) {
+              this.state.relaunchedPid = spawned.pid;
+              this.lastRelaunchAt = now;
+              relaunchedNow = true;
+              await this.save();
+              this.log().info('guardian', 'bridge-relaunched', {
+                pid: spawned.pid,
+                dshProfile: this.state.dshProfile,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        this.log().fail('guardian', error);
+      }
+      // After a fresh relaunch, give the bridge time to come up before taking
+      // over the Feishu channel (avoids a brief double connection).
+      if (!relaunchedNow) await this.ensureChannel();
     } catch (error) {
       this.log().fail('guardian', error);
     } finally {

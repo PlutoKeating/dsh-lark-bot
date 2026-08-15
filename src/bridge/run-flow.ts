@@ -25,6 +25,7 @@ import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
 import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
+import { archiveSessionDir, SESSION_BROKEN_RE, SESSION_CORRUPT_RE } from '../session/heal.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -89,6 +90,16 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       // run was interrupted mid-stream). Fall back to a fresh session so the
       // user's message is still handled; the scope transcript is replayed.
       log.warn('run-flow', 'resume-fallback', { scope: input.scope, sessionId });
+      // Self-heal v2: a genuinely corrupt persisted log (seq gap) is archived
+      // so the session list stays clean; the id-collision class only resets
+      // the binding and keeps the history recoverable.
+      if (sessionId !== undefined && SESSION_CORRUPT_RE.test(errorMessage(error))) {
+        try {
+          await archiveSessionDir(sessionId);
+        } catch {
+          // best effort
+        }
+      }
       input.sessions.clearSession(input.scope);
       try {
         await runAttempt(input, cwd, undefined, false, replyOptions);
@@ -190,6 +201,41 @@ async function runAttempt(
             if (timedOut) return;
             state = applyEvent(state, event, stopRequested);
             state = { ...state, lastActivityMs: Date.now() };
+            // Self-heal: a broken-session error must not destroy the log. Only
+            // genuinely corrupt logs (seq gap / unparsable) are archived; the
+            // id-collision class just resets the chat mapping and keeps the
+            // persisted history recoverable. A native-session resume failure
+            // before any activity is left to the resume-fallback in
+            // `runAgentBatch` (fresh-session retry) so the user's message is
+            // still handled — it is not consumed here.
+            if (
+              event.type === 'error' &&
+              event.terminationReason === 'failed' &&
+              SESSION_BROKEN_RE.test(event.message) &&
+              !(resuming && !sawActivity)
+            ) {
+              const brokenId = input.sessions.getRaw(input.scope)?.sessionId;
+              if (brokenId !== undefined) {
+                const corruptLog = SESSION_CORRUPT_RE.test(event.message);
+                if (corruptLog) {
+                  try {
+                    await archiveSessionDir(brokenId);
+                  } catch {
+                    // best effort
+                  }
+                }
+                input.sessions.clear(input.scope);
+                await input.channel.sendMarkdown(
+                  input.chatId,
+                  corruptLog
+                    ? '⚠️ 会话记录损坏，已自动归档并重置。请重新发送你的消息。'
+                    : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+                  { ...replyOptions },
+                );
+                void run.stop();
+                return;
+              }
+            }
             if (event.type === 'final_text') {
               assistantOutput = event.content;
             } else if (event.type === 'text') {
@@ -284,6 +330,43 @@ async function runAttempt(
           }
         : {}),
     });
+  } catch (error) {
+    log.fail('run-flow', error, { scope: input.scope, runId });
+    state = markInterrupted(state);
+    // A failed native-session resume (thrown above when `resuming` and no
+    // activity yet) must propagate so `runAgentBatch` clears the binding and
+    // retries with a fresh session — do not swallow it here.
+    if (resuming && !sawActivity) throw error;
+    const runErrorText = errorMessage(error);
+    if (SESSION_BROKEN_RE.test(runErrorText)) {
+      const brokenSessionId = input.sessions.getRaw(input.scope)?.sessionId;
+      if (brokenSessionId !== undefined) {
+        const corruptLog = SESSION_CORRUPT_RE.test(runErrorText);
+        if (corruptLog) {
+          try {
+            await archiveSessionDir(brokenSessionId);
+          } catch {
+            // best effort
+          }
+        }
+        input.sessions.clear(input.scope);
+        await input.channel.sendMarkdown(
+          input.chatId,
+          corruptLog
+            ? '⚠️ 会话记录损坏，已自动归档并重置。请重新发送你的消息。'
+            : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+          { ...replyOptions },
+        );
+        return;
+      }
+    }
+    try {
+      await input.channel.sendMarkdown(input.chatId, `⚠️ agent 运行失败：${runErrorText}`, {
+        ...replyOptions,
+      });
+    } catch {
+      // best effort; the card may already have failed
+    }
   } finally {
     input.activeRuns.delete(input.scope, runId);
     if (input.approvals) {

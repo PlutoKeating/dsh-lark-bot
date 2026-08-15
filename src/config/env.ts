@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { resolveDshRuntime } from './dsh-runtime.js';
 
 export type LarkTenant = 'feishu' | 'lark';
-export type AdapterMode = 'sdk' | 'acp' | 'headless';
+export type AdapterMode = 'sdk' | 'acp' | 'headless' | 'web';
 
 export interface RuntimeEnv {
   home: string;
@@ -16,6 +16,10 @@ export interface RuntimeEnv {
   /** True when DSH_LARK_DSH_COMMAND / DSH_LARK_DSH_ARGS were set explicitly. */
   dshExplicit: boolean;
   adapterMode: AdapterMode;
+  /** Base URL of the local dsh web agent used by the `web` adapter (default http://127.0.0.1:3080). */
+  webBaseUrl: string;
+  /** Push web-GUI turn completions to Feishu in `web` adapter mode (default true; DSH_LARK_WEB_PUSH=0 disables). */
+  webPush: boolean;
   provider: string;
   model: string;
   maxTokens: number | undefined;
@@ -112,8 +116,8 @@ function parseStopGrace(value: string | undefined): number {
 
 function parseAdapterMode(value: string | undefined): AdapterMode {
   const mode = nonEmpty(value) ?? 'sdk';
-  if (mode !== 'sdk' && mode !== 'acp' && mode !== 'headless') {
-    throw new Error(`DSH_LARK_ADAPTER must be "sdk", "acp" or "headless", got "${mode}"`);
+  if (mode !== 'sdk' && mode !== 'acp' && mode !== 'headless' && mode !== 'web') {
+    throw new Error(`DSH_LARK_ADAPTER must be "sdk", "acp", "headless" or "web", got "${mode}"`);
   }
   return mode;
 }
@@ -203,6 +207,8 @@ export function loadRuntimeEnv(
     dshArgs: dshRuntime.args,
     dshExplicit,
     adapterMode: parseAdapterMode(source.DSH_LARK_ADAPTER),
+    webBaseUrl: nonEmpty(source.DSH_LARK_WEB_URL) ?? 'http://127.0.0.1:3080',
+    webPush: parseBoolean(source.DSH_LARK_WEB_PUSH, true),
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
