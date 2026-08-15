@@ -18,6 +18,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # The notes step diffs git log between the previous tag and this
+          # one; a shallow clone has no tags, so fetch the full history.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -82,7 +86,9 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: release-artifacts/*.tgz
-          generate_release_notes: false
+          # Fall back to GitHub's auto notes when no previous tag exists
+          # (first release), so the body is never empty.
+          generate_release_notes: ${{ steps.notes.outputs.notes_file == '' }}
           body_path: ${{ steps.notes.outputs.notes_file }}
           # Explicitly mark the just-published version as Latest. GitHub
           # otherwise defaults to the newest *published* release, so
