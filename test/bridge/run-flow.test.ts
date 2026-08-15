@@ -343,6 +343,151 @@ describe('runAgentBatch', () => {
     ]);
   });
 
+  it('falls back when a native resume fails via an error event', async () => {
+    const calls: Array<{ sessionId: string | undefined }> = [];
+    let first = true;
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        calls.push({ sessionId: options.sessionId });
+        if (first) {
+          first = false;
+          return {
+            runId: options.runId,
+            // The SDK adapter surfaces a rejected resume as an error EVENT
+            // (system + error, no real activity), not a thrown error.
+            events: (async function* () {
+              yield {
+                type: 'system',
+                sessionId: 'session-1',
+                cwd: '/tmp/project',
+                model: undefined,
+              };
+              yield {
+                type: 'error',
+                message:
+                  'session "session-1" already has a persisted log on disk that does not match this live session (id collision)',
+                terminationReason: 'failed',
+              };
+            })(),
+            stop: vi.fn().mockResolvedValue(undefined),
+            waitForExit: async () => true,
+          };
+        }
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield { type: 'final_text', content: 'recovered via error event' };
+            yield { type: 'done', sessionId: undefined, terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['new message'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.sessionId).toBe('session-1');
+    expect(calls[1]?.sessionId).toBeUndefined();
+    // No hard failure message was surfaced to the user.
+    expect(fake.messages).toHaveLength(0);
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
+    expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
+      { role: 'user', content: 'my name is Bob' },
+      { role: 'assistant', content: 'Nice to meet you.' },
+      { role: 'user', content: 'new message' },
+      { role: 'assistant', content: 'recovered via error event' },
+    ]);
+  });
+
+  it('does not fall back when a resumed run errors after real activity', async () => {
+    const calls: Array<{ sessionId: string | undefined }> = [];
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        calls.push({ sessionId: options.sessionId });
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield {
+              type: 'system',
+              sessionId: 'session-1',
+              cwd: '/tmp/project',
+              model: undefined,
+            };
+            yield { type: 'text', delta: 'working…' };
+            yield {
+              type: 'error',
+              message: 'upstream provider failed mid-task',
+              terminationReason: 'failed',
+            };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['new message'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    // Only one attempt: a mid-task failure is not a session-level problem.
+    expect(calls).toHaveLength(1);
+    // The error is rendered on the run card, not reported as a hard failure.
+    expect(fake.messages).toHaveLength(0);
+    const lastCard = fake.updates[fake.updates.length - 1] as {
+      body?: { elements?: Array<{ content?: string }> };
+    };
+    const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
+    expect(lastText).toContain('upstream provider failed mid-task');
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
+  });
+
   it('resolves the run cwd through the workspace manager when present', async () => {
     let observedCwd: string | undefined;
     const adapter: AgentAdapter = {

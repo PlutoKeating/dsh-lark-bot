@@ -168,6 +168,7 @@ async function runAttempt(
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
   let timedOut = false;
   let assistantOutput = '';
+  let sawActivity = false;
   const density = input.densityStore?.get(input.scope) ?? 'standard';
 
   try {
@@ -196,6 +197,9 @@ async function runAttempt(
             }
             if (event.type === 'system' && event.sessionId) {
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
+            }
+            if (event.type !== 'system' && event.type !== 'error') {
+              sawActivity = true;
             }
             // Every agent event counts as activity: restart the idle window so
             // a long but responsive run is never killed by the wall clock.
@@ -257,6 +261,15 @@ async function runAttempt(
       },
       replyOptions,
     );
+    // SDK adapters surface session-level failures (e.g. a resume rejected by
+    // dsh's persistence layer with "id collision") as an error EVENT rather
+    // than a thrown error. When we were resuming a native session and the run
+    // failed before any real activity, the persisted session itself is
+    // unusable: throw so the caller clears the binding and retries with a
+    // fresh session instead of leaving the user with a hard failure card.
+    if (resuming && state.terminal === 'error' && !sawActivity) {
+      throw new Error(state.errorMsg ?? 'native session resume failed');
+    }
     input.sessions.recordExchange(input.scope, cwd, input.messages, assistantOutput, {
       ...(input.retention === undefined ? {} : { retention: input.retention }),
       ...(input.archiver

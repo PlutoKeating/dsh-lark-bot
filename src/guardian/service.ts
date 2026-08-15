@@ -808,6 +808,7 @@ export class GuardianService {
     let errorText: string | undefined;
     let timedOut = false;
     let events = 0;
+    let sawActivity = false;
 
     const run = engine.adapter.run({
       runId,
@@ -856,6 +857,9 @@ export class GuardianService {
                   this.sessionIds.set(scope, event.sessionId);
                 }
                 if (event.type === 'error') errorText = event.message;
+                if (event.type !== 'system' && event.type !== 'error') {
+                  sawActivity = true;
+                }
                 // Every agent event counts as activity: restart the idle
                 // window so a long but responsive task is never cut short.
                 armTimeout?.();
@@ -931,6 +935,13 @@ export class GuardianService {
 
     // Terminal states are already visible on the card; only successful
     // answers are folded into the next-turn transcript.
+    if (terminal === 'error' && !sawActivity) {
+      // Session-level failures (e.g. dsh rejecting a resume with id
+      // collision) arrive as an error event before any real activity: drop
+      // the stored session binding so the next safe task starts fresh
+      // instead of failing again on the same broken session.
+      this.sessionIds.delete(scope);
+    }
     if (timedOut || terminal === 'interrupted' || terminal === 'error' || terminal === 'idle_timeout') {
       return;
     }
