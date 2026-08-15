@@ -77,7 +77,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/providers` | 查看 dsh providers、模型与凭据状态 |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
-| `/ask <问题>` | 发送结构化问答卡（回答写入会话上下文） |
+| `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
 
@@ -100,6 +100,10 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 可手动导出）；`/new` 会清空当前 scope 的会话记忆。
 
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
+
+**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过 `lark_ask_user`
+工具主动向当前会话弹一张问答卡（单选 / 多选 / 自由文本），你回答后任务自动继续；等待期间
+任务运行超时看门狗暂停，不会被超时打断。
 
 ## 6. 安全网守护（默认安装）· Safety-net guardian
 

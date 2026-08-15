@@ -515,7 +515,7 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
   引用，凭据文件权限 0600、目录 0700，字面密钥不进入 settings 或聊天记录）。
-- **安全网守护（可选）**：安装后为系统级常驻进程，读取 `~/.dsh-lark/config.json` 中的飞书
+- **安全网守护（默认随 `setup` 安装）**：系统级常驻进程，读取 `~/.dsh-lark/config.json` 中的飞书
   凭据；dsh 下线时接管同一 bot 的飞书长连接并扫描本机进程（仅 `ps` 命令行，不读内存）；
   `/safemode` 时在 `~/.dsh/profiles/<profile>-safe` 创建仅核心的 dsh profile 并逐条执行
   `dsh --profile <safe> "<prompt>"` 子进程。
@@ -570,11 +570,12 @@ Common issues:
   is reachable; with an existing App ID/Secret you can skip scanning via `--app-id` /
   `--app-secret`.
 
-桥接引擎日志写入 `~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines）；dsh 宿主日志走
-dsh 自己的日志体系。
+桥接引擎日志以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log` 是 0.6.0
+独立服务时代的遗留路径，0.7.0 起不再写入）；dsh 宿主日志走 dsh 自己的日志体系。
 
-The bridge engine logs to `~/.dsh-lark/profiles/<profile>/logs/bot.log` (JSON Lines); the dsh
-host uses its own logging.
+The bridge engine logs JSON Lines to stderr (captured by the dsh host; `logs/bot.log` is a
+leftover path from the 0.6.0 standalone-service era and is no longer written since 0.7.0); the
+dsh host uses its own logging.
 
 **回滚 / Rollback**：`dsh plugin --profile dsh-lark remove dsh-lark-bot` 后重装固定版本即可
 （如 `dsh plugin --profile dsh-lark add dsh-lark-bot@0.6.0`）；`~/.dsh-lark` 状态独立于插件

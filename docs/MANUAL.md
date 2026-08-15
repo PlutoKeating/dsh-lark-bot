@@ -127,12 +127,16 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
+- agent 侧工具 `lark_ask_user`（问答卡）：agent 需要你拍板 / 确认 / 补充缺失信息时，通过
+  `http://127.0.0.1:<随机端口>/ask` 回调 bridge，向当前会话弹单选 / 多选 / 自由文本问答卡并
+  等待你回答；你提交后任务自动继续。等待期间任务运行超时看门狗暂停（答完重新计时）。
+  与 `/ask`（你主动发结构化问题）方向相反。
 
 ### 安全网守护 · Safety-net guardian
 
 背景：dsh 采用「一切皆插件」架构，单个第三方插件报错即可让整个 profile boot 失败，此时桥接
-引擎随 dsh 一起下线，飞书入口不可用。为保留最坏情况下的救援通道，可安装**独立于 dsh 进程**
-的最小「安全网守护」（默认随 `setup` 一起安装）：
+引擎随 dsh 一起下线，飞书入口不可用。为保留最坏情况下的救援通道，`setup` 默认安装一个
+**独立于 dsh 进程**的最小「安全网守护」：
 
 ```bash
 # 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
@@ -201,7 +205,8 @@ dsh-lark-bot doctor
 - 工作目录是否存在
 - adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
 
-桥接引擎日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（JSON Lines）。
+桥接引擎日志：以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log` 是
+0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）。
 守护状态可用 `dsh-lark-bot guardian status` 查看；服务未运行时先检查该日志再运行 `doctor`。
 
 ## 8. 卸载 · Uninstall

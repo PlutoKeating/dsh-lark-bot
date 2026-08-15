@@ -86,7 +86,8 @@ export function resolveAppPaths(root?: string): AppPaths;
 
 默认根目录为 `~/.dsh-lark`，可通过 `DSH_LARK_HOME` 覆盖。
 
-桥接引擎日志：`profiles/<profile>/logs/bot.log`（JSON Lines）。
+桥接引擎日志：以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log` 是
+0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）。
 
 安全网守护相关本地状态：
 
@@ -400,7 +401,7 @@ export interface Logger {
   通过问答卡向飞书会话提问并等待答案，配置缺省时读取 `DSH_LARK_ASK_URL` /
   `DSH_LARK_NOTIFY_TOKEN` 环境变量。
 
-常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是可选安装的
+常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是默认安装的
 「安全网守护」（见 §10）：它独立于 dsh / Cordis 常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
 启动后开始向 `profiles/<bridge-profile>/guardian/heartbeat.json` 写心跳，引擎停止时停止心跳。
 

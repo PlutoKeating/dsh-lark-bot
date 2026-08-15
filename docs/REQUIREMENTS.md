@@ -142,7 +142,7 @@
 - 形态关系（0.7.0 定稿）：**dsh profile bundle 即产品形态**——`dsh-lark-bot/plugin` 在 dsh
   进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
   `doctor` / 隐藏 `run`，并额外提供 `guardian run|install|uninstall|status`（安全网守护）。
-  独立后台服务路径已移除，不再存在双安装路径；唯一进程级例外是可选安装的安全网守护
+  独立后台服务路径已移除，不再存在双安装路径；唯一进程级例外是默认安装的安全网守护
   （见 4.10）。
 
 ### 4.10 安全网守护（safety-net guardian，issue #6）

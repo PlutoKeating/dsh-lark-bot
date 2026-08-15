@@ -73,7 +73,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 `dsh-lark-bot setup`）把包装进 profile，dsh 启动时以标准插件方式加载
 `dsh-lark-bot/plugin` —— 桥接引擎**在 dsh 进程内**运行（飞书 WebSocket 通道、会话/工作区、
 卡片、通知回调），并按需拉起官方 dsh SDK runtime 子进程执行 agent 任务。常驻 / 守护 / 重启
-由 dsh 宿主负责，不再有独立后台服务层（唯一进程级例外是可选安装的「安全网守护」，见关键决策 8）。
+由 dsh 宿主负责，不再有独立后台服务层（唯一进程级例外是默认安装的「安全网守护」，见关键决策 8）。
 首次启动无凭据时打印二维码完成一次性绑定。
 
 ## 关键决策 · Key Decisions
@@ -130,4 +130,4 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/media/` | 附件下载与文本注入 |
 | `src/notify/` | 进程内通知回调服务与 `lark_notify` 工具插件 |
 | `src/platform/` | 跨平台原子写入 |
-| `src/guardian/` | 安全网守护（可选）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
+| `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |

@@ -82,7 +82,8 @@
 14. ⏳ 稳定发布下一版本
     - ✅ 0.6.0：P8 归档 / P9 并行 / P10 角色 / P11 出站通知 / P12 dsh bundle
 15. ✅ 安全网守护（issue #6）：`src/guardian/` 独立进程 + 心跳 + 仅核心安全模式 +
-    `/safemode` 控制信号 + `guardian install|uninstall|status|run` + `setup --guardian`
+    `/safemode` 控制信号 + `guardian install|uninstall|status|run`；`setup` 默认安装守护
+    （`--no-guardian` 可跳过）
 
 ## 9. P14 安全网守护 · 验收标准（issue #6）
 
