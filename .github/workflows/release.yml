@@ -70,3 +70,8 @@ jobs:
         with:
           files: release-artifacts/*.tgz
           generate_release_notes: true
+          # Explicitly mark the just-published version as Latest. GitHub
+          # otherwise defaults to the newest *published* release, so
+          # republishing an old tag (e.g. backfilling notes) would silently
+          # steal the Latest badge from the newest version.
+          make_latest: true
