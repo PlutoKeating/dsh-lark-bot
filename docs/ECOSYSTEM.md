@@ -29,9 +29,10 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
   bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
   与 `lark-notify`（标准工具行）。
-- `./plugin`、`./invariant`、`./notify` 三个子路径导出随包发布：`plugin` 为 bundle 行对应的
-  cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方 dsh-lark-channel 同款契约）；
-  `notify` 为 `lark_notify` 工具插件，SDK / ACP runtime profile 自动装配。
+- `./plugin`、`./invariant`、`./notify`、`./ask` 四个子路径导出随包发布：`plugin` 为 bundle
+  行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
+  dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`ask` 为
+  `lark_ask_user` 问答卡工具插件，SDK / ACP runtime profile 自动装配。
 - `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.6 依赖链一致）。
 - pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报
   `ERR_PNPM_IGNORED_BUILDS`，按官方 publish 指引在 profile 的 `pnpm-workspace.yaml` 加入
@@ -72,6 +73,9 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
   的 `dsh-sdk-client` 锁定版本无漂移。
 - `scripts/probe-dsh-compat.mjs`（+ CI `compat-probe` 任务）：临时 DSH_HOME 安装锁定版
   dsh + SDK server，通过 `dist/cli.js doctor` 走真实 SDK 初始化握手，满足 L4 运行实测。
+- `scripts/check-publish-bundle.mjs`（+ `pnpm release:check` / release CI 的 Build 后步骤）：
+  校验 `dist/` 与 `package.json` 所有 `exports` 子路径及 CLI `bin` 入口一一对应，缺产物
+  （如新增入口漏拷）直接失败，确保 npm 发布包完整可加载。
 - 发版前执行 `pnpm release:check`（`ci:local` + 上游一致性检查）与本机
   `dsh --profile <name>`（重启完整 profile）+ `dsh-lark-bot doctor` 实机回归；
   安装安全网守护时另跑 `dsh-lark-bot guardian status` 确认守护待机。

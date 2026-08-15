@@ -592,6 +592,7 @@ pnpm install
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm check:publish-bundle   # 校验 dist 与全部 exports/bin 入口一致（发布前防线）| verifies dist matches every export & the CLI entry (release gate)
 pnpm ci:local
 pnpm release:check   # ci:local + 上游一致性检查 | ci:local + upstream consistency check
 pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手 | installs pinned dsh into a temp DSH_HOME and runs a real SDK handshake
@@ -623,7 +624,7 @@ pnpm publish:dual:dry-run
 pnpm publish:dual
 ```
 
-`scripts/publish-dual-packages.mjs` 从根 `package.json` 生成两份仅 `name` / `bin` 不同的发布清单，避免两份源码漂移。GitHub tag `v*` 会触发 [`release.yml`](.github/workflows/release.yml) 自动发布两个 npm 包并创建 Release。
+`scripts/publish-dual-packages.mjs` 从根 `package.json` 生成两份仅 `name` / `bin` 不同的发布清单，避免两份源码漂移。发布时整目录同步 `dist/`，并在发布前校验 `package.json` 每个 `exports` 子路径与 CLI 入口在产物中都存在——任何缺失（如 v0.9.0 的 `ask` 入口漏拷）都会直接中止发布。GitHub tag `v*` 会触发 [`release.yml`](.github/workflows/release.yml) 自动发布两个 npm 包并创建 Release。
 
 `scripts/publish-dual-packages.mjs` generates two publish manifests from the root
 `package.json`, differing only in `name` / `bin`, so the two copies never drift. A GitHub tag
