@@ -3,6 +3,7 @@ import type { RuntimeEnv } from '../config/env.js';
 import { DshAdapter } from './dsh/adapter.js';
 import { SdkDshAdapter } from './dsh/sdk-adapter.js';
 import { ensureSdkProfile, resolveSdkLaunch } from './dsh/sdk-runtime.js';
+import { WebDshAdapter } from './dsh/web-adapter.js';
 import type { AgentAdapter } from './types.js';
 
 export interface AdapterPreferences {
@@ -15,6 +16,7 @@ export interface AdapterPreferences {
  * - `sdk` (default): official `@deepseek-ai/dsh-sdk-client` runtime.
  * - `acp`: official ACP server runtime with approval cards.
  * - `headless`: legacy subprocess fallback (kept for compatibility).
+ * - `web`: drive the local dsh web agent via its HTTP API (single writer).
  */
 export async function buildAgentAdapter(
   env: RuntimeEnv,
@@ -34,6 +36,13 @@ export async function buildAgentAdapter(
     case 'acp': {
       const { buildAcpAgentAdapter } = await import('./dsh/acp-adapter.js');
       return buildAcpAgentAdapter(env, preferences);
+    }
+    case 'web': {
+      return new WebDshAdapter({
+        baseUrl: env.webBaseUrl,
+        provider: env.provider,
+        model: preferences.model ?? env.model,
+      });
     }
     case 'sdk':
     default: {
