@@ -55,7 +55,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 │  guardian/（可选 · 独立于 dsh 的进程）      │
 │  · 心跳看门狗（读 bridge 心跳 + ps 观察）  │
 │  · dsh 下线后接管飞书通道，接收 /safemode  │
-│  · 仅核心安全 profile（dsh-base+headless） │
+│  · 仅核心安全 profile（SDK 流式优先，      │
+│    headless 回退，均无第三方插件）         │
 │  · 受限对话自愈 + 退出重启完整 profile      │
 └──────────────────────────────────────────┘
 ```
@@ -107,10 +108,13 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
    heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
    （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
-   安全模式：创建 `~/.dsh/profiles/<profile>-safe`（仅 `dsh-base` + `dsh-headless`，无第三方
-   插件），以官方 headless 子进程逐条对话（含上下文拼接）供自愈；`/safemode exit` 重启完整
-   profile 并交还通道。守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程
-   本身不依赖任何 dsh / Cordis 代码。
+   安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
+   `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致的实时流式卡片（思考 / 工具 /
+   web search / 打字机文字），SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
+   （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务墙钟超时（默认 10 分钟）、
+   `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。
+   守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程本身不依赖任何 dsh /
+   Cordis 代码。
 
 ## 目录映射 · Directory Mapping
 

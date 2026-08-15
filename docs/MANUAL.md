@@ -86,6 +86,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/safemode` | 进入仅核心安全模式（`dsh-base` + `dsh-headless`，无第三方插件） |
 | `/safemode status` | 查看守护 / dsh / 安全模式状态 |
 | `/safemode plugins` | 列出故障 profile 已安装的插件清单 |
+| `/safemode stop` | 终止当前正在运行的安全模式任务（也可点击任务卡片 ⏹ 按钮） |
 | `/safemode exit` | 退出安全模式，重启完整 profile 并交还飞书通道 |
 | `/safemode help` | 查看上述命令帮助 |
 
@@ -154,10 +155,16 @@ dsh-lark-bot guardian uninstall
   进程时判定 dsh 在线，保持静默、不占用飞书通道（同 app 飞书长连接仅允许单连接）。
 - 曾观察到 dsh 在线且心跳过期 / 无进程（`DSH_LARK_GUARDIAN_STALE_MS=15000`）后，守护接管
   飞书通道；只有管理员（无管理员时回退白名单用户）能触发控制命令。
-- `/safemode` 创建 `~/.dsh/profiles/<dsh-profile>-safe`（仅 `dsh-base` + `dsh-headless`，
-  不加载任何第三方插件），后续消息以 `dsh --profile <safe> "<prompt>"` 逐条对话（历史上下文
-  自动拼接，每 scope 上限 30 条），可让 agent 配合代码执行能力定位 / 修复 / 禁用损坏插件。
+- `/safemode` 进入仅核心安全模式：优先预置 `~/.dsh/profiles/<dsh-profile>-safe-sdk`
+  （官方 `dsh-base` + `dsh-sdk-jsonrpc-server`，不加载第三方插件、不挂载 bridge 回调工具），
+  以 SDK 流式引擎实时展示思考 / 工具调用 / web search / 打字机式文字，并支持原生会话续跑；
+  SDK 预置失败（如缺 pnpm）时回退 `~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` +
+  `dsh-headless`），历史上下文自动拼接（每 scope 上限 30 条）。任一引擎下任务卡片都实时显示
+  “正在思考 / 已运行 Ns / 无响应 Ns”，任务结束 / 出错 / 超时都有明确终态；单任务墙钟超时默认
+  10 分钟（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，超时会真正停止 dsh 子进程）。
 - `/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示插件清单。
+- `/safemode stop`（或卡片 ⏹ 按钮）终止当前安全模式任务；同一会话同时只允许一个任务，
+  忙碌时新消息会立即收到“仍在处理中”回执。
 - `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并交还通道；
   用户已有会话 / 工作区数据不受影响。
 - dsh 重新在线（手动启动或退出安全模式）时，守护自动回归静默。

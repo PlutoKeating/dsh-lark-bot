@@ -161,15 +161,22 @@
   仅允许单连接）。
 - **接收飞书控制信号**：曾观察到 dsh 在线且 dsh 持续下线（心跳过期
   `DSH_LARK_GUARDIAN_STALE_MS`=15000 + 无进程）后，守护用桥接 profile 的凭据 / 白名单接管
-  同一 bot 的飞书长连接，接收 `/safemode`、`/safemode status|plugins|exit|help`；仅管理员
+  同一 bot 的飞书长连接，接收 `/safemode`、`/safemode status|plugins|stop|exit|help`；仅管理员
   （无管理员时回退白名单用户）可触发。
 - **仅核心重启**：`/safemode` 创建 `~/.dsh/profiles/<profile>-safe`，bundles 仅为
   `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-headless`（官方核心，无第三方插件；两个 bundle
   从 dsh 安装自身的依赖闭包解析，无需 pnpm 安装），以 `dsh --profile <safe> --dump-config`
-  探测通过后进入安全模式。
-- **受限对话自愈**：安全模式下普通消息经 `dsh --profile <safe> "<prompt>"` 与 dsh 核心逐条
-  对话（每 scope 最近 30 条上下文自动拼接，近似记忆），配合 headless 自带代码执行能力定位 /
-  修复 / 禁用损坏插件；`/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示清单。
+  探测通过后进入安全模式。进入时优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方
+  `dsh-base` + `dsh-sdk-jsonrpc-server`，无第三方插件、不挂载 bridge 回调工具），失败回退
+  headless profile。
+- **受限对话自愈（实时可见）**：安全模式下普通消息优先经 SDK 流式引擎执行——复用正常模式的
+  `RunState` / `renderCard` / `streamCard`，实时展示思考、工具调用（含 web search）、打字机式
+  文字与 token 用量，并支持原生 `session(id)` 续跑；SDK 不可用时回退
+  `dsh --profile <safe> "<prompt>"` 逐条对话（每 scope 最近 30 条上下文自动拼接，近似记忆），
+  任务期间卡片仍实时显示“正在思考 / 已运行 Ns / 无响应 Ns”。任一模式都有墙钟超时
+  （`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟，超时调用 `run.stop()` 并渲染超时卡）、
+  `/safemode stop` 与卡片 ⏹ 按钮可终止；同一 scope 同时只允许一个安全任务，忙碌时新消息立即
+  回执；“/safemode plugins”执行 `dsh plugin --profile <name> list` 展示清单。
 - **可退出、可回退**：`/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书
   连接并交还通道；守护状态持久化在 `~/.dsh-lark/guardian.json`（0600），重启不丢
   `profileSeenUp` / `mode`；全程不删除用户已有会话 / 工作区数据。

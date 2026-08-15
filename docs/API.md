@@ -61,6 +61,12 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_GUARDIAN_STALE_MS`：心跳超时阈值，默认 `15000`。
 - `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS`：dsh 进程存活但心跳持续超时该时长即判定桥接引擎已死
   并接管，默认 `120000`。
+- `DSH_LARK_GUARDIAN_SAFE_ADAPTER`：安全模式引擎选择，`auto`（默认，SDK 流式优先、失败回退
+  headless）/ `sdk`（强制 SDK）/ `headless`（跳过预置）。
+- `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`：安全模式单任务墙钟超时，默认 `600000`；到时停止运行并
+  渲染超时卡。
+- `DSH_LARK_GUARDIAN_CARD_DENSITY`：安全模式任务卡片密度，默认 `detailed`
+  （`compact` / `standard` / `detailed`）。
 
 ## 2. 本地状态路径 · Local state paths
 
@@ -97,6 +103,8 @@ export function resolveAppPaths(root?: string): AppPaths;
   （`{ pid, startedAt, ts }`，桥接引擎每 `DSH_LARK_HEARTBEAT_MS` 原子写入，0600）。
 - 仅核心安全 profile：`~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` + `dsh-headless`，
   无第三方插件）。
+- 安全模式 SDK 流式 profile：`~/.dsh/profiles/<dsh-profile>-safe-sdk`（官方 `dsh-base` +
+  `dsh-sdk-jsonrpc-server`，无第三方插件，由守护优先预置）。
 
 ### 2.1 Profile 配置 · Profile config
 
@@ -525,7 +533,10 @@ export function heartbeatAgeMs(payload: HeartbeatPayload, now?: number): number;
   --dump-config`（boot-free）验证核心 bundle 可解析，失败返回 stderr 尾部供飞书展示。
 
 两个 bundle 均来自 dsh 安装自身的依赖闭包（dsh 启动时 heal `$DSH_HOME/profiles/node_modules`），
-无需 pnpm 安装，也不受故障 profile 的 node_modules / 第三方插件影响。
+无需 pnpm 安装，也不受故障 profile 的 node_modules / 第三方插件影响。安全模式进入时守护优先
+通过 `ensureSdkProfile`（`src/adapters/dsh/sdk-runtime.ts`，`bridgeTools: false`，profile
+`dsh-lark-safe-sdk`）预置 SDK 流式 runtime；预置失败（如缺 pnpm）或 `DSH_LARK_GUARDIAN_SAFE_ADAPTER`
+为 `headless` 时回退到上面的核心 headless profile。
 
 ### 10.4 进程观察 · Process watch
 
@@ -570,9 +581,14 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    无进程，连续 `takeoverGracePolls` 次）→ 用桥接 profile 的凭据 / 白名单创建
    `@larksuite/channel` 长连接；只有 admin（无 admin 时回退 allowedUsers）可触发控制命令。
 3. **safe**：`/safemode` 通过安全 profile 探测后，以 `DshAdapter`（`dsh --profile <safe>
-   "<prompt>"`）逐条执行对话，历史上下文拼接进 prompt（每 scope 上限 30 条）；`/safemode
-   plugins` 执行 `dsh plugin --profile <name> list`；`/safemode exit` 以 detached 方式重启
-   完整 profile，短暂延迟后断开飞书连接并回到 standby。
+   "<prompt>"`，headless 回退）或 `SdkDshAdapter`（`dsh-lark-safe-sdk`，默认优先，实时流式
+   思考 / 工具 / 文字）逐条执行对话；SDK 模式以原生 `session(id)` 续跑，headless 模式把历史
+   上下文拼接进 prompt（每 scope 上限 30 条）。任务期间守护通过 `streamCard` 渲染实时卡片
+   （`renderCard` / `RunState`，含已运行秒数、无响应提示、⏹ 终止按钮），并受
+   `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` 墙钟看门狗约束（超时调用 `run.stop()` 并渲染超时卡）；
+   同一 scope 同时只允许一个安全任务，忙碌时新消息立即回执；“/safemode stop”与卡片按钮均可
+   终止当前任务。`/safemode plugins` 执行 `dsh plugin --profile <name> list`；
+   `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并回到 standby。
 
 dsh 重新在线时（用户手动启动或退出安全模式后），守护立即断开飞书连接并清空安全模式上下文。
 守护进程可随时用 `DSH_LARK_GUARDIAN_DISABLED=1` 停止；`guardian status` 只读输出当前状态。

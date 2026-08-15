@@ -61,6 +61,12 @@
   `/safemode` 以仅核心 profile（`dsh-base` + `dsh-headless`，无第三方插件）逐条对话自愈，
   `/safemode exit` 重启完整 profile 并交还通道；`setup` 默认安装守护（`--no-guardian` 跳过）
   / `guardian install|uninstall|status|run`。
+- **P15 done（安全模式实时可见性，0.10.0）**：安全模式优先预置官方 SDK 流式 runtime
+  （`dsh-lark-safe-sdk`，无第三方插件、不挂载 bridge 回调工具），复用正常模式的
+  `RunState` / `renderCard` / `streamCard` 实时展示思考 / 工具 / web search / 打字机文字；
+  SDK 预置失败自动回退 headless 活动卡；新增单任务墙钟超时看门狗（真正 stop 子进程）、
+  `/safemode stop`、卡片 ⏹ 按钮、同 scope 忙碌回执与 `guardian-safe` 结构化日志；正常模式
+  补充排队回执与“已运行 Ns / 无响应 Ns”卡片提示。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
 

@@ -222,12 +222,17 @@ you answer — no extra command needed. The run-timeout watchdog pauses while a 
 
 - `/safemode`：进入**仅核心安全模式**——守护创建 `~/.dsh/profiles/<profile>-safe`（仅
   `dsh-base` + `dsh-headless` 两个官方核心 bundle，**不加载任何第三方插件**），后续消息经
-  守护转发给该核心 dsh 逐条对话，配合代码执行能力定位 / 修复 / 禁用损坏插件；
+  守护转发给该核心 dsh 逐条对话，配合代码执行能力定位 / 修复 / 禁用损坏插件；安全模式优先使用
+  官方 **SDK 流式引擎**（实时思考 / 工具调用 / web search / 打字机式文字输出，与正常模式同一张
+  流式卡），SDK runtime 不可用时自动回退 headless（任务期间卡片仍实时显示“正在思考 / 已运行 Ns /
+  无响应 Ns”活动状态）；
 - `/safemode plugins`：列出故障 profile 已安装的插件清单（自愈诊断）；
 - `/safemode status`：查看守护 / dsh / 安全模式状态；
+- `/safemode stop`：终止当前正在运行的安全模式任务（也可点击任务卡片上的 ⏹ 按钮）；
 - `/safemode exit`：退出安全模式，守护重启完整 profile 并把飞书通道交还给正常形态；
 
-全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
+安全模式任务有墙钟超时（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟），超时或失败都会
+在卡片上给出明确终态，不会无声挂起。全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
 
 ```bash
 # 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
@@ -243,14 +248,20 @@ takes over the Feishu channel so you can self-heal without touching the command 
 - `/safemode`: enter **core-only safe mode** — the guardian provisions
   `~/.dsh/profiles/<profile>-safe` with only the two official core bundles (`dsh-base` +
   `dsh-headless`, **no third-party plugins**) and proxies a restricted conversation to that core
-  dsh so you can locate / fix / disable the offending plugin;
+  dsh so you can locate / fix / disable the offending plugin. Safe mode prefers the official
+  **SDK streaming engine** (real-time reasoning / tool calls / web search / typewriter text on the
+  same streaming card as normal mode) and falls back to headless with a live activity card
+  ("thinking / elapsed Ns / no response Ns") when the SDK runtime cannot be provisioned;
 - `/safemode plugins`: list the plugins installed into the broken profile;
 - `/safemode status`: show guardian / dsh / safe-mode state;
+- `/safemode stop`: interrupt the currently running safe-mode task (or use the ⏹ button on the card);
 - `/safemode exit`: leave safe mode — the guardian relaunches the full profile and hands the
   Feishu channel back;
 
-No command line is needed for the whole rescue flow; once dsh is back, the guardian releases the
-channel automatically. Install:
+Safe-mode tasks are bounded by a wall-clock timeout
+(`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`, default 10 minutes); timeouts and failures always surface a
+clear terminal state on the card instead of hanging silently. No command line is needed for the
+whole rescue flow; once dsh is back, the guardian releases the channel automatically. Install:
 
 ```bash
 # Installed by default with setup (no extra flag); can also be installed / refreshed later:
@@ -496,6 +507,9 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_POLL_MS` | `2000` | 守护看门狗轮询间隔<br>Guardian watchdog poll interval |
 | `DSH_LARK_GUARDIAN_STALE_MS` | `15000` | 心跳超时阈值，超过且无 dsh 进程则接管飞书通道<br>Heartbeat staleness threshold before channel takeover |
 | `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` | `120000` | dsh 进程存活但心跳持续超时该时长，判定桥接引擎已死并接管<br>Live dsh process with heartbeat stale this long is treated as engine-dead (takeover) |
+| `DSH_LARK_GUARDIAN_SAFE_ADAPTER` | `auto` | 安全模式引擎：`auto` 优先 SDK 流式、失败回退 headless；`sdk` 强制 SDK；`headless` 跳过预置<br>Safe-mode engine: `auto` tries the SDK streaming runtime then falls back to headless; `sdk` requires it; `headless` skips provisioning |
+| `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务墙钟超时（到时停止并出超时卡）<br>Safe-mode per-task wall-clock timeout (stops the run and renders a timeout card) |
+| `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed）<br>Card density for safe-mode run cards |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
@@ -519,8 +533,8 @@ This tool runs **locally**; before installing, be aware that it accesses:
   引用，凭据文件权限 0600、目录 0700，字面密钥不进入 settings 或聊天记录）。
 - **安全网守护（默认随 `setup` 安装）**：系统级常驻进程，读取 `~/.dsh-lark/config.json` 中的飞书
   凭据；dsh 下线时接管同一 bot 的飞书长连接并扫描本机进程（仅 `ps` 命令行，不读内存）；
-  `/safemode` 时在 `~/.dsh/profiles/<profile>-safe` 创建仅核心的 dsh profile 并逐条执行
-  `dsh --profile <safe> "<prompt>"` 子进程。
+  `/safemode` 时创建仅官方核心的 dsh profile（headless 或 SDK JSON-RPC runtime，均无第三方插件）
+  并逐条执行任务；SDK 引擎会以官方 `dsh-sdk-jsonrpc-server` 子进程提供实时流式事件。
 
 - **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at
   `~/.dsh-lark/config.json` (file mode 600).

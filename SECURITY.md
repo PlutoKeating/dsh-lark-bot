@@ -45,8 +45,9 @@
     - 控制信号默认拒绝：仅管理员（`access.admins`，无管理员时回退 `allowedUsers`）可触发
       `/safemode` 系列命令，未授权消息静默丢弃；
     - 过期事件复用 `DSH_LARK_EVENT_FRESHNESS_MS` 窗口拒绝；
-    - 心跳 / 守护状态文件以 `0600` 写入；安全模式仅挂载官方核心 bundle（`dsh-base` +
-      `dsh-headless`），不加载任何第三方插件，避免把故障面带进救援通道。
+    - 心跳 / 守护状态文件以 `0600` 写入；安全模式仅挂载官方核心 bundle（headless：
+      `dsh-base` + `dsh-headless`；SDK 流式优先：`dsh-base` + `dsh-sdk-jsonrpc-server`，
+      均不挂载第三方插件与 bridge 回调工具），避免把故障面带进救援通道。
 
 ## 数据与凭据 · Data & credentials
 
