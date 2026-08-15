@@ -87,10 +87,15 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
 `setup` 会自动完成：发现本机 dsh → 预批准 pnpm 构建策略 → 执行标准的
-`dsh plugin --profile dsh-lark add dsh-lark-bot`。
+`dsh plugin --profile dsh-lark add dsh-lark-bot`，并**默认同时安装「安全网守护」**——系统级
+常驻、dsh 全部下线后仍保留飞书救援入口（核心能力之一，见下文「安全网守护」一节）。
+一条命令即完成全部安装。
 
 `setup` automatically: locates your dsh install → pre-approves pnpm's build policy → runs the
-standard `dsh plugin --profile dsh-lark add dsh-lark-bot`.
+standard `dsh plugin --profile dsh-lark add dsh-lark-bot`, and **also installs the safety-net
+guardian by default** — a system-level resident process that keeps the Feishu rescue entrance
+alive even when dsh is fully down (one of the core features; see "Safety-net guardian" below).
+One command installs everything.
 
 ### 2. 启动并扫码绑定 | Start and bind with one scan
 
@@ -197,8 +202,8 @@ runtime profiles): after a task finishes it can push messages to other groups/to
 members. The bridge listens on 127.0.0.1 with a random per-boot token — nothing is exposed to the
 public network.
 
-**安全网守护（Safe-mode guardian）**：可选安装一个独立于 dsh 进程、系统级常驻的最小守护进程
-（Linux systemd user unit / macOS LaunchAgent / Windows 启动项）。dsh 正常运行时守护保持静默；
+**安全网守护（Safe-mode guardian）**：默认随 `setup` 一起安装的、独立于 dsh 进程、系统级常驻的
+最小守护进程（Linux systemd user unit / macOS LaunchAgent / Windows 启动项）。dsh 正常运行时守护保持静默；
 一旦 dsh 进程下线或无法 boot（例如某个第三方插件破坏了整个 profile 组合），守护自动接管飞书
 通道，用户无需接触命令行即可发送控制信号自救：
 
@@ -212,12 +217,13 @@ public network.
 全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
 
 ```bash
-npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
-# 或已安装后单独安装：dsh-lark-bot guardian install
+# 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
+dsh-lark-bot guardian install --dsh-profile dsh-lark
 ```
+不需要守护时，安装时加 `--no-guardian` 跳过；单独卸载用 `dsh-lark-bot guardian uninstall`。
 
-**Safety-net guardian**: optionally install a minimal system-level resident process that is
-independent of the dsh process. While dsh runs, the guardian stays silent; once dsh goes down or
+**Safety-net guardian**: a minimal system-level resident process installed **by default with
+`setup`**, independent of the dsh process. While dsh runs, the guardian stays silent; once dsh goes down or
 fails to boot (e.g. a third-party plugin breaks the whole profile composition), the guardian
 takes over the Feishu channel so you can self-heal without touching the command line:
 
@@ -234,9 +240,10 @@ No command line is needed for the whole rescue flow; once dsh is back, the guard
 channel automatically. Install:
 
 ```bash
-npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
-# or later: dsh-lark-bot guardian install
+# Installed by default with setup (no extra flag); can also be installed / refreshed later:
+dsh-lark-bot guardian install --dsh-profile dsh-lark
 ```
+Pass `--no-guardian` to setup to skip it; remove it later with `dsh-lark-bot guardian uninstall`.
 
 ### 模型 / Provider / 凭据管理 | Models / Providers / Credentials
 
@@ -285,21 +292,25 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
 `setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
-`dsh plugin --profile dsh-lark add dsh-lark-bot`。加 `--guardian` 会同时安装「安全网守护」
-（见「安全网守护」一节）。已安装时重复执行即升级到最新版。
+`dsh plugin --profile dsh-lark add dsh-lark-bot`，并**默认同时安装「安全网守护」**
+（见「安全网守护」一节；不需要时加 `--no-guardian` 跳过）。已安装时重复执行即升级到最新版。
 
 `setup` locates your dsh, pre-approves pnpm's build policy (protobufjs) and runs the standard
-`dsh plugin --profile dsh-lark add dsh-lark-bot`. Adding `--guardian` also installs the
-safety-net guardian (see "Safety-net guardian" above). Re-running it upgrades to the latest version.
+`dsh plugin --profile dsh-lark add dsh-lark-bot`. It **also installs the safety-net guardian by
+default** (see "Safety-net guardian" above; pass `--no-guardian` to skip). Re-running it upgrades
+to the latest version.
 
 ### 升级 | Upgrade
 
 - 插件本体：重跑 `setup`（或 `dsh plugin --profile <name> add dsh-lark-bot`）拉取 npm 最新版。
+- 安全网守护：随 `setup` 一起安装 / 升级（幂等重装），也可单独 `dsh-lark-bot guardian install`。
 - CLI 工具（可选）：`npm i -g dsh-lark-bot@latest`；使用 `npx` 时无需全局安装。
 - 升级后重启 profile：`dsh --profile dsh-lark`。
 
 - Plugin: re-run `setup` (or `dsh plugin --profile <name> add dsh-lark-bot`) to pull the latest
   npm release.
+- Safety-net guardian: installed / upgraded together with `setup` (idempotent), or standalone via
+  `dsh-lark-bot guardian install`.
 - CLI tool (optional): `npm i -g dsh-lark-bot@latest`; not needed when using `npx`.
 - Restart the profile after upgrading: `dsh --profile dsh-lark`.
 
@@ -391,7 +402,7 @@ tasks and session archival.
   对应 runtime 并自动重建。
 - 桥接引擎作为 dsh 插件在 dsh 进程内运行，agent 执行使用官方 dsh SDK runtime 子进程
   （嵌套 runtime 是有意取舍，用于按工作区隔离的 runtime 池与 scope 内并行 run）。
-  唯一的进程级例外是可选安装的「安全网守护」——它独立于 dsh / Cordis 常驻，仅在 dsh
+  唯一的进程级例外是默认安装的「安全网守护」——它独立于 dsh / Cordis 常驻，仅在 dsh
   下线后接管飞书通道，正常运行时保持静默。
 - 飞书文档评论、富文本回复为规划中能力，尚未实现。
 - pnpm ≥ 10 的构建脚本策略由 `setup` 自动处理；手动 `dsh plugin add` 时若报
@@ -673,7 +684,7 @@ See "Community Listings" in the next section for ecosystem registration status.
 
 核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接官方 DeepSeek Harness SDK（`DSH_LARK_ADAPTER=sdk`），可选 ACP 审批模式与 legacy headless。
 
-可选「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
+默认安装的「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
 通道接收 `/safemode` 控制信号，以仅核心 profile（`dsh-base` + `dsh-headless`）拉起受限对话
 用于自愈，`/safemode exit` 重启完整 profile 并交还通道。
 

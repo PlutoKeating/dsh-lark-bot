@@ -132,12 +132,11 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 背景：dsh 采用「一切皆插件」架构，单个第三方插件报错即可让整个 profile boot 失败，此时桥接
 引擎随 dsh 一起下线，飞书入口不可用。为保留最坏情况下的救援通道，可安装**独立于 dsh 进程**
-的最小「安全网守护」：
+的最小「安全网守护」（默认随 `setup` 一起安装）：
 
 ```bash
-# 安装（两种方式等价，安装后系统级常驻）
-npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
-# 或：dsh-lark-bot guardian install --dsh-profile dsh-lark
+# 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
+dsh-lark-bot guardian install --dsh-profile dsh-lark
 
 # 状态 / 卸载
 dsh-lark-bot guardian status

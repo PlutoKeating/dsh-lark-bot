@@ -48,11 +48,12 @@ export function buildProgram(): Command {
       'Install this package as a standard dsh profile bundle (single install path)',
     )
     .option('--profile <name>', 'dsh profile to install into (default: dsh-lark)')
-    .option('--guardian', 'also install the safety-net guardian service')
+    .option('--guardian', 'install the safety-net guardian service (installed by default; compatibility)')
+    .option('--no-guardian', 'skip installing the safety-net guardian service (installed by default)')
     .action(async (opts: { profile?: string; guardian?: boolean }) => {
       await runSetup({
         ...(opts.profile ? { profile: opts.profile } : {}),
-        ...(opts.guardian ? { guardian: true } : {}),
+        guardian: opts.guardian !== false,
       });
     });
 

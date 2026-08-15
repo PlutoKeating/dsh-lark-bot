@@ -411,7 +411,7 @@ export interface Logger {
 - `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）。
 - `dsh-lark-bot --version` / `-v`：版本号。
 - `dsh-lark-bot run`（隐藏）：直接运行桥接引擎（诊断用；插件模式下引擎在 dsh 进程内运行）。
-- `dsh-lark-bot setup --guardian`：安装 bundle 的同时安装安全网守护（见 §10）。
+- `dsh-lark-bot setup`：安装 bundle 的同时**默认安装安全网守护**（`--no-guardian` 可跳过；见 §10）。
 - `dsh-lark-bot guardian run|install|uninstall|status`：安全网守护常驻 / 系统服务安装 /
   卸载 / 状态查询（见 §10）。
 
@@ -572,4 +572,5 @@ dsh 重新在线时（用户手动启动或退出安全模式后），守护立�
 - `uninstallGuardian({ env, run?, rootOverride? })`：停用并删除服务文件，保留状态文件。
 - `systemdUnit` / `launchdPlist` / `windowsStartupCmd`：纯函数生成单元文件内容（可测试）。
 
-CLI：`dsh-lark-bot setup --guardian`、`dsh-lark-bot guardian run|install|uninstall|status`。
+CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
+`dsh-lark-bot guardian run|install|uninstall|status`。

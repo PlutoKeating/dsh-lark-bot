@@ -59,8 +59,8 @@
 - **P14 done（安全网守护）**：新增 `src/guardian/`（心跳 / 状态 / 安全 profile / 进程观察 /
   控制信号 / 接管状态机 / 系统服务安装）；桥接引擎周期写心跳；dsh 下线后守护接管飞书通道，
   `/safemode` 以仅核心 profile（`dsh-base` + `dsh-headless`，无第三方插件）逐条对话自愈，
-  `/safemode exit` 重启完整 profile 并交还通道；`setup --guardian` / `guardian
-  install|uninstall|status|run`。
+  `/safemode exit` 重启完整 profile 并交还通道；`setup` 默认安装守护（`--no-guardian` 跳过）
+  / `guardian install|uninstall|status|run`。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
 

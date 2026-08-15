@@ -15,7 +15,8 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
 `setup` 会：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs 等）→ 执行标准
-`dsh plugin --profile dsh-lark add dsh-lark-bot`，把本插件作为标准 bundle 装进 profile。
+`dsh plugin --profile dsh-lark add dsh-lark-bot`，把本插件作为标准 bundle 装进 profile，
+并**默认同时安装「安全网守护」**（见第 6 节；不需要时加 `--no-guardian` 跳过）。
 
 开发阶段也可以先 `pnpm install && pnpm build`，再用
 `DSH_LARK_SETUP_PACKAGE=/path/to/dsh-lark-bot-x.y.z.tgz node dist/cli.js setup --profile dsh-lark`
@@ -37,7 +38,7 @@ dsh 以标准插件方式加载桥接引擎；首次启动（无凭据时）终�
 
 在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
 
-常驻 / 守护由 dsh 宿主负责（profile 在则引擎在；可选安装的「安全网守护」除外，见第 6 节）。
+常驻 / 守护由 dsh 宿主负责（profile 在则引擎在；默认安装的「安全网守护」除外，见第 6 节）。
 已经有一个 PersonalAgent 应用时，
 可在启动命令的环境变量中提供凭据跳过扫码：
 
@@ -100,21 +101,22 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
 
-## 6. 安全网守护（可选）· Safety-net guardian
+## 6. 安全网守护（默认安装）· Safety-net guardian
 
 dsh 采用「一切皆插件」架构，任何第三方插件都可能让整个 profile boot 失败。此时桥接引擎与
-dsh 一起下线，飞书入口不可用。可选安装一个**独立于 dsh 进程**的最小守护，在最坏情况下仍
-保留飞书救援入口：
+dsh 一起下线，飞书入口不可用。因此 `setup` **默认安装**一个**独立于 dsh 进程**的最小守护，
+在最坏情况下仍保留飞书救援入口：
 
 ```bash
-# 安装（与 setup 一起，或单独安装）
-npx dsh-lark-bot@latest setup --profile dsh-lark --guardian
+# 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
 dsh-lark-bot guardian install --dsh-profile dsh-lark
 
 # 状态查看 / 卸载
 dsh-lark-bot guardian status
 dsh-lark-bot guardian uninstall
 ```
+
+不需要守护时，安装命令加 `--no-guardian` 跳过。
 
 dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或无法 boot 后，守护自动接管通道，
 在飞书里向 bot 发送控制信号即可全程自救，无需命令行：
