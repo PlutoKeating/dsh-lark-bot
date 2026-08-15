@@ -14,6 +14,10 @@ describe('SessionStore', () => {
       expect(store.scopeForSession('session-1')).toBe('chat-a');
       expect(store.scopeForSession('session-2')).toBe('chat-b');
       expect(store.scopeForSession('session-3')).toBeUndefined();
+      // set() schedules an asynchronous persist; flush it before the temp dir
+      // is removed so writeFileAtomic's temp file cannot race with rmdir
+      // (ENOTEMPTY flake under load).
+      await store.flush();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
