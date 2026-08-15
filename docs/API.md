@@ -396,6 +396,9 @@ export interface Logger {
   时保持停止。插件卸载时返回的 disposer 会停止引擎。
 - `dsh-lark-bot/notify`：`lark_notify` 工具（见 §9），配置缺省时在执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN` 环境变量。
+- `dsh-lark-bot/ask`：`lark_ask_user` 工具（见 §9），agent 需要用户拍板 / 补充信息时
+  通过问答卡向飞书会话提问并等待答案，配置缺省时读取 `DSH_LARK_ASK_URL` /
+  `DSH_LARK_NOTIFY_TOKEN` 环境变量。
 
 常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是可选安装的
 「安全网守护」（见 §10）：它独立于 dsh / Cordis 常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
@@ -434,6 +437,7 @@ export interface Logger {
 - `./invariant`（`src/invariant.ts`）：`dsh-lark-bot-invariant` 伴生模块，向宿主
   `invariants` 注册表登记包归属（与官方 dsh-lark-channel/invariant 同契约）。
 - `./notify`（`src/notify/tool.ts`）：`lark-notify` 工具插件（见 §9）。
+- `./ask`（`src/notify/ask-tool.ts`）：`lark-ask` 问答卡工具插件（见 §9）。
 
 `dsh plugin --profile <name> add dsh-lark-bot`（或一行 `dsh-lark-bot setup`）后，profile 的
 `dsh.profile.bundles` 会追加 `dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层（
@@ -463,10 +467,21 @@ export interface Logger {
 （`text` / `scope` / `chat_id` / `mention_user_ids`），把请求 POST 回 bridge 的
 `DSH_LARK_NOTIFY_URL`（token 取 `DSH_LARK_NOTIFY_TOKEN`）。
 
+同一服务器还提供 `POST /ask`（`server.askUrl`，桥接进程写 `DSH_LARK_ASK_URL`）：
+`src/notify/ask-handler.ts` 的 `buildAskHandler` 按 `sessionId` 反查 scope（
+`SessionStore.scopeForSession`）并解析到 chat/thread，用现有
+`QuestionRegistry` + `renderQuestionCard` 发送问答卡，等待卡片提交后把答案返回
+给 runtime。`src/notify/ask-tool.ts` 是 cordis 插件（`dsh-lark-bot/ask`，
+`inject: ['tools']`）：注册 dsh 工具 `lark_ask_user`（`question` / `kind` /
+`options` / `header`，`timeoutMs` 10 分钟），执行时以 `exec.agent.session.id`
+定位会话并 POST 到 `DSH_LARK_ASK_URL` 阻塞等待答案；答案作为普通工具结果
+回到 agent 循环。问答卡等待期间 run 超时看门狗暂停（`QuestionRegistry.pendingCount`
+/ `onSettled`），用户答完卡后重新计时。
+
 SDK / ACP runtime profile（`src/adapters/dsh/sdk-runtime.ts` / `acp-runtime.ts`）会在
 `cordis.patch.yml` 插入 `lark-notify` 行，并把当前 bridge 包以 `link:` 依赖加入 profile，
-因此 `lark_notify` 在 `sdk` 与 `acp` 两种 adapter 下都自动可用（`headless` 无 runtime profile，
-不提供该工具）。
+同时插入 `lark-ask` 行，因此 `lark_notify` 与 `lark_ask_user` 在 `sdk` 与 `acp` 两种
+adapter 下都自动可用（`headless` 无 runtime profile，不提供这两个工具）。
 
 ## 10. 安全网守护 · Safety-net guardian（issue #6）
 

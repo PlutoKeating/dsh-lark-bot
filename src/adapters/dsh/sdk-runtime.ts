@@ -66,7 +66,7 @@ function packageJsonFor(profile: string): string {
   )}\n`;
 }
 
-function patchYamlFor(): string {
+export function patchYamlFor(): string {
   const own = ownPackageInfo();
   return [
     '# dsh-lark SDK JSON-RPC runtime overlay (managed by dsh-lark-bot).',
@@ -97,6 +97,15 @@ function patchYamlFor(): string {
     `      name: '${own.name}/notify'`,
     '      config:',
     '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
+    // Question-card tool: the agent asks the user for decisions / missing
+    // information; the bridge shows a card and returns the answer.
+    '- insert:',
+    '    - id: lark-ask',
+    `      name: '${own.name}/ask'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
   ].join('\n');

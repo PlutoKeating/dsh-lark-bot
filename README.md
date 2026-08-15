@@ -195,12 +195,23 @@ run in that scope carries the role instructions, and the role model wins below t
 dsh 工具（SDK / ACP 两种 runtime 均可装配）：agent 完成任务后可主动向其他群 / 话题发消息并
 @ 指定成员，桥接进程通过 127.0.0.1 本地回调端口 + 随机 token 校验，不暴露公网。
 
+**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过
+`lark_ask_user` 工具主动向当前会话弹一张**问答卡**（单选 / 多选 / 自由文本），
+你回答后任务自动继续——无需额外命令。问答卡等待期间任务不会被运行超时打断。
+（与 `/ask` 的“你主动发结构化问题”方向相反：这是 agent 主动来问你。）
+
 **Outbound mentions & cross-session notify**: the outbound contract supports `mentions` and
 cross-chat/thread sends; `/notify <scope|chatId> <text>` pushes a report to another session
 (admin). The agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP
 runtime profiles): after a task finishes it can push messages to other groups/topics and @mention
 members. The bridge listens on 127.0.0.1 with a random per-boot token — nothing is exposed to the
 public network.
+
+**Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or
+missing information, it proactively sends a **question card** to the current chat via the
+`lark_ask_user` tool (single choice / multi choice / free text) and resumes automatically once
+you answer — no extra command needed. The run-timeout watchdog pauses while a card is waiting.
+(This is the opposite direction of `/ask`, which is you asking the agent.)
 
 **安全网守护（Safe-mode guardian）**：默认随 `setup` 一起安装的、独立于 dsh 进程、系统级常驻的
 最小守护进程（Linux systemd user unit / macOS LaunchAgent / Windows 启动项）。dsh 正常运行时守护保持静默；

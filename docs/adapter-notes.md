@@ -149,7 +149,9 @@ SDK / ACP 模式需要对应 runtime profile：
 `ensureSdkProfile` / `ensureAcpProfile`（`src/adapters/dsh/sdk-runtime.ts` /
 `src/adapters/dsh/acp-runtime.ts`）在首次启动时创建 profile 并 `pnpm install` 插件，幂等且可自愈
 （部分创建状态也会补齐）。stdout 保留给 JSON-RPC 协议；overlay 禁用了 `user-questions`
-（IM 无法回达的交互工具默认拒绝）与 HMR。
+（IM 无法回达的原生 `ask_user_question` 默认拒绝）与 HMR；agent 提问改走桥接自建
+`lark_ask_user` 工具（`dsh-lark-bot/ask` + bridge `POST /ask` 问答卡），SDK / ACP
+runtime 均自动装配。
 
 ---
 

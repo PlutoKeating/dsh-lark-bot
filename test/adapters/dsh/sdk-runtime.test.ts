@@ -6,6 +6,7 @@ import {
   DEFAULT_SDK_PROFILE,
   ensureSdkProfile,
   isSdkProfileReady,
+  patchYamlFor,
   resolveSdkLaunch,
   sdkProfileRoot,
   SDK_SERVER_PACKAGE,
@@ -19,6 +20,14 @@ afterEach(async () => {
 });
 
 describe('resolveSdkLaunch', () => {
+  it('writes the runtime overlay with the notify and ask tools', () => {
+    const patch = patchYamlFor();
+    expect(patch).toContain("id: sdk-jsonrpc-server");
+    expect(patch).toContain("id: lark-notify");
+    expect(patch).toContain("id: lark-ask");
+    expect(patch).toContain("name: 'dsh-lark-bot/ask'");
+  });
+
   it('uses the discovered bin with the SDK profile', () => {
     const launch = resolveSdkLaunch({ home: '/home/x', bin: '/home/x/bin.js' });
     expect(launch.command).toBe('node');

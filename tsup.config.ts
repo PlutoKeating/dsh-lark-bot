@@ -7,6 +7,7 @@ export default defineConfig({
     plugin: 'src/plugin.ts',
     invariant: 'src/invariant.ts',
     notify: 'src/notify/tool.ts',
+    ask: 'src/notify/ask-tool.ts',
   },
   format: ['esm'],
   target: 'node22',

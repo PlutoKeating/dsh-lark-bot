@@ -39,6 +39,14 @@ function installPlugin(root: string) {
 }
 
 describe('resolveAcpLaunch', () => {
+  it('writes the runtime overlay with the notify and ask tools', () => {
+    const patch = acpPatchYaml('deepseek-official', 'deepseek-v4-flash');
+    expect(patch).toContain("id: acp");
+    expect(patch).toContain("id: lark-notify");
+    expect(patch).toContain("id: lark-ask");
+    expect(patch).toContain("name: 'dsh-lark-bot/ask'");
+  });
+
   it('resolves the discovered bin with the ACP profile', () => {
     const launch = resolveAcpLaunch({ home: '/home/x', bin: '/home/x/bin.js' });
     expect(launch.args).toEqual(['/home/x/bin.js', '--profile', DEFAULT_ACP_PROFILE]);

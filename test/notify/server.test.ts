@@ -106,4 +106,72 @@ describe('NotifyServer', () => {
       },
     );
   });
+
+  it('serves the ask endpoint when an ask handler is wired', async () => {
+    const ask = vi.fn().mockResolvedValue({ ok: true, answer: 'use A' });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      ask,
+    });
+    servers.push(server);
+    await server.start();
+    expect(server.askUrl).toBeTruthy();
+
+    const response = await fetch(server.askUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        question: 'Which plan?',
+        kind: 'single',
+        options: ['A', 'B'],
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, answer: 'use A' });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', question: 'Which plan?' }),
+    );
+  });
+
+  it('rejects ask requests with an invalid token or missing fields', async () => {
+    const ask = vi.fn();
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      ask,
+    });
+    servers.push(server);
+    await server.start();
+
+    const badToken = await fetch(server.askUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'wrong', sessionId: 's', question: 'Q' }),
+    });
+    expect(badToken.status).toBe(401);
+
+    const missing = await fetch(server.askUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 's' }),
+    });
+    expect(missing.status).toBe(400);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for /ask when no ask handler is wired', async () => {
+    const directory = new ScopeDirectory(':memory:');
+    const { server } = await startServer({ directory });
+    const response = await fetch(`${server.url!.replace('/notify', '')}/ask`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 's', question: 'Q' }),
+    });
+    expect(response.status).toBe(404);
+  });
 });

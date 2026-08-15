@@ -23,6 +23,10 @@
     "./notify": {
       "types": "./dist/notify.d.ts",
       "import": "./dist/notify.js"
+    },
+    "./ask": {
+      "types": "./dist/ask.d.ts",
+      "import": "./dist/ask.js"
     }
   },
   "files": [

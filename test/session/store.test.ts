@@ -5,6 +5,20 @@ import { describe, expect, it } from 'vitest';
 import { SessionStore } from '../../src/session/store.js';
 
 describe('SessionStore', () => {
+  it('resolves a live session id back to its scope', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
+    try {
+      const store = new SessionStore(join(root, 'sessions.json'));
+      store.set('chat-a', 'session-1', '/tmp/project-a');
+      store.set('chat-b', 'session-2', '/tmp/project-b');
+      expect(store.scopeForSession('session-1')).toBe('chat-a');
+      expect(store.scopeForSession('session-2')).toBe('chat-b');
+      expect(store.scopeForSession('session-3')).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('persists and restores session bindings', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
     const path = join(root, 'sessions.json');

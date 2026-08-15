@@ -19,6 +19,7 @@ import { runAgentBatch } from '../../bridge/run-flow.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import type { StreamingChannel } from '../../bridge/types.js';
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
+import { buildAskHandler } from '../../notify/ask-handler.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -209,6 +210,18 @@ export async function startBridgeEngine(
         ...(payload.mentions ? { mentions: payload.mentions } : {}),
       });
     },
+    ask: buildAskHandler({
+      sessions,
+      scopeDirectory,
+      questions,
+      channel: {
+        sendCard: async (chatId, card, options) => {
+          if (!streaming) throw new Error('bridge channel is not ready');
+          if (!streaming.sendCard) throw new Error('bridge channel does not support cards');
+          await streaming.sendCard(chatId, card, options);
+        },
+      },
+    }),
   });
   process.env.DSH_LARK_NOTIFY_TOKEN = notifyToken;
 
@@ -312,6 +325,7 @@ export async function startBridgeEngine(
   larkChannel = bridge.channel;
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
+  process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
   const heartbeat = startHeartbeat(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,

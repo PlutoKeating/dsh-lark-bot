@@ -94,6 +94,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Question-card tool (same contract as the SDK runtime).
+    '- insert:',
+    '    - id: lark-ask',
+    `      name: '${own.name}/ask'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
   ].join('\n');
 }
 

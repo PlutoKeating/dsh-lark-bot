@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { log } from '../core/logger.js';
 import type { MentionTarget } from '../bridge/types.js';
+import type { AskPayload, AskResult } from './ask-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -30,6 +31,8 @@ export interface NotifyServerDeps {
     destination: NotifyDestination,
     payload: { text: string; mentions?: MentionTarget[] },
   ) => Promise<void>;
+  /** Optional handler for the `lark_ask_user` question-card channel. */
+  ask?: (payload: AskPayload) => Promise<AskResult>;
 }
 
 /**
@@ -44,6 +47,7 @@ export class NotifyServer {
   private readonly token: string;
   private readonly deps: NotifyServerDeps;
   url: string | undefined;
+  askUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -61,6 +65,7 @@ export class NotifyServer {
       server.listen(this.deps.port ?? 0, '127.0.0.1', () => {
         const address = server.address() as AddressInfo;
         this.url = `http://127.0.0.1:${String(address.port)}/notify`;
+        this.askUrl = `http://127.0.0.1:${String(address.port)}/ask`;
         resolve();
       });
     });
@@ -82,12 +87,38 @@ export class NotifyServer {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(`${JSON.stringify(body)}\n`);
     };
-    if (req.method !== 'POST' || req.url !== '/notify') {
-      respond(404, { ok: false, error: 'not found' });
-      return;
-    }
     try {
       const body = await readBody(req);
+      if (req.method !== 'POST') {
+        respond(404, { ok: false, error: 'not found' });
+        return;
+      }
+      if (req.url === '/ask') {
+        if (!this.deps.ask) {
+          respond(404, { ok: false, error: 'ask channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as AskPayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.question?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and question are required' });
+          return;
+        }
+        const result = await this.deps.ask(payload);
+        if (!result.ok) {
+          respond(404, { ok: false, ...(result.error === undefined ? {} : { error: result.error }) });
+          return;
+        }
+        respond(200, { ok: true, ...(result.answer === undefined ? {} : { answer: result.answer }) });
+        return;
+      }
+      if (req.url !== '/notify') {
+        respond(404, { ok: false, error: 'not found' });
+        return;
+      }
       const message = JSON.parse(body) as NotifyMessage;
       if (message.token !== this.token) {
         respond(401, { ok: false, error: 'invalid token' });

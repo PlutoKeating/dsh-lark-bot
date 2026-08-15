@@ -132,16 +132,36 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
         };
 
         let timeoutTimer: NodeJS.Timeout | undefined;
+        let armTimeout: (() => void) | undefined;
         const timeoutPromise =
           timeoutMs > 0
             ? new Promise<void>((resolve) => {
-                timeoutTimer = setTimeout(() => {
-                  timedOut = true;
-                  void run.stop();
-                  resolve();
-                }, timeoutMs);
+                armTimeout = (): void => {
+                  timeoutTimer = setTimeout(() => {
+                    if (timedOut) return;
+                    if (input.questions?.pendingCount(input.scope)) {
+                      // A question card is awaiting the user: pause the
+                      // run-timeout watchdog instead of killing the task.
+                      armTimeout?.();
+                      return;
+                    }
+                    timedOut = true;
+                    void run.stop();
+                    resolve();
+                  }, timeoutMs);
+                };
+                armTimeout();
               })
             : undefined;
+        // The user answered a card: restart a full run-timeout window so the
+        // remaining work is not cut short by time spent waiting for input.
+        const unsubscribeSettled = timeoutPromise
+          ? input.questions?.onSettled(input.scope, () => {
+              if (timedOut) return;
+              if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+              armTimeout?.();
+            })
+          : undefined;
 
         try {
           if (timeoutPromise) {
@@ -156,6 +176,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           await controller.update(renderCard(state, density));
         } finally {
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+          unsubscribeSettled?.();
         }
       },
       replyOptions,

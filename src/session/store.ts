@@ -26,6 +26,8 @@ interface SessionData {
 
 export class SessionStore {
   private data: SessionData = { chats: {} };
+  /** Live session-id → scope index (used by the agent question-card router). */
+  private sessionScopes = new Map<string, string>();
   private saving: Promise<void> = Promise.resolve();
   private pendingArchive: Promise<void> = Promise.resolve();
   private readonly path: string;
@@ -67,7 +69,22 @@ export class SessionStore {
       cwd,
       messages: existing?.messages ?? [],
     };
+    if (sessionId) this.sessionScopes.set(sessionId, scopeId);
     this.schedulePersist();
+  }
+
+  /**
+   * Reverse lookup used by the bridge question-card router: map a live dsh
+   * session id back to its bridge scope. Falls back to a scan of the loaded
+   * records (e.g. after a fresh load before any live run registered).
+   */
+  scopeForSession(sessionId: string): string | undefined {
+    const direct = this.sessionScopes.get(sessionId);
+    if (direct !== undefined) return direct;
+    for (const [scope, record] of Object.entries(this.data.chats)) {
+      if (record.sessionId === sessionId) return scope;
+    }
+    return undefined;
   }
 
   historyFor(scopeId: string, cwd: string): ChatMessage[] {
