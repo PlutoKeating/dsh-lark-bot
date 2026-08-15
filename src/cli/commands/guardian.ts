@@ -114,7 +114,13 @@ function printResult(result: InstallResult): void {
 
 function waitForShutdown(): Promise<void> {
   return new Promise((resolve) => {
+    // The guardian service's poll timer is unref'd (so embedding and tests do
+    // not pin the process), therefore the foreground service entry must hold
+    // the event loop itself until SIGINT / SIGTERM arrives; otherwise Node
+    // drains the loop and exits with an unsettled top-level await.
+    const keepAlive = setInterval(() => {}, 2 ** 31 - 1);
     const shutdown = (): void => {
+      clearInterval(keepAlive);
       process.off('SIGINT', shutdown);
       process.off('SIGTERM', shutdown);
       resolve();
