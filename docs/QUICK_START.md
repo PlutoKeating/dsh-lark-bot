@@ -93,7 +93,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +
 `dsh-sdk-jsonrpc-server`），需要本机可用 `pnpm`。审批场景可切换
 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，审批卡通过 ACP
-`session/request_permission` 一问一答）；`headless` 保留旧版子进程 fallback。
+`session/request_permission` 一问一答）；`headless` 保留旧版子进程 fallback；
+`DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`，
+网页端成为唯一写者，从根上消除多写者会话损坏；配合 `DSH_LARK_WEB_URL` / `DSH_LARK_WEB_PUSH`）。
 
 bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可调），超出保留窗口的消息自动
 归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown + JSONL + Git commit，`/archive`

@@ -211,7 +211,7 @@ dsh-lark-bot doctor
 - profile 是否可读
 - 访问白名单用户数 / 群聊数
 - 工作目录是否存在
-- adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` 对应 runtime 探测）
+- adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` / `web` 对应 runtime 探测）
 
 桥接引擎日志：以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log` 是
 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）。
@@ -236,10 +236,12 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
 | `DSH_LARK_DSH_ARGS` | 自动发现 | dsh 启动参数 |
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy） |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者） |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
+| `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent base URL |
+| `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成推送飞书 + 自动切换会话映射（`0` 关闭） |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时（持续无活动事件才终止） |
