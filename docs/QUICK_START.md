@@ -140,7 +140,8 @@ dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
-- 运行日志：`~/.dsh-lark/profiles/<profile>/logs/bot.log`（桥接引擎 JSON Lines）
+- 运行日志：桥接引擎以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log`
+  是 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）
 - 守护心跳：`~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（桥接引擎周期写入）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
