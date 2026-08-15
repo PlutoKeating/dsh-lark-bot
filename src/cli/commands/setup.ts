@@ -105,7 +105,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   );
 }
 
-function runDshPlugin(bin: string, profile: string, packageSpec: string): Promise<void> {
+export function runDshPlugin(bin: string, profile: string, packageSpec: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'node',
@@ -120,7 +120,7 @@ function runDshPlugin(bin: string, profile: string, packageSpec: string): Promis
   });
 }
 
-async function approveBuilds(profileDir: string): Promise<void> {
+export async function approveBuilds(profileDir: string): Promise<void> {
   const workspaceFile = join(profileDir, 'pnpm-workspace.yaml');
   let existing = '';
   try {

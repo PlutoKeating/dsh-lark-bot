@@ -10,7 +10,20 @@ export interface DoctorOptions extends StartOptions {
   output?: (text: string) => void;
 }
 
-export async function runDoctor(options: DoctorOptions): Promise<void> {
+export interface DoctorResult {
+  lines: string[];
+  critical: boolean;
+}
+
+/**
+ * Core diagnostics, shared by the `doctor` command and the post-upgrade
+ * verification inside `dsh-lark-bot upgrade`. Returns the report lines and
+ * whether any critical check failed; never writes to stdout / exit code
+ * itself.
+ */
+export async function runDoctorChecks(
+  options: DoctorOptions,
+): Promise<DoctorResult> {
   const env = loadRuntimeEnv({
     ...process.env,
     ...(options.workspace ? { DSH_LARK_WORKSPACE: options.workspace } : {}),
@@ -84,6 +97,11 @@ export async function runDoctor(options: DoctorOptions): Promise<void> {
     critical = true;
   }
 
+  return { lines, critical };
+}
+
+export async function runDoctor(options: DoctorOptions): Promise<void> {
+  const { lines, critical } = await runDoctorChecks(options);
   const output = options.output ?? ((text: string) => process.stdout.write(text));
   output(`${lines.join('\n')}\n`);
   if (critical) process.exitCode = 1;

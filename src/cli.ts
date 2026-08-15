@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { runDoctor } from './cli/commands/doctor.js';
 import { runBot } from './cli/commands/run.js';
 import { runSetup } from './cli/commands/setup.js';
+import { runUpgrade } from './cli/commands/upgrade.js';
 import {
   installGuardianCommand,
   runGuardian,
@@ -67,6 +68,41 @@ export function buildProgram(): Command {
     .option('--tenant <tenant>', 'feishu or lark')
     .action(async (opts: StartOptions) => {
       await runDoctor({ ...opts, version: packageVersion() });
+    });
+
+  program
+    .command('upgrade')
+    .description(
+      'One-command full upgrade: package + guardian + runtime profiles, running-instance safe (issue #10)',
+    )
+    .option('--profile <name>', 'dsh profile to upgrade (default: dsh-lark)')
+    .option('--check', 'report installed vs latest versions and running state without changing anything')
+    .option('-y, --yes', 'skip the interactive confirmation')
+    .option('--no-guardian', 'do not install / upgrade the safety-net guardian')
+    .option('--restart', 'restart the guardian service and (managed) dsh profile after upgrading')
+    .option('--rollback', 'reinstall the previously recorded version')
+    .option('--force', 'proceed with the running package version when npm latest is unreachable')
+    .option('--package <spec>', 'explicit name@version spec (advanced)')
+    .action(async (opts: {
+      profile?: string;
+      check?: boolean;
+      yes?: boolean;
+      guardian?: boolean;
+      restart?: boolean;
+      rollback?: boolean;
+      force?: boolean;
+      package?: string;
+    }) => {
+      await runUpgrade({
+        ...(opts.profile ? { profile: opts.profile } : {}),
+        check: opts.check === true,
+        yes: opts.yes === true,
+        guardian: opts.guardian !== false,
+        restart: opts.restart === true,
+        rollback: opts.rollback === true,
+        force: opts.force === true,
+        ...(opts.package ? { packageSpec: opts.package } : {}),
+      });
     });
 
   addBotOptions(
