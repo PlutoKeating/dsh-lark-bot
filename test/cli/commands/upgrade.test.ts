@@ -36,6 +36,7 @@ interface Harness {
   installGuardian: ReturnType<typeof vi.fn>;
   restartGuardian: ReturnType<typeof vi.fn>;
   restartProfile: ReturnType<typeof vi.fn>;
+  repairRuntime: ReturnType<typeof vi.fn>;
   runDoctor: ReturnType<typeof vi.fn>;
 }
 
@@ -48,6 +49,10 @@ function makeHarness(): Harness {
   });
   const restartGuardian = vi.fn().mockResolvedValue({ ok: true, message: 'guardian 已重启' });
   const restartProfile = vi.fn().mockResolvedValue({ ok: true, message: 'profile 已重启' });
+  const repairRuntime = vi.fn().mockResolvedValue([
+    { profile: 'dsh-lark-sdk', existed: true, repaired: true, ok: true },
+    { profile: 'dsh-lark-acp', existed: false, repaired: false, ok: true },
+  ]);
   const runDoctor = vi.fn().mockResolvedValue({
     lines: ['dsh-lark-bot doctor', 'version: 0.11.0', 'config: missing'],
     critical: false,
@@ -62,6 +67,7 @@ function makeHarness(): Harness {
     installGuardian,
     restartGuardian,
     restartProfile,
+    repairRuntime,
     runDoctor,
   };
 }
@@ -81,6 +87,7 @@ async function runWith(
     installGuardianFn: harness.installGuardian,
     restartGuardianFn: harness.restartGuardian,
     restartProfileFn: harness.restartProfile,
+    repairRuntimeFn: harness.repairRuntime,
     runDoctorFn: harness.runDoctor,
     listProcessesFn: async () => [],
     ...options,
@@ -135,8 +142,12 @@ describe('dsh-lark-bot upgrade', () => {
     expect(harness.installGuardian).toHaveBeenCalledWith(
       expect.objectContaining({ dshProfile: 'dsh-lark' }),
     );
+    expect(harness.repairRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ dshHome: harness.dshHome }),
+    );
     const joined = harness.out.join('');
     expect(joined).toContain('✅ 包本体已更新到 0.12.0');
+    expect(joined).toContain('runtime profile dsh-lark-sdk: own-package 链接已修复');
     expect(joined).toContain('回滚命令：dsh-lark-bot upgrade --rollback');
 
     const state = await loadUpgradeState(harness.stateFile);
@@ -166,6 +177,7 @@ describe('dsh-lark-bot upgrade', () => {
     expect(harness.out.join('')).toContain('已是最新');
     expect(harness.pluginSpawn).not.toHaveBeenCalled();
     expect(harness.installGuardian).not.toHaveBeenCalled();
+    expect(harness.repairRuntime).not.toHaveBeenCalled();
   });
 
   it('aborts without --yes when confirmation is declined', async () => {
