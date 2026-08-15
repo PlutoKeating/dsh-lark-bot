@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -58,16 +58,7 @@ describe('ensureSdkProfile', () => {
           join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
           JSON.stringify({ name: SDK_SERVER_PACKAGE }),
         );
-        const ownDir = join(root, 'node_modules', own.name);
-        await mkdir(ownDir, { recursive: true });
-        await writeFile(
-          join(ownDir, 'package.json'),
-          JSON.stringify({
-            name: own.name,
-            version: '0.6.0',
-            dsh: { bundle: { patch: './cordis.patch.yml' } },
-          }),
-        );
+        await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
       },
     });
 
@@ -75,6 +66,48 @@ describe('ensureSdkProfile', () => {
     expect(result.created).toBe(true);
     expect(isSdkProfileReady(profileRoot)).toBe(true);
     expect(await ensureSdkProfile({ home })).toMatchObject({ ok: true, created: false });
+  });
+
+  it('repairs a stale own-package link after an upgrade', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-stale-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const own = ownPackageInfo();
+
+    // Simulate an old install: a different copy that still declares our name
+    // and bundle patch, plus the server plugin and profile skeleton.
+    await mkdir(join(profileRoot, 'node_modules', own.name), { recursive: true });
+    await writeFile(
+      join(profileRoot, 'node_modules', own.name, 'package.json'),
+      JSON.stringify({
+        name: own.name,
+        version: '0.9.0',
+        dsh: { bundle: { patch: './cordis.patch.yml' } },
+      }),
+    );
+    await mkdir(join(profileRoot, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), {
+      recursive: true,
+    });
+    await writeFile(
+      join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE }),
+    );
+    await writeFile(join(profileRoot, 'package.json'), '{}', 'utf8');
+    await writeFile(join(profileRoot, 'cordis.yml'), '[]\n', 'utf8');
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), '[]\n', 'utf8');
+
+    expect(isSdkProfileReady(profileRoot)).toBe(false);
+
+    const result = await ensureSdkProfile({
+      home,
+      install: async (root) => {
+        await rm(join(root, 'node_modules', own.name), { recursive: true, force: true });
+        await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.created).toBe(true);
+    expect(isSdkProfileReady(profileRoot)).toBe(true);
   });
 
   it('reports install failures', async () => {

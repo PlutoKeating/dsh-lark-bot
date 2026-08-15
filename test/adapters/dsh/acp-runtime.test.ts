@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,16 +25,7 @@ function installPlugin(root: string) {
     const pluginRoot = join(root, 'node_modules', ...ACP_PACKAGE.split('/'));
     await mkdir(pluginRoot, { recursive: true });
     await writeFile(join(pluginRoot, 'package.json'), JSON.stringify({ name: ACP_PACKAGE }));
-    const ownDir = join(root, 'node_modules', own.name);
-    await mkdir(ownDir, { recursive: true });
-    await writeFile(
-      join(ownDir, 'package.json'),
-      JSON.stringify({
-        name: own.name,
-        version: '0.6.0',
-        dsh: { bundle: { patch: './cordis.patch.yml' } },
-      }),
-    );
+    await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
   };
 }
 
@@ -91,6 +82,46 @@ describe('ensureAcpProfile', () => {
       provider: 'deepseek-official',
       model: 'deepseek-v4-flash',
       install: async () => undefined,
+    });
+    expect(result.ok).toBe(true);
+    expect(isAcpProfileReady(root)).toBe(true);
+  });
+
+  it('repairs a stale own-package link after an upgrade', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-acp-stale-'));
+    tempDirs.push(home);
+    const root = acpProfileRoot(home, DEFAULT_ACP_PROFILE);
+    const own = ownPackageInfo();
+
+    // Old copy that declares our name and bundle patch but is not the running
+    // package root — exactly the upgrade scenario that broke v0.9.0 installs.
+    await mkdir(join(root, 'node_modules', ...ACP_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE }),
+    );
+    await mkdir(join(root, 'node_modules', own.name), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules', own.name, 'package.json'),
+      JSON.stringify({
+        name: own.name,
+        version: '0.9.0',
+        dsh: { bundle: { patch: './cordis.patch.yml' } },
+      }),
+    );
+    await writeFile(join(root, 'package.json'), '{}', 'utf8');
+    await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
+
+    expect(isAcpProfileReady(root)).toBe(false);
+
+    const result = await ensureAcpProfile({
+      home,
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      install: async (installRoot) => {
+        await rm(join(installRoot, 'node_modules', own.name), { recursive: true, force: true });
+        await symlink(own.root, join(installRoot, 'node_modules', own.name), 'dir');
+      },
     });
     expect(result.ok).toBe(true);
     expect(isAcpProfileReady(root)).toBe(true);

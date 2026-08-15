@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findOwnPackageRoot } from '../../../src/adapters/dsh/own-package.js';
+import {
+  findOwnPackageRoot,
+  ownPackageInfo,
+} from '../../../src/adapters/dsh/own-package.js';
 import { isSdkProfileReady } from '../../../src/adapters/dsh/sdk-runtime.js';
 import { sdkProfileRoot } from '../../../src/adapters/dsh/sdk-runtime.js';
 
@@ -60,20 +63,11 @@ describe('runtime profile package link readiness', () => {
 
   it('accepts a link whose target is the real package', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-link-'));
-    const pkgRoot = await mkdtemp(join(tmpdir(), 'dsh-link-pkg-'));
-    tempDirs.push(home, pkgRoot);
-    await writeFile(
-      join(pkgRoot, 'package.json'),
-      JSON.stringify({
-        name: 'dsh-lark-bot',
-        version: '0.6.0',
-        dsh: { bundle: { patch: './cordis.patch.yml' } },
-      }),
-    );
+    tempDirs.push(home);
     const profileRoot = sdkProfileRoot(home, 'dsh-lark');
     const nodeModules = join(profileRoot, 'node_modules');
     await mkdir(nodeModules, { recursive: true });
-    await symlink(pkgRoot, join(nodeModules, 'dsh-lark-bot'), 'dir');
+    await symlink(ownPackageInfo().root, join(nodeModules, 'dsh-lark-bot'), 'dir');
     await writeFile(join(profileRoot, 'package.json'), '{}', 'utf8');
     await writeFile(join(profileRoot, 'cordis.yml'), '[]\n', 'utf8');
     await writeFile(join(profileRoot, 'cordis.patch.yml'), '[]\n', 'utf8');
@@ -82,5 +76,31 @@ describe('runtime profile package link readiness', () => {
     });
 
     expect(isSdkProfileReady(profileRoot)).toBe(true);
+  });
+
+  it('rejects a stale link to an older copy with the same name and patch', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-link-'));
+    const staleRoot = await mkdtemp(join(tmpdir(), 'dsh-link-stale-'));
+    tempDirs.push(home, staleRoot);
+    await writeFile(
+      join(staleRoot, 'package.json'),
+      JSON.stringify({
+        name: 'dsh-lark-bot',
+        version: '0.9.0',
+        dsh: { bundle: { patch: './cordis.patch.yml' } },
+      }),
+    );
+    const profileRoot = sdkProfileRoot(home, 'dsh-lark');
+    const nodeModules = join(profileRoot, 'node_modules');
+    await mkdir(nodeModules, { recursive: true });
+    await symlink(staleRoot, join(nodeModules, 'dsh-lark-bot'), 'dir');
+    await writeFile(join(profileRoot, 'package.json'), '{}', 'utf8');
+    await writeFile(join(profileRoot, 'cordis.yml'), '[]\n', 'utf8');
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), '[]\n', 'utf8');
+    await mkdir(join(nodeModules, '@deepseek-ai', 'dsh-sdk-jsonrpc-server'), {
+      recursive: true,
+    });
+
+    expect(isSdkProfileReady(profileRoot)).toBe(false);
   });
 });

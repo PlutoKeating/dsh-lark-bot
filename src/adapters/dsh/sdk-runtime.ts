@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
+import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
@@ -126,13 +127,18 @@ export function isSdkProfileReady(profileRoot: string): boolean {
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
     sdkServerInstalled(profileRoot) &&
-    ownPackageLinked(profileRoot, own.name)
+    ownPackageLinked(profileRoot, own)
   );
 }
 
-/** True when the profile's node_modules link resolves to this package. */
-function ownPackageLinked(profileRoot: string, ownName: string): boolean {
-  const linkPath = join(profileRoot, 'node_modules', ownName);
+/**
+ * True when the profile's node_modules link resolves to THIS package root.
+ * A stale link to an older published copy passes the name/patch checks but
+ * would boot a broken entry set (e.g. the missing `ask` artifact of v0.9.0),
+ * so the resolved real path must equal the running package root.
+ */
+function ownPackageLinked(profileRoot: string, own: OwnPackageInfo): boolean {
+  const linkPath = join(profileRoot, 'node_modules', own.name);
   try {
     const real = realpathSync(linkPath);
     const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8')) as {
@@ -140,8 +146,9 @@ function ownPackageLinked(profileRoot: string, ownName: string): boolean {
       dsh?: { bundle?: { patch?: unknown } };
     };
     return (
-      pkg.name === ownName &&
-      pkg.dsh?.bundle?.patch !== undefined
+      pkg.name === own.name &&
+      pkg.dsh?.bundle?.patch !== undefined &&
+      real === realpathSync(own.root)
     );
   } catch {
     return false;
