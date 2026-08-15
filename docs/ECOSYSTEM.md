@@ -103,7 +103,7 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 - 包名使用**自有命名空间**（`dsh-lark-bot`），不占用 `@dsh-external/*` 等组织或官方保留命名空间。
 - 已收录：`AdamPlatin123/awesome-dsh-plugins`（收录条目 v0.8.0 更新
   [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 已合并，运行级
-  实测 ✅；榜单行同步与 agent-test 名称异常跟进见
+  实测 ✅；v0.10.1 同步、榜单行同步与 agent-test 名称异常跟进见
   [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139)）。
 - 其他平台（dshfind / omdsh-dev/community）的收录与更新状态见根目录
   `README.md`「社区收录情况」。
