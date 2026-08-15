@@ -38,6 +38,10 @@ export function matchProfileProcess(
   cmdline: string,
   dshProfile: string,
 ): boolean {
+  // `dsh plugin --profile <name> ...` is a short-lived package-management
+  // invocation, not a profile boot; it must never count as the profile being
+  // up (it would flip profileSeenUp while the bridge never actually ran).
+  if (/(?:^|\s)plugin(?:\s|$)/.test(cmdline)) return false;
   return hasProfileFlag(cmdline, dshProfile) && looksLikeDshProcess(cmdline);
 }
 

@@ -13,6 +13,10 @@ describe('guardian process watch', () => {
     expect(matchProfileProcess('dsh --profile=other', 'dsh-lark')).toBe(false);
     expect(matchProfileProcess('dsh --profile dsh-lark', 'dsh-lark')).toBe(true);
     expect(matchProfileProcess('node something.js --profile dsh-lark', 'dsh-lark')).toBe(false);
+    expect(
+      matchProfileProcess('node /x/@deepseek-ai/dsh/lib/bin.js plugin --profile dsh-lark add pkg', 'dsh-lark'),
+    ).toBe(false);
+    expect(matchProfileProcess('dsh plugin --profile dsh-lark add dsh-lark-bot', 'dsh-lark')).toBe(false);
   });
 
   it('captures command output', async () => {
