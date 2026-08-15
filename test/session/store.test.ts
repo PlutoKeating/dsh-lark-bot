@@ -31,6 +31,10 @@ describe('SessionStore', () => {
         { role: 'assistant', content: 'hi there' },
       ]);
       expect(reloaded.resumeFor('chat-b', '/tmp/project-a')).toBeUndefined();
+      // fork schedules an asynchronous persist; flush it before the temp dir
+      // is removed so writeFileAtomic's temp file cannot race with rmdir
+      // (ENOTEMPTY flake under load).
+      await reloaded.flush();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
