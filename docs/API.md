@@ -437,7 +437,8 @@ export interface Logger {
   （`dsh --profile <name>`）。默认 profile 名 `dsh-lark`。
 - `dsh-lark-bot upgrade [--profile <name>] [--check] [--yes] [--no-guardian] [--restart]
   [--rollback] [--force] [--package <spec>]`：一行命令彻底升级（issue #10）——检测已装 /
-  运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → 幂等重装并
+  运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → **修复
+  `dsh-lark-sdk` / `dsh-lark-acp` runtime profile 的 own-package 链接** → 幂等重装并
   重启 guardian 服务 → `doctor` 验证。运行中实例默认只提示重启命令（不中断会话）；
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；

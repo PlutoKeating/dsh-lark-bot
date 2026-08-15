@@ -343,7 +343,9 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - `--check`：只报告版本与运行状态，零改动；
 - `--rollback`：回滚到上一次升级前的版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
 - `--force`：无法访问 npm（离线）时按当前运行版本重装；
-- `--no-guardian`：跳过守护升级。
+- `--no-guardian`：跳过守护升级；
+- **runtime profile 一致性修复**：升级后自动把 `dsh-lark-sdk` / `dsh-lark-acp` 的
+  own-package 链接重指到新版本（避免下次启动重新预置）。
 
 无需交互确认时加 `--yes`（非交互环境不带 `--yes` 会安全中止）。其余方式：
 
