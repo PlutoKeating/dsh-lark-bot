@@ -86,7 +86,7 @@ type AgentEvent =
 | `src/adapters/index.ts` | `buildAgentAdapter(env, prefs)` 按 `DSH_LARK_ADAPTER` 构建 |
 | `src/adapters/dsh/sdk-adapter.ts` | `SdkDshAdapter`（默认）：`DeepSeekHarness` runtime 池 |
 | `src/adapters/dsh/sdk-translate.ts` | SDK `session.event` → `AgentEvent`（chunk 流式翻译） |
-| `src/adapters/dsh/sdk-runtime.ts` | `ensureSdkProfile` / `resolveSdkLaunch`（`dsh-lark` profile） |
+| `src/adapters/dsh/sdk-runtime.ts` | `ensureSdkProfile` / `resolveSdkLaunch`（`dsh-lark-sdk` profile） |
 | `src/adapters/dsh/acp-adapter.ts` | `AcpDshAdapter`：ACP client + `session/request_permission` |
 | `src/adapters/dsh/acp-runtime.ts` | `ensureAcpProfile` / `resolveAcpLaunch`（`dsh-lark-acp` profile） |
 | `src/adapters/dsh/event-channel.ts` | 有序事件队列（流式事件中转） |
@@ -143,7 +143,7 @@ SDK / ACP 模式需要对应 runtime profile：
 
 | 模式 | profile | 组合 |
 | --- | --- | --- |
-| sdk | `~/.dsh/profiles/dsh-lark` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay |
+| sdk | `~/.dsh/profiles/dsh-lark-sdk` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay |
 | acp | `~/.dsh/profiles/dsh-lark-acp` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-acp` overlay |
 
 `ensureSdkProfile` / `ensureAcpProfile`（`src/adapters/dsh/sdk-runtime.ts` /

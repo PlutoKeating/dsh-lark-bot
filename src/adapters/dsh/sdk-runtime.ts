@@ -10,7 +10,7 @@ import { ownPackageInfo } from './own-package.js';
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
 export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
 export const SDK_BASE_BUNDLE = '@deepseek-ai/dsh-base';
-export const DEFAULT_SDK_PROFILE = 'dsh-lark';
+export const DEFAULT_SDK_PROFILE = 'dsh-lark-sdk';
 
 export interface SdkRuntimeOptions {
   /** OS home directory used to resolve the shared dsh installation. */

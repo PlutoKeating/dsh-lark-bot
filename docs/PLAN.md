@@ -133,7 +133,7 @@
 | --- | --- | --- |
 | P0-1 | 验证 npm 依赖链（`dsh-type-meta` 404 已解除） | registry 实测通过 ✅ |
 | P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
-| P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
+| P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark-sdk` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
 | P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
 | P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
 | P0-6 | 接线：`DSH_LARK_ADAPTER=sdk\|acp\|headless`（默认 sdk）、`start.ts` / `doctor` / `.env.example` | typecheck / test / build 通过 ✅ |

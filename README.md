@@ -369,7 +369,7 @@ tasks and session archival.
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
   token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
-  子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark`（或 `dsh-lark-acp`）创建 runtime profile。
+  子进程 fallback。首次启动自动在 `~/.dsh/profiles/dsh-lark-sdk`（或 `dsh-lark-acp`）创建 runtime profile。
 
 - **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (last verified 2026-08-15: SDK JSON-RPC / ACP
   runtime handshake + real streaming task verification), connected through the official
@@ -383,7 +383,7 @@ tasks and session archival.
   native session continuation and token-level streaming events); `DSH_LARK_ADAPTER=acp` switches
   to the official **ACP server** (approval cards); `headless` keeps the legacy subprocess
   fallback. On first start the bot creates the runtime profile at
-  `~/.dsh/profiles/dsh-lark` (or `dsh-lark-acp`).
+  `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## 已知限制 | Known limitations
 

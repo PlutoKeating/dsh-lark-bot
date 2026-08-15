@@ -89,7 +89,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
 
 默认 backend 为官方 `@deepseek-ai/dsh-sdk-client`（`DSH_LARK_ADAPTER=sdk`）：首次启动会自动在
-`~/.dsh/profiles/dsh-lark` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +
+`~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +
 `dsh-sdk-jsonrpc-server`），需要本机可用 `pnpm`。审批场景可切换
 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，审批卡通过 ACP
 `session/request_permission` 一问一答）；`headless` 保留旧版子进程 fallback。
@@ -145,7 +145,7 @@ dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
 
-- `dsh-lark`：SDK JSON-RPC runtime（`DSH_LARK_ADAPTER=sdk`，默认）
+- `dsh-lark-sdk`：SDK JSON-RPC runtime（`DSH_LARK_ADAPTER=sdk`，默认）
 - `dsh-lark-acp`：ACP runtime（`DSH_LARK_ADAPTER=acp`，审批）
 - `dsh-lark-safe`：仅核心安全 profile（`/safemode` 时由守护创建，`dsh-base` + `dsh-headless`）
 

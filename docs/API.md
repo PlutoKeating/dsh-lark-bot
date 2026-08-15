@@ -330,7 +330,7 @@ export async function buildAgentAdapter(
 ```
 
 - `sdk`（默认）：`SdkDshAdapter`（`src/adapters/dsh/sdk-adapter.ts`），先 `ensureSdkProfile`
-  创建 `~/.dsh/profiles/dsh-lark`（`dsh-base` + `dsh-sdk-jsonrpc-server`），按 cwd 管理
+  创建 `~/.dsh/profiles/dsh-lark-sdk`（`dsh-base` + `dsh-sdk-jsonrpc-server`），按 cwd 管理
   `DeepSeekHarness` runtime 池，`session(id)` 原生续跑；`/stop` 关闭对应 runtime。
 - `acp`：`AcpDshAdapter`（`src/adapters/dsh/acp-adapter.ts`），先 `ensureAcpProfile` 创建
   `~/.dsh/profiles/dsh-lark-acp`（`dsh-base` + `dsh-acp`），以 `ClientSideConnection` 连接
