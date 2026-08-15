@@ -740,6 +740,18 @@ and relaunches the full profile on `/safemode exit`.
 - dshfind data-refresh request (incl. fixing the entry name): [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed, detail page updated
 - omdsh-dev/community listing update: [Discussion #12 update comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998) — ✅ posted
 
+**亮点跟进 / Highlights follow-ups**（六项独家能力与 issue #6 设计实现）：
+
+- awesome-dsh-plugins 榜单行同步（仓库描述 → v0.8.0）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交
+- dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交
+- omdsh 六项独家亮点补充（含 Guardian 设计实现）：[Discussion #12 亮点评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18026370) — 📨 已提交
+
+**Highlights follow-ups** (six exclusive capabilities & the issue #6 design):
+
+- awesome-dsh-plugins leaderboard row sync (repo description → v0.8.0) & agent-test name anomaly: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 submitted
+- dshfind detail page: add the in-chat model/key management highlight: [#2 follow-up](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 submitted
+- omdsh six-exclusive-highlights summary (incl. the Guardian design): [Discussion #12 highlights comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18026370) — 📨 submitted
+
 ## 免责声明 | Disclaimer
 
 > [!NOTE]
