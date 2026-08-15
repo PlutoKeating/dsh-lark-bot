@@ -25,6 +25,7 @@ import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { StreamingChannel } from './types.js';
 import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
+import { archiveSessionDir, SESSION_BROKEN_RE, SESSION_CORRUPT_RE } from '../session/heal.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -119,6 +120,37 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           for await (const event of run.events) {
             if (timedOut) return;
             state = applyEvent(state, event, stopRequested);
+            // Self-heal: a broken-session error must not destroy the log. Only
+            // genuinely corrupt logs (seq gap / unparsable) are archived; the
+            // id-collision class just resets the chat mapping and keeps the
+            // persisted history recoverable.
+            if (
+              event.type === 'error' &&
+              event.terminationReason === 'failed' &&
+              SESSION_BROKEN_RE.test(event.message)
+            ) {
+              const brokenId = input.sessions.getRaw(input.scope)?.sessionId;
+              if (brokenId !== undefined) {
+                const corruptLog = SESSION_CORRUPT_RE.test(event.message);
+                if (corruptLog) {
+                  try {
+                    await archiveSessionDir(brokenId);
+                  } catch {
+                    // best effort
+                  }
+                }
+                input.sessions.clear(input.scope);
+                await input.channel.sendMarkdown(
+                  input.chatId,
+                  corruptLog
+                    ? '⚠️ 会话记录损坏，已自动归档并重置。请重新发送你的消息。'
+                    : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+                  { ...replyOptions },
+                );
+                void run.stop();
+                return;
+              }
+            }
             if (event.type === 'final_text') {
               assistantOutput = event.content;
             } else if (event.type === 'text') {
@@ -198,8 +230,31 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   } catch (error) {
     log.fail('run-flow', error, { scope: input.scope, runId });
     state = markInterrupted(state);
+    const runErrorText = errorMessage(error);
+    if (SESSION_BROKEN_RE.test(runErrorText)) {
+      const brokenSessionId = input.sessions.getRaw(input.scope)?.sessionId;
+      if (brokenSessionId !== undefined) {
+        const corruptLog = SESSION_CORRUPT_RE.test(runErrorText);
+        if (corruptLog) {
+          try {
+            await archiveSessionDir(brokenSessionId);
+          } catch {
+            // best effort
+          }
+        }
+        input.sessions.clear(input.scope);
+        await input.channel.sendMarkdown(
+          input.chatId,
+          corruptLog
+            ? '⚠️ 会话记录损坏，已自动归档并重置。请重新发送你的消息。'
+            : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+          { ...replyOptions },
+        );
+        return;
+      }
+    }
     try {
-      await input.channel.sendMarkdown(input.chatId, `⚠️ agent 运行失败：${errorMessage(error)}`, {
+      await input.channel.sendMarkdown(input.chatId, `⚠️ agent 运行失败：${runErrorText}`, {
         ...replyOptions,
       });
     } catch {
