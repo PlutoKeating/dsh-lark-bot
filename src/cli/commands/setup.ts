@@ -34,7 +34,15 @@ export interface SetupOptions {
 export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const profile = options.profile ?? 'dsh-lark';
   const own = ownPackageInfo();
-  const packageSpec = options.packageSpec ?? process.env.DSH_LARK_SETUP_PACKAGE ?? own.name;
+  // Pin the running package's exact version. Registry installs MUST NOT rely
+  // on pnpm's bare-name `latest` resolution: on some environments it resolves
+  // an arbitrarily old published version (observed: dsh-lark-bot -> 0.5.1 even
+  // though latest is 0.9.x), which is not even a dsh bundle and silently
+  // breaks the profile. An explicit name@version is deterministic.
+  const packageSpec =
+    options.packageSpec ??
+    process.env.DSH_LARK_SETUP_PACKAGE ??
+    (own.version ? `${own.name}@${own.version}` : own.name);
   const dshHome = options.dshHome ?? resolveDshHome(homedir(), process.env);
   const bin = options.bin ?? discoverDshBin(homedir(), process.env);
   if (!bin) {

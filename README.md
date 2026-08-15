@@ -87,12 +87,14 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
 `setup` 会自动完成：发现本机 dsh → 预批准 pnpm 构建策略 → 执行标准的
-`dsh plugin --profile dsh-lark add dsh-lark-bot`，并**默认同时安装「安全网守护」**——系统级
+`dsh plugin --profile dsh-lark add dsh-lark-bot@<版本>`（版本号由当前包固定，避免 pnpm
+裸名解析到旧版本），并**默认同时安装「安全网守护」**——系统级
 常驻、dsh 全部下线后仍保留飞书救援入口（核心能力之一，见下文「安全网守护」一节）。
 一条命令即完成全部安装。
 
 `setup` automatically: locates your dsh install → pre-approves pnpm's build policy → runs the
-standard `dsh plugin --profile dsh-lark add dsh-lark-bot`, and **also installs the safety-net
+standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running
+package so pnpm never resolves an outdated bare-name release), and **also installs the safety-net
 guardian by default** — a system-level resident process that keeps the Feishu rescue entrance
 alive even when dsh is fully down (one of the core features; see "Safety-net guardian" below).
 One command installs everything.

@@ -29,6 +29,7 @@ describe('ownPackageInfo', () => {
     const info = findOwnPackageRoot(dist);
     expect(info.name).toBe('dsh-lark-bot');
     expect(info.root).toBe(root);
+    expect(info.version).toBe('0.6.0');
   });
 
   it('resolves the package root from unbundled (dist/adapters/dsh) depth', async () => {

@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 export interface OwnPackageInfo {
   name: string;
   root: string;
+  /** Version from the resolved package.json (absent for the cwd fallback). */
+  version?: string;
 }
 
 /**
@@ -33,9 +35,12 @@ export function findOwnPackageRoot(startDir: string): OwnPackageInfo {
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
         name?: unknown;
+        version?: unknown;
       };
       if (typeof pkg.name === 'string' && isOwnPackageName(pkg.name)) {
-        return { name: pkg.name, root: dir };
+        const info: OwnPackageInfo = { name: pkg.name, root: dir };
+        if (typeof pkg.version === 'string') info.version = pkg.version;
+        return info;
       }
     } catch {
       // Not a readable manifest at this level; keep walking upward.
