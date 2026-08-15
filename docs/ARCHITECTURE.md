@@ -44,6 +44,7 @@
 │  · dsh-sdk（官方 SDK client，默认）         │
 │  · dsh-acp（ACP 审批通道，可选）            │
 │  · dsh-headless（legacy fallback）          │
+│  · dsh-web（本地 dsh web agent，单写者）    │
 └──────────────────────────────────────────┘
         │
         ▼
@@ -81,7 +82,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。
 2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端。默认走官方
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
-   `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback。
+   `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
+   `DSH_LARK_ADAPTER=web` 走本地 dsh web agent（`session.prompt` + `/api/events.mux`，单写者，根治双写）。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约，dsh 漂移只影响 `src/adapters/dsh/`。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
 4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写
