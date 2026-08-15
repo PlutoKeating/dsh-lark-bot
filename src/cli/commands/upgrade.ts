@@ -46,6 +46,10 @@ import {
   fetchNpmLatestVersion,
   packageSpecFor,
 } from '../../upgrade/versions.js';
+import {
+  repairRuntimeProfiles,
+  type RuntimeProfileState,
+} from '../../upgrade/runtime.js';
 import { runDoctorChecks } from './doctor.js';
 import { approveBuilds, runDshPlugin } from './setup.js';
 
@@ -82,6 +86,7 @@ export interface UpgradeOptions {
   restartProfileFn?: typeof restartProfileProcess;
   pluginSpawnFn?: typeof runDshPlugin;
   runDoctorFn?: typeof runDoctorChecks;
+  repairRuntimeFn?: typeof repairRuntimeProfiles;
   listProcessesFn?: typeof import('../../guardian/process.js').listProcesses;
   stateFile?: string;
 }
@@ -299,6 +304,29 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     }
     await (options.pluginSpawnFn ?? runDshPlugin)(bin, profile, target.spec);
     write(out, `✅ 包本体已更新到 ${target.version}。\n`);
+
+    // 1b. Runtime profiles (dsh-lark-sdk / dsh-lark-acp): after a package
+    //     change their own-package link points at the old root; relink to the
+    //     running package so the next boot does not need to re-provision.
+    const repair = options.repairRuntimeFn ?? repairRuntimeProfiles;
+    const runtimeStates: RuntimeProfileState[] = await repair({
+      dshHome,
+      env: process.env,
+    });
+    for (const state of runtimeStates) {
+      if (!state.existed) continue;
+      if (state.ok) {
+        write(
+          out,
+          `runtime profile ${state.profile}: ${state.repaired ? 'own-package 链接已修复' : '就绪'}。\n`,
+        );
+      } else {
+        write(
+          out,
+          `runtime profile ${state.profile}: 需要重新预置（下次启动会自动自愈；也可运行 dsh-lark-bot doctor 检查）。\n`,
+        );
+      }
+    }
   } else {
     write(out, `包本体无需变更（已安装 ${installedVersion}）。\n`);
   }
