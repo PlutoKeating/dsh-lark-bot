@@ -128,24 +128,25 @@ Agent 在本地完成 commit后，是否 push、何时 push、push 到哪个远�
 
 ## 4. 分支工作流
 
-本项目采用面向多人协作的标准环境流：
+本项目采用面向多人协作的标准环境流（自 v0.11.0 起启用的 **dev → staging → production** 方案）：
 
 ```text
-personal feature branch -> staging branch -> production branch
+feature/<issue>-<name>（基于 staging）→ staging（集成验证）→ main（生产发布）
 ```
 
 Agent 必须默认理解以下含义：
 
-- `feature/<name>` 或个人特性分支：开发和修复的工作区。
-- `staging`：集成验证分支，对应预生产或测试环境。
-- `production`：生产发布分支，只接受已经验证并批准的变更。
+- `feature/<issue>-<name>`：特性 / 开发分支，**基于 `staging` 开出**，一切改动的工作区。
+- `staging`：集成验证分支，对应预生产或测试环境；特性分支验证通过后**立即合并**（无需人工审批）。
+- `main`：生产发布分支，只接受已经验证并批准（人类开发者显式许可）的变更；发布 tag 从 `main` 打出。
 
 Agent 的工作边界：
 
-- 可以在当前本地分支上修改、暂存、提交。
-- 不得自行把变更合并到 `staging` 或 `production`。
-- 不得自行创建远程分支或推送远程。
-- 如果用户要求涉及 `staging` 或 `production`，必须先说明风险，并只在本地准备变更。
+- 可以在 `feature/*` 分支上修改、暂存、提交，并可推送 `feature/*` 与 `staging` 分支（见 §3.3）。
+- 工作完毕且本地验证通过后，可**立即把 `feature/*` 合并到 `staging`**，无需人工审批。
+- **合并到 `main` 或推送 `main` 必须经过人类开发者显式许可**；授权不清晰时立即停止并询问。
+- 严禁对任何远程分支执行破坏性推送（`--force` / `--force-with-lease`）。
+- 涉及 `main`（生产）的操作必须先说明风险，并只在本地准备变更、等待授权。
 
 ---
 
