@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/runtime-Node.js%20%E2%89%A5%2022-339933" alt="Node">
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
   <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
+  <a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
 </p>
 
 <br>
@@ -23,6 +24,49 @@
 *Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace — drive your local coding agent from mobile, group chats and topics, and fold conversations, tasks, cards and **project workspaces** into one collaborative flow.*
 
 </div>
+
+<div align="center">
+
+<a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/card/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind" width="440"></a>
+
+</div>
+
+---
+
+## 项目介绍 | What & Why
+
+**用在什么场景？** 你在飞书 / Lark（私聊、群聊、话题）里指挥本机 DeepSeek Harness（`dsh`）
+coding agent：发消息就收流式卡片与工具调用过程，把项目工作区、并行任务、会话归档都收进同一
+个协作流。适合需要多项目隔离、角色分工、并行任务与故障自愈的开发者与团队。
+
+**Where does it fit?** Drive your local DeepSeek Harness (`dsh`) coding agent from Feishu /
+Lark — DMs, group chats and topics — with streaming cards, isolated project workspaces,
+parallel tasks, session archival and self-healing when things break.
+
+**功能亮点（以下六项为 dsh-lark-bot 全网独有组合）| Highlights (exclusive to dsh-lark-bot)**：
+
+- 🆘 **Guardian 安全网守护 —— “永远叫得应”**：DSH 进程一崩，其他方案的机器人就变成死号，只能回
+  服务器手动重启；dsh-lark-bot 的守护进程在 DSH 崩溃后**仍然会在飞书回复你**——告诉你引擎已挂、
+  可进入仅核心安全模式，直接在飞书对话里发控制信号把它重启。**唯一“出故障时用户不会失联”的项目。**
+  *When DSH crashes, this bot still answers in Feishu: enter core-only safe mode and send a
+  control signal to restart it. The only project where users never lose contact.*
+- 👥 **多角色 Agent —— “一个机器人，一整个团队”**：在飞书里用 `/role` 切换或指派 PM / 开发 /
+  文档等角色，每个角色有持久化的人设、模型偏好与规则。
+  *Switch or assign PM / dev / docs personas in chat with `/role` — each with its own
+  persisted persona. One bot, a whole team.*
+- ⚡ **并行多任务 —— “不用排队”**：同一群里可以**同时跑多个任务**，各自会话隔离；其他方案同聊
+  串行，上一个没跑完下一个只能等。
+  *Run multiple tasks in the same chat simultaneously with isolated sessions — no queueing.*
+- 🗂 **会话归档与清理 —— “会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留
+  策略；长期使用也不会越积越多。
+  *Archive old tasks and auto-prune with retention policies — your session list stays clean.*
+- 📣 **跨会话主动通知 + @人 —— “活干完了它会来找你”**：Agent 在 A 群跑完任务，可以**主动发消息到
+  B 群或私聊并 @ 你**；而不是“你问它答”。
+  *Agents proactively report to other chats or DMs and @mention you when work finishes.*
+- 🔑 **对话内管理模型和密钥 —— “不用离开飞书”**：`/providers` `/provider` `/key` 直接在聊天里
+  查看、切换供应商、热更新密钥，全程闭环。
+  *View providers, switch vendors and hot-update API keys entirely in chat — no server-side
+  edits.*
 
 ---
 
@@ -680,21 +724,21 @@ and relaunches the full profile on `/safemode exit`.
 
 | 平台 Platform | 状态 Status | 说明 Notes |
 | :--- | :--- | :--- |
-| [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`，2026-08-14 agent 实测通过；v0.8.0 更新已提交（见下文链接）<br>Shown as `✅ 运行级可用` in the community leaderboard; agent-tested on 2026-08-14; v0.8.0 update submitted (see below) |
-| [dshfind](https://github.com/hikariming/dshfind) | ✅ 已收录（自动聚合）<br>Listed (auto-aggregated) | 插件市场从 GitHub `dsh-plugin` topic 自动聚合；本仓库已带该 topic，刷新后展示最新版本与数据<br>Marketplace auto-aggregates from the GitHub `dsh-plugin` topic; this repo carries the topic, so the latest version shows after the next refresh |
+| [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`，2026-08-14 agent 实测通过；收录条目已更新至 v0.8.0（[PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 已合并）<br>Shown as `✅ 运行级可用` in the community leaderboard; agent-tested on 2026-08-14; the v0.8.0 entry update ([PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127)) is merged |
+| [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页已上线<br>Listed · detail page live | 中英日韩四语详情页已上线（含安装命令与亮点），条目名称正常（[issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭）；顶部徽章 / 展示卡来自 dshfind<br>Four-language detail page is live (install command & highlights), entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); the header badge / card comes from dshfind |
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/12) | ✅ 已提交收录申请<br>Submission submitted | `[Plugin]` 收录申请（Discussion #12）已通过；v0.8.0 更新说明已发布在该讨论<br>`[Plugin]` submission (Discussion #12) accepted; v0.8.0 update posted there |
 
-**更新请求 / Update requests**：
+**更新请求进度 / Update request status**：
 
-- awesome-dsh-plugins 收录条目更新：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127)（v0.8.0 描述同步）
-- dshfind 数据刷新请求（含快照条目名称异常修正）：[#2](https://github.com/hikariming/dshfind/issues/2)
-- omdsh-dev/community 收录讨论更新：[Discussion #12 更新评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998)
+- awesome-dsh-plugins 收录条目更新：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并
+- dshfind 数据刷新请求（含条目名称异常修正）：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭，详情页已更新
+- omdsh-dev/community 收录讨论更新：[Discussion #12 更新评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998) — ✅ 已发布
 
 **Update requests**:
 
-- awesome-dsh-plugins entry refresh: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) (v0.8.0 description)
-- dshfind data-refresh request (incl. fixing the snapshot entry name): [#2](https://github.com/hikariming/dshfind/issues/2)
-- omdsh-dev/community listing update: [Discussion #12 update comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998)
+- awesome-dsh-plugins entry refresh: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged
+- dshfind data-refresh request (incl. fixing the entry name): [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed, detail page updated
+- omdsh-dev/community listing update: [Discussion #12 update comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998) — ✅ posted
 
 ## 免责声明 | Disclaimer
 
