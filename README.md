@@ -136,6 +136,7 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 | 命令 Command | 作用 Description |
 | --- | --- |
 | `/new` `/reset` | 开始新会话<br>Start a new session |
+| `/newg <群名>` | 自动新建群聊（拉你入群）并开新会话，当前会话保留<br>Auto-create a group chat (with you invited) and start a fresh session there; the current session is untouched |
 | `/cd <path>` | 切换工作目录并重置会话<br>Change working directory and reset the session |
 | `/ws list` | 查看命名工作空间<br>List named workspaces |
 | `/ws save <name>` | 保存当前工作空间<br>Save the current workspace |
@@ -169,6 +170,10 @@ Just send a normal message to the bot in Feishu to get started. Common commands:
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+
+**`/newg <群名>`**：通过飞书 API 自动新建一个私密群、把发送者拉入群，并回复群链接——在新群里发消息即为新 scope / 新会话，当前会话不受影响。需要应用具备 `im:chat` 与 `im:chat.members:write_only` 权限（在开发者后台「权限管理」申请）。
+
+**`/newg <group name>`**: auto-creates a private group via the Feishu API, invites the sender, and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes (apply in the developer console).
 
 同一 scope（私聊 / 群聊 / 话题）默认允许 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或
 `/concurrency` 调整）：连续发来的多条消息会以独立 run 并行推进，每个 run 使用独立的 dsh
