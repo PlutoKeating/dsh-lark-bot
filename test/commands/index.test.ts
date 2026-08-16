@@ -158,5 +158,69 @@ describe('command router', () => {
     expect(body).toContain('/provider');
     expect(body).toContain('/key');
     expect(body).toContain('/help');
+    expect(body).toContain('/newg');
+  });
+
+  it('/newg creates a group, invites the sender and replies with a link', async () => {
+    const createChat = vi.fn().mockResolvedValue({ chatId: 'oc_new_group' });
+    const ctx = makeContext({
+      senderId: 'ou_sender',
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        createChat,
+      } as unknown as CommandChannel,
+    });
+
+    const handled = await tryHandleCommand('/newg 项目A', ctx);
+
+    expect(handled).toBe(true);
+    expect(createChat).toHaveBeenCalledWith({
+      name: '项目A',
+      chatType: 'private',
+      chatMode: 'group',
+      inviteUserIds: ['ou_sender'],
+      userIdType: 'open_id',
+    });
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('项目A');
+    expect(body).toContain('oc_new_group');
+    expect(body).toContain('applink.feishu.cn/client/chat/open?chatId=oc_new_group');
+  });
+
+  it('/newg without a name prints usage', async () => {
+    const ctx = makeContext();
+    await tryHandleCommand('/newg', ctx);
+
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('用法');
+    expect(ctx.channel.createChat).toBeUndefined();
+  });
+
+  it('/newg reports missing channel support', async () => {
+    const ctx = makeContext({ senderId: 'ou_sender' });
+    await tryHandleCommand('/newg 项目A', ctx);
+
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('不支持');
+  });
+
+  it('/newg surfaces create failures', async () => {
+    const ctx = makeContext({
+      senderId: 'ou_sender',
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        createChat: vi.fn().mockRejectedValue(new Error('scope missing')),
+      } as unknown as CommandChannel,
+    });
+
+    await tryHandleCommand('/newg 项目A', ctx);
+
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('建群失败');
+    expect(body).toContain('scope missing');
   });
 });

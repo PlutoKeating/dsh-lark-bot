@@ -35,6 +35,15 @@ export interface CommandChannel {
     options?: SendOptions,
   ): Promise<void>;
   sendCard?(chatId: string, card: object): Promise<void>;
+  /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
+  createChat?(opts: {
+    name: string;
+    description?: string;
+    inviteUserIds?: string[];
+    userIdType?: 'open_id' | 'user_id' | 'union_id';
+    chatMode?: 'group';
+    chatType?: 'private' | 'public';
+  }): Promise<{ chatId: string }>;
 }
 
 export interface CommandContext {
@@ -75,6 +84,7 @@ const HELP = [
   '**dsh-lark-bot 命令**',
   '',
   '- `/new` `/reset` — 开始新会话',
+  '- `/newg <群名>` — 自动新建群聊（拉你入群）并开新会话，当前会话保留',
   '- `/cd <path>` — 切换工作目录并重置会话',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看当前状态',
@@ -115,6 +125,64 @@ async function handleNew(_args: string, ctx: CommandContext): Promise<void> {
     ctx,
     interrupted > 0 ? `已中断 ${String(interrupted)} 个任务并开始新会话。` : '已开始新会话。',
   );
+}
+
+const MAX_GROUP_NAME_LENGTH = 60;
+
+/** Open a chat via the Feishu applink (client-side deep link). */
+function groupAppLink(chatId: string): string {
+  return `https://applink.feishu.cn/client/chat/open?chatId=${encodeURIComponent(chatId)}`;
+}
+
+/**
+ * `/newg <群名>` — create a new group chat via the Feishu API, invite the
+ * requesting user, and reply with a link. Because each scope (chat) owns an
+ * independent session, chatting in the new group automatically starts a fresh
+ * session there while the current session stays untouched.
+ */
+async function handleNewGroup(args: string, ctx: CommandContext): Promise<void> {
+  const name = args.trim();
+  if (!name) {
+    await reply(ctx, '用法：`/newg <群名>` — 自动新建群聊并开始新会话');
+    return;
+  }
+  if (name.length > MAX_GROUP_NAME_LENGTH) {
+    await reply(
+      ctx,
+      `群名过长（上限 ${String(MAX_GROUP_NAME_LENGTH)} 字符，当前 ${String(name.length)}）。`,
+    );
+    return;
+  }
+  if (!ctx.channel.createChat) {
+    await reply(ctx, '当前渠道不支持自动建群。');
+    return;
+  }
+  if (!ctx.senderId) {
+    await reply(ctx, '无法识别发送者 open_id，不能自动建群。');
+    return;
+  }
+  try {
+    const { chatId } = await ctx.channel.createChat({
+      name,
+      chatType: 'private',
+      chatMode: 'group',
+      inviteUserIds: [ctx.senderId],
+      userIdType: 'open_id',
+    });
+    await reply(
+      ctx,
+      [
+        `✅ 已创建群聊：**${name}**`,
+        `- 群 ID：\`${chatId}\``,
+        `- 已将你加入群聊，新会话将在群里自动开始（当前会话不受影响）`,
+        '',
+        `👉 [打开群聊](${groupAppLink(chatId)})`,
+      ].join('\n'),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await reply(ctx, `❌ 建群失败：\`${message}\``);
+  }
 }
 
 async function handleCd(args: string, ctx: CommandContext): Promise<void> {
@@ -433,6 +501,7 @@ async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
 const handlers: Record<string, Handler> = {
   '/new': handleNew,
   '/reset': handleNew,
+  '/newg': handleNewGroup,
   '/cd': handleCd,
   '/ws': handleWs,
   '/status': handleStatus,
