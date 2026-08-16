@@ -234,8 +234,11 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
       own.name,
     );
     reportVersions(out, detection, latest);
+    // Doctor checks inspect the *bridge* state profile (config / workspace /
+    // credentials live under `~/.dsh-lark/profiles/<bridgeProfile>`), not the
+    // dsh runtime profile being upgraded.
     const doctor = await (options.runDoctorFn ?? runDoctorChecks)({
-      profile,
+      profile: detection.bridgeProfile,
       ...(own.version ? { version: own.version } : {}),
     });
     for (const line of doctor.lines) write(out, `${line}\n`);
@@ -390,7 +393,8 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
   // 5. Post-upgrade verification.
   write(out, '\n--- 升级后验证（doctor）---\n');
   const doctor = await (options.runDoctorFn ?? runDoctorChecks)({
-    profile,
+    // Same as --check: doctor inspects the bridge state profile.
+    profile: detection.bridgeProfile,
     ...(own.version ? { version: own.version } : {}),
   });
   for (const line of doctor.lines) write(out, `${line}\n`);

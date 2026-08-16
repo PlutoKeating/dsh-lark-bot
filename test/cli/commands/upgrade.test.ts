@@ -120,6 +120,11 @@ describe('dsh-lark-bot upgrade', () => {
     expect(harness.pluginSpawn).not.toHaveBeenCalled();
     expect(harness.installGuardian).not.toHaveBeenCalled();
     expect(harness.runDoctor).toHaveBeenCalled();
+    // Doctor checks must inspect the bridge state profile, not the dsh runtime
+    // profile being upgraded (regression: dsh profile name was passed before).
+    expect(harness.runDoctor).toHaveBeenCalledWith(
+      expect.objectContaining({ profile: 'default' }),
+    );
   });
 
   it('upgrades package + guardian and records the change for rollback', async () => {
@@ -144,6 +149,10 @@ describe('dsh-lark-bot upgrade', () => {
     );
     expect(harness.repairRuntime).toHaveBeenCalledWith(
       expect.objectContaining({ dshHome: harness.dshHome }),
+    );
+    // Post-upgrade verification also inspects the bridge state profile.
+    expect(harness.runDoctor).toHaveBeenCalledWith(
+      expect.objectContaining({ profile: 'default' }),
     );
     const joined = harness.out.join('');
     expect(joined).toContain('✅ 包本体已更新到 0.12.0');
