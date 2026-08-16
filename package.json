@@ -42,6 +42,52 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "file:read",
+      "file:write",
+      "network:outbound",
+      "network:listen",
+      "process:spawn",
+      "credentials:read",
+      "credentials:write",
+      "harness:tool",
+      "harness:event"
+    ],
+    "compatibility": {
+      "dshVersions": [
+        "0.1.0-rc.6"
+      ]
+    },
+    "capability": {
+      "id": "lark_notify",
+      "kind": "tool",
+      "invocation": "invoke the model-facing lark_notify tool through the host agent runtime with a target Feishu/Lark scope (chat or topic), message text, and optional member mentions",
+      "expected": "the bridge notify callback (bound to 127.0.0.1 with a per-boot random token) accepts the call and the message card is delivered to the target scope with the requested mentions; an invalid or unreachable target returns a structured failure result without terminating the run"
+    },
+    "evidence": {
+      "install": "docs/QUICK_START.md",
+      "failureIsolation": "test/plugin.test.ts",
+      "hotReload": null,
+      "remove": "docs/QUICK_START.md"
+    }
+  },
   "scripts": {
     "dev": "tsup --watch",
     "start": "node bin/dsh-lark-bot.mjs start",
