@@ -718,6 +718,27 @@ The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bo
 
 See "Community Listings" in the next section for ecosystem registration status.
 
+## 贡献者 | Contributors
+
+感谢以下贡献者（按合入 / 提交时间）：
+
+Thanks to the following contributors (by merge / submission time):
+
+| 贡献者 Contributor | 贡献 Contribution | 状态 Status |
+| :--- | :--- | :--- |
+| [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) | [PR #9](https://github.com/PlutoKeating/dsh-lark-bot/pull/9)：web 单写者适配器 + self-heal v2 + 守护自动重启<br>Web single-writer adapter + self-heal v2 + guardian auto-relaunch | ✅ 已合入<br>Merged |
+| [Normanyin](https://github.com/Normanyin) | [PR #11](https://github.com/PlutoKeating/dsh-lark-bot/pull/11)：`/newg` 自动建群命令<br>`/newg` auto-create group chat command | 📨 进行中<br>In progress |
+
+> 说明：GitHub 贡献者图按 commit 作者邮箱归因。PR #9 合入时的提交使用了本地通用身份
+> `dsh-user <dsh-user@local>`（未绑定 GitHub 账号），因此未自动计入贡献者图；本表为仓库侧
+> 的明确署名，PR #11 的提交身份已绑定其账号，合入后会自动计入。
+>
+> Note: GitHub's contributor graph attributes commits by author email. The commits merged via
+> PR #9 carried a local generic identity (`dsh-user <dsh-user@local>`, not linked to a GitHub
+> account), so they are not auto-counted in the graph; this table is the repository's explicit
+> acknowledgment. PR #11's commits are authored under the contributor's linked account and will
+> be credited automatically once merged.
+
 ## 许可与安全 | License & Security
 
 - **许可证**：GNU Affero General Public License v3.0（见 `LICENSE`）。
