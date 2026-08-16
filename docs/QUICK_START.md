@@ -22,7 +22,7 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 `DSH_LARK_SETUP_PACKAGE=/path/to/dsh-lark-bot-x.y.z.tgz node dist/cli.js setup --profile dsh-lark`
 安装本地构建产物（可选，不面向普通用户）。
 
-**升级（v0.11.0+ 推荐）：** 一行命令彻底升级包 + guardian + 升级后验证：
+**升级（v0.12.0+ 推荐）：** 一行命令彻底升级包 + guardian + 升级后验证：
 
 ```bash
 npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes

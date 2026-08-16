@@ -75,6 +75,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   `600000`；到时停止运行并渲染超时卡。
 - `DSH_LARK_GUARDIAN_CARD_DENSITY`：安全模式任务卡片密度，默认 `detailed`
   （`compact` / `standard` / `detailed`）。
+- `DSH_LARK_UPGRADE_REGISTRY`：`dsh-lark-bot upgrade` 探测最新版本的 npm registry，
+  默认官方 registry（可指向镜像，issue #10）。
 
 ## 2. 本地状态路径 · Local state paths
 

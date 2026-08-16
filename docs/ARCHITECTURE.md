@@ -103,8 +103,14 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
-   `doctor` / 隐藏 `run`（诊断）以及安全网守护的 `guardian run|install|uninstall|status`，
-   README 只记录这一条路径。
+   `doctor` / `upgrade`（一键彻底升级，issue #10）/ 隐藏 `run`（诊断）以及安全网守护的
+   `guardian run|install|uninstall|status`，README 只记录这一条路径。
+9. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
+   一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
+   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复 → `doctor` 升级后验证；
+   运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
+   `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
+   通过 `npx dsh-lark-bot@latest upgrade` 引导：npx 拉取最新版执行升级。
 8. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
@@ -127,11 +133,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用 |
 | `src/session/` | 会话路由、上下文记忆、持久化 |
 | `src/workspace/` | 项目工作区管理 |
-| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy） |
+| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
 | `src/card/` | 流式卡片状态与渲染 |
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
-| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ 隐藏 `run` |
+| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |
+| `src/upgrade/` | 一键升级（issue #10）：版本探测、升级状态记录、运行状态检测、guardian / profile 重启助手、runtime profile 链接修复 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |

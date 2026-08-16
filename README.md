@@ -328,7 +328,7 @@ to the latest version.
 
 ### 升级 | Upgrade
 
-**推荐：一行命令彻底升级（v0.11.0+ 新增，issue #10）**
+**推荐：一行命令彻底升级（v0.12.0+ 新增，issue #10）**
 
 ```bash
 npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
@@ -355,7 +355,7 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - CLI 工具（可选）：`npm i -g dsh-lark-bot@latest`；使用 `npx` 时无需全局安装。
 - 升级后重启 profile（未用 `--restart` 时）：`dsh --profile dsh-lark`。
 
-- **Recommended: one-command full upgrade (new in v0.11.0, issue #10)**
+- **Recommended: one-command full upgrade (new in v0.12.0, issue #10)**
 
 ```bash
 npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
@@ -784,11 +784,12 @@ and relaunches the full profile on `/safemode exit`.
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用<br>First-run QR onboarding |
 | `src/session/` | 会话路由、排队、访问控制<br>Session routing, queueing, access control |
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入<br>Project workspace, git worktree isolation & rule injection |
-| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy）<br>Agent backend adapters (sdk / acp / headless) |
+| `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者）<br>Agent backend adapters (sdk / acp / headless / web single-writer) |
 | `src/card/` | 流式卡片状态与渲染<br>Streaming card state & rendering |
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表<br>Run registry, queueing, approval/question registries |
 | `src/commands/` | 斜杠命令（/cd /ws /new …）<br>Slash commands |
-| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ 隐藏 `run`<br>CLI entry: setup / doctor / hidden run |
+| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run`<br>CLI entry: setup / doctor / upgrade / hidden run |
+| `src/upgrade/` | 一键升级（issue #10）：版本探测、升级状态、运行检测、guardian/profile 重启助手、runtime 链接修复<br>One-command upgrade (issue #10): version probe, upgrade state, running-state detection, restart helpers, runtime link repair |
 | `src/guardian/` | 安全网守护：心跳、进程观察、仅核心安全 profile、接管状态机、系统服务安装<br>Safety-net guardian: heartbeat, process watch, core-only safe profile, takeover state machine, service install |
 | `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理<br>Profile, config, access & dsh config management |
 | `src/core/` | 结构化日志<br>Structured logging |

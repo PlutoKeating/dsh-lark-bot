@@ -18,6 +18,8 @@
 | **P13 唯一路径** Single install path | `dsh-lark-bot setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；移除独立后台服务层 | ✅ 已完成 Done（0.7.0） |
 | **P14 安全网守护** Safety-net guardian | 独立于 dsh 进程的系统级最小守护：dsh 下线后接管飞书通道、`/safemode` 仅核心（dsh-base + headless）重启与受限对话自愈、`/safemode exit` 恢复完整 profile | ✅ 已完成 Done（0.8.0） |
 | **P15 安全模式实时可见性** Safe-mode live visibility | 安全模式优先预置官方 SDK 流式 runtime（`dsh-lark-safe-sdk`）、headless 活动卡回退、单任务空闲超时看门狗、`/safemode stop` 与卡片 ⏹、忙碌回执、正常模式排队回执与卡住提示 | ✅ 已完成 Done（0.10.0） |
+| **P16 Web 单写者适配器** Web single-writer adapter | `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`），网页端成为**唯一写者**，从根上消除多写者会话损坏；配套 web watcher（issue #8 补丁包 / PR #9） | ✅ 已完成 Done（0.11.0） |
+| **P17 一键彻底升级** One-command upgrade | `dsh-lark-bot upgrade`：包本体 + guardian 幂等重装重启 + runtime profile 链接修复 + doctor 验证；`--check` / `--restart` / `--rollback` / `--force` / `--no-guardian`；运行中实例安全；旧版本经 `npx dsh-lark-bot@latest upgrade` 引导（issue #10） | ✅ 已完成 Done（0.12.0） |
 
 ## 里程碑 · Milestones
 

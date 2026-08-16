@@ -15,7 +15,7 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 `dsh plugin --profile dsh-lark add dsh-lark-bot`。安装后包名 `dsh-lark-bot` /
 `dsh-feishu-bot` 内容一致，`dsh-lark-bot --version` 可查看版本。
 
-### 1.1 升级 · Upgrade（v0.11.0+）
+### 1.1 升级 · Upgrade（v0.12.0+）
 
 **一行命令彻底升级（包本体 + guardian + 升级后验证）：**
 
