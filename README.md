@@ -718,6 +718,19 @@ The same dist is also published to GitHub Packages as `@plutokeating/dsh-lark-bo
 
 See "Community Listings" in the next section for ecosystem registration status.
 
+## 作者 | Author
+
+本项目由 **PlutoKeating** 开发并维护。作者专注于自动化与开发者工具，习惯从真实使用场景出发
+做软件：本项目正是从“用飞书 / Lark 群聊驱动 DeepSeek Agent”的日常需求长出来的，逐步演进为
+一套带守护、自愈与一键升级能力的完整桥接方案。更多信息见个人主页：
+[PlutoKeating](https://github.com/PlutoKeating)。
+
+This project is developed and maintained by **PlutoKeating**, who focuses on automation and
+developer tooling and prefers building software from real usage. It grew out of the daily need
+to drive DeepSeek agents from Feishu/Lark group chats, evolving into a complete bridge with
+guardian, self-healing, and one-command upgrade capabilities. See the author's profile:
+[PlutoKeating](https://github.com/PlutoKeating).
+
 ## 贡献者 | Contributors
 
 感谢以下贡献者（按合入 / 提交时间）：
