@@ -562,6 +562,7 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_SAFE_ADAPTER` | `auto` | 安全模式引擎：`auto` 优先 SDK 流式、失败回退 headless；`sdk` 强制 SDK；`headless` 跳过预置<br>Safe-mode engine: `auto` tries the SDK streaming runtime then falls back to headless; `sdk` requires it; `headless` skips provisioning |
 | `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡）<br>Safe-mode per-task idle timeout (stops the run after it has been silent this long and renders a timeout card) |
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed）<br>Card density for safe-mode run cards |
+| `DSH_LARK_UPGRADE_REGISTRY` | `https://registry.npmjs.org` | `upgrade` 探测最新版本的 npm registry（可指向镜像）<br>npm registry used by `upgrade` to discover the latest version (mirrors supported) |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 

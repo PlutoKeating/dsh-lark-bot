@@ -185,6 +185,36 @@
 - **安全约束**：守护进程只读本地状态与进程命令行（`ps`），不读内存；控制命令默认拒绝未授权
   用户；过期事件复用 `DSH_LARK_EVENT_FRESHNESS_MS` 窗口拒绝；心跳 / 状态文件 0600。
 
+### 4.11 Web 单写者适配器（web single-writer adapter，issue #8 / PR #9）
+
+背景：多写者并发写同一会话日志会损坏 session；web 端（dsh web agent）与 bot 同时写导致
+偶发 `id collision` 类损坏。需求是把 dsh web agent 作为每个会话的**唯一写者**，从根上根治。
+
+- `DSH_LARK_ADAPTER=web`：驱动本地 dsh web agent（默认 `http://127.0.0.1:3080`，
+  `DSH_LARK_WEB_URL` 可改），`session.prompt` 发起回合、`/api/events.mux` WebSocket 消费
+  事件；网页端成为唯一写者，bot 只读 mux 事件并转发到飞书卡片。
+- `web-watcher`（`src/adapters/dsh/web-watcher.ts`）：进程内事件订阅，把网页端回合完成
+  推送到飞书（`DSH_LARK_WEB_PUSH=1` 默认开启；`0` 关闭），并按聊天映射自动切换 scope。
+- **自愈 v2**（`src/session/heal.ts`）：仅对真正损坏的会话日志归档（seq gap 类），
+  id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。
+
+### 4.12 一键彻底升级（one-command upgrade，issue #10）
+
+背景：项目持续高频更新，旧用户（含 0.6.x 遗留形态）升级需手动分步（setup + 重启 + guardian
+单独 install），且旧流程/旧版本易导致升级卡住（issue #7 触发）。需求是从当前版本起引入
+**完善的版本维护机制与用户一键更新**。
+
+- **一行命令**：`npx dsh-lark-bot@latest upgrade --profile <name> --yes`（旧版本无 upgrade
+  命令，经 npx 拉取最新版执行，实现对任意旧用户的一行彻底更新）。
+- **覆盖范围**：包本体（`dsh plugin add <name>@<latest>`）+ guardian（幂等重装并重启服务）+
+  runtime profile（dsh-lark-sdk / dsh-lark-acp own-package 链接修复）+ 升级后 `doctor` 验证。
+- **运行中实例安全**：默认不中断运行中 dsh profile（只提示重启命令，配置 / 会话 / 凭据不受
+  影响）；`--restart` 可选自动重启 guardian 与受管 profile。
+- **可回滚 / 可重入**：每次变更记录 `~/.dsh-lark/upgrade-state.json`，`--rollback` 精确回滚到
+  上一版本；重复执行幂等（已最新时跳过）。
+- **离线 / 安全**：`--force` 离线时按当前版本重装；非交互环境不带 `--yes` 安全中止；
+  `DSH_LARK_UPGRADE_REGISTRY` 支持镜像 registry。
+
 ---
 
 ## 5. 规范与约束 · Specifications & Constraints
