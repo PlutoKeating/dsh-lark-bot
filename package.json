@@ -1,6 +1,6 @@
 {
   "name": "dsh-lark-bot",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Bridge DeepSeek Harness (dsh) into Feishu / Lark with streaming cards, project workspaces, approvals and scheduling",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
