@@ -30,7 +30,10 @@ function escapeRegExp(value: string): string {
 export function looksLikeDshProcess(cmdline: string): boolean {
   return (
     cmdline.includes('@deepseek-ai/dsh') ||
-    /(?:^|\s)dsh(?:\.exe)?(?:\s|$)/.test(cmdline)
+    // `dsh` as a bare token or as a path basename (e.g. `~/.local/bin/dsh`)
+    // followed by whitespace / end of line. The basename form is required for
+    // wrapper installs: `node /home/pluto/.local/bin/dsh --profile dsh-lark`.
+    /(?:^|[\s/])dsh(?:\.exe)?(?:\s|$)/.test(cmdline)
   );
 }
 

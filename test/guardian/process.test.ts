@@ -19,6 +19,15 @@ describe('guardian process watch', () => {
     expect(matchProfileProcess('dsh plugin --profile dsh-lark add dsh-lark-bot', 'dsh-lark')).toBe(false);
   });
 
+  it('matches dsh wrapper binaries by basename (e.g. ~/.local/bin/dsh)', () => {
+    expect(matchProfileProcess('node /home/pluto/.local/bin/dsh --profile dsh-lark', 'dsh-lark')).toBe(true);
+    expect(matchProfileProcess('node /usr/local/bin/dsh --profile dsh-lark', 'dsh-lark')).toBe(true);
+    // A path that merely contains "dsh" as a prefix must not match.
+    expect(matchProfileProcess('node /x/dsh-lark-helper --profile dsh-lark', 'dsh-lark')).toBe(false);
+    // Token-level profile match still holds for wrappers.
+    expect(matchProfileProcess('node /home/pluto/.local/bin/dsh --profile dsh-lark-safe', 'dsh-lark')).toBe(false);
+  });
+
   it('captures command output', async () => {
     const result = await captureOutput('node', ['-e', 'console.log("ok")'], 5_000);
     expect(result.code).toBe(0);
