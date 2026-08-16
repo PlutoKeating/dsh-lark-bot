@@ -841,39 +841,39 @@ and relaunches the full profile on `/safemode exit`.
 | :--- | :--- | :--- |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`，2026-08-14 agent 实测通过；收录条目更新至 v0.8.0（[PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 已合并），v0.10.2 同步已跟进（[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) 最新评论）<br>Shown as `✅ 运行级可用` in the community leaderboard; agent-tested on 2026-08-14; v0.8.0 entry merged via [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127); v0.10.2 sync requested in [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页已上线<br>Listed · detail page live | 中英日韩四语详情页已上线（含安装命令与亮点），条目名称正常（[issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭）；v0.10.2 数据刷新已提交（[issue #6](https://github.com/hikariming/dshfind/issues/6)）；顶部徽章 / 展示卡来自 dshfind<br>Four-language detail page is live (install command & highlights), entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); v0.10.2 data refresh requested in [issue #6](https://github.com/hikariming/dshfind/issues/6); the header badge / card comes from dshfind |
-| [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/12) | ✅ 已提交收录申请<br>Submission submitted | `[Plugin]` 收录申请（Discussion #12）已通过；v0.8.0 更新、六项独家亮点与 v0.10.1 / v0.10.2 稳定性修复说明均已发布在该讨论<br>`[Plugin]` submission (Discussion #12) accepted; v0.8.0 update, the six-exclusive-highlights summary and the v0.10.1 / v0.10.2 stability-fix notes are all posted there |
+| [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 已提交收录申请<br>Submission submitted | `[Plugin]` 收录申请（Discussion #11）已通过；v0.8.0 更新、六项独家亮点与 v0.10.1 / v0.10.2 稳定性修复说明均已发布在该讨论<br>`[Plugin]` submission (Discussion #11) accepted; v0.8.0 update, the six-exclusive-highlights summary and the v0.10.1 / v0.10.2 stability-fix notes are all posted there |
 
 **更新请求进度 / Update request status**：
 
 - awesome-dsh-plugins 收录条目更新：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并
 - dshfind 数据刷新请求（含条目名称异常修正）：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭，详情页已更新
-- omdsh-dev/community 收录讨论更新：[Discussion #12 更新评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998) — ✅ 已发布
+- omdsh-dev/community 收录讨论更新：[Discussion #11 更新评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18021998) — ✅ 已发布
 - awesome-dsh-plugins 榜单行同步至 v0.10.2：[#139 最新评论](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139#issuecomment-5304382615) — 📨 已提交
 - dshfind 数据刷新至 v0.10.2：[#6 跟进评论](https://github.com/hikariming/dshfind/issues/6#issuecomment-5304382647) — 📨 已提交
-- omdsh-dev/community v0.10.1 更新说明：[Discussion #12 评论](https://github.com/omdsh-dev/community/discussions/12#discussioncomment-18034706) — ✅ 已发布
-- omdsh-dev/community v0.10.2 更新说明：[Discussion #12 评论](https://github.com/omdsh-dev/community/discussions/12#discussioncomment-18034903) — ✅ 已发布
+- omdsh-dev/community v0.10.1 更新说明：[Discussion #11 评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034706) — ✅ 已发布
+- omdsh-dev/community v0.10.2 更新说明：[Discussion #11 评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034903) — ✅ 已发布
 
 **Update requests**:
 
 - awesome-dsh-plugins entry refresh: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged
 - dshfind data-refresh request (incl. fixing the entry name): [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed, detail page updated
-- omdsh-dev/community listing update: [Discussion #12 update comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18021998) — ✅ posted
+- omdsh-dev/community listing update: [Discussion #11 update comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18021998) — ✅ posted
 - awesome-dsh-plugins leaderboard sync to v0.10.2: [#139 comment](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139#issuecomment-5304382615) — 📨 submitted
 - dshfind data refresh to v0.10.2: [#6 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5304382647) — 📨 submitted
-- omdsh-dev/community v0.10.1 update: [Discussion #12 comment](https://github.com/omdsh-dev/community/discussions/12#discussioncomment-18034706) — ✅ posted
-- omdsh-dev/community v0.10.2 update: [Discussion #12 comment](https://github.com/omdsh-dev/community/discussions/12#discussioncomment-18034903) — ✅ posted
+- omdsh-dev/community v0.10.1 update: [Discussion #11 comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034706) — ✅ posted
+- omdsh-dev/community v0.10.2 update: [Discussion #11 comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034903) — ✅ posted
 
 **亮点跟进 / Highlights follow-ups**（六项独家能力与 issue #6 设计实现）：
 
 - awesome-dsh-plugins 榜单行同步（仓库描述 → 最新）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交（维护方已确认，等待渲染周期同步）
 - dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交
-- omdsh 六项独家亮点补充（含 Guardian 设计实现）：[Discussion #12 亮点评论](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18026370) — 📨 已提交
+- omdsh 六项独家亮点补充（含 Guardian 设计实现）：[Discussion #11 亮点评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 已提交
 
 **Highlights follow-ups** (six exclusive capabilities & the issue #6 design):
 
 - awesome-dsh-plugins leaderboard row sync (repo description → latest) & agent-test name anomaly: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 submitted (maintainer confirmed; awaiting the snapshot/render cycle)
 - dshfind detail page: add the in-chat model/key management highlight: [#2 follow-up](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 submitted
-- omdsh six-exclusive-highlights summary (incl. the Guardian design): [Discussion #12 highlights comment](https://github.com/orgs/omdsh-dev/discussions/12#discussioncomment-18026370) — 📨 submitted
+- omdsh six-exclusive-highlights summary (incl. the Guardian design): [Discussion #11 highlights comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 submitted
 
 ## 免责声明 | Disclaimer
 
