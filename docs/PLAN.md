@@ -121,7 +121,7 @@
 1. **dsh profile bundle 即产品形态**（0.7.0 定稿）：`dsh.bundle.patch` →
    `cordis.patch.yml`，`dsh-lark-bot/plugin` 在 dsh 进程内运行完整桥接引擎
    （`startBridgeEngine`），`lark_notify` 作为标准工具行装载；CLI 只保留
-   `setup`（唯一安装命令）/ `doctor` / 隐藏 `run`。不再存在「独立后台服务 vs dsh 插件」
+   `setup`（唯一安装命令）/ `doctor` / `upgrade`（一键彻底升级，issue #10）/ 隐藏 `run`。不再存在「独立后台服务 vs dsh 插件」
    双路径。`AgentAdapter` 抽象保留，agent 后端可换。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
 3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
