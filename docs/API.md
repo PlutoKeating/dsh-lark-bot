@@ -226,6 +226,13 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 `onArchive` 归档，再裁剪；支持 `fork(scopeId, newScopeId, cwd)` 复制历史。SDK 模式以原生
 `session(id)` 续跑，headless 模式把历史拼入下一次 prompt 作为近似上下文。
 
+`src/session/heal.ts` 提供会话自愈分类与归档：`classifySessionError(message)` 以锚定正则将
+会话错误分为 `broken`（持久化日志与 live session 不一致 → 重置 scope 绑定、保留历史）与
+`corrupt`（日志损坏 / seq gap → 归档后重置）两类，普通文本（模型输出 / 工具结果）不会误触发；
+`archiveSessionDir(sessionId)` 先把会话目录**复制**到
+`~/.dsh-lark/_archived-sessions/<id>-<ts>` 再删除原目录，并返回归档路径供用户可见与恢复
+（复制失败不删原目录）。
+
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
 每次归档 / 清理单独 commit；`list(scope)` 列出归档，`prune({ maxArchives, maxAgeMs })` 按
@@ -603,8 +610,12 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
 1. **standby**：dsh 在线（心跳新鲜，或存在 `--profile <name>` 进程且心跳未超过
    `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` 判定引擎已死）→ 不连接飞书；记录 `profileSeenUp`。
 2. **takeover**：`profileSeenUp` 且 dsh 持续下线（`DSH_LARK_GUARDIAN_STALE_MS` 心跳过期 +
-   无进程，连续 `takeoverGracePolls` 次）→ 用桥接 profile 的凭据 / 白名单创建
-   `@larksuite/channel` 长连接；只有 admin（无 admin 时回退 allowedUsers）可触发控制命令。
+   无进程，连续 `takeoverGracePolls` 次）→ 守护先**自动重启完整 profile**
+   （`node <dsh-bin> --profile <name>`；`relaunchCooldownMs` 冷却默认 60s，spawn 前二次
+   进程探测防双实例），并在 `relaunchReadyTimeoutMs` 就绪窗口（默认 15s）内等待桥接心跳 /
+   进程恢复：就绪则回到 standby，超时则记录失败并**接管**飞书长连接（用桥接 profile 的
+   凭据 / 白名单创建 `@larksuite/channel`）；只有 admin（无 admin 时回退 allowedUsers）
+   可触发控制命令。
 3. **safe**：`/safemode` 通过安全 profile 探测后，以 `DshAdapter`（`dsh --profile <safe>
    "<prompt>"`，headless 回退）或 `SdkDshAdapter`（`dsh-lark-safe-sdk`，默认优先，实时流式
    思考 / 工具 / 文字）逐条执行对话；SDK 模式以原生 `session(id)` 续跑，headless 模式把历史
@@ -614,7 +625,8 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    `run.stop()` 并渲染超时卡，活跃任务不会被误杀）；
    同一 scope 同时只允许一个安全任务，忙碌时新消息立即回执；“/safemode stop”与卡片按钮均可
    终止当前任务。`/safemode plugins` 执行 `dsh plugin --profile <name> list`；
-   `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并回到 standby。
+   `/safemode exit` 以 detached 方式重启完整 profile（同样纳入就绪窗口与冷却），短暂延迟后
+   断开飞书连接并回到 standby。
 
 dsh 重新在线时（用户手动启动或退出安全模式后），守护立即断开飞书连接并清空安全模式上下文。
 守护进程可随时用 `DSH_LARK_GUARDIAN_DISABLED=1` 停止；`guardian status` 只读输出当前状态。
