@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dsh-lark-bot：把 DeepSeek Harness 装进飞书 / Lark（扫码即用）| DeepSeek Harness × 飞书桥接插件</title>
+  <meta name="description" content="dsh-lark-bot 是把 DeepSeek Harness (dsh) 接入飞书 / Lark 的开源桥接插件：扫码 30 秒绑定，在手机飞书里指挥本机 coding agent。流式卡片、项目工作区、并行任务、多角色 Agent、跨会话通知与安全网守护（dsh 崩溃后飞书仍可自救）。一条命令安装：npx dsh-lark-bot@latest setup --profile dsh-lark。">
+  <meta name="keywords" content="deepseek harness 连接飞书,deepseek harness 飞书,deepseek 飞书机器人,deepseek harness 扫码,dsh 飞书,dsh-lark-bot,飞书 接入 deepseek,deepseek harness 插件,飞书 手机远程 coding agent">
+  <meta name="author" content="PlutoKeating">
+  <link rel="canonical" href="https://plutokeating.github.io/dsh-lark-bot/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="dsh-lark-bot">
+  <meta property="og:title" content="dsh-lark-bot：把 DeepSeek Harness 装进飞书 / Lark（扫码即用）">
+  <meta property="og:description" content="扫码把 DeepSeek Harness 装进飞书：流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。唯一「dsh 崩溃后飞书仍叫得应」的桥接插件。">
+  <meta property="og:url" content="https://plutokeating.github.io/dsh-lark-bot/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="dsh-lark-bot：把 DeepSeek Harness 装进飞书 / Lark">
+  <meta name="twitter:description" content="扫码把 DeepSeek Harness 装进飞书：流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "dsh-lark-bot",
+    "alternateName": "dsh-feishu-bot",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "softwareVersion": "0.15.0",
+    "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+    "url": "https://github.com/PlutoKeating/dsh-lark-bot",
+    "sameAs": [
+      "https://www.npmjs.com/package/dsh-lark-bot",
+      "https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot",
+      "https://dshbase.com/zh/plugins/dsh-lark-bot"
+    ],
+    "description": "把 DeepSeek Harness (dsh) 接入飞书 / Lark 的开源桥接插件：扫码即用，在飞书私聊、群聊、话题里指挥本机 coding agent，支持流式卡片、项目工作区、并行任务、多角色 Agent、跨会话通知与安全网守护。",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "author": { "@type": "Person", "name": "PlutoKeating", "url": "https://github.com/PlutoKeating" },
+    "featureList": [
+      "安全网守护：dsh 崩溃后飞书仍可回复并自助重启",
+      "多角色 Agent：一个机器人，PM / 开发 / 文档多个角色",
+      "并行多任务：同一群聊同时跑多个任务，会话隔离",
+      "会话归档与保留策略：会话列表不会越积越多",
+      "跨会话主动通知并 @ 人：任务完成主动找你",
+      "对话内管理模型 / Provider / 密钥：全程不离开飞书"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "DeepSeek Harness 怎么接入飞书？",
+        "acceptedAnswer": { "@type": "Answer", "text": "用 dsh-lark-bot：安装 Node.js ≥ 22，执行 npx dsh-lark-bot@latest setup --profile dsh-lark，然后 dsh --profile dsh-lark 启动，用飞书 App 扫描终端二维码绑定 PersonalAgent 应用即可。私聊直接发消息，群聊 / 话题里 @bot。" }
+      },
+      {
+        "@type": "Question",
+        "name": "dsh-lark-bot 需要公网 IP、域名或服务器吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "不需要。飞书通道使用 WebSocket 长连接（出站连接），本机在 NAT 后面也能用，免公网服务器、免域名、免内网穿透。" }
+      },
+      {
+        "@type": "Question",
+        "name": "为什么说 dsh 崩溃后飞书里仍能自救？",
+        "acceptedAnswer": { "@type": "Answer", "text": "dsh-lark-bot 默认安装独立于 dsh 进程的安全网守护（systemd / LaunchAgent / Windows 启动项）。dsh 进程崩溃或无法启动时，守护接管飞书通道，你只需发 /safemode 进入仅核心安全模式，定位并修复问题后 /safemode exit 恢复完整 profile。" }
+      },
+      {
+        "@type": "Question",
+        "name": "dsh-lark-bot 和其他 DeepSeek Harness 飞书插件有什么区别？",
+        "acceptedAnswer": { "@type": "Answer", "text": "dsh-lark-bot 是功能最全的组合：安全网守护、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项能力合为一体，且为标准 dsh profile bundle，dsh plugin add 一条命令安装。" }
+      },
+      {
+        "@type": "Question",
+        "name": "可以用手机远程使用本机 DeepSeek Harness 吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "可以。扫码绑定后，用飞书手机 App 给机器人发消息即可指挥本机 dsh coding agent 读代码、跑命令、完成任务；任务完成还可跨会话主动推送并 @ 你。" }
+      },
+      {
+        "@type": "Question",
+        "name": "项目从哪下载，会不会有假冒版本？",
+        "acceptedAnswer": { "@type": "Answer", "text": "唯一官方仓库是 github.com/PlutoKeating/dsh-lark-bot，唯一官方 npm 包是 dsh-lark-bot / dsh-feishu-bot（维护者 plutokeating）。本项目从不提供 .exe 或“下载即运行”的安装包，任何以项目名义分发 exe 的仓库或页面都是假冒来源，请勿运行。" }
+      }
+    ]
+  }
+  </script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; line-height: 1.7; color: #1f2328; }
+    h1 { font-size: 1.9em; margin-bottom: .2em; }
+    h2 { margin-top: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: .3em; }
+    code, pre { background: #f6f8fa; border-radius: 6px; font-size: .92em; }
+    code { padding: 2px 6px; }
+    pre { padding: 14px 16px; overflow-x: auto; }
+    a { color: #0969da; }
+    .badge { display: inline-block; margin: 2px 3px 2px 0; }
+    .lead { font-size: 1.12em; color: #57606a; }
+    .features li { margin: .5em 0; }
+    .note { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 12px 16px; }
+    @media (prefers-color-scheme: dark) {
+      body { color: #e6edf3; }
+      code, pre { background: #161b22; }
+      a { color: #4493f8; }
+      .note { background: #2d2210; border-color: #bb8009; }
+    }
+  </style>
+</head>
+<body>
+  <h1>dsh-lark-bot</h1>
+  <p class="lead"><strong>把 DeepSeek Harness（dsh）装进飞书 / Lark，扫码即用。</strong>在手机飞书里指挥本机 coding agent：发消息就收流式卡片与工具调用过程，把对话、任务、卡片和项目工作区都收进同一个协作流。</p>
+
+  <p>
+    <a class="badge" href="https://github.com/PlutoKeating/dsh-lark-bot"><img src="https://img.shields.io/github/stars/PlutoKeating/dsh-lark-bot?style=social" alt="GitHub stars"></a>
+    <a class="badge" href="https://www.npmjs.com/package/dsh-lark-bot"><img src="https://img.shields.io/npm/v/dsh-lark-bot" alt="npm version"></a>
+    <a class="badge" href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
+    <a class="badge" href="https://dshbase.com/zh/plugins/dsh-lark-bot"><img src="https://dshbase.com/badges/dsh-lark-bot.svg" alt="dshbase"></a>
+  </p>
+
+  <h2>DeepSeek Harness 怎么连接飞书</h2>
+  <ol>
+    <li>安装 Node.js ≥ 22，并安装 DeepSeek Harness（<code>dsh</code>）与配置 <code>DEEPSEEK_API_KEY</code>。</li>
+    <li>一条命令安装桥接插件：<pre>npx dsh-lark-bot@latest setup --profile dsh-lark</pre></li>
+    <li>启动并用飞书 App 扫码：<pre>dsh --profile dsh-lark</pre>终端打印二维码，用飞书 / Lark App 扫码创建或选择 PersonalAgent 应用，绑定即完成。</li>
+    <li>私聊直接发消息；群聊 / 话题里 <code>@bot</code>。</li>
+  </ol>
+
+  <div class="note">⚠️ 官方渠道声明：唯一官方仓库是 <a href="https://github.com/PlutoKeating/dsh-lark-bot">github.com/PlutoKeating/dsh-lark-bot</a>；唯一官方 npm 包是 <code>dsh-lark-bot</code> / <code>dsh-feishu-bot</code>（维护者 <code>plutokeating</code>）。本项目从不提供 .exe 或“下载即运行”的安装包，任何此类第三方分发均为假冒 / 恶意来源。</div>
+
+  <h2>核心能力（六项组合全网独有）</h2>
+  <ul class="features">
+    <li><strong>安全网守护</strong>：dsh 进程崩溃后机器人仍会在飞书回复你，可进入仅核心安全模式并在对话里发控制信号把它重启——唯一“出故障时用户不会失联”的项目。</li>
+    <li><strong>多角色 Agent</strong>：/role 切换或指派 PM / 开发 / 文档等角色，每个角色有持久化的人设、模型偏好与规则。一个机器人，一整个团队。</li>
+    <li><strong>并行多任务</strong>：同一群里同时跑多个任务，各自会话隔离，不用排队。</li>
+    <li><strong>会话归档与清理</strong>：/archive、/retention 管理旧任务与自动保留策略，会话列表不会越积越多。</li>
+    <li><strong>跨会话主动通知 + @人</strong>：Agent 在 A 群跑完任务，可主动发消息到 B 群或私聊并 @ 你。</li>
+    <li><strong>对话内管理模型和密钥</strong>：/model、/providers、/key 直接在聊天里查看、切换供应商、热更新密钥，全程不离开飞书。</li>
+  </ul>
+
+  <h2>常见问题</h2>
+  <details><summary>DeepSeek Harness 怎么接入飞书？</summary><p>见上方安装步骤：一条命令安装 + 扫码绑定，全程不需要公网服务器、域名或内网穿透。</p></details>
+  <details><summary>需要公网 IP 或服务器吗？</summary><p>不需要。飞书通道使用 WebSocket 长连接（出站），NAT 后面也能用，代码始终只在本机运行，飞书只传输消息。</p></details>
+  <details><summary>dsh 崩溃了怎么办？</summary><p>默认安装的安全网守护会接管飞书通道，发 /safemode 进入仅核心安全模式自愈，/safemode exit 恢复完整 profile。</p></details>
+  <details><summary>和其他飞书插件有什么区别？</summary><p>功能最全：安全网守护、多角色、并行任务、会话归档、跨会话通知、对话内模型 / 密钥管理六项组合为一，标准 dsh profile bundle 一条命令安装。</p></details>
+  <details><summary>能用手机远程用吗？</summary><p>可以。飞书手机 App 扫码绑定后，随时给机器人发消息指挥本机 agent，任务完成还会主动推送并 @ 你。</p></details>
+  <details><summary>怎么确认下载的是正版？</summary><p>只从 github.com/PlutoKeating/dsh-lark-bot 与 npm（dsh-lark-bot / dsh-feishu-bot）获取；凡提供 exe 的渠道均为假冒。</p></details>
+
+  <h2>链接</h2>
+  <ul>
+    <li>GitHub 仓库：<a href="https://github.com/PlutoKeating/dsh-lark-bot">github.com/PlutoKeating/dsh-lark-bot</a></li>
+    <li>npm 包：<a href="https://www.npmjs.com/package/dsh-lark-bot">dsh-lark-bot</a>（同源双包 <a href="https://www.npmjs.com/package/dsh-feishu-bot">dsh-feishu-bot</a>）</li>
+    <li>插件超市 dshfind：<a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot">dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot</a></li>
+    <li>插件目录 dshbase：<a href="https://dshbase.com/zh/plugins/dsh-lark-bot">dshbase.com/zh/plugins/dsh-lark-bot</a></li>
+    <li>DeepSeek Harness：<a href="https://github.com/deepseek-ai/deepseek-harness">github.com/deepseek-ai/deepseek-harness</a></li>
+  </ul>
+</body>
+</html>

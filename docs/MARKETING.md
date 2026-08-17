@@ -1,0 +1,276 @@
+# 推广与 SEO 手册 · Marketing & SEO Playbook
+
+> 本文档服务于 dsh-lark-bot 的全网宣传矩阵建设：诊断结论、关键词与渠道矩阵、可直接发布的稿件、
+> 平台执行步骤与效果跟踪。维护人：项目所有者；创建：2026-08-17。
+
+---
+
+## 1. 现状诊断（2026-08-17 多平台实测）
+
+### 1.1 我们有什么（硬数据）
+
+| 指标 | 数值 | 同类对比 |
+| --- | --- | --- |
+| GitHub 仓库 | `PlutoKeating/dsh-lark-bot`（2026-08-13 创建） | 飞书桥接细分头部（20 star，与竞品差距在一天内） |
+| npm 下载（月） | `dsh-lark-bot` 3,640 + `dsh-feishu-bot` 3,614 | **同类第一**；harness-lark 1,480、dsh-lark-link 343、dsh-im-hub 231 |
+| 功能组合 | 六项能力组合（Guardian / 多角色 / 并行 / 归档 / 跨会话通知 / 对话内模型密钥） | 同类最全，且为唯一「dsh 崩溃后飞书仍叫得应」方案 |
+| 目录收录 | dshfind ✅、dshbase ✅、awesome-dsh-plugins ✅、omdsh-dev ✅ | 缺失：awesome-dsh-plugin 大榜（7.2k+ star）——已提交 PR 待合并 |
+| GitHub 搜索 | 关键词「deepseek harness 飞书」GitHub 内第 1 位 | GitHub 内可见度 OK |
+
+### 1.2 我们缺什么（问题清单）
+
+1. **中文媒体零曝光**：Bing / 百度 / B 站 / 知乎 / 小红书 / 抖音均搜不到本项目。
+2. **竞品用内容占位**：Bing「deepseek harness 飞书」前 10 条是 dsh-lark-link 的 CSDN+B 站、
+   harness-lark 的 Docker 教程、zhbdream 的 CSDN 文、cc-connect 的技术站文章、ai-bot.cn/aihub.cn 目录。
+   这些竞品 star 数很多低于我们（如 zhbdream 仅 1 star），但**内容先发=搜索可见**。
+3. **品牌词被劫持**：Bing 搜「dsh-lark-bot」，第一页是 dshbase（我们的目录页，尚可）、zhihu、
+   dsh-launcher、dsh.do、dsh-plugin.shop（无内容的空壳站）等；百度完全无收录。
+4. **缺官网/落地页**：仓库 `homepage` 为空，无 GitHub Pages、无 sitemap、无结构化数据 → SEO/AEO/GEO 地基缺失。
+5. **缺中国站点镜像**：竞品 zhbdream 在 Gitee 同步发布；我们没有 Gitee 镜像（百度对 Gitee 收录好于 GitHub）。
+6. **缺英文媒体**：dsh 生态英文教程（orcarouter.ai、dev.to 等）均未提及我们。
+
+### 1.3 核心结论
+
+> 产品力没有转化为搜索可见度。原因不是「不够好」，而是：**没有内容、没有落地页、没有结构化数据、
+> 没有目录覆盖、没有镜像站点**。这是纯执行问题，一个月内可系统性解决。
+
+---
+
+## 2. 关键词矩阵（按优先级）
+
+| 关键词（中文） | 用户意图 | 当前排名 | 目标载体 |
+| --- | --- | --- | --- |
+| deepseek harness 连接飞书 | 教程/方案 | Bing 无；百度无 | 落地页 + CSDN/掘金/知乎长文 + B 站 |
+| deepseek harness 飞书 | 教程/方案 | Bing 无（竞品占据） | 同上 |
+| deepseek harness 扫码飞书 | 安装教程 | 无 | 落地页 FAQ + 小红书 |
+| deepseek 飞书机器人 | 泛需求（含非 dsh） | 无 | 知乎回答 + 公众号 |
+| dsh 飞书 | 品牌/方案 | Bing 无 | 全渠道统一用词 |
+| dsh-lark-bot | 品牌词 | Bing 第一页为目录页，仓库未上榜 | 内容矩阵反哺 |
+| deepseek harness 插件推荐 | 盘点 | 无（V2EX 盘点文已出现） | 投稿「插件盘点」类文章/回答 |
+| 手机远程用 deepseek harness | 场景 | 无 | 小红书/抖音场景化内容 |
+
+英文（GEO/AEO 用）：
+
+| 关键词 | 目标载体 |
+| --- | --- |
+| deepseek harness feishu / lark | 英文 README、dev.to/medium 投稿、Hacker News 评论 |
+| dsh lark bridge / dsh feishu plugin | npm 描述、GitHub topics |
+
+---
+
+## 3. 渠道矩阵与优先级
+
+| 渠道 | 优先级 | 动作 | 谁来做 |
+| --- | --- | --- | --- |
+| GitHub（仓库 + 收录） | P0 | 元数据/README/落地页优化；awesome-dsh-plugin PR | 已完成（见 §5） |
+| 落地页（GitHub Pages） | P0 | 启用 Pages + 提交 sitemap | 需要你在 GitHub 设置开启（§6.1） |
+| CSDN / 掘金 | P0 | 发布主稿（§7.1），多账号转载 | 稿子已备好，复制粘贴 |
+| B 站 | P0 | 实机演示视频（§7.2） | 需你录屏，脚本已备好 |
+| 知乎 | P1 | 文章 + 回答引流（§7.3） | 稿子已备好 |
+| 小红书 | P1 | 3 条图文笔记（§7.4） | 图文已备好，需截图 |
+| 抖音 / 视频号 | P2 | 30 秒口播（§7.5） | 需出镜/录屏 |
+| 公众号 | P2 | 长文转载 + 私域 | 主稿改标题 |
+| 目录与收录 | P0 | ai-bot.cn / aihub.cn / Gitee（§6.2–6.4） | 部分我提交，部分需账号 |
+| 英文媒体 | P2 | dev.to / medium / HN（§7.6） | 稿子可翻译后发 |
+
+---
+
+## 4. 统一对外口径（全渠道一致）
+
+- 一句话：**把 DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥本机 coding agent。**
+- 安装命令：`npx dsh-lark-bot@latest setup --profile dsh-lark`
+- 六个差异化能力：安全网守护 / 多角色 Agent / 并行多任务 / 会话归档 / 跨会话通知 / 对话内模型密钥管理
+- 卖点一句话：**「唯一 dsh 崩溃后飞书里还叫得应」的桥接方案**
+- 官方渠道：GitHub `PlutoKeating/dsh-lark-bot`；npm `dsh-lark-bot` / `dsh-feishu-bot`
+- 反假冒声明：从不提供 exe；发现 `tarraencompassing61/dsh-lark-bot` 等仿冒仓库已留存证（docs/security/）
+
+---
+
+## 5. 仓库侧已执行优化（本次提交）
+
+1. GitHub 仓库描述加入「扫码即用 / scan-to-connect」关键词；topics 增加 feishu-bot、lark-bot、qrcode；homepage 指向 dshfind 详情页。
+2. `package.json`：npm 描述改中英双语，keywords 增加「飞书 / 飞书机器人 / 扫码 / deepseek harness 飞书」等中文词。
+3. `README.md`：徽章行增加 dshbase；「社区收录情况」增加 awesome-dsh-plugin（PR 待合并）与 dshbase 两行。
+4. 新增落地页 `docs/index.html`：中英双语、OG/Twitter 卡片、SoftwareApplication + FAQPage 结构化数据、FAQ 覆盖长尾问题。
+5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（AEO/GEO：给 AI 引擎可直接读取的项目摘要）。
+6. 新增本文档 `docs/MARKETING.md`。
+7. 已向 awesome-dsh-plugin 提交收录 PR（见 §6.2 状态）。
+
+---
+
+## 6. 需要你操作的事项
+
+### 6.1 启用 GitHub Pages（P0，5 分钟）
+
+1. 仓库 Settings → Pages → Source 选 **Deploy from a branch** → 分支 `main` + 目录 `/docs` → Save。
+2. 访问 `https://plutokeating.github.io/dsh-lark-bot/` 确认落地页在线。
+3. 在线后：
+   - Bing Webmaster Tools（bing.com/webmasters）添加站点并提交 `sitemap.xml`；
+   - Google Search Console（search.google.com/search-console）添加资源并提交 sitemap；
+   - 百度搜索资源平台（ziyuan.baidu.com）若需收录 Pages 域名，同样提交 sitemap。
+4. 然后把仓库 homepage 从 dshfind 改为落地页 URL（可选，也可维持现状，二者择一）。
+
+### 6.2 awesome-dsh-plugin 收录（P0，已提交）
+
+- 已按规范新增 `data/plugins/PlutoKeating__dsh-lark-bot.yml`（category: notify）并重新生成 README，
+  PR 已创建（编号见 README「社区收录情况」更新后回填）。合并后请把 README 中 `#PLACEHOLDER`
+  替换为真实 PR 编号并更新状态。
+
+### 6.3 ai-bot.cn / aihub.cn 目录提交（P1）
+
+- ai-bot.cn（AI 工具目录，Bing 权重高）：首页有「提交收录」入口，按表单提交仓库 URL + 简介 + 截图；
+- aihub.cn：同理；
+- 需要账号注册，用主邮箱注册后提交即可（推广用途，建议用项目专用邮箱）。
+
+### 6.4 Gitee 镜像（P1，百度收录关键）
+
+1. 注册 gitee.com 账号，创建同名仓库 `dsh-lark-bot`；
+2. 把 GitHub 仓库添加为 remote 并推送：`git remote add gitee https://gitee.com/<你的账号>/dsh-lark-bot.git && git push gitee main`；
+3. 在 Gitee 仓库「管理 → 开源软件」勾选开源，README 自动渲染（百度对 Gitee 收录明显好于 GitHub）；
+4. 竞品 zhbdream 已这么做，我们是追赶方。
+
+### 6.5 平台账号准备（P1）
+
+- CSDN / 掘金 / 知乎 / B 站 / 小红书 / 抖音 / 公众号：用项目身份或主理人身份注册；
+- 头像统一用仓库 logo，简介统一写「DeepSeek Harness × 飞书 开源桥接插件作者」。
+
+---
+
+## 7. 可直接发布的稿件
+
+### 7.1 主稿（CSDN / 掘金 / 知乎 / 公众号通用）
+
+标题（A/B 任选）：
+- A：把 DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥本机 Coding Agent
+- B：DeepSeek Harness 连接飞书全教程：扫码即用、崩溃也能自救，六项能力一次讲清
+
+正文：
+
+> DeepSeek Harness（dsh）8 月 13 日开源后，「一切皆插件」引爆了生态。在手机飞书里指挥本机
+> coding agent 是最高频的需求之一，但市面上的桥接方案大多是「串行单聊 + 崩溃就失联」。
+> 这篇文章介绍 dsh-lark-bot——把 dsh 装进飞书 / Lark 的开源桥接插件，扫码即用。
+>
+> **为什么需要它？**
+> 官方 Web UI 要求你坐在电脑前；桥接方案则让你在路上用手机发一句话，家里的电脑就开始干活。
+> dsh-lark-bot 用飞书 WebSocket 长连接，不需要公网 IP、域名、服务器或内网穿透；代码始终只在本机运行。
+>
+> **安装（唯一路径）**
+> ```bash
+> npx dsh-lark-bot@latest setup --profile dsh-lark
+> dsh --profile dsh-lark
+> ```
+> 首次启动终端打印二维码，飞书 App 扫码绑定 PersonalAgent 应用，私聊直接发消息，群聊/话题里 @bot。
+>
+> **六个差异化能力**
+> 1. 安全网守护：dsh 进程崩溃后机器人仍在飞书回复，/safemode 进入仅核心安全模式自愈——唯一
+>    「出故障时用户不会失联」的方案；
+> 2. 多角色 Agent：/role 切换 PM / 开发 / 文档角色，每个角色有人设、模型偏好与规则；
+> 3. 并行多任务：同群同时跑多个任务，会话隔离不排队；
+> 4. 会话归档：/archive、/retention 自动保留策略，会话列表不烂掉；
+> 5. 跨会话主动通知：A 群跑完，主动发到 B 群并 @ 你；
+> 6. 对话内管理模型和密钥：/model、/providers、/key 全程在聊天里完成。
+>
+> **安全性**
+> 数据只在本机、飞书与 DeepSeek 之间流转；密钥不写入仓库；访问白名单 /invite 可管理；
+> 官方从不提供 exe 安装包，凡遇到「下载双击运行」的页面均为假冒来源，请认准
+> GitHub `PlutoKeating/dsh-lark-bot` 与 npm `dsh-lark-bot`。
+>
+> **项目信息**
+> GitHub：github.com/PlutoKeating/dsh-lark-bot
+> npm：dsh-lark-bot / dsh-feishu-bot
+> 收录：dshfind、dshbase、awesome-dsh-plugin 等。
+> 欢迎 Star、提 Issue、参与社区；项目基于 AGPL-3.0 开源。
+
+发布要点：
+- CSDN：勾选「原创」「转载需授权」，标签选 DeepSeek / 飞书 / AI Agent / 开源；
+- 掘金：标签选 人工智能 / 前端 / 开源；
+- 知乎：文章 + 同步回答「DeepSeek Harness 怎么接入飞书？」类问题（§7.3）；
+- 公众号：标题改「我用一个周末把 DeepSeek Harness 装进了飞书」，首图用仓库卡片。
+
+### 7.2 B 站视频脚本（8–10 分钟实机演示）
+
+标题：DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥本机 Coding Agent｜dsh-lark-bot 实机演示
+
+分镜：
+1. **开场（0:00–0:30）**：手机飞书界面，「帮我跑一下测试」→ 电脑终端开始执行 → 飞书收流式卡片。
+   口播：DeepSeek Harness 8 月 13 日开源，今天带你把本机 coding agent 装进飞书。
+2. **为什么（0:30–1:20）**：官方 Web UI 要坐电脑前；出门想改代码怎么办。对比其他方案：串行、崩溃失联。
+3. **安装演示（1:20–3:00）**：终端执行两条命令，打印二维码，飞书扫码绑定，第一条消息发出去。
+4. **六个能力逐个演示（3:00–7:30）**：
+   - 并行任务：同群连发两个任务同时跑；
+   - 多角色：/role set pm，让 agent 换角色；
+   - 跨会话通知：A 群让 agent 完成后去 B 群 @ 你；
+   - 归档：/archive 后 /archive list；
+   - 对话内换模型 / 密钥：/model use、/key set；
+   - 杀手锏：kill dsh 进程 → 飞书发 /safemode → 机器人照常回复 → /safemode exit 恢复。
+5. **安全提示（7:30–8:20）**：认准官方仓库；不提供 exe；仿冒仓库警示。
+6. **结尾（8:20–9:00）**：Star/安装命令/评论区提问。
+
+发布要点：简介放安装命令与官方链接；分区选「科技→软件应用」；标签 DeepSeek/飞书/AI Agent；
+字幕开启；标题与简介覆盖「deepseek harness 飞书」「扫码」关键词。
+
+### 7.3 知乎回答模板（P1）
+
+问题：「DeepSeek Harness 怎么接入飞书？」「有哪些好用的 DeepSeek Harness 插件？」
+
+回答结构：
+> 飞书桥接我推荐 dsh-lark-bot（github.com/PlutoKeating/dsh-lark-bot），是目前功能最全的飞书方案，
+> 扫码即用，安装只要两条命令……（展开六个能力，重点讲安全网守护）…… 特别提醒：官方从不提供 exe，
+> 别下任何「下载双击运行」的版本。
+
+要点：回答要带实际演示截图；知乎对 GitHub 外链放行，但避免堆链接；优先回答高浏览问题。
+
+### 7.4 小红书笔记（3 条，P1）
+
+**笔记 1（教程类）**：标题「DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥电脑干活」
+正文：安装命令 + 扫码步骤 + 效果截图（飞书里跑任务的流式卡片）。话题：#DeepSeek #飞书 #AI编程 #效率工具。
+
+**笔记 2（场景类）**：标题「通勤路上改 bug：手机发一句，家里电脑自己跑」
+正文：场景化故事 + 并行任务/主动通知演示。话题：#程序员日常 #远程办公 #AI Agent。
+
+**笔记 3（避坑类）**：标题「警惕 DeepSeek Harness 仿冒插件：官方只有一条安装命令」
+正文：假 exe 警示 + 官方渠道清单。话题：#DeepSeek避坑 #开源软件。
+
+要点：首图用实机截图（飞书对话流式卡），小红书搜索权重吃标题关键词；发布频率 1–2 条/周。
+
+### 7.5 抖音 / 视频号口播稿（30 秒）
+
+> 你知道吗，DeepSeek Harness 现在已经可以装进飞书了。一条命令，扫码 30 秒，你在手机飞书里发消息，
+> 家里的电脑就开始干活。跑测试、改代码、看结果，全程流式卡片。而且就算 dsh 崩了，飞书里照样能把它救活。
+> 唯一官方仓库 PlutoKeating/dsh-lark-bot，注意，官方从来不提供 exe，别下错了。
+
+### 7.6 英文媒体（P2）
+
+- 将 §7.1 主稿翻译为英文，发布到 dev.to / medium / Hacker Noon，标题：
+  “Connect DeepSeek Harness to Feishu / Lark in 30 Seconds (Scan-to-Connect)”。
+- HN 评论区参与 dsh 相关讨论时，自然提及项目与 npm 包名。
+- 给 orcarouter.ai 等 dsh 教程站发邮件建议收录（联系页一般有邮箱）。
+
+---
+
+## 8. GEO / AEO 清单（面向 AI 搜索引擎）
+
+- [x] llms.txt 提供项目摘要（docs/llms.txt）
+- [x] 落地页 FAQPage + SoftwareApplication 结构化数据
+- [x] README 中英双语、问题式小标题
+- [ ] 在 Perplexity / 豆包 / Kimi / 文心等 AI 搜索里主动提问并截图记录（用「deepseek harness 飞书」类问题），
+      持续迭代落地页 FAQ 以命中 AI 引用
+- [ ] 让项目出现在更多「插件盘点」类内容中（V2EX、LINUX DO、awesome 榜单、bilibili 盘点视频评论区）
+- [ ] 鼓励用户写使用体验（Issue/讨论区）→ 形成带「真实口碑」的长尾内容源
+
+---
+
+## 9. 效果跟踪（周报模板）
+
+| 指标 | 基线（2026-08-17） | 目标（30 天） | 本周 |
+| --- | --- | --- | --- |
+| GitHub star | 20 | 100+ | |
+| npm 月下载 | ~7,250（双包） | 15,000+ | |
+| Bing「deepseek harness 飞书」前 10 出现我们 | 无 | 有 | |
+| 百度收录 | 无 | 有（落地页/Gitee） | |
+| 落地页访问（GSC/Bing 数据） | 未启用 | 可统计 | |
+| 已发布内容数 | 0 | ≥8（CSDN/掘金/知乎/B站/小红书×3/抖音） | |
+| awesome-dsh-plugin | PR 待合并 | 已收录 | |
+| Gitee 镜像 | 无 | 已上线 | |
+
+> 每周五复盘一次，更新本表与 README「社区收录情况」。

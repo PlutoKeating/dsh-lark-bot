@@ -35,6 +35,7 @@
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
   <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
   <a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
+  <a href="https://dshbase.com/zh/plugins/dsh-lark-bot"><img src="https://dshbase.com/badges/dsh-lark-bot.svg" alt="dshbase 实测可装"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/commits/main"><img src="https://img.shields.io/github/commits-since/PlutoKeating/dsh-lark-bot/v0.7.0?label=commits%20since%20v0.7.0" alt="Commits since v0.7.0"></a>
 </p>
@@ -890,12 +891,15 @@ and relaunches the full profile on `/safemode exit`.
 | 平台 Platform | 状态 Status | 说明 Notes |
 | :--- | :--- | :--- |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`（agent 实测通过）；收录条目 v0.8.0 经 [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 合并，榜单行同步 [issue #139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) 已关闭；数据刷新至 v0.14.0 待跟进<br>Shown as `✅ 运行级可用` (agent-tested); v0.8.0 entry merged via [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127); leaderboard sync [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) closed; refresh to v0.14.0 pending |
+| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 收录 PR 已提交 · 待合并<br>Submission PR open · awaiting merge | 7.2k+ star 的社区插件精选大榜（`dsh-plugin` 生态流量入口）；收录 PR [#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) 已提交，合并后回填状态<br>The 7.2k+ star curated plugin list (the ecosystem traffic hub); submission [PR #1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) open, status backfilled after merge |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页在线<br>Listed · detail page live | 条目名称修正 [issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭；v0.10.1 数据刷新 [issue #6](https://github.com/hikariming/dshfind/issues/6) 待处理；v0.14.0 刷新待跟进；顶部徽章 / 展示卡来自 dshfind<br>Entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); v0.10.1 refresh ([issue #6](https://github.com/hikariming/dshfind/issues/6)) pending; v0.14.0 refresh pending; the header badge / card comes from dshfind |
+| [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ 已收录 · 实测可装<br>Listed · CI-verified | 中文插件目录（收录 1771+ 插件），自动化 CI 实测 `dsh plugin add` 可装可启动，标注 `✅ 已验证 · 实测可装`；顶部徽章来自 dshbase<br>Chinese plugin directory (1771+ plugins) with automated CI install verification, marked `✅ verified`; the header badge comes from dshbase |
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 收录申请通过 · 讨论活跃<br>Accepted · discussion active | `[Plugin]` 收录申请（Discussion #11）已通过并持续维护，最新更新说明 v0.10.2；v0.14.0 更新待跟进<br>`[Plugin]` submission (Discussion #11) accepted and active, latest notes v0.10.2; v0.14.0 update pending |
 
 **更新请求进度 / Update request status（截至 2026-08-17 复核 | as of 2026-08-17）**：
 
 - awesome-dsh-plugins 收录条目 v0.8.0：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并；榜单行同步：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ 已关闭
+- awesome-dsh-plugin 大榜收录：[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) — 📨 已提交（2026-08-17，v0.15.0 数据）
 - dshfind 条目名称修正 + v0.8.0 刷新：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭；v0.10.1 刷新：[#6](https://github.com/hikariming/dshfind/issues/6) — 📨 待处理
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）
 - 平台数据刷新至 v0.14.0 — ⏸ 暂缓提交（安全窗口内保持低调，见「假冒仓库警告」）
@@ -903,6 +907,7 @@ and relaunches the full profile on `/safemode exit`.
 **Update requests**:
 
 - awesome-dsh-plugins v0.8.0 entry: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged; leaderboard sync: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ closed
+- awesome-dsh-plugin listing: [#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) — 📨 submitted (2026-08-17, v0.15.0 data)
 - dshfind name fix + v0.8.0 refresh: [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed; v0.10.1 refresh: [#6](https://github.com/hikariming/dshfind/issues/6) — 📨 pending
 - omdsh-dev/community listing: [Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ accepted, discussion active (latest notes v0.10.2)
 - Platform refresh to v0.14.0 — ⏸ deferred (staying low-key during the security window; see "Impostor warning" below)
