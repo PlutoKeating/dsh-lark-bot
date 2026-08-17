@@ -19,8 +19,8 @@
 | `github-report-en.md` | GitHub 举报假冒仓库（Spam / Deceptive practices） | GitHub Report content（无 API，需 PlutoKeating 手动提交） | ⏳ 待手动提交 |
 | `github-malware-escalation-en.md` | GitHub 恶意软件升级举报（Releases 出现附件时） | GitHub Report content | ⏸ 待触发 |
 | `dshfind-appeal-zh.md` | dshfind 申诉：假冒条目下架 / 标记 | [hikariming/dshfind#10](https://github.com/hikariming/dshfind/issues/10) | ✅ 已发布 |
-| `omdsh-reminder-zh.md` | 向 omdsh 官方 / dsh-lark 原作者的安全提醒 | [omdsh-dev/community#25](https://github.com/omdsh-dev/community/discussions/25) | ✅ 已发布 |
-| `omdsh-community-announcement-zh.md` | 官方渠道防伪公告 | [omdsh-dev/community#26](https://github.com/omdsh-dev/community/discussions/26)（原目标 #11 评论不可达） | ✅ 已发布 |
+| `omdsh-reminder-zh.md` | 向 dsh-lark 项目作者的安全提醒 | [omdsh-dev/dsh-lark#4](https://github.com/omdsh-dev/dsh-lark/issues/4) | ✅ 已发布 |
+| `omdsh-community-announcement-zh.md` | 面向 omdsh 社区的事件提醒 | [omdsh-dev/community#25](https://github.com/omdsh-dev/community/discussions/25)（原 #26 已关闭并入） | ✅ 已发布 |
 | `impostor-repo-pr-en.md` | 给假冒仓库的“过时副本”信息牌 PR | [tarraencompassing61/dsh-lark-bot#1](https://github.com/tarraencompassing61/dsh-lark-bot/pull/1) | ✅ 已发布 |
 
 触发条件见 `issue-external-actions-tracking.md`。任何草稿发送前需维护者逐份确认。
