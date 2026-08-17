@@ -72,44 +72,55 @@ function lastCard(channel: CardCapture): Record<string, unknown> {
   return channel.cards[channel.cards.length - 1] as Record<string, unknown>;
 }
 
+interface CardElement {
+  tag?: string;
+  elements?: unknown[];
+  columns?: unknown[];
+  actions?: unknown[];
+  value?: Record<string, unknown>;
+}
+
+/** Walk the schema-2.0 card tree and collect every button element. */
+function collectButtons(elements: unknown[]): Array<{ value?: Record<string, unknown> }> {
+  const buttons: Array<{ value?: Record<string, unknown> }> = [];
+  for (const element of elements as CardElement[]) {
+    if (element?.tag === 'button') buttons.push(element as never);
+    if (element?.tag === 'column_set' && Array.isArray(element.columns)) {
+      for (const column of element.columns as CardElement[]) {
+        if (Array.isArray(column?.elements)) buttons.push(...collectButtons(column.elements));
+      }
+    }
+    if (element?.tag === 'form' && Array.isArray(element.elements)) {
+      buttons.push(...collectButtons(element.elements));
+    }
+    if (element?.tag === 'action' && Array.isArray(element.actions)) {
+      buttons.push(...(element.actions as Array<{ value?: Record<string, unknown> }>));
+    }
+  }
+  return buttons;
+}
+
+function buttonsOf(card: Record<string, unknown>): Array<{ value?: Record<string, unknown> }> {
+  return collectButtons((card.body as { elements: unknown[] }).elements);
+}
+
 function wizardValue(card: Record<string, unknown>): Record<string, unknown> {
-  const elements = (card.body as { elements: unknown[] }).elements;
-  const action = elements.find(
-    (element) =>
-      typeof element === 'object' &&
-      element !== null &&
-      (element as { tag?: string }).tag === 'action',
-  ) as { actions?: Array<{ value?: Record<string, unknown> }> } | undefined;
-  return action?.actions?.[0]?.value ?? {};
+  return buttonsOf(card)[0]?.value ?? {};
 }
 
 function choose(card: Record<string, unknown>, index: number): Record<string, unknown> {
-  const elements = (card.body as { elements: unknown[] }).elements;
-  const action = elements.find(
-    (element) =>
-      typeof element === 'object' &&
-      element !== null &&
-      (element as { tag?: string }).tag === 'action' &&
-      ((element as { actions?: Array<{ value?: Record<string, unknown> }> }).actions?.some(
-        (button) => typeof button.value?.choose === 'number',
-      ) ??
-        false),
-  ) as { actions: Array<{ value: Record<string, unknown> }> };
-  return action.actions[index]!.value;
+  const values = buttonsOf(card)
+    .map((button) => button.value)
+    .filter((value) => typeof value?.choose === 'number');
+  return values[index] ?? {};
 }
 
 function confirmValue(card: Record<string, unknown>): Record<string, unknown> {
-  const elements = (card.body as { elements: unknown[] }).elements;
-  const action = elements.find(
-    (element) =>
-      typeof element === 'object' &&
-      element !== null &&
-      (element as { tag?: string }).tag === 'action' &&
-      (element as { actions?: Array<{ value?: Record<string, unknown> }> }).actions?.some(
-        (button) => button.value?.confirm !== undefined,
-      ),
-  ) as { actions: Array<{ value: Record<string, unknown> }> };
-  return action.actions[0]!.value;
+  return buttonsOf(card).find((button) => button.value?.confirm !== undefined)?.value ?? {};
+}
+
+function cancelValue(card: Record<string, unknown>): Record<string, unknown> {
+  return buttonsOf(card).find((button) => button.value?.cancel !== undefined)?.value ?? {};
 }
 
 describe('config wizard', () => {
@@ -126,6 +137,7 @@ describe('config wizard', () => {
       // 2. provider id
       await handleWizardCardAction(wizardValue(lastCard(channel)), { answer: 'kingapi' }, ctx);
       expect(wizardValue(lastCard(channel)).step).toBe(2);
+      expect(JSON.stringify(lastCard(channel))).toContain('"required":true');
 
       // 3. base url (bare origin is normalized to /v1)
       await handleWizardCardAction(
@@ -134,6 +146,7 @@ describe('config wizard', () => {
         ctx,
       );
       expect(wizardValue(lastCard(channel)).step).toBe(3);
+      expect(JSON.stringify(lastCard(channel))).not.toContain('"required":true');
 
       // 4. display name (optional, empty)
       await handleWizardCardAction(wizardValue(lastCard(channel)), { answer: '  ' }, ctx);
@@ -201,19 +214,28 @@ describe('config wizard', () => {
     await withContext(async (ctx, _root, channel) => {
       await beginWizard(ctx, 'model-use');
       const card = lastCard(channel);
-      const elements = (card.body as { elements: unknown[] }).elements;
-      const action = elements.find(
-        (element) =>
-          typeof element === 'object' &&
-          element !== null &&
-          (element as { tag?: string }).tag === 'action' &&
-          (element as { actions?: Array<{ value?: Record<string, unknown> }> }).actions?.some(
-            (button) => button.value?.cancel !== undefined,
-          ),
-      ) as { actions: Array<{ value: Record<string, unknown> }> };
-      await handleWizardCardAction(action.actions[0]!.value, undefined, ctx);
+      await handleWizardCardAction(cancelValue(card), undefined, ctx);
       expect(ctx.wizards.get('chat-a')).toBeUndefined();
       expect(channel.markdowns.join('\n')).toContain('已取消');
+    });
+  });
+
+  it('renders schema-2.0 cards without the deprecated action container', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      await handleConfigHubAction('refresh', ctx);
+      const hub = lastCard(channel);
+      expect(JSON.stringify(hub)).not.toContain('"tag":"action"');
+      expect(JSON.stringify(hub)).toContain('"tag":"column_set"');
+
+      await beginWizard(ctx, 'provider-add');
+      const options = lastCard(channel);
+      expect(JSON.stringify(options)).not.toContain('"tag":"action"');
+
+      await handleWizardCardAction(choose(options, 0), undefined, ctx);
+      const text = lastCard(channel);
+      expect(JSON.stringify(text)).toContain('"tag":"form"');
+      expect(JSON.stringify(text)).toContain('"form_action_type":"submit"');
+      expect(JSON.stringify(text)).not.toContain('"tag":"action"');
     });
   });
 
