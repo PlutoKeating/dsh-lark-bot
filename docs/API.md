@@ -175,7 +175,8 @@ export class RunPolicyStore {
 **首个** run 会续跑 dsh 原生 session，并发 run 一律使用全新 session id，避免共享 wire session。
 
 `src/config/access-manager.ts` 的 `AccessManager` 把 `/invite user|admin|group|list|remove` 的
-变更持久化到当前 profile 的访问白名单。
+变更持久化到当前 profile 的访问白名单（`list` 为只读；其余写操作仅管理员可执行，见
+`src/commands/index.ts` 的 `requireAdmin` 守卫）。
 
 `src/bot/model-store.ts` 提供内存级 `ModelStore`，按 scope 覆盖模型：
 

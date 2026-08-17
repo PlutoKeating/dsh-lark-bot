@@ -122,7 +122,7 @@ dsh --profile dsh-lark
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
-| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单|
+| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单（写操作需管理员）|
 | `/help` | 查看帮助|
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。

@@ -47,9 +47,11 @@
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
 8. **审批**：ACP 模式下敏感操作通过 `session/request_permission` 以飞书审批卡一问一答；
    run 结束 / dispose 时所有挂起审批卡结算为拒绝（`src/bot/approvals.ts`）。
-9. **管理操作鉴权**：飞书会话内对 dsh 配置的写操作（`/model default`、`/model add|remove`、
-   `/provider add|update|remove`、`/key set|remove`）仅管理员可执行（管理员由
-   `/invite admin <open_id>` 定义）；查看类命令（`/model`、`/providers`、`/key list`）开放。
+9. **管理操作鉴权**：飞书会话内对 dsh 配置与访问白名单的写操作（`/model default`、
+   `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
+   与 `/invite remove …`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
+   管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
+   （`/model`、`/providers`、`/key list`）开放。
 10. **本地回调隔离**：`lark_notify` 工具的回调服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
 11. **安全网守护（默认随 `setup` 安装）**：

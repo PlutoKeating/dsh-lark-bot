@@ -122,7 +122,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/provider add\|update\|remove <id>` | Manage providers (admin; deepseek-official and custom pi-ai) |
 | `/key set\|remove\|list <ref>` | Manage dsh credentials (set / remove require admin) |
 | `/ask <question>` | Send a Q&A card; the answer is written back to session context |
-| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | Manage the access allowlist |
+| `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | Manage the access allowlist (mutating commands require admin) |
 | `/help` | Show help |
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
