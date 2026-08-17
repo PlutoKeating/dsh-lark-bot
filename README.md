@@ -1,5 +1,3 @@
-> **⚠️ 仅认准官方渠道：** 唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，唯一官方 npm 包 `dsh-lark-bot`（同源双包 `dsh-feishu-bot`，维护者 `plutokeating`）。**本项目从不提供 Windows 可执行文件（.exe），也没有任何“下载即运行”的安装包**——任何以本项目名义提供 exe / “下载后双击运行”的页面、仓库或第三方分发渠道均为**假冒 / 恶意来源**，请勿下载或运行。官方安装唯一命令：`npx dsh-lark-bot@latest setup --profile dsh-lark`。仿冒仓库取证与完整声明见文末「假冒仓库警告」及 [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md)。
-
 <h1 align="center">dsh-lark-bot</h1>
 
 <p align="center">🌏 英文版：[README_EN.md](README_EN.md)</p>
@@ -33,6 +31,8 @@
   · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
+> **⚠️ 仅认准官方渠道：** 唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，唯一官方 npm 包 `dsh-lark-bot`（同源双包 `dsh-feishu-bot`，维护者 `plutokeating`）。**本项目从不提供 Windows 可执行文件（.exe），也没有任何“下载即运行”的安装包**——任何以本项目名义提供 exe / “下载后双击运行”的页面、仓库或第三方分发渠道均为**假冒 / 恶意来源**，请勿下载或运行。官方安装唯一命令：`npx dsh-lark-bot@latest setup --profile dsh-lark`。仿冒仓库取证与完整声明见文末「假冒仓库警告」及 [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md)。
+
 ---
 
 ## 场景
@@ -41,13 +41,15 @@
 
 **dsh-lark-bot 把遥控器装进你的飞书**：在私聊、群聊、话题里直接指挥本机 dsh coding agent，流式卡片实时看思考与工具调用；任务完成主动推送到你所在的任何群并 @ 你；即使 dsh 崩溃下线，飞书里依然叫得应——发 `/safemode` 进入仅核心安全模式，直接在聊天里定位问题、重启引擎。**这是唯一“dsh 挂了你不会失联”的桥接方案。**
 
+**适合谁**：在飞书 / Lark（私聊、群聊、话题）里指挥本机 dsh coding agent 的开发者与团队，尤其是需要多项目隔离、角色分工、并行任务与会话归档的协作场景。
+
 ## 能做什么
 
 **基础能力**：
 
 - 私聊、群聊、话题（thread）里指挥本机 dsh coding agent，图片 / 文本文件直接发给 bot 即可；
 - 流式卡片实时展示思考、工具调用与结果，支持交互按钮（停止 / 审批 / 问答卡）；
-- 会话自动归档与保留策略；Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
+- Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
 **六项全网独有组合**：
 
@@ -77,9 +79,7 @@ dsh --profile dsh-lark
 
 ③ 首次启动终端打印二维码 → 飞书 / Lark App 扫码创建或选择 PersonalAgent 应用 → 绑定后私聊直接发消息，群聊 / 话题里 `@bot`。
 
-`setup` 会自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
-`dsh plugin --profile dsh-lark add dsh-lark-bot@<版本>`（版本号由当前包固定）→ 默认安装「安全网守护」系统服务。
-一条命令即完成全部安装。
+`setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略 → 标准 `dsh plugin add` → 默认安装「安全网守护」系统服务，一条命令完成全部安装。
 
 > **无需公网 IP / 域名 / 服务器 / 内网穿透**（飞书 WebSocket 出站长连接），Linux / macOS / Windows 通用。
 > 已有 PersonalAgent 应用时可跳过扫码（见「配置」）：`DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu dsh --profile dsh-lark`
@@ -127,84 +127,40 @@ dsh --profile dsh-lark
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
-**`/newg <群名>`**：通过飞书 API 自动新建一个私密群、把发送者拉入群，并回复群链接——在新群里发消息即为新 scope / 新会话，当前会话不受影响。需要应用具备 `im:chat` 与 `im:chat.members:write_only` 权限（在开发者后台「权限管理」申请）。
+**`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
-同一 scope（私聊 / 群聊 / 话题）默认允许 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或
-`/concurrency` 调整）：连续发来的多条消息会以独立 run 并行推进，每个 run 使用独立的 dsh
-session 与独立 runId，`/status` 展示全部运行中的 run，`/stop` 一次性终止全部任务。
+同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；`/status` 查看全部运行中的 run，`/stop` 一次性终止。
 
-**多角色 Agent**：管理员用 `/role save <id> <name> --persona <文案> [--model <id>] [--tools
-<csv>] [--rules <文案>]` 定义 PM / 开发 / 文档等角色（persona、模型偏好、工具指引、角色规则），
-`/role set <id>` 把角色绑定到当前 scope：下一轮起该 scope 的每个 run 都携带角色 persona 与
-规则，并优先使用角色模型（角色模型 < 每会话 `/model use`）。角色定义持久化在
-`~/.dsh-lark/profiles/<profile>/roles.json`。
+**多角色 Agent**：管理员用 `/role save <id> <name> --persona <文案> [--model <id>] [--tools <csv>] [--rules <文案>]` 定义 PM / 开发 / 文档等角色，`/role set <id>` 绑定到当前 scope；每个 run 携带角色 persona 与规则，角色模型低于每会话 `/model use`。角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`。
 
-**出站 @ 提及与跨会话通知**：bridge 出站契约支持 `mentions`（@ 提及）与跨 chat/thread 发送；
-`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）。agent 侧还内置 `lark_notify`
-dsh 工具（SDK / ACP 两种 runtime 均可装配）：agent 完成任务后可主动向其他群 / 话题发消息并
-@ 指定成员，桥接进程通过 127.0.0.1 本地回调端口 + 随机 token 校验，不暴露公网。
+**出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
-**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过
-`lark_ask_user` 工具主动向当前会话弹一张**问答卡**（单选 / 多选 / 自由文本），
-你回答后任务自动继续——无需额外命令。问答卡等待期间任务不会被运行超时打断。
-（与 `/ask` 的“你主动发结构化问题”方向相反：这是 agent 主动来问你。）
+**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本），回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
-**安全网守护**：默认随 `setup` 一起安装的、独立于 dsh 进程、系统级常驻的
-最小守护进程（Linux systemd user unit / macOS LaunchAgent / Windows 启动项）。dsh 正常运行时守护保持静默；
-一旦 dsh 进程下线或无法 boot（例如某个第三方插件破坏了整个 profile 组合），守护自动接管飞书
-通道，用户无需接触命令行即可发送控制信号自救：
+**安全网守护**：独立于 dsh 进程、系统级常驻的最小守护进程（systemd / LaunchAgent / Windows 启动项），默认随 `setup` 安装。dsh 正常时静默；dsh 下线或无法 boot（如第三方插件破坏 profile 组合）时自动接管飞书通道，无需命令行即可自救：
 
-- `/safemode`：进入**仅核心安全模式**——守护创建 `~/.dsh/profiles/<profile>-safe`（仅
-  `dsh-base` + `dsh-headless` 两个官方核心 bundle，**不加载任何第三方插件**），后续消息经
-  守护转发给该核心 dsh 逐条对话，配合代码执行能力定位 / 修复 / 禁用损坏插件；安全模式优先使用
-  官方 **SDK 流式引擎**（实时思考 / 工具调用 / web search / 打字机式文字输出，与正常模式同一张
-  流式卡），SDK runtime 不可用时自动回退 headless（任务期间卡片仍实时显示“正在思考 / 已运行 Ns /
-  无响应 Ns”活动状态）；
-- `/safemode plugins`：列出故障 profile 已安装的插件清单（自愈诊断）；
-- `/safemode status`：查看守护 / dsh / 安全模式状态；
-- `/safemode stop`：终止当前正在运行的安全模式任务（也可点击任务卡片上的 ⏹ 按钮）；
-- `/safemode exit`：退出安全模式，守护重启完整 profile 并把飞书通道交还给正常形态；
+- `/safemode`：进入**仅核心安全模式**（仅 `dsh-base` + `dsh-headless` 官方核心，**不加载第三方插件**），优先 SDK 流式引擎、失败回退 headless，直接在聊天里定位 / 修复 / 禁用损坏插件；
+- `/safemode plugins`：列出故障 profile 的插件清单；`/safemode status`：查看状态；`/safemode stop`：终止当前安全任务（或点卡片 ⏹）；`/safemode exit`：重启完整 profile 并交还通道。
 
-安全模式任务有**空闲超时**（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟：任务持续无
-活动事件才被终止，活跃的流式任务不会被误杀），超时或失败都会在卡片上给出明确终态，不会无声
-挂起。全程不需要命令行；dsh 恢复后守护自动断开并回归静默。安装：
+安全模式任务有**空闲超时**（`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟，仅持续无活动事件才终止），超时 / 失败都给出明确终态。安装：
 
 ```bash
-# 随 setup 默认安装（无需额外参数）；已安装后也可单独安装 / 重装：
+# 随 setup 默认安装；已安装后也可单独安装 / 重装：
 dsh-lark-bot guardian install --dsh-profile dsh-lark
 ```
-不需要守护时，安装时加 `--no-guardian` 跳过；单独卸载用 `dsh-lark-bot guardian uninstall`。
+不需要时 `setup --no-guardian` 跳过；单独卸载用 `dsh-lark-bot guardian uninstall`。
 
 ### 模型 / Provider / 凭据管理
 
-模型与 provider 的配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 页面完全相同的
-存储协议），改动在下一个请求生效，无需重启 bot：
+配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 同一存储协议），改动下一请求生效、无需重启：
 
-- `/model use <id>`：按会话热切换模型，下一轮消息即用新模型。
-- `/model default <id>`：写入 dsh 的 `agent-default-model`，作为新会话的默认模型。
-- `/providers`：展示 dsh 已配置的 provider、模型与凭据状态（DeepSeek 官方 + 自定义 pi-ai）。
-- `/provider add|update|remove`：管理自定义 provider（`llm-pi-ai`）或 `deepseek-official`；
-  自定义 provider 需要 `--api`（`openai-completions` / `openai-responses` / `anthropic-messages`）、
-  `--base-url` 与至少一个 `--model`，与官方 schema 一致。
-- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）。settings 只保存 `apiKeyEnv`
-  引用，字面密钥不进入 settings 或聊天记录。
+- `/model use <id>`：按会话热切换模型（下一轮生效）；`/model default <id>`：写入 dsh 默认模型。
+- `/providers`：查看 provider、模型与凭据状态；`/provider add|update|remove`：管理自定义 provider（需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
+- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，字面密钥不进 settings / 聊天记录。
 
-安全提醒：在飞书会话里输入密钥会对该会话的可见成员暴露密钥，建议仅在私聊中使用，或优先用
-`--api-key-env` 引用已配置的环境变量 / dsh Web 页面录入。bot 不会在任何回复中回显密钥值。
+安全提醒：在飞书会话输入密钥会对可见成员暴露，建议私聊使用或 `--api-key-env` 引用环境变量；bot 不在任何回复中回显密钥值。
 
-## 安装与卸载
-
-### 安装
-
-唯一安装方式（标准 dsh profile bundle）：
-
-```bash
-npx dsh-lark-bot@latest setup --profile dsh-lark
-```
-
-`setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
-`dsh plugin --profile dsh-lark add dsh-lark-bot`，并**默认同时安装「安全网守护」**
-（见「安全网守护」一节；不需要时加 `--no-guardian` 跳过）。已安装时重复执行即升级到最新版。
+## 升级、禁用与卸载
 
 ### 升级
 
@@ -258,21 +214,21 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: 出门在外，想用手机指挥本机的 DeepSeek Harness？**
 
-**A:** 可以。安装并扫码绑定后，用飞书手机 App 给机器人发消息即可指挥本机 dsh coding agent 读代码、跑命令、完成任务；任务完成还能跨会话主动推送并 @ 你。安装只需：`npx dsh-lark-bot@latest setup --profile dsh-lark` → `dsh --profile dsh-lark` → 飞书扫码 → 开聊。
+**A:** 可以。安装并扫码绑定后，用飞书手机 App 发消息即可指挥本机 dsh coding agent；任务完成还能跨会话主动推送并 @ 你。安装：`npx dsh-lark-bot@latest setup --profile dsh-lark` → `dsh --profile dsh-lark` → 扫码 → 开聊。
 
 **Q: 多个项目 / 多人协作，怎么隔离与分工？**
 
-**A:** 每个会话自动落在独立的 git worktree（`~/.dsh-lark/profiles/<profile>/worktrees/<scope>/`），项目级 `AGENTS.md` 规则自动注入，多项目互不干扰；管理员用 `/role` 定义 PM / 开发 / 文档等角色并绑定到群，用 `/invite` 管理访问白名单；同一群内默认 2 个任务并行（`/concurrency` 调整），`/archive` + `/retention` 控制会话归档与保留。
+**A:** 每个会话自动落在独立 git worktree，项目级 `AGENTS.md` 自动注入；管理员用 `/role` 定义并绑定角色、用 `/invite` 管理白名单；同群默认 2 个任务并行（`/concurrency` 调整），`/archive` + `/retention` 控制归档与保留。
 
 **Q: dsh 崩溃 / 掉线后，飞书机器人还能用吗？**
 
-**A:** 能。`setup` 默认安装独立于 dsh 进程的「安全网守护」（systemd / LaunchAgent / Windows 启动项）。dsh 崩溃或无法启动时，守护自动接管飞书通道并先尝试自动重启完整 profile；仍失败时你直接发 `/safemode` 进入仅核心安全模式（官方核心 bundle，不加载任何第三方插件），在聊天里定位 / 修复问题，`/safemode exit` 重启完整 profile 并交还通道。全程不需要命令行。
+**A:** 能。`setup` 默认安装独立于 dsh 的「安全网守护」：dsh 崩溃时守护自动接管飞书通道并先尝试自动重启；仍失败时发 `/safemode` 进入仅核心安全模式定位 / 修复问题，`/safemode exit` 恢复完整 profile。全程不需要命令行。
 
 ### 常见问题
 
 **Q: DeepSeek Harness 怎么接入飞书？**
 
-**A:** 安装 Node.js ≥ 22 与 DeepSeek Harness（已配置 `DEEPSEEK_API_KEY`），执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 启动并用飞书 App 扫描终端二维码绑定 PersonalAgent 应用。私聊直接发消息，群聊 / 话题里 `@bot`。
+**A:** 安装 Node.js ≥ 22 与 DeepSeek Harness（已配置 `DEEPSEEK_API_KEY`），执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 扫码绑定即可。私聊直接发消息，群聊 / 话题里 `@bot`。
 
 **Q: 需要公网 IP、域名或服务器吗？**
 
@@ -280,7 +236,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护（dsh 崩溃后飞书仍叫得应）、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合为一体；安装上是标准 dsh profile bundle，`npx dsh-lark-bot@latest setup` 一条命令装进 dsh profile，无需独立 Docker / 后台服务。
+**A:** 功能组合最全：安全网守护、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合一；标准 dsh profile bundle，`npx dsh-lark-bot@latest setup` 一条命令安装，无需独立 Docker / 后台服务。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -293,20 +249,6 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `dsh` · `deepseek` · `deepseek harness` · `feishu` · `lark` · `bridge` · `bot` ·
 `chatbot` · `messaging` · `qrcode` · `typescript` · `feishu-bot` · `lark-bot` ·
 `dsh-plugin` · `deepseek-harness` · `im-bridge` · `ai-agent` · `workspace` · `self-healing`
-
-## 这是什么
-
-**dsh-lark-bot** 是一个轻量桥接工具，把本机的 DeepSeek Harness（`dsh`）接入飞书 / Lark，复刻当年 OpenCode Telegram Bot / MiMoCode Telegram Bot 的体验——在 IM 里与 coding agent 对话、收流式卡片、审阅 diff，并在此基础上叠加**完整的项目工作区管理**。
-
-**适合谁**：在飞书 / Lark（私聊、群聊、话题）里指挥本机 dsh coding agent 的
-开发者与团队，尤其是需要多项目隔离、角色分工、并行任务与会话归档的协作场景。
-
-## 目标
-
-- **一条命令安装部署**：`npx dsh-lark-bot@latest setup --profile dsh-lark` 装进 dsh profile，
-  随后 `dsh --profile dsh-lark` 启动并扫码，桥接引擎作为标准插件在 dsh 进程内运行。
-- **飞书原生体验**：流式卡片、交互按钮、图片 / 文件，全程双语（文档评论为规划中能力）。
-- **完整工作区管理**：多项目隔离、git worktree、项目级规则注入、上下文持久化。
 
 ## 兼容性
 

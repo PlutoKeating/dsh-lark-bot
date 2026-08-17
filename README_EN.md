@@ -1,5 +1,3 @@
-> **⚠️ Official channels only:** The only official repository is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot); the only official npm packages are `dsh-lark-bot` (with the twin package `dsh-feishu-bot`, maintainer `plutokeating`). **This project never ships Windows executables (.exe) or any "download-and-run" installer.** Any page, repository, or third-party channel offering executables under this project's name is a **counterfeit / malicious source** — do not download or run anything from it. The only official install command: `npx dsh-lark-bot@latest setup --profile dsh-lark`. Evidence and the full statement live in the "Impostor Repository Warning" section below and [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md).
-
 <h1 align="center">dsh-lark-bot</h1>
 
 <p align="center">🌏 中文版 / Chinese version：[README.md](README.md)</p>
@@ -33,6 +31,8 @@ Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace 
   · Backup <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
+> **⚠️ Official channels only:** The only official repository is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot); the only official npm packages are `dsh-lark-bot` (with the twin package `dsh-feishu-bot`, maintainer `plutokeating`). **This project never ships Windows executables (.exe) or any "download-and-run" installer.** Any page, repository, or third-party channel offering executables under this project's name is a **counterfeit / malicious source** — do not download or run anything from it. The only official install command: `npx dsh-lark-bot@latest setup --profile dsh-lark`. Evidence and the full statement live in the "Impostor Repository Warning" section below and [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md).
+
 ---
 
 ## The Problem
@@ -40,6 +40,8 @@ Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace 
 Tired of being chained to your desk to drive DeepSeek Harness? dsh runs on your local machine, so checking progress and adjusting tasks means going back to your computer; once you leave your desk, a run can stall, drift, or dsh itself can crash without you ever hearing about it — until you come back and find you wasted hours.
 
 dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding agent from DMs, group chats and topics, with streaming cards showing reasoning and tool calls in real time; get proactive notifications pushed to any chat you're in with @mentions when tasks finish; and even when dsh crashes, Feishu still answers — send `/safemode` to enter core-only safe mode and locate the problem and restart the engine right from the chat. **It is the only bridge where you never lose contact when dsh goes down.**
+
+**Who it is for**: developers and teams who drive a local dsh coding agent from Feishu / Lark (DMs, groups, topics) — especially those needing multi-project isolation, role-based collaboration, parallel tasks and session archival.
 
 ## What you get
 
@@ -125,56 +127,41 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
 
-**`/newg <group name>`**: auto-creates a private group via the Feishu API, invites the sender, and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes (apply in the developer console).
+**`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
 Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts them all.
 
-**Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name> --persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` — persona, model preference, tool guidance and role rules — then bind one to the current scope with `/role set <id>`. Every run in that scope carries the role instructions, and the role model wins below the per-session `/model use` override. Role definitions persist in `~/.dsh-lark/profiles/<profile>/roles.json`.
+**Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name> --persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` and bind one to the current scope with `/role set <id>`; every run carries the role instructions, and the role model wins below the per-session `/model use` override. Role definitions persist in `~/.dsh-lark/profiles/<profile>/roles.json`.
 
-**Outbound mentions & cross-session notify**: the outbound contract supports `mentions` and cross-chat/thread sends; `/notify <scope|chatId> <text>` pushes a report to another session (admin). The agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles): after a task finishes it can push messages to other groups/topics and @mention members. The bridge listens on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
+**Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
 
-**Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it proactively sends a **question card** to the current chat via the `lark_ask_user` tool (single choice / multi choice / free text) and resumes automatically once you answer — no extra command needed. The run-timeout watchdog pauses while a card is waiting. (This is the opposite direction of `/ask`, which is you asking the agent.)
+**Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text) and resumes automatically once you answer; the run-timeout watchdog pauses while a card is waiting. (The opposite direction of `/ask`, where you ask the agent.)
 
-**Safety-net guardian**: a minimal system-level resident process installed **by default with `setup`**, independent of the dsh process (Linux systemd user unit / macOS LaunchAgent / Windows startup). While dsh runs, the guardian stays silent; once dsh goes down or fails to boot (e.g. a third-party plugin breaks the whole profile composition), the guardian takes over the Feishu channel so you can self-heal without touching the command line:
+**Safety-net guardian**: a minimal system-level resident process (systemd / LaunchAgent / Windows startup), independent of the dsh process and installed **by default with `setup`**. Silent while dsh runs, it takes over the Feishu channel when dsh goes down or fails to boot (e.g. a third-party plugin breaks the profile composition), so you can self-heal without touching the command line:
 
-- `/safemode`: enter **core-only safe mode** — the guardian provisions `~/.dsh/profiles/<profile>-safe` with only the two official core bundles (`dsh-base` + `dsh-headless`, **no third-party plugins**) and proxies a restricted conversation to that core dsh so you can locate / fix / disable the offending plugin. Safe mode prefers the official **SDK streaming engine** (real-time reasoning / tool calls / web search / typewriter text on the same streaming card as normal mode) and falls back to headless with a live activity card ("thinking / elapsed Ns / no response Ns") when the SDK runtime cannot be provisioned;
-- `/safemode plugins`: list the plugins installed into the broken profile;
-- `/safemode status`: show guardian / dsh / safe-mode state;
-- `/safemode stop`: interrupt the currently running safe-mode task (or use the ⏹ button on the card);
-- `/safemode exit`: leave safe mode — the guardian relaunches the full profile and hands the Feishu channel back;
+- `/safemode`: enter **core-only safe mode** (only the official `dsh-base` + `dsh-headless` bundles, **no third-party plugins**) — prefers the SDK streaming engine, falls back to headless, and lets you locate / fix / disable the offending plugin right from the chat;
+- `/safemode plugins`: list the plugins installed into the broken profile; `/safemode status`: show state; `/safemode stop`: interrupt the current safe-mode task (or tap ⏹ on the card); `/safemode exit`: relaunch the full profile and hand the channel back.
 
-Safe-mode tasks are bounded by an **idle timeout** (`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`, default 10 minutes: a task is stopped only after it has been silent for the whole window, so active streaming work is never cut short); timeouts and failures always surface a clear terminal state on the card instead of hanging silently. No command line is needed for the whole rescue flow; once dsh is back, the guardian releases the channel automatically. Install:
+Safe-mode tasks are bounded by an **idle timeout** (`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`, default 10 minutes, stopping only after a task has been silent the whole window); timeouts and failures always surface a clear terminal state. Install:
 
 ```bash
 # Installed by default with setup (no extra flag); can also be installed / refreshed later:
 dsh-lark-bot guardian install --dsh-profile dsh-lark
 ```
 
-Pass `--no-guardian` to setup to skip it; remove it later with `dsh-lark-bot guardian uninstall`.
+Skip it with `setup --no-guardian`; remove it later with `dsh-lark-bot guardian uninstall`.
 
 ### Models / Providers / Credentials
 
-Model and provider configuration is persisted the official dsh way (the exact storage protocol used by the dsh Web **Settings → Models** page); changes take effect on the next request without restarting the bot:
+Configuration is persisted the official dsh way (the same storage protocol as the dsh Web **Settings → Models** page); changes take effect on the next request without restarting the bot:
 
-- `/model use <id>`: hot-switch the model for this session; the next message uses it.
-- `/model default <id>`: write the dsh `agent-default-model` as the default for new sessions.
-- `/providers`: show configured providers, models and credential status (official DeepSeek + custom pi-ai).
-- `/provider add|update|remove`: manage custom providers (`llm-pi-ai`) or `deepseek-official`; a custom provider needs `--api` (`openai-completions` / `openai-responses` / `anthropic-messages`), `--base-url` and at least one `--model`, matching the official schema.
-- `/key set|remove|list`: read / write `~/.dsh/.credentials.yaml` (0600). Settings keep only `apiKeyEnv` references; literal keys never enter settings or chat history.
+- `/model use <id>`: hot-switch the model for this session (effective next message); `/model default <id>`: write the dsh default model.
+- `/providers`: show providers, models and credential status; `/provider add|update|remove`: manage custom providers (needs `--api` / `--base-url` / at least one `--model`, matching the official schema) or `deepseek-official`.
+- `/key set|remove|list`: read / write `~/.dsh/.credentials.yaml` (0600); settings keep only `apiKeyEnv` references — literal keys never enter settings or chat history.
 
-Security note: typing a key in a Feishu conversation exposes it to everyone who can see that chat; prefer private chats, `--api-key-env` references to existing environment variables, or the dsh Web UI. The bot never echoes key values in any reply.
+Security note: typing a key in a Feishu conversation exposes it to everyone who can see that chat; prefer private chats or `--api-key-env` references to environment variables. The bot never echoes key values in any reply.
 
-## Install & Uninstall
-
-### Install
-
-The only install path (a standard dsh profile bundle):
-
-```bash
-npx dsh-lark-bot@latest setup --profile dsh-lark
-```
-
-`setup` locates your dsh, pre-approves pnpm's build policy (protobufjs) and runs the standard `dsh plugin --profile dsh-lark add dsh-lark-bot`. It **also installs the safety-net guardian by default** (see the "Safety-net guardian" section above; pass `--no-guardian` to skip). Re-running it upgrades to the latest version.
+## Upgrade, Disable & Uninstall
 
 ### Upgrade
 
@@ -223,21 +210,21 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: Can I drive my local DeepSeek Harness from my phone?**
 
-**A:** Yes. After the one-command install and a QR scan, message the bot from the Feishu mobile app to read code, run commands and complete tasks on your local dsh coding agent; proactive cross-session notifications with @mentions are supported when tasks finish. Install: `npx dsh-lark-bot@latest setup --profile dsh-lark` → `dsh --profile dsh-lark` → scan the QR code → start chatting.
+**A:** Yes. After the one-command install and a QR scan, message the bot from the Feishu mobile app to drive your local dsh coding agent; tasks can also push cross-session notifications with @mentions when done. Install: `npx dsh-lark-bot@latest setup --profile dsh-lark` → `dsh --profile dsh-lark` → scan → start chatting.
 
 **Q: How do I isolate projects and split work across a team?**
 
-**A:** Each session automatically lands in an isolated git worktree (`~/.dsh-lark/profiles/<profile>/worktrees/<scope>/`) with project-level `AGENTS.md` rules injected, so multiple projects never interfere; admins define PM / dev / docs roles with `/role` and bind them to a chat, and manage the access allowlist with `/invite`; up to 2 tasks run in parallel per chat by default (`/concurrency` to adjust), with `/archive` + `/retention` controlling archival and retention.
+**A:** Each session automatically lands in an isolated git worktree with project-level `AGENTS.md` injected; admins define and bind roles with `/role` and manage the allowlist with `/invite`; up to 2 tasks run in parallel per chat by default (`/concurrency` to adjust), with `/archive` + `/retention` controlling archival and retention.
 
 **Q: Does the bot still work if dsh crashes or goes offline?**
 
-**A:** Yes. `setup` installs the safety-net guardian by default (systemd / LaunchAgent / Windows startup). When dsh crashes or fails to boot, the guardian takes over the Feishu channel and first tries to relaunch the full profile automatically; if that still fails, send `/safemode` to enter core-only safe mode (official core bundles only, no third-party plugins), locate / fix the problem from the chat, and `/safemode exit` relaunches the full profile and hands the channel back. No command line is needed for the whole flow.
+**A:** Yes. `setup` installs the safety-net guardian by default: when dsh crashes, the guardian takes over the Feishu channel and first tries to relaunch the full profile; if that still fails, send `/safemode` to enter core-only safe mode, fix the problem from the chat, and `/safemode exit` restores the full profile. No command line is needed.
 
 ### Common questions
 
 **Q: How do I connect DeepSeek Harness to Feishu?**
 
-**A:** Install Node.js ≥ 22 and DeepSeek Harness (with `DEEPSEEK_API_KEY` configured), run `npx dsh-lark-bot@latest setup --profile dsh-lark`, then start with `dsh --profile dsh-lark` and scan the terminal QR code with the Feishu app to bind a PersonalAgent app. DM the bot directly, or use `@bot` in groups/topics.
+**A:** Install Node.js ≥ 22 and DeepSeek Harness (with `DEEPSEEK_API_KEY` configured), run `npx dsh-lark-bot@latest setup --profile dsh-lark`, then `dsh --profile dsh-lark` and scan to bind. DM the bot directly, or use `@bot` in groups/topics.
 
 **Q: Do I need a public IP, domain or server?**
 
@@ -245,7 +232,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: How is dsh-lark-bot different from other DeepSeek Harness Feishu plugins (e.g. harness-lark)?**
 
-**A:** The most complete feature set: safety-net guardian (still reachable in Feishu after a dsh crash), multi-role agents, parallel tasks, session archival, cross-session proactive notifications, and in-chat model/key management — all in one. It ships as a standard dsh profile bundle installed with a single `npx dsh-lark-bot@latest setup` command — no separate Docker / background service.
+**A:** The most complete feature set: safety-net guardian, multi-role agents, parallel tasks, session archival, cross-session proactive notifications, and in-chat model/key management — all in one. It ships as a standard dsh profile bundle installed with a single `npx dsh-lark-bot@latest setup` command — no separate Docker / background service.
 
 **Q: Where do I download the project? Are there impostors?**
 
@@ -258,18 +245,6 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 `dsh` · `deepseek` · `deepseek harness` · `feishu` · `lark` · `bridge` · `bot` ·
 `chatbot` · `messaging` · `qrcode` · `typescript` · `feishu-bot` · `lark-bot` ·
 `dsh-plugin` · `deepseek-harness` · `im-bridge` · `ai-agent` · `workspace` · `self-healing`
-
-## What it is
-
-**dsh-lark-bot** is a lightweight bridge that connects your local DeepSeek Harness (`dsh`) into Feishu / Lark, recreating the beloved OpenCode / MiMoCode Telegram-bot experience — chat with your coding agent, receive streaming cards, review diffs — and adds **full project workspace management** on top.
-
-**Who it is for**: developers and teams who drive a local dsh coding agent from Feishu / Lark (DMs, groups, topics) — especially those needing multi-project isolation, role-based collaboration, parallel tasks and session archival.
-
-## Goals
-
-- **One-command install & deploy**: `npx dsh-lark-bot@latest setup --profile dsh-lark` installs into a dsh profile; then `dsh --profile dsh-lark` starts and scans once — the bridge engine runs as a standard plugin inside the dsh process.
-- **Native Feishu experience**: streaming cards, interactive buttons, images / files (doc comments are planned).
-- **Full workspace management**: multi-project isolation, git worktrees, per-project rules, persistent context.
 
 ## Compatibility
 
