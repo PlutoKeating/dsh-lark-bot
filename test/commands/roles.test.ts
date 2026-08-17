@@ -6,6 +6,7 @@ import { tryHandleCommand, type CommandContext } from '../../src/commands/index.
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { WizardStore } from '../../src/bot/wizard-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager as RealAccessManager } from '../../src/config/access-manager.js';
@@ -52,6 +53,7 @@ async function makeContext(overrides: Partial<CommandContext> = {}): Promise<Com
     questions: undefined,
     densityStore: undefined,
     models: new ModelStore(),
+    wizardStore: new WizardStore(),
     dshConfig: new DshProviderManager({
       home: join(tmpdir(), 'dsh-lark-bot-test-home'),
     }),

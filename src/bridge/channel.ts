@@ -10,7 +10,13 @@ import type { QuestionRegistry } from '../bot/questions.js';
 import type { RetentionStore } from '../bot/retention-store.js';
 import type { RoleStore } from '../bot/role-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
+import type { WizardStore } from '../bot/wizard-store.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
+import {
+  handleConfigHubAction,
+  handleWizardCardAction,
+  type ConfigWizardContext,
+} from '../commands/config-wizard.js';
 import { extractQuestionAnswer } from '../card/question-card.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { DshProviderManager } from '../config/dsh-config.js';
@@ -47,6 +53,7 @@ export interface StartChannelDeps {
   questions?: QuestionRegistry;
   densityStore?: DensityStore;
   models: ModelStore;
+  wizardStore: WizardStore;
   dshConfig: DshProviderManager;
   defaultWorkspace: string;
   defaultModel: string;
@@ -137,6 +144,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         questions: deps.questions,
         densityStore: deps.densityStore,
         models: deps.models,
+        wizardStore: deps.wizardStore,
         dshConfig: deps.dshConfig,
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
@@ -196,6 +204,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           deps.questions.resolve(scope, value.id, answer);
         }
       }
+      if (value?.cmd === 'wizard' && deps.wizardStore) {
+        await handleWizardCardAction(
+          value,
+          event.action.formValue,
+          wizardContextFor(event, deps, commandChannel, scope),
+        );
+        return;
+      }
+      if (value?.cmd === 'cfg' && deps.wizardStore) {
+        await handleConfigHubAction(
+          typeof value.action === 'string' ? value.action : '',
+          wizardContextFor(event, deps, commandChannel, scope),
+        );
+        return;
+      }
     },
     reconnecting: () => {
       log.warn('channel', 'reconnecting', {});
@@ -233,4 +256,26 @@ async function resolveCardScope(
   raw: { message?: { thread_id?: string } },
 ): Promise<string> {
   return raw.message?.thread_id ? `${chatId}:${raw.message.thread_id}` : chatId;
+}
+
+function wizardContextFor(
+  event: { chatId: string; operator: { openId: string } },
+  deps: Pick<
+    StartChannelDeps,
+    'dshConfig' | 'accessManager' | 'models' | 'wizardStore' | 'defaultModel'
+  >,
+  channel: CommandChannel,
+  scope: string,
+): ConfigWizardContext {
+  return {
+    scope,
+    chatId: event.chatId,
+    senderId: event.operator.openId,
+    channel,
+    dshConfig: deps.dshConfig,
+    accessManager: deps.accessManager,
+    models: deps.models,
+    wizards: deps.wizardStore,
+    defaultModel: deps.defaultModel,
+  };
 }

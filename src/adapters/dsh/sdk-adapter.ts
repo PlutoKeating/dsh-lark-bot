@@ -21,11 +21,18 @@ export interface SdkAdapterOptions {
   /** Per-request timeout for the availability probe. */
   probeTimeoutMs?: number;
   /** Injectable harness factory for tests. */
-  harnessFactory?: (cwd: string) => DeepSeekHarness;
+  harnessFactory?: (cwd: string, route: ModelRoute) => DeepSeekHarness;
 }
 
 interface RuntimeEntry {
   harness: DeepSeekHarness;
+  provider: string;
+  model: string;
+}
+
+export interface ModelRoute {
+  provider: string;
+  model: string;
 }
 
 function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
@@ -60,7 +67,7 @@ export class SdkDshAdapter implements AgentAdapter {
   private readonly model: string;
   private readonly maxTokens: number | undefined;
   private readonly probeTimeoutMs: number;
-  private readonly harnessFactory: (cwd: string) => DeepSeekHarness;
+  private readonly harnessFactory: (cwd: string, route: ModelRoute) => DeepSeekHarness;
   private readonly runtimes = new Map<string, RuntimeEntry>();
   private disposed = false;
 
@@ -70,7 +77,8 @@ export class SdkDshAdapter implements AgentAdapter {
     this.model = options.model;
     this.maxTokens = options.maxTokens;
     this.probeTimeoutMs = options.probeTimeoutMs ?? 15_000;
-    this.harnessFactory = options.harnessFactory ?? ((cwd) => this.createHarness(cwd));
+    this.harnessFactory =
+      options.harnessFactory ?? ((cwd, route) => this.createHarness(cwd, route));
   }
 
   async isAvailable(): Promise<boolean> {
@@ -113,7 +121,11 @@ export class SdkDshAdapter implements AgentAdapter {
 
   run(options: AgentRunOptions): AgentRun {
     const cwd = options.cwd ?? process.cwd();
-    const entry = this.runtimeFor(cwd);
+    const route: ModelRoute = {
+      provider: options.provider ?? this.provider,
+      model: options.model ?? this.model,
+    };
+    const entry = this.runtimeFor(cwd, route);
     const sessionId =
       options.sessionId ?? `session-${randomUUID().replaceAll('-', '')}`;
     const stopRequested = { value: false };
@@ -146,7 +158,7 @@ export class SdkDshAdapter implements AgentAdapter {
     );
   }
 
-  private createHarness(cwd: string): DeepSeekHarness {
+  private createHarness(cwd: string, route: ModelRoute): DeepSeekHarness {
     return new DeepSeekHarness({
       launch: {
         command: this.launch.command,
@@ -154,19 +166,41 @@ export class SdkDshAdapter implements AgentAdapter {
         cwd,
       },
       cwd,
-      provider: this.provider,
-      model: this.model,
+      provider: route.provider,
+      model: route.model,
       ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
     });
   }
 
-  private runtimeFor(cwd: string): RuntimeEntry {
+  /**
+   * Return the runtime entry for a cwd + model route, rebinding when the
+   * requested route differs from the harness's fixed route. The dsh SDK
+   * JSON-RPC protocol binds provider/model at session creation (initialize
+   * handshake), so a hot model/provider switch requires re-spawning that
+   * runtime; the previous harness is closed and replaced lazily.
+   */
+  private runtimeFor(cwd: string, route: ModelRoute): RuntimeEntry {
     if (this.disposed) {
       throw new Error('SdkDshAdapter is disposed');
     }
     const existing = this.runtimes.get(cwd);
-    if (existing) return existing;
-    const entry: RuntimeEntry = { harness: this.harnessFactory(cwd) };
+    if (
+      existing &&
+      existing.provider === route.provider &&
+      existing.model === route.model
+    ) {
+      return existing;
+    }
+    if (existing) {
+      this.runtimes.delete(cwd);
+      // Best-effort teardown; a failed close must not block the hot switch.
+      void existing.harness.close().catch(() => undefined);
+    }
+    const entry: RuntimeEntry = {
+      harness: this.harnessFactory(cwd, route),
+      provider: route.provider,
+      model: route.model,
+    };
     this.runtimes.set(cwd, entry);
     return entry;
   }

@@ -53,6 +53,11 @@ export interface DshProviderManagerOptions {
   credentialsFile?: string;
 }
 
+export interface DshModelSelection {
+  provider: string;
+  model: string;
+}
+
 export interface DshPiAiProviderInput {
   id: string;
   displayName?: string;
@@ -111,6 +116,32 @@ function validateProviderId(id: string): void {
   if (!PROVIDER_ID_PATTERN.test(id)) {
     throw new Error(`provider id 必须是小写字母开头且仅含 a-z 0-9 . _ -，得到 "${id}"`);
   }
+}
+
+/**
+ * Normalize an OpenAI-compatible gateway base URL. A bare origin (no path) is
+ * completed with `/v1` (the conventional versioned route used by most
+ * OpenAI-compatible gateways, including KingAI); a full chat endpoint is kept
+ * as-is. Throws a clear error when the URL is not parseable / not http(s).
+ */
+export function normalizeBaseUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`baseURL 不是合法 URL：${url}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`baseURL 仅支持 http/https：${url}`);
+  }
+  validateBaseUrl(url);
+  const pathname = parsed.pathname.replace(/\/+$/, '');
+  if (pathname === '' || pathname === '/') {
+    parsed.pathname = '/v1';
+  } else {
+    parsed.pathname = pathname;
+  }
+  return parsed.toString();
 }
 
 function validateBaseUrl(url: string): void {
@@ -289,14 +320,62 @@ export class DshProviderManager {
   }
 
   async defaultModel(): Promise<string | undefined> {
+    return (await this.defaultModelSelection())?.model;
+  }
+
+  /** Read the full `agent-default-model` selection (provider + model). */
+  async defaultModelSelection(): Promise<DshModelSelection | undefined> {
     const settings = await this.readSettings();
     const section = settings[AGENT_DEFAULT_MODEL_NAMESPACE];
-    return isMapLike(section) && typeof section.model === 'string' ? section.model : undefined;
+    if (typeof section === 'string') {
+      // Legacy string form (`agent-default-model: deepseek-v4-pro`).
+      return { provider: DEEPSEEK_PROVIDER, model: section };
+    }
+    if (isMapLike(section) && typeof section.model === 'string') {
+      return {
+        provider: typeof section.provider === 'string' ? section.provider : DEEPSEEK_PROVIDER,
+        model: section.model,
+      };
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolve the provider that owns a model id across the configured providers.
+   * Explicitly configured models (pi-ai providers / llm-deepseek section) win
+   * over the built-in deepseek default catalog.
+   */
+  async resolveProviderForModel(modelId: string): Promise<DshProviderSummary | undefined> {
+    const providers = await this.listProviders();
+    const explicit = providers.filter((provider) => provider.configured);
+    const owned = explicit.find((provider) =>
+      provider.models.some((model) => model.id === modelId),
+    );
+    if (owned) return owned;
+    return providers.find((provider) => provider.models.some((model) => model.id === modelId));
+  }
+
+  /** Resolve the full route (provider + model) for a model id. */
+  async resolveModelRoute(modelId: string): Promise<DshModelSelection | undefined> {
+    const provider = await this.resolveProviderForModel(modelId);
+    if (!provider) return undefined;
+    return { provider: provider.id, model: modelId };
   }
 
   async setDefaultModel(model: string): Promise<void> {
     if (!model.trim()) throw new Error('默认模型不能为空');
-    await this.writeNamespace(AGENT_DEFAULT_MODEL_NAMESPACE, { model });
+    const route = await this.resolveModelRoute(model);
+    if (!route) {
+      throw new Error(
+        `模型 ${model} 未在任何已配置 provider 中找到，无法设为默认；可先 /model add 或 /provider add 添加。`,
+      );
+    }
+    // dsh's official `agent-default-model` schema requires BOTH provider and
+    // model; writing only `model` makes the section unreadable for the runtime.
+    await this.writeNamespace(AGENT_DEFAULT_MODEL_NAMESPACE, {
+      provider: route.provider,
+      model: route.model,
+    });
   }
 
   async upsertDeepseekProvider(input: {
@@ -383,8 +462,7 @@ export class DshProviderManager {
       section.api = input.api;
     }
     if (input.baseURL !== undefined) {
-      validateBaseUrl(input.baseURL);
-      section.baseURL = input.baseURL;
+      section.baseURL = normalizeBaseUrl(input.baseURL);
     }
     if (input.models !== undefined) section.models = input.models.map(modelRecord);
 
@@ -396,7 +474,7 @@ export class DshProviderManager {
       if (typeof section.baseURL !== 'string') {
         throw new Error('新增自定义 provider 必须指定 --base-url');
       }
-      validateBaseUrl(section.baseURL);
+      section.baseURL = normalizeBaseUrl(section.baseURL);
       const models = rawModels(section.models);
       if (models.length === 0) {
         throw new Error('新增自定义 provider 至少需要一个 --model（models 不能为空）');

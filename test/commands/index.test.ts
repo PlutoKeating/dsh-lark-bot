@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { WizardStore } from '../../src/bot/wizard-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
@@ -110,6 +111,7 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     questions: undefined,
     densityStore: undefined,
     models: new ModelStore(),
+    wizardStore: new WizardStore(),
     dshConfig: new DshProviderManager({
       home: join(tmpdir(), 'dsh-lark-bot-test-home'),
     }),

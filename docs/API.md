@@ -203,6 +203,9 @@ export class ModelStore {
 export class DshProviderManager {
   listProviders(): Promise<DshProviderSummary[]>;
   defaultModel(): Promise<string | undefined>;
+  defaultModelSelection(): Promise<{ provider: string; model: string } | undefined>;
+  resolveProviderForModel(modelId: string): Promise<DshProviderSummary | undefined>;
+  resolveModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
   setDefaultModel(model: string): Promise<void>;
   upsertDeepseekProvider(input: { baseURL?; apiKeyEnv?; apiKey? }): Promise<void>;
   removeDeepseekProvider(): Promise<void>;
@@ -221,8 +224,21 @@ export class DshProviderManager {
 
 pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` / `openai-responses` /
 `anthropic-messages`；自定义 provider 按官方 schema 需要 `api` + `baseURL` + 非空 `models`。
+pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时
+自动补全为 `/v1`，完整 chat 端点原样保留。
 模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
 `agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
+`/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由
+`resolveModelRoute()` 从模型自动解析，找不到模型时报错）。每轮运行前
+`src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器
+（`src/adapters/dsh/sdk-adapter.ts`）在路由变化时关闭旧 harness 并以新路由重建，
+因此 `/model use` 的「下一轮生效」承诺真实落地（issue #47）。
+
+交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
+（`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
+per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作过期）；卡片 action
+`wizard-submit` / `wizard-choose` / `wizard-confirm` / `wizard-cancel` 与 `cfg` 系列
+在 `src/bridge/channel.ts` 的 `cardAction` 路由中接线（写操作仅管理员）。
 
 dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
@@ -316,6 +332,9 @@ export interface AgentRunOptions {
   prompt: string;
   cwd: string | undefined;
   sessionId: string | undefined;
+  /** Provider route for this run; adapters that bind a runtime route at
+   *  construction time (SDK/ACP) rebind when it differs from the default. */
+  provider?: string;
   model: string | undefined;
   images: readonly string[] | undefined;
   stopGraceMs: number | undefined;
