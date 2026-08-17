@@ -16,6 +16,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 7a495b2c871926a73fd06fbef7dd3b75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,8 +29,4 @@ jobs:
           cp docs/index.html docs/llms.txt docs/robots.txt docs/sitemap.xml _cf_site/
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 7a495b2c871926a73fd06fbef7dd3b75
-          command: pages deploy _cf_site --project-name=dsh-lark-bot
+        run: npx --yes wrangler@4 pages deploy _cf_site --project-name=dsh-lark-bot --branch=main
