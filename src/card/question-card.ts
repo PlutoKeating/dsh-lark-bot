@@ -36,7 +36,12 @@ function formElement(input: QuestionCardInput): object {
   };
 }
 
-/** Structured question card: single choice, multi choice, or free text. */
+/**
+ * Structured question card: single choice, multi choice, or free text.
+ * The input/select and its submit button are wrapped in a `form` container —
+ * schema 2.0 only returns the selected/filled value in the callback when the
+ * interactive component lives inside a form with a submit-bound button.
+ */
 export function renderQuestionCard(input: QuestionCardInput): object {
   return {
     schema: '2.0',
@@ -46,15 +51,18 @@ export function renderQuestionCard(input: QuestionCardInput): object {
     body: {
       elements: [
         { tag: 'markdown', content: `❓ ${input.question}` },
-        formElement(input),
         {
-          tag: 'action',
-          actions: [
+          tag: 'form',
+          name: `form-${input.id}`,
+          elements: [
+            formElement(input),
             {
               tag: 'button',
               text: { tag: 'plain_text', content: '提交' },
               type: 'primary',
               value: { cmd: 'question-submit', id: input.id },
+              form_action_type: 'submit',
+              name: `btn-submit-${input.id}`,
             },
           ],
         },

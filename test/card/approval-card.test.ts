@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderApprovalCard } from '../../src/card/approval-card.js';
 
 describe('renderApprovalCard', () => {
-  it('renders allow and reject actions keyed by request id', () => {
+  it('renders allow and reject buttons keyed by request id in a column_set row', () => {
     const card = renderApprovalCard({
       id: 'call-1',
       toolName: 'bash',
@@ -12,11 +12,31 @@ describe('renderApprovalCard', () => {
         { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
       ],
     }) as {
-      body: { elements: Array<{ tag: string; actions?: Array<{ value?: Record<string, unknown> }> }> };
+      body: {
+        elements: Array<{
+          tag: string;
+          columns?: Array<{ elements: Array<{ tag: string; value?: Record<string, unknown> }> }>;
+        }>;
+      };
     };
-    const action = card.body.elements.find((element) => element.tag === 'action');
-    const values = action?.actions?.map((button) => button.value) ?? [];
+    expect(card.body.elements.some((element) => element.tag === 'action')).toBe(false);
+    const row = card.body.elements.find((element) => element.tag === 'column_set');
+    const values =
+      row?.columns
+        ?.flatMap((column) => column.elements)
+        .filter((button) => button.tag === 'button')
+        .map((button) => button.value) ?? [];
     expect(values).toContainEqual({ cmd: 'approve', id: 'call-1', outcome: 'allow' });
     expect(values).toContainEqual({ cmd: 'approve', id: 'call-1', outcome: 'reject' });
+  });
+
+  it('skips the button row when there is nothing to approve or reject', () => {
+    const card = renderApprovalCard({
+      id: 'call-2',
+      toolName: 'bash',
+      reason: 'no options',
+      options: [],
+    }) as { body: { elements: Array<{ tag: string }> } };
+    expect(card.body.elements.some((element) => element.tag === 'column_set')).toBe(false);
   });
 });

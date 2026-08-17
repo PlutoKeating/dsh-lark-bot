@@ -241,8 +241,12 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
 per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作过期）；卡片 action
-`wizard-submit` / `wizard-choose` / `wizard-confirm` / `wizard-cancel` 与 `cfg` 系列
+`value.cmd === 'wizard'`（携带 `submit` / `choose` / `confirm` / `cancel` 标记）与 `cfg` 系列
 在 `src/bridge/channel.ts` 的 `cardAction` 路由中接线（写操作仅管理员）。
+所有卡片均为 schema 2.0：按钮直接放 `body.elements`（横向成组用 `column_set`
+自动宽列，飞书 2.0 已废弃 `action` 容器，旧容器会被 Open Platform 以 sub-code 200861
+拒绝）；需要收集输入/选择的步骤把 `input` / `select_static` 与 `form_action_type: "submit"`
+按钮一起包进 `form` 容器，回调经 `action.form_value` 返回，否则输入值不会随按钮回调送达。
 
 dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
