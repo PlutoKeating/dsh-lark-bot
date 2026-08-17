@@ -32,6 +32,9 @@ export interface AgentRunOptions {
   prompt: string;
   cwd: string | undefined;
   sessionId: string | undefined;
+  /** Provider route for this run; adapters that bind a runtime route at
+   *  construction time (SDK/ACP) rebind when it differs from the default. */
+  provider?: string;
   model: string | undefined;
   images: readonly string[] | undefined;
   stopGraceMs: number | undefined;

@@ -96,7 +96,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
 
   if (!sub) {
     const active = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
-    const dshDefault = await ctx.dshConfig.defaultModel();
+    const dshDefault = await ctx.dshConfig.defaultModelSelection();
     const providers = await ctx.dshConfig.listProviders();
     const modelLines = providers.flatMap((provider) =>
       provider.models.map((model) => `- ${formatModel(model)} ← ${provider.id}`),
@@ -105,7 +105,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
       ctx,
       [
         `**当前会话模型**：\`${active}\``,
-        `**dsh 默认模型**（agent-default-model）：\`${dshDefault ?? '(未设置)'}\``,
+        `**dsh 默认模型**（agent-default-model）：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
         `**bot 回退默认**（profile / DSH_LARK_MODEL）：\`${ctx.defaultModel}\``,
         '',
         '**可用模型**（dsh 已配置）：',
@@ -187,7 +187,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
 
 export async function handleProviders(_args: string, ctx: CommandContext): Promise<void> {
   const providers = await ctx.dshConfig.listProviders();
-  const dshDefault = await ctx.dshConfig.defaultModel();
+  const dshDefault = await ctx.dshConfig.defaultModelSelection();
   await reply(
     ctx,
     [
@@ -195,7 +195,7 @@ export async function handleProviders(_args: string, ctx: CommandContext): Promi
       '',
       ...formatProviders(providers).split('\n'),
       '',
-      `dsh 默认模型：\`${dshDefault ?? '(未设置)'}\``,
+      `dsh 默认模型：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
       '',
       '管理：`/provider add|update|remove`、`/model add|remove`、`/key set|remove`（需管理员）',
     ].join('\n'),

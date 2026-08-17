@@ -246,6 +246,25 @@ export async function startBridgeEngine(
           ...attachments.textFileNotes,
         ].filter(Boolean);
         const role = roleStore.roleForScope(scope);
+        const resolvedModel =
+          models.get(scope) ??
+          role?.model ??
+          activeProfile.preferences.model ??
+          (await dshConfig.defaultModel().catch(() => undefined)) ??
+          env.model;
+        const modelRoute = resolvedModel
+          ? await dshConfig.resolveModelRoute(resolvedModel).catch(() => undefined)
+          : undefined;
+        if (resolvedModel && !modelRoute) {
+          // Surface a clear configuration error instead of letting the dsh
+          // runtime fail with an opaque provider/model mismatch.
+          await streaming.sendMarkdown(
+            first.chatId,
+            `⚠️ 模型 \`${resolvedModel}\` 未在任何已配置 provider 中找到。可用 \`/model\` 查看列表，或用 \`/model add|remove\` 管理。`,
+            { replyTo: first.messageId },
+          );
+          return;
+        }
         const runInput: Parameters<typeof runAgentBatch>[0] = {
           scope,
           chatId: first.chatId,
@@ -268,12 +287,10 @@ export async function startBridgeEngine(
           maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
           images: attachments.imagePaths,
-          model:
-            models.get(scope) ??
-            role?.model ??
-            activeProfile.preferences.model ??
-            (await dshConfig.defaultModel().catch(() => undefined)) ??
-            env.model,
+          ...(modelRoute?.provider === undefined
+            ? {}
+            : { provider: modelRoute.provider }),
+          model: resolvedModel,
         };
         if (activeProfile.preferences.stopGraceMs !== undefined) {
           runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
