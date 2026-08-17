@@ -95,6 +95,9 @@
 5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（AEO/GEO：给 AI 引擎可直接读取的项目摘要）。
 6. 新增本文档 `docs/MARKETING.md`。
 7. 已向 awesome-dsh-plugin 提交收录 PR（见 §6.2 状态）。
+8. IndexNow 即时收录已配置：密钥文件 `docs/2a7bb299d031c8950416360bfa35cd94.txt`（**勿删**，删除后
+   IndexNow 提交会失败）；提交接口 `https://api.indexnow.org/indexnow`，host 为
+   `dsh-lark-bot.arr2018.dpdns.org`，新 URL 上线后可 POST 提交（Bing / Yandex / Naver 均支持）。
 
 ---
 
@@ -152,6 +155,7 @@
 - canonical 已统一指向正式域名，双站（Cloudflare + GitHub Pages）不会被重复收录。
 - 提交后如 7 天仍未收录：重新提交 sitemap、确认 robots.txt 没有误拦（当前允许全部抓取）、
   并在各工具「抓取测试」里确认 200。
+- [x] IndexNow 已配置并提交首页（2026-08-17，HTTP 202 接受）；Bing 一般数小时内安排抓取。
 
 ### 6.2 awesome-dsh-plugin 收录（P0，已提交）
 
