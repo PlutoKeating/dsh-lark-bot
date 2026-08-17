@@ -58,6 +58,11 @@
 
 </div>
 
+<p align="center">
+  🌐 官网落地页 <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a>
+  · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
+</p>
+
 ---
 
 ## 项目介绍 | What & Why

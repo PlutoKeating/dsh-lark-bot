@@ -100,15 +100,25 @@
 
 ## 6. 需要你操作的事项
 
-### 6.1 启用 GitHub Pages（P0，5 分钟）
+### 6.1 落地页双活部署（已完成）
 
-1. 仓库 Settings → Pages → Source 选 **Deploy from a branch** → 分支 `main` + 目录 `/docs` → Save。
-2. 访问 `https://plutokeating.github.io/dsh-lark-bot/` 确认落地页在线。
-3. 在线后：
-   - Bing Webmaster Tools（bing.com/webmasters）添加站点并提交 `sitemap.xml`；
-   - Google Search Console（search.google.com/search-console）添加资源并提交 sitemap；
-   - 百度搜索资源平台（ziyuan.baidu.com）若需收录 Pages 域名，同样提交 sitemap。
-4. 然后把仓库 homepage 从 dshfind 改为落地页 URL（可选，也可维持现状，二者择一）。
+- **Cloudflare Pages（主站，正式域名）**：`https://dsh-lark-bot.arr2018.dpdns.org/`
+  - Pages 项目 `dsh-lark-bot`（subdomain `dsh-lark-bot.pages.dev`），部署目录为 `docs/` 中
+    `index.html`、`llms.txt`、`robots.txt`、`sitemap.xml` 四个资产；
+  - 自定义域名已绑定：zone `arr2018.dpdns.org` 下 CNAME `dsh-lark-bot → dsh-lark-bot.pages.dev`
+    （proxied）；
+  - 后续更新：把 `docs/` 里这四个文件同步到部署目录后执行
+    `wrangler pages deploy <目录> --project-name=dsh-lark-bot`。
+- **GitHub Pages（备用/回源）**：`https://plutokeating.github.io/dsh-lark-bot/`
+  - 已启用，Source = main 分支 `/docs` 目录，push 后自动重建。
+- **去重策略**：两份内容共用同一份源文件，canonical 统一指向正式域名
+  `https://dsh-lark-bot.arr2018.dpdns.org/`，搜索引擎只收录正式域名。
+- **sitemap 提交**：
+  - Bing Webmaster Tools（bing.com/webmasters）添加 `dsh-lark-bot.arr2018.dpdns.org` 并提交
+    `https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml`；
+  - Google Search Console 添加同域名资源并提交同 sitemap；
+  - 百度搜索资源平台（ziyuan.baidu.com）可尝试收录（dpdns.org 为动态 DNS 域名，收录优先级低，
+    主攻 Gitee 镜像与 CSDN 内容）。
 
 ### 6.2 awesome-dsh-plugin 收录（P0，已提交）
 
