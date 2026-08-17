@@ -100,6 +100,7 @@
     "release:check": "pnpm ci:local && node scripts/check-dsh-upstream.mjs",
     "dsh:upstream": "node scripts/check-dsh-upstream.mjs",
     "compat:probe": "node scripts/probe-dsh-compat.mjs",
+    "security:monitor": "node scripts/monitor-impostor-repo.mjs",
     "publish:dual": "node scripts/publish-dual-packages.mjs",
     "publish:dual:dry-run": "node scripts/publish-dual-packages.mjs --dry-run",
     "publish:github:dry-run": "node scripts/publish-dual-packages.mjs --github --dry-run",

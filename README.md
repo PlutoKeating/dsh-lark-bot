@@ -1,3 +1,27 @@
+> [!CAUTION]
+> **⚠️ 官方渠道声明 · Official channels only**
+>
+> 唯一官方仓库是 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)；唯一官方 npm 包是
+> `dsh-lark-bot`（同源双包 `dsh-feishu-bot`，维护者 `plutokeating`）。**本项目从不提供 Windows 可执行文件
+> （.exe），也没有任何“下载即运行”的安装包。** 任何以本项目名义提供 exe / “下载后双击运行”的页面、仓库或
+> 第三方分发渠道（例如 `tarraencompassing61/dsh-lark-bot` 这类仿冒仓库）均为**假冒 / 恶意来源**——请勿下载
+> 或运行其中的任何附件。官方安装唯一命令：
+>
+> `npx dsh-lark-bot@latest setup --profile dsh-lark`
+>
+> The **only official repository** is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot);
+> the **only official npm packages** are `dsh-lark-bot` and `dsh-feishu-bot` (maintainer `plutokeating`).
+> **This project never ships Windows executables (.exe) or any “download-and-run” installer.** Any page,
+> repository, or third-party channel offering such downloads under this project’s name (including impostor
+> repositories like `tarraencompassing61/dsh-lark-bot`) is a **counterfeit / malicious source** — do not download
+> or execute anything from it. The only official install command:
+>
+> `npx dsh-lark-bot@latest setup --profile dsh-lark`
+>
+> 仿冒仓库停留在 v0.7.0 快照；正版版本差距见上方徽章。Evidence:
+> [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md) ·
+> Official download page: [docs/DOWNLOAD.md](docs/DOWNLOAD.md)
+
 <h1 align="center">dsh-lark-bot</h1>
 
 <p align="center">
@@ -11,6 +35,8 @@
   <img src="https://img.shields.io/badge/License-AGPLv3-blue" alt="License">
   <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
   <a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
+  <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/PlutoKeating/dsh-lark-bot/commits/main"><img src="https://img.shields.io/github/commits-since/PlutoKeating/dsh-lark-bot/v0.7.0?label=commits%20since%20v0.7.0" alt="Commits since v0.7.0"></a>
 </p>
 
 <br>
@@ -675,6 +701,7 @@ pnpm ci:local
 pnpm release:check   # ci:local + 上游一致性检查 | ci:local + upstream consistency check
 pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手 | installs pinned dsh into a temp DSH_HOME and runs a real SDK handshake
 pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵 | compares npm upstream stable with the pinned matrix
+pnpm security:monitor # 假冒仓库与仿冒包监控（建议每周）| impostor-repo & npm copycat monitor (recommended weekly)
 ```
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
@@ -857,34 +884,28 @@ and relaunches the full profile on `/safemode exit`.
 
 ## 社区收录情况 | Community Listings
 
-> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.10.2：
-> Community listing & recommendation status, kept current as update requests land. As of v0.10.2:
+> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.14.0（2026-08-17 复核）：
+> Community listing & recommendation status, kept current as update requests land. As of v0.14.0 (re-verified 2026-08-17):
 
 | 平台 Platform | 状态 Status | 说明 Notes |
 | :--- | :--- | :--- |
-| [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`，2026-08-14 agent 实测通过；收录条目更新至 v0.8.0（[PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 已合并），v0.10.2 同步已跟进（[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) 最新评论）<br>Shown as `✅ 运行级可用` in the community leaderboard; agent-tested on 2026-08-14; v0.8.0 entry merged via [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127); v0.10.2 sync requested in [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) |
-| [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页已上线<br>Listed · detail page live | 中英日韩四语详情页已上线（含安装命令与亮点），条目名称正常（[issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭）；v0.10.2 数据刷新已提交（[issue #6](https://github.com/hikariming/dshfind/issues/6)）；顶部徽章 / 展示卡来自 dshfind<br>Four-language detail page is live (install command & highlights), entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); v0.10.2 data refresh requested in [issue #6](https://github.com/hikariming/dshfind/issues/6); the header badge / card comes from dshfind |
-| [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 已提交收录申请<br>Submission submitted | `[Plugin]` 收录申请（Discussion #11）已通过；v0.8.0 更新、六项独家亮点与 v0.10.1 / v0.10.2 稳定性修复说明均已发布在该讨论<br>`[Plugin]` submission (Discussion #11) accepted; v0.8.0 update, the six-exclusive-highlights summary and the v0.10.1 / v0.10.2 stability-fix notes are all posted there |
+| [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用<br>Listed · runtime-verified | 社区榜单标注 `✅ 运行级可用`（agent 实测通过）；收录条目 v0.8.0 经 [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) 合并，榜单行同步 [issue #139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) 已关闭；数据刷新至 v0.14.0 待跟进<br>Shown as `✅ 运行级可用` (agent-tested); v0.8.0 entry merged via [PR #127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127); leaderboard sync [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) closed; refresh to v0.14.0 pending |
+| [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页在线<br>Listed · detail page live | 条目名称修正 [issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭；v0.10.1 数据刷新 [issue #6](https://github.com/hikariming/dshfind/issues/6) 待处理；v0.14.0 刷新待跟进；顶部徽章 / 展示卡来自 dshfind<br>Entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); v0.10.1 refresh ([issue #6](https://github.com/hikariming/dshfind/issues/6)) pending; v0.14.0 refresh pending; the header badge / card comes from dshfind |
+| [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 收录申请通过 · 讨论活跃<br>Accepted · discussion active | `[Plugin]` 收录申请（Discussion #11）已通过并持续维护，最新更新说明 v0.10.2；v0.14.0 更新待跟进<br>`[Plugin]` submission (Discussion #11) accepted and active, latest notes v0.10.2; v0.14.0 update pending |
 
-**更新请求进度 / Update request status**：
+**更新请求进度 / Update request status（截至 2026-08-17 复核 | as of 2026-08-17）**：
 
-- awesome-dsh-plugins 收录条目更新：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并
-- dshfind 数据刷新请求（含条目名称异常修正）：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭，详情页已更新
-- omdsh-dev/community 收录讨论更新：[Discussion #11 更新评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18021998) — ✅ 已发布
-- awesome-dsh-plugins 榜单行同步至 v0.10.2：[#139 最新评论](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139#issuecomment-5304382615) — 📨 已提交
-- dshfind 数据刷新至 v0.10.2：[#6 跟进评论](https://github.com/hikariming/dshfind/issues/6#issuecomment-5304382647) — 📨 已提交
-- omdsh-dev/community v0.10.1 更新说明：[Discussion #11 评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034706) — ✅ 已发布
-- omdsh-dev/community v0.10.2 更新说明：[Discussion #11 评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034903) — ✅ 已发布
+- awesome-dsh-plugins 收录条目 v0.8.0：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并；榜单行同步：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ 已关闭
+- dshfind 条目名称修正 + v0.8.0 刷新：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭；v0.10.1 刷新：[#6](https://github.com/hikariming/dshfind/issues/6) — 📨 待处理
+- omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）
+- 平台数据刷新至 v0.14.0 — ⏸ 暂缓提交（安全窗口内保持低调，见「假冒仓库警告」）
 
 **Update requests**:
 
-- awesome-dsh-plugins entry refresh: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged
-- dshfind data-refresh request (incl. fixing the entry name): [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed, detail page updated
-- omdsh-dev/community listing update: [Discussion #11 update comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18021998) — ✅ posted
-- awesome-dsh-plugins leaderboard sync to v0.10.2: [#139 comment](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139#issuecomment-5304382615) — 📨 submitted
-- dshfind data refresh to v0.10.2: [#6 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5304382647) — 📨 submitted
-- omdsh-dev/community v0.10.1 update: [Discussion #11 comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034706) — ✅ posted
-- omdsh-dev/community v0.10.2 update: [Discussion #11 comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18034903) — ✅ posted
+- awesome-dsh-plugins v0.8.0 entry: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged; leaderboard sync: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ closed
+- dshfind name fix + v0.8.0 refresh: [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed; v0.10.1 refresh: [#6](https://github.com/hikariming/dshfind/issues/6) — 📨 pending
+- omdsh-dev/community listing: [Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ accepted, discussion active (latest notes v0.10.2)
+- Platform refresh to v0.14.0 — ⏸ deferred (staying low-key during the security window; see "Impostor warning" below)
 
 **亮点跟进 / Highlights follow-ups**（六项独家能力与 issue #6 设计实现）：
 
@@ -897,6 +918,21 @@ and relaunches the full profile on `/safemode exit`.
 - awesome-dsh-plugins leaderboard row sync (repo description → latest) & agent-test name anomaly: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 submitted (maintainer confirmed; awaiting the snapshot/render cycle)
 - dshfind detail page: add the in-chat model/key management highlight: [#2 follow-up](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 submitted
 - omdsh six-exclusive-highlights summary (incl. the Guardian design): [Discussion #11 highlights comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 submitted
+
+## 假冒仓库警告 | Impostor Repository Warning
+
+> [!WARNING]
+> 2026-08-17 发现假冒仓库 **`tarraencompassing61/dsh-lark-bot`**：非 fork 重新上传、114 个 commit 中
+> 113 个作者为 PlutoKeating、删除全部 CI、关闭 Issues、Releases 为 0，却以“下载 Windows exe 双击运行”的
+> SEO 诱饵 README 冒充官方分发。**本项目从不提供 exe，任何此类下载均为假冒 / 恶意来源。**
+> On 2026-08-17 an impostor repository **`tarraencompassing61/dsh-lark-bot`** was found: re-uploaded as a
+> non-fork with 113/114 commits authored by PlutoKeating, all CI deleted, Issues disabled, zero Releases,
+> and a SEO-bait README offering “Windows exe download & run”. **This project never ships executables —
+> treat any such download as counterfeit / malicious.**
+>
+> 取证存档 Evidence: [`docs/security/2026-08-17-impostor-repo-evidence/`](docs/security/2026-08-17-impostor-repo-evidence/README.md) ·
+> 官方下载渠道 Official download: [`docs/DOWNLOAD.md`](docs/DOWNLOAD.md) ·
+> 持续监控 Ongoing monitor: `pnpm security:monitor`
 
 ## 免责声明 | Disclaimer
 

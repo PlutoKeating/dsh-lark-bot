@@ -3,6 +3,21 @@
 > dsh-lark-bot 把本机 DeepSeek Harness（`dsh`）暴露给飞书 / Lark IM。本文件说明威胁模型、
 > 默认安全姿态与报告渠道。Security model for a bridge that exposes a local coding agent to Feishu / Lark.
 
+## 官方分发渠道 · Official distribution channels
+
+- **唯一官方仓库**：<https://github.com/PlutoKeating/dsh-lark-bot>
+- **唯一官方 npm 包**：`dsh-lark-bot`（同源双包 `dsh-feishu-bot`），维护者 `plutokeating`
+- **唯一安装命令**：`npx dsh-lark-bot@latest setup --profile dsh-lark`
+- **Releases 资产**：仅两个 npm tarball（`dsh-lark-bot-<ver>.tgz` / `dsh-feishu-bot-<ver>.tgz`），
+  **从不发布 Windows/macOS 可执行文件**
+- **校验承诺**：自本文档更新后的下一个 Release 起，每个发布资产随附 `<asset>.sha256` 校验文件；
+  安装/使用前请核对 SHA-256，不一致即视为被篡改，请勿安装并报告
+- **假冒识别**：任何以本项目名义提供“下载即运行”二进制（尤其 .exe）、或使用仿冒仓库名/包名的分发
+  渠道均为**假冒 / 恶意来源**——请勿下载或运行，并截图按下方报告渠道反馈
+- **取证存档**：假冒仓库 `tarraencompassing61/dsh-lark-bot` 的取证与处置约定见
+  `docs/security/2026-08-17-impostor-repo-evidence/`
+- **持续监控**：`pnpm security:monitor`（假冒仓库活动 / npm 仿冒包 / 相似包名抢注），建议每周运行或挂 cron
+
 ## 威胁模型 · Threat model
 
 - **凭据泄露**：飞书 `app_id` / `app_secret`、DeepSeek API key、会话内容可能在日志、卡片或进程环境中出现。
