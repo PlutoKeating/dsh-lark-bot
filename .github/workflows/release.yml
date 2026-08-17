@@ -105,10 +105,26 @@ jobs:
       - name: Remove existing release for tag (idempotent re-release)
         run: |
           TAG="${TAG_INPUT:-${GITHUB_REF_NAME}}"
-          ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id 2>/dev/null || true)"
-          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
-            gh api "repos/${GITHUB_REPOSITORY}/releases/${ID}" -X DELETE
-            echo "::notice::removed existing release ${ID} for ${TAG}"
+          # List-based lookup also finds draft releases (the tags/{tag}
+          # endpoint 404s for drafts, and its non-2xx body must not be
+          # captured as an id).
+          if ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"${TAG}\") | .id" 2>/dev/null | head -1)"; then
+            if [ -n "$ID" ]; then
+              attempt=0
+              until gh api "repos/${GITHUB_REPOSITORY}/releases/${ID}" -X DELETE; do
+                attempt=$((attempt + 1))
+                if [ "$attempt" -ge 6 ]; then
+                  echo "::error::failed to delete existing release ${ID} after 6 attempts"
+                  exit 1
+                fi
+                echo "retrying delete of release ${ID} (attempt ${attempt})..."
+                sleep 20
+              done
+              echo "::notice::removed existing release ${ID} for ${TAG}"
+            else
+              echo "no existing release for ${TAG}"
+            fi
           else
             echo "no existing release for ${TAG}"
           fi
