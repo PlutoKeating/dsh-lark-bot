@@ -205,18 +205,26 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         }
       }
       if (value?.cmd === 'wizard' && deps.wizardStore) {
-        await handleWizardCardAction(
-          value,
-          event.action.formValue,
-          wizardContextFor(event, deps, commandChannel, scope),
-        );
+        try {
+          await handleWizardCardAction(
+            value,
+            event.action.formValue,
+            wizardContextFor(event, deps, commandChannel, scope),
+          );
+        } catch (error) {
+          log.fail('channel-wizard', error, { scope });
+        }
         return;
       }
       if (value?.cmd === 'cfg' && deps.wizardStore) {
-        await handleConfigHubAction(
-          typeof value.action === 'string' ? value.action : '',
-          wizardContextFor(event, deps, commandChannel, scope),
-        );
+        try {
+          await handleConfigHubAction(
+            typeof value.action === 'string' ? value.action : '',
+            wizardContextFor(event, deps, commandChannel, scope),
+          );
+        } catch (error) {
+          log.fail('channel-wizard', error, { scope });
+        }
         return;
       }
     },

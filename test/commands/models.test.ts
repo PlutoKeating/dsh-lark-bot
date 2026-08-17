@@ -143,4 +143,16 @@ describe('model slash commands', () => {
       expect(lastReply(ctx)).toContain('已添加模型');
     });
   });
+
+  it('/provider add warns when the credential ref is not linked to the provider', async () => {
+    await withContext(async (ctx) => {
+      ctx.senderId = 'ou_admin';
+      await handleProvider(
+        'add kingapi --api openai-completions --base-url https://www.kingapi.xyz --model doubao-seed-2-0-lite-260428',
+        ctx,
+      );
+      expect(lastReply(ctx)).toContain('不会自动关联 provider');
+      expect(lastReply(ctx)).toContain('--api-key-env');
+    });
+  });
 });
