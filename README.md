@@ -568,6 +568,10 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡）<br>Safe-mode per-task idle timeout (stops the run after it has been silent this long and renders a timeout card) |
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed）<br>Card density for safe-mode run cards |
 | `DSH_LARK_UPGRADE_REGISTRY` | `https://registry.npmjs.org` | `upgrade` 探测最新版本的 npm registry（可指向镜像）<br>npm registry used by `upgrade` to discover the latest version (mirrors supported) |
+| `DSH_LARK_UPGRADE_CHECK` | `1` | `doctor` / `/version` 是否探测 npm 最新版本（`0` 关闭，best-effort）<br>Whether `doctor` / `/version` probe npm latest (`0` disables; best-effort) |
+| `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS` | `21600000` | 桥接引擎检查新版本的间隔（`0` 关闭，默认 6h）<br>Bridge new-version check interval (`0` disables; default 6h) |
+| `DSH_LARK_UPGRADE_NOTIFY` | `false` | `true` 时发现新版本向指定 chat 推送飞书通知（默认仅日志）<br>Push a Feishu notification to the target chat when a newer version is found (default: log-only) |
+| `DSH_LARK_UPGRADE_NOTIFY_CHAT` | — | 接收更新通知的 chat id（配合 `DSH_LARK_UPGRADE_NOTIFY=true`）<br>Chat receiving update notifications (with `DSH_LARK_UPGRADE_NOTIFY=true`) |
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 

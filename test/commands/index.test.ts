@@ -19,6 +19,12 @@ import {
 import { SessionStore } from '../../src/session/store.js';
 import type { SessionArchive } from '../../src/session/archive.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
+import { latestVersion } from '../../src/upgrade/update-check.js';
+
+vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
+  return { ...actual, latestVersion: vi.fn().mockResolvedValue('0.14.0') };
+});
 
 function makeArchiver(): SessionArchive {
   return {
@@ -222,5 +228,24 @@ describe('command router', () => {
       .calls[0]?.[1] as string;
     expect(body).toContain('建群失败');
     expect(body).toContain('scope missing');
+  });
+
+  it('/version reports a newer npm version with the upgrade hint', async () => {
+    const ctx = makeContext();
+    await tryHandleCommand('/version', ctx);
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('版本');
+    expect(body).toContain('0.14.0');
+    expect(body).toContain('dsh-lark-bot upgrade');
+  });
+
+  it('/version says already latest when the versions match', async () => {
+    vi.mocked(latestVersion).mockResolvedValueOnce('0.13.1');
+    const ctx = makeContext();
+    await tryHandleCommand('/version', ctx);
+    const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as string;
+    expect(body).toContain('已是最新');
   });
 });

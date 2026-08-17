@@ -39,6 +39,12 @@ export interface RuntimeEnv {
   heartbeatMs: number;
   /** Guardian disabled switch (DSH_LARK_GUARDIAN_DISABLED=1 keeps it stopped). */
   guardianDisabled: boolean;
+  /** Push a Feishu update notification when a newer version is found (DSH_LARK_UPGRADE_NOTIFY=1; default off, log-only). */
+  upgradeNotify: boolean;
+  /** Chat to receive update notifications (DSH_LARK_UPGRADE_NOTIFY_CHAT); required for `upgradeNotify`. */
+  upgradeNotifyChat: string | undefined;
+  /** How often the bridge checks for a newer version (DSH_LARK_UPGRADE_CHECK_INTERVAL_MS, default 6h; 0 disables). */
+  upgradeCheckIntervalMs: number;
   /** dsh profile the guardian watches / relaunches (default `dsh-lark`). */
   guardianProfile: string;
   /** Bridge state profile providing Feishu credentials (default `default`). */
@@ -70,6 +76,8 @@ const DEFAULTS = {
   guardianEngineDeadMs: 120_000,
   guardianProfile: 'dsh-lark',
   guardianBridgeProfile: 'default',
+  upgradeNotify: false,
+  upgradeCheckIntervalMs: 6 * 60 * 60_000,
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -242,6 +250,13 @@ export function loadRuntimeEnv(
       'DSH_LARK_HEARTBEAT_MS',
     ),
     guardianDisabled: parseBoolean(source.DSH_LARK_GUARDIAN_DISABLED, false),
+    upgradeNotify: parseBoolean(source.DSH_LARK_UPGRADE_NOTIFY, false),
+    upgradeNotifyChat: nonEmpty(source.DSH_LARK_UPGRADE_NOTIFY_CHAT),
+    upgradeCheckIntervalMs: parsePositiveInt(
+      source.DSH_LARK_UPGRADE_CHECK_INTERVAL_MS,
+      DEFAULTS.upgradeCheckIntervalMs,
+      'DSH_LARK_UPGRADE_CHECK_INTERVAL_MS',
+    ),
     guardianProfile:
       nonEmpty(source.DSH_LARK_GUARDIAN_PROFILE) ?? DEFAULTS.guardianProfile,
     guardianBridgeProfile:

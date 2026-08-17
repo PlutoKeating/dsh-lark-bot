@@ -12,6 +12,7 @@ afterEach(() => {
   delete process.env.DSH_LARK_DSH_ARGS;
   delete process.env.DSH_LARK_ADAPTER;
   delete process.env.DSH_LARK_UPGRADE_CHECK;
+  delete process.env.DSH_HOME;
   process.exitCode = 0;
 });
 
@@ -130,5 +131,73 @@ describe('runDoctor', () => {
       await rm(root, { recursive: true, force: true });
     }
     expect(outputChunks.join('')).toContain('guardian: ⚠️ 服务单元指向 npx 缓存路径');
+  });
+
+  it('surfaces a pending restart after an upgrade', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-restart-'));
+    process.env.DSH_LARK_HOME = root;
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
+    process.env.DSH_LARK_UPGRADE_CHECK = '0';
+    await writeFile(
+      join(root, 'upgrade-state.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        lastUpgrade: {
+          at: '2026-08-17T00:00:00.000Z',
+          fromVersion: '0.13.0',
+          toVersion: '0.13.1',
+          profile: 'dsh-lark',
+          packageSpec: 'dsh-lark-bot@0.13.1',
+          guardianInstalled: true,
+          pendingRestart: true,
+        },
+      }),
+      'utf8',
+    );
+    const outputChunks: string[] = [];
+    try {
+      await runDoctor({ version: '0.13.1', output: (text) => outputChunks.push(text) });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+    expect(outputChunks.join('')).toContain('upgrade: 上次升级未自动重启');
+  });
+
+  it('warns when a runtime profile link version drifts from the installed package', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-runtime-'));
+    process.env.DSH_LARK_HOME = root;
+    process.env.DSH_HOME = join(root, '.dsh');
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
+    process.env.DSH_LARK_UPGRADE_CHECK = '0';
+    const dshHome = join(root, '.dsh');
+    await mkdir(
+      join(dshHome, 'profiles', 'dsh-lark', 'node_modules', 'dsh-lark-bot'),
+      { recursive: true },
+    );
+    await writeFile(
+      join(dshHome, 'profiles', 'dsh-lark', 'node_modules', 'dsh-lark-bot', 'package.json'),
+      JSON.stringify({ name: 'dsh-lark-bot', version: '0.13.1' }),
+      'utf8',
+    );
+    await mkdir(
+      join(dshHome, 'profiles', 'dsh-lark-sdk', 'node_modules', 'dsh-lark-bot'),
+      { recursive: true },
+    );
+    await writeFile(
+      join(dshHome, 'profiles', 'dsh-lark-sdk', 'node_modules', 'dsh-lark-bot', 'package.json'),
+      JSON.stringify({ name: 'dsh-lark-bot', version: '0.13.0' }),
+      'utf8',
+    );
+    const outputChunks: string[] = [];
+    try {
+      await runDoctor({ version: '0.13.1', output: (text) => outputChunks.push(text) });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+    expect(outputChunks.join('')).toContain(
+      'runtime dsh-lark-sdk: ⚠️ 链接版本 0.13.0 与已装 0.13.1 不一致',
+    );
   });
 });

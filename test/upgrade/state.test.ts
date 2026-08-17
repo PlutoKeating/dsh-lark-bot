@@ -22,6 +22,7 @@ const sample: UpgradeRecord = {
   profile: 'dsh-lark',
   packageSpec: 'dsh-lark-bot@0.11.0',
   guardianInstalled: true,
+  pendingRestart: true,
 };
 
 describe('upgrade state', () => {

@@ -27,6 +27,12 @@ import {
 import { handleArchive, handleRetention } from './archive.js';
 import { handleRole } from './roles.js';
 import { handleNotify } from './notify.js';
+import {
+  currentVersion,
+  isNewer,
+  latestVersion,
+  upgradeCheckEnabled,
+} from '../upgrade/update-check.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -88,6 +94,7 @@ const HELP = [
   '- `/cd <path>` — 切换工作目录并重置会话',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看当前状态',
+  '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
@@ -287,6 +294,26 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
       ...runLines,
     ].join('\n'),
   );
+}
+
+async function handleVersion(_args: string, ctx: CommandContext): Promise<void> {
+  const current = currentVersion();
+  const lines = [`🔖 **版本**: \`${current}\``];
+  try {
+    const latest = await latestVersion();
+    if (latest !== undefined) {
+      lines.push(
+        isNewer(latest, current)
+          ? `⬆️ **最新**: \`${latest}\` — 有新版本；管理员可执行 \`dsh-lark-bot upgrade\` 一键更新`
+          : `✅ **最新**: \`${latest}\`（已是最新）`,
+      );
+    } else if (upgradeCheckEnabled()) {
+      lines.push('最新版本查询暂不可用（网络 / registry 异常）。');
+    }
+  } catch {
+    lines.push('最新版本查询暂不可用（网络 / registry 异常）。');
+  }
+  await reply(ctx, lines.join('\n'));
 }
 
 async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
@@ -505,6 +532,7 @@ const handlers: Record<string, Handler> = {
   '/cd': handleCd,
   '/ws': handleWs,
   '/status': handleStatus,
+  '/version': handleVersion,
   '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,

@@ -25,6 +25,8 @@ export interface UpgradeRecord {
   packageSpec: string;
   /** Whether the guardian service was (re)installed as part of the upgrade. */
   guardianInstalled: boolean;
+  /** True when the dsh profile process was running and was not restarted, so the new version is not active yet. */
+  pendingRestart?: boolean;
 }
 
 export interface UpgradeState {

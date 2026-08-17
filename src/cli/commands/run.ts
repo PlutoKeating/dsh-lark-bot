@@ -35,6 +35,8 @@ import { SessionArchive } from '../../session/archive.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 import { startHeartbeat } from '../../guardian/heartbeat.js';
+import { currentVersion } from '../../upgrade/update-check.js';
+import { UpdateNotifier } from '../../upgrade/update-notifier.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -345,6 +347,24 @@ export async function startBridgeEngine(
     process.pid,
     env.heartbeatMs,
   );
+  // Periodic new-version detection (issue #15): logs by default; pushes a
+  // Feishu notification when DSH_LARK_UPGRADE_NOTIFY=1 and a target chat is
+  // configured.
+  const updateNotifier = new UpdateNotifier({
+    current: currentVersion(),
+    notify: env.upgradeNotify,
+    notifyChat: env.upgradeNotifyChat,
+    intervalMs: env.upgradeCheckIntervalMs,
+    send: async (chatId, markdown) => {
+      if (!streaming) return;
+      await streaming.sendMarkdown(chatId, markdown);
+    },
+    log: {
+      warn: (category, event, fields) =>
+        log.warn(category, event, fields as Record<string, unknown>),
+    },
+  });
+  updateNotifier.start();
 
   const startedAt = new Date().toISOString();
   log.info('cli', 'started', {
@@ -372,6 +392,7 @@ export async function startBridgeEngine(
       if (stopped) return;
       stopped = true;
       webWatcher?.close();
+      updateNotifier.stop();
       heartbeat.stop();
       await notifyServer.stop();
       await bridge.disconnect();
