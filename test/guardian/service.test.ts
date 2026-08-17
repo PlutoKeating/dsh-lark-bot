@@ -195,6 +195,7 @@ async function makeHarness(
     safeTimeoutMs?: number;
     ensureSdkProfile?: GuardianServiceOptions['ensureSdkProfile'];
     engineDeadMs?: number;
+    relaunchReadyTimeoutMs?: number;
     findProcess?: (dshProfile: string) => Promise<{ pid: number; cmdline: string } | undefined>;
   } = {},
 ) {
@@ -264,6 +265,7 @@ async function makeHarness(
     ...(overrides.ensureSdkProfile === undefined
       ? {}
       : { ensureSdkProfile: overrides.ensureSdkProfile }),
+    relaunchReadyTimeoutMs: overrides.relaunchReadyTimeoutMs ?? 50,
   });
   services.push(service);
   return {
@@ -322,7 +324,12 @@ describe('GuardianService', () => {
   });
 
   it('takes over after dsh goes down, then releases when dsh returns', async () => {
-    const harness = await makeHarness({ state: { profileSeenUp: true } });
+    // A short readiness window: the auto-relaunch does not come up, so the
+    // guardian gives up and takes over the rescue channel.
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      relaunchReadyTimeoutMs: 50,
+    });
     await harness.service.start();
     await until(() => harness.handlers.message !== undefined);
     expect(harness.service.snapshot().mode).toBe('takeover');
@@ -335,6 +342,58 @@ describe('GuardianService', () => {
     } finally {
       heartbeat.stop();
     }
+  });
+
+  it('auto-relaunches once and does not take over while the relaunch is pending', async () => {
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      relaunchReadyTimeoutMs: 50,
+    });
+    await harness.service.start();
+    await until(() => harness.spawnDetachedFn.mock.calls.length > 0);
+    expect(harness.service.snapshot().relaunchedPid).toBe(777);
+    expect((harness.channel.connect as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+
+    // The relaunch never comes up: after the readiness window the guardian
+    // gives up, converges the state and takes over the rescue channel.
+    await until(() => harness.service.snapshot().mode === 'takeover');
+    expect(harness.service.snapshot().relaunchedPid).toBeUndefined();
+    expect(harness.spawnDetachedFn.mock.calls.length).toBe(1);
+  });
+
+  it('marks the auto-relaunch ready and converges when the profile comes back', async () => {
+    let calls = 0;
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      relaunchReadyTimeoutMs: 10_000,
+      findProcess: async () => {
+        calls += 1;
+        // First tick: profile down (tick check + pre-spawn re-check both see
+        // nothing, so the spawn happens). Afterwards it is up.
+        return calls > 2 ? { pid: 777, cmdline: 'dsh --profile dsh-lark' } : undefined;
+      },
+    });
+    await harness.service.start();
+    await until(() => harness.spawnDetachedFn.mock.calls.length > 0);
+    expect((harness.channel.connect as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+
+    await until(() => harness.service.snapshot().relaunchedPid === undefined);
+    expect(harness.service.snapshot().mode).toBe('standby');
+    expect((harness.channel.connect as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it('skips the auto-relaunch when a profile process appears right before the spawn', async () => {
+    let calls = 0;
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      findProcess: async () => {
+        calls += 1;
+        return calls >= 2 ? { pid: 42, cmdline: 'dsh --profile dsh-lark' } : undefined;
+      },
+    });
+    await harness.service.start();
+    await sleep(80);
+    expect(harness.spawnDetachedFn.mock.calls.length).toBe(0);
   });
 
   it('takes over when the bridge engine is dead even though the dsh process survives', async () => {
