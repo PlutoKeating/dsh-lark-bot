@@ -1,5 +1,5 @@
 ---
-状态: DRAFT · 未授权不发送
+状态: 已发布 · https://github.com/omdsh-dev/community/discussions/25
 渠道建议: omdsh-dev/community 新 Discussion（[Security] 分类）或公开 issue
 身份声明: PlutoKeating，dsh-lark-bot 维护者
 ---

@@ -1,6 +1,6 @@
 ---
-状态: DRAFT · 未授权不发布
-建议编号: #41（占位，实际以创建时为准）
+状态: 已发布 · https://github.com/PlutoKeating/dsh-lark-bot/issues/41
+建议编号: #41
 ---
 
 # 标题

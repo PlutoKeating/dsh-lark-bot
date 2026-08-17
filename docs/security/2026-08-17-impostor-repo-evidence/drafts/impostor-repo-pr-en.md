@@ -1,5 +1,5 @@
 ---
-status: DRAFT · optional action, do not submit without maintainer authorization
+status: Published · https://github.com/tarraencompassing61/dsh-lark-bot/pull/1
 channel: pull request to tarraencompassing61/dsh-lark-bot
 ---
 

@@ -1,5 +1,5 @@
 ---
-status: DRAFT · do not send without maintainer authorization
+status: READY · awaiting PlutoKeating manual form submission (no API channel)
 channel: GitHub "Report content" on the repository page (or https://support.github.com/contact/report-content)
 category: Spam / Deceptive practices (NOT DMCA — AGPL and attribution are preserved)
 ---
