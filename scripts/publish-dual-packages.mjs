@@ -40,6 +40,39 @@ function run(command, args, cwd) {
   });
 }
 
+/**
+ * Publish one package, tolerating "already published" (E409 / "cannot
+ * publish over previously published versions") so re-runs are idempotent —
+ * both the public npm registry and GitHub Packages reject republishing an
+ * existing version.
+ */
+function publishPackage(name, args, cwd) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('npm', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk.toString('utf8');
+    });
+    child.once('error', rejectPromise);
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      if (/cannot publish over|previously published/i.test(output)) {
+        console.log(`[skip-publish] ${name} — version already published, nothing to do`);
+        resolvePromise();
+        return;
+      }
+      const tail = output.trim().split('\n').slice(-8).join('\n');
+      rejectPromise(new Error(`npm publish exited with code ${String(code)}\n${tail}`));
+    });
+  });
+}
+
 async function main() {
   await mkdir(join(ROOT, 'dist'), { recursive: true });
   if (packDir) await mkdir(packDir, { recursive: true });
@@ -65,7 +98,7 @@ async function main() {
         } else if (process.env.GITHUB_ACTIONS === 'true' && !github) {
           publishArgs.push('--provenance');
         }
-        await run('npm', publishArgs, dir);
+        await publishPackage(name, publishArgs, dir);
       }
 
       if (packDir) {
