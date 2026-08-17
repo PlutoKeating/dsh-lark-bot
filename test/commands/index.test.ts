@@ -23,7 +23,13 @@ import { latestVersion } from '../../src/upgrade/update-check.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
-  return { ...actual, latestVersion: vi.fn().mockResolvedValue('0.14.0') };
+  return {
+    ...actual,
+    // Pin both versions so the assertions are independent of the package
+    // version at release time (CI checks out the tag, where current == latest).
+    currentVersion: () => '0.13.1',
+    latestVersion: vi.fn().mockResolvedValue('0.14.0'),
+  };
 });
 
 function makeArchiver(): SessionArchive {
