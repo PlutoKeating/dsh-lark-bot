@@ -90,11 +90,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
 | `/archive clean` | 清理过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
-| `/model` | 查看当前会话模型、dsh 默认模型与可用模型列表 |
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导；选择用按钮、填值用卡片输入、写入前确认） |
 | `/model use <id>` | 热切换当前会话模型（下一轮生效） |
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
 | `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
-| `/providers` | 查看 dsh providers、模型与凭据状态 |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
@@ -120,15 +119,23 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `~/.dsh/.credentials.yaml`，与 dsh Web **Settings → Models** 页面同一协议），改动在下一个
 请求生效、无需重启 bot：
 
+- **交互式管理卡片（推荐）**：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片，
+  按 BotFather 式多轮向导完成增删改查：能选择的用按钮点选（API 协议、provider、模型、凭据引用），
+  需要填值的用卡片输入（ID、Base URL、模型列表、密钥值），写入前有确认卡，随时可取消；
+  向导 30 分钟无操作自动过期。文字命令与卡片向导等价、可混用。
 - `/model use <id>`：按会话热切换模型，下一轮消息即用新模型；`/model reset` 恢复默认。
-- `/model default <id>`：写入 dsh 的 `agent-default-model`，作为新会话的默认模型。
+- `/model default <id>`：写入 dsh 的 `agent-default-model`（`{ provider, model }`，provider 由
+  桥接自动解析），作为新会话的默认模型。
 - `/providers`：展示 dsh 已配置的 provider、模型与凭据状态（DeepSeek 官方 + 自定义 pi-ai）。
 - `/provider add|update <id>`：新增 / 更新自定义 provider（`llm-pi-ai`）或 `deepseek-official`；
   自定义 provider 需要 `--api`（`openai-completions` / `openai-responses` / `anthropic-messages`）、
-  `--base-url` 与至少一个 `--model`。`/provider remove <id>` 删除 provider。
+  `--base-url`（根域名如 `https://www.kingapi.xyz` 自动补全为 `/v1`）与至少一个 `--model`。
+  `/provider remove <id>` 删除 provider。
 - `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；settings
   只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
+- **热重载**：每轮运行前桥接把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
+  在路由变化时自动重建 runtime，`/model use` 的下一轮生效是真实行为（issue #47 修复）。
 
 除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
 （`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在

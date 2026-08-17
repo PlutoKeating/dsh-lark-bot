@@ -91,7 +91,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    dsh 官方配置存储（`~/.dsh/settings.yaml` + `~/.dsh/.credentials.yaml`），与 dsh Web
    Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），
    因此不重复造配置管理 API，也不绕过官方热发布；ACP / SDK 协议本身不含配置管理方法，
-   模型切换通过每轮请求的 model 参数与 dsh 热发布生效。
+   模型切换通过每轮请求的 provider/model 路由与 dsh 热发布生效：桥接在每轮运行前调用
+   `DshProviderManager.resolveModelRoute()` 把模型解析为「provider + model」，SDK 适配器在
+   路由变化时关闭旧 runtime 并以新路由重建（`/model use` 下一轮真正生效）；`agent-default-model`
+   按 dsh 官方 schema 写入 `{ provider, model }` 双字段。管理入口提供 BotFather 式交互卡片
+   多轮向导（`src/commands/config-wizard.ts` + `src/card/config-cards.ts`，
+   `src/bot/wizard-store.ts` 持有 per-scope 向导状态）。
 5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需

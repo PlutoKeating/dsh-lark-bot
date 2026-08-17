@@ -36,7 +36,10 @@
   进程内运行，守护由 dsh 宿主负责。
 - **P6 done**（0.5.0）：`/model use|default|reset|add|remove`、`/providers`、`/provider
   add|update|remove`、`/key set|remove|list`；按 dsh 官方存储协议读写 `settings.yaml` +
-  `.credentials.yaml`，热切换与默认模型改动下一请求生效。
+  `.credentials.yaml`，热切换与默认模型改动下一请求生效。**P6 强化（issue #47）**：每轮运行前
+  解析 model → provider 路由并传给 dsh runtime（SDK 适配器路由变化自动重建，`/model use`
+  下一轮真实生效）；`agent-default-model` 写入 `{ provider, model }`；`/providers` 与裸
+  `/provider` `/model` `/key` 提供 BotFather 式交互卡片多轮向导。
 - **P7 done**（0.5.1）：`src/config/dsh-compat.ts` 单一事实来源、`scripts/check-dsh-upstream.mjs`
   上游雷达（每周 CI）、`scripts/probe-dsh-compat.mjs` 真实探测（CI `compat-probe`）、
   `docs/COMPATIBILITY.md` 升级手册、`/help` 测试覆盖。
