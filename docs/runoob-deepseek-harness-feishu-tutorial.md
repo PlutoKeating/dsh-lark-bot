@@ -1,0 +1,153 @@
+# DeepSeek Harness 连接飞书（dsh-lark-bot 桥接插件）
+
+> 本文是面向 runoob.com「DeepSeek Harness 教程」栏目的投稿文章（原创），
+> 配套可直接粘贴进 runoob 投稿编辑器的 HTML 版本见 `docs/runoob-deepseek-harness-feishu-tutorial.html`。
+
+## 为什么要把 DeepSeek Harness 装进飞书
+
+DeepSeek Harness（`dsh`）是 DeepSeek 开源的 AI Agent 运行框架，采用「一切皆插件」的架构，默认提供
+Web UI（`http://127.0.0.1:3080`）。使用官方 Web UI 时，你通常需要坐在电脑前打开浏览器才能指挥
+agent 干活。如果你在通勤路上、开会间隙，想用手机给本机 agent 发一句话让它跑测试、改代码、查文档，
+就需要一个 IM 入口。
+
+`dsh-lark-bot` 正是这样一个开源桥接插件：它把本机的 DeepSeek Harness 接入飞书 / Lark，
+**扫码 30 秒绑定**，之后在飞书私聊、群聊、话题里发消息即可指挥本机 coding agent。它使用飞书
+WebSocket 长连接（出站），**不需要公网 IP、域名、服务器或内网穿透**，代码始终只在本机运行。
+
+## 准备工作
+
+| 项目 | 要求 |
+| --- | --- |
+| Node.js | ≥ 22.19 |
+| DeepSeek Harness | 已安装 `dsh` 并配置 `DEEPSEEK_API_KEY` |
+| 飞书 / Lark | 一个可扫码登录的账号 |
+| 网络 | 可访问飞书开放平台（大陆网络可直接使用） |
+| 公网条件 | 不需要公网 IP / 域名 / 服务器 / 内网穿透 |
+
+## 安装（一条命令）
+
+`dsh-lark-bot` 以标准 dsh profile bundle 交付，安装命令：
+
+```bash
+npx dsh-lark-bot@latest setup --profile dsh-lark
+```
+
+`setup` 会自动完成：定位本机 dsh → 预批准 pnpm 构建策略 → 执行标准
+`dsh plugin --profile dsh-lark add dsh-lark-bot@<版本>`，并默认同时安装「安全网守护」
+（系统级常驻进程，dsh 全部下线后飞书救援入口仍存活；不需要时加 `--no-guardian`）。
+
+## 启动并扫码绑定
+
+```bash
+dsh --profile dsh-lark
+```
+
+首次启动（无凭据时）终端会打印二维码：
+
+1. 用飞书 / Lark App 扫码；
+2. 选择或创建 PersonalAgent 应用；
+3. 绑定成功后，桥接引擎在 dsh 进程内运行，并向私聊发送欢迎卡片；
+4. 私聊直接发消息即可，群聊 / 话题中需要 `@bot`。
+
+已有 PersonalAgent 应用时，可在启动命令中提供凭据跳过扫码：
+
+```bash
+DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
+  dsh --profile dsh-lark
+```
+
+## 基本使用
+
+在飞书里给机器人发普通消息即可开始工作，常用命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/new` `/reset` | 开始新会话 |
+| `/cd <path>` | 切换工作目录并重置会话 |
+| `/ws list` `/ws save <name>` `/ws use <name>` | 查看 / 保存 / 切换命名工作空间 |
+| `/status` | 查看当前状态与运行中的任务 |
+| `/stop` | 终止当前任务 |
+| `/concurrency [N]` | 查看或设置当前 scope 并行任务数（默认 2） |
+| `/role list` `/role set <id>` | 查看角色 / 为当前 scope 绑定角色 |
+| `/notify <scope|chatId> <text>` | 跨会话发送通知（管理员） |
+| `/archive` `/archive list` | 归档 / 查看会话记录 |
+| `/model use <id>` | 热切换当前会话模型（下一轮生效） |
+| `/key set|remove|list` | 管理 dsh 凭据 |
+| `/help` | 查看命令帮助 |
+
+## 核心能力
+
+### 安全网守护：dsh 崩溃后飞书仍叫得应
+
+DSH 进程崩溃后，其他方案的机器人会变成「死号」，只能回服务器手动重启。`dsh-lark-bot` 默认安装的
+守护进程独立于 dsh 运行，一旦检测到 dsh 下线或无法启动，会自动接管飞书通道：
+
+- `/safemode`：进入仅核心安全模式（只加载官方 `dsh-base` + `dsh-headless`，不加载第三方插件），
+  在飞书里逐条对话定位、修复损坏的插件；
+- `/safemode plugins`：列出故障 profile 已安装的插件清单；
+- `/safemode status`：查看守护 / dsh / 安全模式状态；
+- `/safemode exit`：退出安全模式，守护重启完整 profile 并把飞书通道交还。
+
+全程不需要命令行，dsh 恢复后守护自动回归静默。
+
+### 多角色 Agent：一个机器人，一整个团队
+
+用 `/role save` 定义 PM / 开发 / 文档等角色（persona、模型偏好、工具指引、角色规则），
+再用 `/role set <id>` 绑定到当前 scope。每个角色有持久化的人设与规则。
+
+### 并行多任务：不用排队
+
+同一群里可以同时跑多个任务，各自会话隔离（默认 2 个并行，`/concurrency` 可调），
+连续发来的多条消息会以独立 run 并行推进。
+
+### 会话归档与清理
+
+`/archive` 归档旧任务、`/retention` 配置自动保留策略，长期使用会话列表也不会越积越多。
+
+### 跨会话主动通知
+
+Agent 在 A 群跑完任务，可以主动发消息到 B 群或私聊并 `@` 你（内置 `lark_notify` dsh 工具），
+而不是「你问它答」。
+
+### 对话内管理模型和密钥
+
+`/model`、`/providers`、`/provider`、`/key` 直接在聊天里查看、切换供应商、热更新密钥，
+全程不离开飞书；密钥写入 `~/.dsh/.credentials.yaml`（0600），不在聊天记录中显示。
+
+## 安全性说明
+
+- 数据只在本机、飞书与 DeepSeek 之间流转，不收集、不上传任何遥测；
+- 密钥不写入仓库，访问白名单用 `/invite` 管理；
+- 项目从不提供 Windows `.exe` 或「下载即运行」的安装包，任何以项目名义分发 exe 的页面或仓库
+  均为假冒 / 恶意来源，请认准官方渠道（见文末链接）。
+
+## 升级与卸载
+
+```bash
+# 升级（v0.12.0+ 推荐）：升级包 + 守护 + 升级后验证
+npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
+
+# 卸载
+dsh plugin --profile dsh-lark remove dsh-lark-bot
+```
+
+## 常见问题
+
+**扫码失败？** 确认本机时间准确、网络可访问飞书开放平台；已有 App ID/Secret 时可用
+`--app-id` / `--app-secret` 跳过扫码。
+
+**机器人静默 / 长连接失败？** 查看 stderr 上的 JSONL 日志（关注 `channel` 类别），
+SDK 会自动重连；也可先运行 `dsh-lark-bot doctor` 检查 profile 与本机 dsh 可用性。
+
+**agent 无响应？** 发送 `/status` 查看 scope、cwd 和 active run；`/stop` 终止当前任务；
+持续无响应超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。
+
+**dsh 崩溃了怎么办？** 直接发 `/safemode`，守护会拉起仅核心安全模式，修复后 `/safemode exit` 恢复。
+
+## 参考链接
+
+- GitHub 仓库：https://github.com/PlutoKeating/dsh-lark-bot
+- npm 包：https://www.npmjs.com/package/dsh-lark-bot（同源双包 `dsh-feishu-bot`）
+- 项目文档：https://github.com/PlutoKeating/dsh-lark-bot/tree/main/docs
+- 落地页：https://dsh-lark-bot.arr2018.dpdns.org
+- DeepSeek Harness：https://github.com/deepseek-ai/deepseek-harness

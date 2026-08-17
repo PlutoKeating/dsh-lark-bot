@@ -293,6 +293,34 @@
 - HN 评论区参与 dsh 相关讨论时，自然提及项目与 npm 包名。
 - 给 orcarouter.ai 等 dsh 教程站发邮件建议收录（联系页一般有邮箱）。
 
+### 7.7 runoob.com（菜鸟教程）投稿（P1）
+
+**稿件已备好**：`docs/runoob-deepseek-harness-feishu-tutorial.md`（母版）与
+`docs/runoob-deepseek-harness-feishu-tutorial.html`（可直接粘贴版）。
+
+**投稿步骤**
+
+1. 打开投稿页 https://www.runoob.com/tougao（即「笔记分享」表单）；
+2. 表单填写：
+   - 笔记标题（≤100 字）：`DeepSeek Harness 连接飞书（dsh-lark-bot 桥接插件）`
+   - 昵称（≤20 字）：建议 `dsh-lark-bot` 或你的常用昵称
+   - E-Mail：必填，用于接收审核结果
+   - 引用地址：填 `https://www.runoob.com/deepseek-harness/`（关联 DeepSeek Harness 栏目，
+     提高被编入该栏目的概率）
+3. 正文：把 `runoob-deepseek-harness-feishu-tutorial.html` 的内容整体粘贴进 Simditor 编辑器
+   （正文需 ≥100 字，本稿远超）；粘贴后检查标题层级、代码块与表格是否保留；
+4. 提交后等待审核；「笔记分享」投稿由后台管理员审核，优质原创通过后会被发表/分享；
+5. 投稿通过后，发邮件到 **429240967@qq.com** 申请内测邀请码（这是 runoob 用户中心的注册方式，
+   注册后可管理自己的笔记与投稿；官方联系邮箱另有 admin@runoob.com）。
+
+**备选路径（满足其一即可申请邀请码）**
+
+- 提交 3 个有效问题反馈并被采纳；
+- 在任意 runoob 教程文章底部「点我分享笔记」分享 2 份扩展笔记（简单描述 + 代码实例）。
+
+**注意**：runoob 审核的是「优质原创」；投稿不等于自动生成栏目页面，是否编入
+DeepSeek Harness 栏目由 runoob 编辑决定。引用地址填栏目首页可显著提高归位概率。
+
 ---
 
 ## 8. GEO / AEO 清单（面向 AI 搜索引擎）
