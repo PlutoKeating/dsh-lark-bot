@@ -745,7 +745,7 @@ Thanks to the following contributors (by merge / submission time):
 | 贡献者 Contributor | 贡献 Contribution | 状态 Status |
 | :--- | :--- | :--- |
 | [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) | [PR #9](https://github.com/PlutoKeating/dsh-lark-bot/pull/9)：web 单写者适配器 + self-heal v2 + 守护自动重启<br>Web single-writer adapter + self-heal v2 + guardian auto-relaunch | ✅ 已合入<br>Merged |
-| [Normanyin](https://github.com/Normanyin) | [PR #11](https://github.com/PlutoKeating/dsh-lark-bot/pull/11)：`/newg` 自动建群命令<br>`/newg` auto-create group chat command | 📨 进行中<br>In progress |
+| [Normanyin](https://github.com/Normanyin) | [PR #11](https://github.com/PlutoKeating/dsh-lark-bot/pull/11)：`/newg` 自动建群命令<br>`/newg` auto-create group chat command | ✅ 已合入（cherry-pick）<br>Merged (cherry-pick) |
 
 > 说明：GitHub 贡献者图按 commit 作者邮箱归因。PR #9 合入时的提交使用了本地通用身份
 > `dsh-user <dsh-user@local>`（未绑定 GitHub 账号），因此未自动计入贡献者图；本表为仓库侧
