@@ -73,6 +73,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Generate SHA-256 checksums for release artifacts
+        run: node scripts/generate-release-checksums.mjs release-artifacts
+
       - name: Publish both packages to GitHub Packages
         run: |
           npm_config_file="$RUNNER_TEMP/github-packages.npmrc"
@@ -85,7 +88,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: release-artifacts/*.tgz
+          files: |
+            release-artifacts/*.tgz
+            release-artifacts/*.tgz.sha256
           # Fall back to GitHub's auto notes when no previous tag exists
           # (first release), so the body is never empty.
           generate_release_notes: ${{ steps.notes.outputs.notes_file == '' }}
