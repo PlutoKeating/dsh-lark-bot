@@ -39,6 +39,80 @@ export interface ModelRoute {
   model: string;
 }
 
+/**
+ * The dsh SDK runtime registers llm-pi-ai provider routes asynchronously a
+ * few hundred ms after boot. An initialize handshake sent inside that window
+ * fails with "no adapter registered for provider <id>" even though the
+ * provider is correctly configured; deepseek-official registers synchronously
+ * so only pi-ai providers are affected. Retry the handshake with backoff.
+ */
+const RETRYABLE_INIT_ERROR = /no adapter registered for provider/i;
+const INIT_RETRY_ATTEMPTS = 6;
+const INIT_RETRY_DELAY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableInitError(error: unknown): boolean {
+  return error instanceof Error && RETRYABLE_INIT_ERROR.test(error.message);
+}
+
+/**
+ * Wrap a harness so its start handshake survives the transient pi-ai
+ * registration race. The race is per runtime boot: llm-pi-ai registers its
+ * provider routes a few hundred ms AFTER the JSON-RPC server starts serving,
+ * so re-spawning the runtime resets the clock. We therefore keep the SAME
+ * subprocess and poll `initialize` until the routes are registered.
+ */
+function withRetryableStart(harness: DeepSeekHarness): DeepSeekHarness {
+  const originalStart = harness.start.bind(harness);
+  const internals = harness as unknown as {
+    client: HarnessClient;
+    cwd: string;
+    provider: string;
+    model: string;
+    initialized: Promise<void> | undefined;
+  };
+  let handled = false;
+  harness.start = async () => {
+    if (handled) return originalStart();
+    try {
+      const result = await originalStart();
+      handled = true;
+      return result;
+    } catch (error) {
+      if (!isRetryableInitError(error)) throw error;
+      handled = true;
+      // originalStart() closed its client on failure and swapped in a fresh
+      // one. Boot that subprocess and poll initialize on the SAME process.
+      const client = internals.client;
+      if (!client) throw error;
+      client.start();
+      let lastError: unknown = error;
+      for (let attempt = 1; attempt <= INIT_RETRY_ATTEMPTS; attempt += 1) {
+        await sleep(INIT_RETRY_DELAY_MS * attempt);
+        try {
+          await client.initialize({
+            cwd: internals.cwd,
+            provider: internals.provider,
+            model: internals.model,
+          });
+          // Mark the harness initialized so later runs reuse this runtime
+          // instead of spawning another subprocess.
+          internals.initialized = Promise.resolve();
+          return undefined;
+        } catch (retryError) {
+          lastError = retryError;
+          if (!isRetryableInitError(retryError)) throw retryError;
+        }
+      }
+      throw lastError;
+    }
+  };
+  return harness;
+}
+
 function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), timeoutMs > 0 ? timeoutMs : 5_000);
@@ -103,21 +177,35 @@ export class SdkDshAdapter implements AgentAdapter {
     });
     try {
       client.start();
-      const info = await client.initialize({
-        cwd: process.cwd(),
-        provider: this.provider,
-        model: this.model,
-        ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
-      });
-      return {
-        ok: true,
-        error: undefined,
-        version: `${info.serverInfo.name}@${info.serverInfo.version}`,
-      };
-    } catch (error) {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= INIT_RETRY_ATTEMPTS; attempt += 1) {
+        try {
+          const info = await client.initialize({
+            cwd: process.cwd(),
+            provider: this.provider,
+            model: this.model,
+            ...(this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens }),
+          });
+          return {
+            ok: true,
+            error: undefined,
+            version: `${info.serverInfo.name}@${info.serverInfo.version}`,
+          };
+        } catch (error) {
+          lastError = error;
+          if (!isRetryableInitError(error) || attempt === INIT_RETRY_ATTEMPTS) {
+            return {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+              version: undefined,
+            };
+          }
+          await sleep(INIT_RETRY_DELAY_MS * attempt);
+        }
+      }
       return {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: lastError instanceof Error ? lastError.message : String(lastError),
         version: undefined,
       };
     } finally {
@@ -218,7 +306,7 @@ export class SdkDshAdapter implements AgentAdapter {
       }
     }
     const entry: RuntimeEntry = {
-      harness: this.harnessFactory(cwd, route),
+      harness: withRetryableStart(this.harnessFactory(cwd, route)),
       provider: route.provider,
       model: route.model,
       active: 0,

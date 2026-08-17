@@ -110,6 +110,37 @@ describe('DshProviderManager', () => {
     expect(() => normalizeBaseUrl('not a url')).toThrow(/不是合法 URL/);
   });
 
+  it('links a credential ref to a same-named pi-ai provider missing apiKeyEnv', async () => {
+    await withHome(async (_root, manager) => {
+      await manager.upsertPiAiProvider({
+        id: 'kingapi',
+        api: 'openai-completions',
+        baseURL: 'https://www.kingapi.xyz/v1',
+        models: [
+          {
+            id: 'doubao-seed-2-0-lite-260428',
+            name: undefined,
+            contextWindow: undefined,
+            maxTokens: undefined,
+          },
+        ],
+      });
+      // No credential yet -> no link.
+      expect(await manager.linkCredentialRefIfMissing('kingapi')).toBe(false);
+      await manager.setCredential('kingapi', 'sk-secret');
+      expect(await manager.linkCredentialRefIfMissing('kingapi')).toBe(true);
+      // Idempotent.
+      expect(await manager.linkCredentialRefIfMissing('kingapi')).toBe(false);
+      const settings = await manager.readSettings();
+      const section = (
+        (settings[PIAI_NAMESPACE] as { providers: Record<string, Record<string, unknown>> })
+          .providers
+      )['kingapi'];
+      expect(section?.['apiKeyEnv']).toBe('kingapi');
+      expect(section?.['baseURL']).toBe('https://www.kingapi.xyz/v1');
+    });
+  });
+
   it('adds a pi-ai custom provider matching the official schema and preserves exotic model fields', async () => {
     await withHome(async (root, manager) => {
       await manager.upsertPiAiProvider({

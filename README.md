@@ -163,9 +163,12 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
   字面密钥不进 settings / 聊天记录。
 - **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要生效还须在其
   `apiKeyEnv` 字段引用同一名字（`/provider add|update ... --api-key-env <引用名>`，或向导中填写）。
+  引用名与 provider ID 相同且 provider 未设 `apiKeyEnv` 时，`/key set` 会自动补关联；
+  已存在的老配置在下次运行时也会自动补齐。
 - **热重载**：桥接在每轮运行前把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
   在路由变化时自动重建 runtime（下一轮生效）。pi-ai 的 Base URL 填根域名（如
-  `https://www.kingapi.xyz`）会自动补全为 `/v1`。
+  `https://www.kingapi.xyz`）会自动补全为 `/v1`。dsh runtime 启动后需几百毫秒才注册
+  pi-ai 路由，桥接会重试握手直到注册完成（避免 “no adapter registered for provider”）。
 
 安全提醒：在飞书会话输入密钥会对可见成员暴露，建议私聊使用或 `--api-key-env` 引用环境变量；bot 不在任何回复中回显密钥值。
 
