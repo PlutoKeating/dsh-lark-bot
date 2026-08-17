@@ -83,6 +83,8 @@ export interface CommandContext {
   dshConfig: DshProviderManager;
   defaultRunTimeoutMs: number;
   defaultModel: string;
+  /** Persist the admin default into the bridge profile preferences. */
+  setDefaultModelPreference?: (model: string) => Promise<void>;
   senderId: string | undefined;
   accessManager: AccessManager;
   channel: CommandChannel;

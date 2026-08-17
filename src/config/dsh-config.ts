@@ -135,13 +135,60 @@ export function normalizeBaseUrl(url: string): string {
     throw new Error(`baseURL 仅支持 http/https：${url}`);
   }
   validateBaseUrl(url);
-  const pathname = parsed.pathname.replace(/\/+$/, '');
-  if (pathname === '' || pathname === '/') {
+  const pathname = stripApiOperationSuffix(parsed.pathname);
+  if (pathname === '') {
     parsed.pathname = '/v1';
   } else {
     parsed.pathname = pathname;
   }
   return parsed.toString();
+}
+
+/**
+ * Normalize a deepseek-official base URL. The dsh llm-deepseek adapter also
+ * appends its own API paths (`${baseURL}/chat/completions`), so a full
+ * endpoint pasted by the user must be trimmed the same way — but unlike
+ * pi-ai gateways the official API serves chat at the bare root, so we must
+ * NOT default an empty path to `/v1`.
+ */
+export function normalizeDeepseekBaseUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`baseURL 不是合法 URL：${url}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`baseURL 仅支持 http/https：${url}`);
+  }
+  validateBaseUrl(url);
+  const pathname = stripApiOperationSuffix(parsed.pathname);
+  if (pathname === '' || pathname === '/') {
+    // Keep the official bare-root form (https://api.deepseek.com) without a
+    // trailing slash; the adapter appends its own API paths.
+    return parsed.origin;
+  }
+  parsed.pathname = pathname;
+  return parsed.toString();
+}
+
+/**
+ * The dsh pi-ai / llm-deepseek adapters build request URLs by appending the
+ * API operation path to the configured base URL (e.g.
+ * `${baseURL}/chat/completions`). Users routinely paste the full endpoint
+ * from gateway docs, which would otherwise produce a doubled path and a
+ * gateway 404 — trim those operation suffixes here.
+ */
+const API_OPERATION_SUFFIXES = ['/chat/completions', '/responses', '/messages'];
+
+function stripApiOperationSuffix(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/, '');
+  for (const suffix of API_OPERATION_SUFFIXES) {
+    if (trimmed.endsWith(suffix)) {
+      return trimmed.slice(0, trimmed.length - suffix.length).replace(/\/+$/, '');
+    }
+  }
+  return trimmed;
 }
 
 function validateBaseUrl(url: string): void {
@@ -389,8 +436,7 @@ export class DshProviderManager {
       : {};
     const section = { ...current };
     if (input.baseURL !== undefined) {
-      validateBaseUrl(input.baseURL);
-      section.baseURL = input.baseURL;
+      section.baseURL = normalizeDeepseekBaseUrl(input.baseURL);
     }
     if (input.apiKeyEnv !== undefined) section.apiKeyEnv = input.apiKeyEnv;
     if (input.apiKey !== undefined) {

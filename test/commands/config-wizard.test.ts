@@ -248,6 +248,20 @@ describe('config wizard', () => {
     });
   });
 
+  it('model-default also persists the profile preference for new sessions', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      const preferenceSaved: string[] = [];
+      ctx.setDefaultModelPreference = async (model: string) => {
+        preferenceSaved.push(model);
+      };
+      await beginWizard(ctx, 'model-default');
+      await handleWizardCardAction(choose(lastCard(channel), 0), undefined, ctx);
+      await handleWizardCardAction(confirmValue(lastCard(channel)), undefined, ctx);
+      expect(preferenceSaved).toEqual(['deepseek-v4-flash']);
+      expect(channel.markdowns.join('\n')).toContain('同时更新 profile 默认模型');
+    });
+  });
+
   it('hub refresh renders a card with management buttons', async () => {
     await withContext(async (ctx, _root, channel) => {
       await handleConfigHubAction('refresh', ctx);

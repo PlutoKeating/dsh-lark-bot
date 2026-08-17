@@ -156,7 +156,11 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     }
     if (!requireAdmin(ctx)) return;
     await ctx.dshConfig.setDefaultModel(id);
-    await reply(ctx, `已写入 dsh 默认模型（agent-default-model）：\`${id}\`，新会话生效。`);
+    await ctx.setDefaultModelPreference?.(id);
+    await reply(
+      ctx,
+      `已写入 dsh 默认模型（agent-default-model）：\`${id}\`（同时更新 profile 默认模型），新会话生效。`,
+    );
     return;
   }
 

@@ -226,7 +226,11 @@ export class DshProviderManager {
 pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` / `openai-responses` /
 `anthropic-messages`；自定义 provider 按官方 schema 需要 `api` + `baseURL` + 非空 `models`。
 pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时
-自动补全为 `/v1`，完整 chat 端点原样保留。
+自动补全为 `/v1`；误填 `.../chat/completions`、`.../responses`、`.../messages` 等完整接口地址时
+自动去掉末尾操作路径（dsh 的 pi-ai 适配器会自行追加 `/chat/completions` 等路径，保留完整端点
+会导致请求 URL 双写路径、网关返回 404）。deepseek-official 的 `baseURL` 走
+`normalizeDeepseekBaseUrl()`：同样去掉末尾操作路径，但保留裸根域名（官方 API 在根路径提供
+接口，不强制补 `/v1`）。
 模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
 `agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
 `/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由

@@ -91,12 +91,17 @@ describe('model slash commands', () => {
 
   it('/model default requires admin and writes agent-default-model', async () => {
     await withContext(async (ctx, root) => {
+      const preferenceSaved: string[] = [];
+      ctx.setDefaultModelPreference = async (model: string) => {
+        preferenceSaved.push(model);
+      };
       await handleModel('default deepseek-v4-pro', ctx);
       expect(lastReply(ctx)).toContain('仅管理员');
 
       ctx.senderId = 'ou_admin';
       await handleModel('default deepseek-v4-pro', ctx);
       expect(lastReply(ctx)).toContain('agent-default-model');
+      expect(preferenceSaved).toEqual(['deepseek-v4-pro']);
 
       const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
       expect(settings).toContain('agent-default-model');
