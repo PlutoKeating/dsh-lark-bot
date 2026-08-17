@@ -254,9 +254,21 @@ export async function startBridgeEngine(
           activeProfile.preferences.model ??
           (await dshConfig.defaultModel().catch(() => undefined)) ??
           env.model;
-        const modelRoute = resolvedModel
-          ? await dshConfig.resolveModelRoute(resolvedModel).catch(() => undefined)
-          : undefined;
+        let modelRoute: Awaited<ReturnType<DshProviderManager['resolveModelRoute']>>;
+        if (resolvedModel) {
+          try {
+            modelRoute = await dshConfig.resolveModelRoute(resolvedModel);
+          } catch (error) {
+            // A settings read/parse failure is a different problem than a
+            // missing model; report it instead of a misleading "not found".
+            await streaming.sendMarkdown(
+              first.chatId,
+              `⚠️ 读取 dsh 配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
+              { replyTo: first.messageId },
+            );
+            return;
+          }
+        }
         if (resolvedModel && !modelRoute) {
           // Surface a clear configuration error instead of letting the dsh
           // runtime fail with an opaque provider/model mismatch.

@@ -134,6 +134,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 - `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；settings
   只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
+- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要使用该密钥，其
+  `apiKeyEnv` 必须引用同一名字（`/provider update <id> --api-key-env <引用名>` 或向导中填写）。
 - **热重载**：每轮运行前桥接把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
   在路由变化时自动重建 runtime，`/model use` 的下一轮生效是真实行为（issue #47 修复）。
 

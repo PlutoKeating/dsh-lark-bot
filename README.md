@@ -161,6 +161,8 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
   （需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，
   字面密钥不进 settings / 聊天记录。
+- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要生效还须在其
+  `apiKeyEnv` 字段引用同一名字（`/provider add|update ... --api-key-env <引用名>`，或向导中填写）。
 - **热重载**：桥接在每轮运行前把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
   在路由变化时自动重建 runtime（下一轮生效）。pi-ai 的 Base URL 填根域名（如
   `https://www.kingapi.xyz`）会自动补全为 `/v1`。

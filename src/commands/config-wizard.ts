@@ -206,7 +206,7 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
           kind: 'text',
           question: 'API Key 引用名（可选）',
           placeholder: 'KINGAI_API_KEY',
-          hint: 'settings 只保存引用名（如 KINGAI_API_KEY），密钥值下一步单独输入',
+          hint: 'settings 只保存引用名（通常可直接用 provider ID，如 kingapi）；密钥值下一步单独输入',
           optional: true,
           parse: (raw) => {
             const ref = asString(raw)?.trim();
@@ -338,7 +338,18 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
         placeholder: '…',
         parse: (raw, data) => {
           const field = asString(data.field);
-          if (field === 'base-url') return normalizeBaseUrl(asString(raw)?.trim() ?? '');
+          if (field === 'base-url') {
+            const url = asString(raw)?.trim() ?? '';
+            if (!url) throw new Error('Base URL 不能为空');
+            // The llm-deepseek adapter expects the official root base URL
+            // (it appends its own API paths); only pi-ai gateways get the
+            // bare-origin -> /v1 normalization.
+            if (asString(data.provider) === DEEPSEEK_PROVIDER) {
+              normalizeBaseUrl(url); // validate protocol, keep the raw value
+              return url;
+            }
+            return normalizeBaseUrl(url);
+          }
           if (field === 'models') return splitCsv(asString(raw) ?? '');
           if (field === 'api') {
             const protocol = asString(raw)?.trim();
@@ -721,7 +732,16 @@ async function finalize(ctx: ConfigWizardContext, state: WizardState, flow: Wiza
     ctx.wizards.clear(ctx.scope);
     await ctx.channel.sendMarkdown(ctx.chatId, text);
     if (flow.requireAdmin && ctx.channel.sendCard) {
-      await showConfigHub(ctx);
+      try {
+        await showConfigHub(ctx);
+      } catch (error) {
+        // The write already succeeded; a hub refresh failure must not surface
+        // as a failed operation.
+        await ctx.channel.sendMarkdown(
+          ctx.chatId,
+          `（管理卡片刷新失败：${error instanceof Error ? error.message : String(error)}）`,
+        );
+      }
     }
   } catch (error) {
     ctx.wizards.clear(ctx.scope);

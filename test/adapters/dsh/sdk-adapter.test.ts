@@ -170,4 +170,63 @@ describe('SdkDshAdapter', () => {
     expect(created.length).toBe(1);
     await adapter.dispose();
   });
+
+  it('retires (not kills) the old harness when the route switches mid-flight', async () => {
+    const created: Array<{ cwd: string; route: ModelRoute; harness: DeepSeekHarness }> = [];
+    let releaseFirst: (() => void) | undefined;
+    const adapter = new SdkDshAdapter({
+      launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      harnessFactory: (cwd, route) => {
+        const harness = fakeHarness(route);
+        if (created.length === 0) {
+          const originalRun = harness.run.bind(harness);
+          harness.run = vi.fn((input, options) =>
+            new Promise((resolve) => {
+              releaseFirst = () => void resolve(originalRun(input, options));
+            }),
+          ) as unknown as typeof harness.run;
+        }
+        created.push({ cwd, route, harness });
+        return harness;
+      },
+    });
+
+    const first = adapter.run({
+      runId: 'r8',
+      prompt: 'hi',
+      cwd: '/tmp/a',
+      sessionId: 'session-1',
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek-official',
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+    // The route switch happens while run 1 is still in flight.
+    const second = adapter.run({
+      runId: 'r9',
+      prompt: 'hi',
+      cwd: '/tmp/a',
+      sessionId: 'session-2',
+      model: 'doubao-seed-2-0-lite-260428',
+      provider: 'kingapi',
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+
+    // The old harness must NOT be closed while its run is still active.
+    expect(created[0]?.harness.close).not.toHaveBeenCalled();
+    expect(created).toHaveLength(2);
+
+    // Once run 1 settles, the retired harness is closed.
+    releaseFirst?.();
+    const firstEvents = [];
+    for await (const event of first.events) firstEvents.push(event);
+    expect(firstEvents.at(-1)).toMatchObject({ type: 'done', sessionId: 'session-1' });
+    expect(created[0]?.harness.close).toHaveBeenCalledTimes(1);
+
+    void second.events;
+    await adapter.dispose();
+  });
 });

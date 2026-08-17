@@ -236,4 +236,30 @@ describe('config wizard', () => {
       expect(content).toContain('model-use');
     });
   });
+
+  it('keeps the deepseek official base URL root (no /v1 normalization) on update', async () => {
+    await withContext(async (ctx, root, channel) => {
+      await ctx.dshConfig.upsertDeepseekProvider({ baseURL: 'https://api.deepseek.com' });
+      await beginWizard(ctx, 'provider-update');
+
+      // Select deepseek-official, then the base-url field.
+      await handleWizardCardAction(choose(lastCard(channel), 0), undefined, ctx);
+      expect(wizardValue(lastCard(channel)).step).toBe(1);
+      await handleWizardCardAction(choose(lastCard(channel), 0), undefined, ctx);
+      expect(wizardValue(lastCard(channel)).step).toBe(2);
+
+      await handleWizardCardAction(
+        wizardValue(lastCard(channel)),
+        { answer: 'https://api.deepseek.com' },
+        ctx,
+      );
+      await handleWizardCardAction(confirmValue(lastCard(channel)), undefined, ctx);
+
+      const settings = await ctx.dshConfig.readSettings();
+      expect(
+        (settings['llm-deepseek'] as Record<string, unknown>)['baseURL'],
+      ).toBe('https://api.deepseek.com');
+      void root;
+    });
+  });
 });

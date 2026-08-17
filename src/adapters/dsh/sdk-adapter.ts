@@ -28,6 +28,10 @@ interface RuntimeEntry {
   harness: DeepSeekHarness;
   provider: string;
   model: string;
+  /** Number of runs currently holding this harness. */
+  active: number;
+  /** True once this entry has been superseded by a new route. */
+  retired: boolean;
 }
 
 export interface ModelRoute {
@@ -69,6 +73,8 @@ export class SdkDshAdapter implements AgentAdapter {
   private readonly probeTimeoutMs: number;
   private readonly harnessFactory: (cwd: string, route: ModelRoute) => DeepSeekHarness;
   private readonly runtimes = new Map<string, RuntimeEntry>();
+  /** Retired harnesses still draining in-flight runs; closed when idle. */
+  private readonly draining = new Set<RuntimeEntry>();
   private disposed = false;
 
   constructor(options: SdkAdapterOptions) {
@@ -129,6 +135,7 @@ export class SdkDshAdapter implements AgentAdapter {
     const sessionId =
       options.sessionId ?? `session-${randomUUID().replaceAll('-', '')}`;
     const stopRequested = { value: false };
+    entry.active += 1;
     const handle = createSdkRun(entry.harness, options.prompt, {
       sessionId,
       cwd,
@@ -136,6 +143,11 @@ export class SdkDshAdapter implements AgentAdapter {
       images: options.images,
       stopRequested,
     });
+    // Release the harness when the SDK turn settles; a retired harness is
+    // closed as soon as the last in-flight run on it finishes.
+    void handle.settled
+      .finally(() => this.releaseEntry(entry))
+      .catch(() => undefined);
 
     return {
       runId: options.runId,
@@ -153,8 +165,10 @@ export class SdkDshAdapter implements AgentAdapter {
     this.disposed = true;
     const entries = [...this.runtimes.values()];
     this.runtimes.clear();
+    const draining = [...this.draining];
+    this.draining.clear();
     await Promise.allSettled(
-      entries.map((entry) => entry.harness.close()),
+      [...entries, ...draining].map((entry) => entry.harness.close()),
     );
   }
 
@@ -177,7 +191,9 @@ export class SdkDshAdapter implements AgentAdapter {
    * requested route differs from the harness's fixed route. The dsh SDK
    * JSON-RPC protocol binds provider/model at session creation (initialize
    * handshake), so a hot model/provider switch requires re-spawning that
-   * runtime; the previous harness is closed and replaced lazily.
+   * runtime. An in-use harness is NOT killed: it is retired and closed once
+   * its last in-flight run settles, so parallel tasks are never interrupted
+   * by a model switch.
    */
   private runtimeFor(cwd: string, route: ModelRoute): RuntimeEntry {
     if (this.disposed) {
@@ -193,16 +209,31 @@ export class SdkDshAdapter implements AgentAdapter {
     }
     if (existing) {
       this.runtimes.delete(cwd);
-      // Best-effort teardown; a failed close must not block the hot switch.
-      void existing.harness.close().catch(() => undefined);
+      if (existing.active > 0) {
+        existing.retired = true;
+        this.draining.add(existing);
+      } else {
+        // Best-effort teardown; a failed close must not block the hot switch.
+        void existing.harness.close().catch(() => undefined);
+      }
     }
     const entry: RuntimeEntry = {
       harness: this.harnessFactory(cwd, route),
       provider: route.provider,
       model: route.model,
+      active: 0,
+      retired: false,
     };
     this.runtimes.set(cwd, entry);
     return entry;
+  }
+
+  private releaseEntry(entry: RuntimeEntry): void {
+    entry.active = Math.max(0, entry.active - 1);
+    if (entry.retired && entry.active === 0) {
+      this.draining.delete(entry);
+      void entry.harness.close().catch(() => undefined);
+    }
   }
 
   private async closeRuntime(cwd: string): Promise<void> {

@@ -266,12 +266,17 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       });
       const protocolNote = flags.api ? `协议 \`${flags.api}\`` : '协议不变';
       const modelNote = models.length > 0 ? `，models 已${sub === 'add' ? '写入' : '替换为'} ${models.length} 个` : '';
+      const credentialNote = flags['api-key-env']
+        ? `凭据引用已设为 \`${flags['api-key-env']}\`，可用 \`/key set ${flags['api-key-env']} <值>\` 写入密钥值。`
+        : '`/key set` 的引用名不会自动关联 provider；未设 `--api-key-env` 时密钥不会生效，可先 `/provider update <id> --api-key-env <引用名>` 关联，再 `/key set <引用名> <值>`。';
       await reply(
         ctx,
         [
           `已${sub === 'add' ? '添加' : '更新'} provider：\`${id}\`（${protocolNote}${modelNote}）。`,
           '',
-          '凭据请用 `/key set <引用名> <值>` 写入（或配置对应环境变量），密钥不会显示在聊天中。',
+          credentialNote,
+          '',
+          '密钥不会显示在聊天中。',
           `协议可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}`,
         ].join('\n'),
       );
