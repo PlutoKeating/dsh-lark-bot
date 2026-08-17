@@ -97,7 +97,9 @@ export async function runDoctorChecks(
   try {
     const state = await loadUpgradeState(upgradeStatePath(env.home));
     if (state?.lastUpgrade.pendingRestart === true) {
-      lines.push('upgrade: ⚠️ 上次升级待重启生效（重启 dsh profile 后加载新版本）。');
+      lines.push(
+        'upgrade: 上次升级未自动重启（如尚未重启，请重启 dsh profile 以加载新版本）。',
+      );
     }
   } catch {
     // Best effort.

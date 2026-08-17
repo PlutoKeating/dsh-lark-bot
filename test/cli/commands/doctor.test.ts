@@ -161,7 +161,7 @@ describe('runDoctor', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-    expect(outputChunks.join('')).toContain('upgrade: ⚠️ 上次升级待重启生效');
+    expect(outputChunks.join('')).toContain('upgrade: 上次升级未自动重启');
   });
 
   it('warns when a runtime profile link version drifts from the installed package', async () => {
