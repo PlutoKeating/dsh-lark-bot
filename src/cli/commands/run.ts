@@ -8,6 +8,7 @@ import { ApprovalRegistry } from '../../bot/approvals.js';
 import { ConcurrencyStore } from '../../bot/concurrency-store.js';
 import { DensityStore } from '../../bot/density-store.js';
 import { ModelStore } from '../../bot/model-store.js';
+import { WizardStore } from '../../bot/wizard-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
 import { QuestionRegistry } from '../../bot/questions.js';
 import { RetentionStore } from '../../bot/retention-store.js';
@@ -191,6 +192,7 @@ export async function startBridgeEngine(
   const questions = new QuestionRegistry();
   const densityStore = new DensityStore();
   const models = new ModelStore();
+  const wizardStore = new WizardStore();
   const dshConfig = new DshProviderManager({ env: process.env });
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
@@ -325,6 +327,7 @@ export async function startBridgeEngine(
     questions,
     densityStore,
     models,
+    wizardStore,
     dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     defaultModel: activeProfile.preferences.model ?? env.model,

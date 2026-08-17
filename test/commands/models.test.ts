@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { WizardStore } from '../../src/bot/wizard-store.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
@@ -51,6 +52,7 @@ async function withContext(
     questions: undefined,
     densityStore: undefined,
     models: new ModelStore(),
+    wizardStore: new WizardStore(),
     dshConfig: new DshProviderManager({ home: root, env: {} }),
     defaultRunTimeoutMs: 300_000,
     defaultModel: 'deepseek-v4-flash',
