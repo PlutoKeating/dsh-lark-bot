@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { WizardStore } from '../../src/bot/wizard-store.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
@@ -51,6 +52,7 @@ async function withContext(
     questions: undefined,
     densityStore: undefined,
     models: new ModelStore(),
+    wizardStore: new WizardStore(),
     dshConfig: new DshProviderManager({ home: root, env: {} }),
     defaultRunTimeoutMs: 300_000,
     defaultModel: 'deepseek-v4-flash',
@@ -139,6 +141,18 @@ describe('model slash commands', () => {
       const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
       expect(settings).toContain('deepseek-r1');
       expect(lastReply(ctx)).toContain('已添加模型');
+    });
+  });
+
+  it('/provider add warns when the credential ref is not linked to the provider', async () => {
+    await withContext(async (ctx) => {
+      ctx.senderId = 'ou_admin';
+      await handleProvider(
+        'add kingapi --api openai-completions --base-url https://www.kingapi.xyz --model doubao-seed-2-0-lite-260428',
+        ctx,
+      );
+      expect(lastReply(ctx)).toContain('不会自动关联 provider');
+      expect(lastReply(ctx)).toContain('--api-key-env');
     });
   });
 });

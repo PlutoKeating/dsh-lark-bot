@@ -96,7 +96,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
 
   if (!sub) {
     const active = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
-    const dshDefault = await ctx.dshConfig.defaultModel();
+    const dshDefault = await ctx.dshConfig.defaultModelSelection();
     const providers = await ctx.dshConfig.listProviders();
     const modelLines = providers.flatMap((provider) =>
       provider.models.map((model) => `- ${formatModel(model)} ← ${provider.id}`),
@@ -105,7 +105,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
       ctx,
       [
         `**当前会话模型**：\`${active}\``,
-        `**dsh 默认模型**（agent-default-model）：\`${dshDefault ?? '(未设置)'}\``,
+        `**dsh 默认模型**（agent-default-model）：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
         `**bot 回退默认**（profile / DSH_LARK_MODEL）：\`${ctx.defaultModel}\``,
         '',
         '**可用模型**（dsh 已配置）：',
@@ -187,7 +187,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
 
 export async function handleProviders(_args: string, ctx: CommandContext): Promise<void> {
   const providers = await ctx.dshConfig.listProviders();
-  const dshDefault = await ctx.dshConfig.defaultModel();
+  const dshDefault = await ctx.dshConfig.defaultModelSelection();
   await reply(
     ctx,
     [
@@ -195,7 +195,7 @@ export async function handleProviders(_args: string, ctx: CommandContext): Promi
       '',
       ...formatProviders(providers).split('\n'),
       '',
-      `dsh 默认模型：\`${dshDefault ?? '(未设置)'}\``,
+      `dsh 默认模型：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
       '',
       '管理：`/provider add|update|remove`、`/model add|remove`、`/key set|remove`（需管理员）',
     ].join('\n'),
@@ -266,12 +266,17 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       });
       const protocolNote = flags.api ? `协议 \`${flags.api}\`` : '协议不变';
       const modelNote = models.length > 0 ? `，models 已${sub === 'add' ? '写入' : '替换为'} ${models.length} 个` : '';
+      const credentialNote = flags['api-key-env']
+        ? `凭据引用已设为 \`${flags['api-key-env']}\`，可用 \`/key set ${flags['api-key-env']} <值>\` 写入密钥值。`
+        : '`/key set` 的引用名不会自动关联 provider；未设 `--api-key-env` 时密钥不会生效，可先 `/provider update <id> --api-key-env <引用名>` 关联，再 `/key set <引用名> <值>`。';
       await reply(
         ctx,
         [
           `已${sub === 'add' ? '添加' : '更新'} provider：\`${id}\`（${protocolNote}${modelNote}）。`,
           '',
-          '凭据请用 `/key set <引用名> <值>` 写入（或配置对应环境变量），密钥不会显示在聊天中。',
+          credentialNote,
+          '',
+          '密钥不会显示在聊天中。',
           `协议可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}`,
         ].join('\n'),
       );

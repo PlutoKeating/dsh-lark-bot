@@ -17,13 +17,17 @@ import { renderWorkspaceCard } from '../card/workspace-card.js';
 import { parseCardDensity, type CardDensity } from '../card/density.js';
 import { questionHandlerFor } from '../bridge/run-flow.js';
 import type { ModelStore } from '../bot/model-store.js';
+import type { WizardStore } from '../bot/wizard-store.js';
 import type { DshProviderManager } from '../config/dsh-config.js';
 import {
   handleKey,
   handleModel,
   handleProvider,
-  handleProviders,
 } from './models.js';
+import {
+  showConfigHub,
+  type ConfigWizardContext,
+} from './config-wizard.js';
 import { handleArchive, handleRetention } from './archive.js';
 import { handleRole } from './roles.js';
 import { handleNotify } from './notify.js';
@@ -75,6 +79,7 @@ export interface CommandContext {
   questions: QuestionRegistry | undefined;
   densityStore: DensityStore | undefined;
   models: ModelStore;
+  wizardStore: WizardStore;
   dshConfig: DshProviderManager;
   defaultRunTimeoutMs: number;
   defaultModel: string;
@@ -535,6 +540,53 @@ function requireAdmin(ctx: CommandContext): boolean {
   return true;
 }
 
+/** Build the interactive config-wizard context from a command context. */
+function wizardContext(ctx: CommandContext): ConfigWizardContext {
+  return {
+    scope: ctx.scope,
+    chatId: ctx.chatId,
+    senderId: ctx.senderId ?? '',
+    channel: ctx.channel,
+    dshConfig: ctx.dshConfig,
+    accessManager: ctx.accessManager,
+    models: ctx.models,
+    wizards: ctx.wizardStore,
+    defaultModel: ctx.defaultModel,
+  };
+}
+
+/** `/providers` and bare `/provider` open the interactive management hub. */
+async function handleConfigHub(_args: string, ctx: CommandContext): Promise<void> {
+  await showConfigHub(wizardContext(ctx));
+}
+
+/** Bare `/provider` opens the hub; subcommands keep the text interface. */
+async function handleProviderDispatch(args: string, ctx: CommandContext): Promise<void> {
+  if (!args.trim()) {
+    await handleConfigHub(args, ctx);
+    return;
+  }
+  await handleProvider(args, ctx);
+}
+
+/** Bare `/model` opens the hub; subcommands keep the text interface. */
+async function handleModelDispatch(args: string, ctx: CommandContext): Promise<void> {
+  if (!args.trim()) {
+    await handleConfigHub(args, ctx);
+    return;
+  }
+  await handleModel(args, ctx);
+}
+
+/** Bare `/key` opens the hub; subcommands keep the text interface. */
+async function handleKeyDispatch(args: string, ctx: CommandContext): Promise<void> {
+  if (!args.trim()) {
+    await handleConfigHub(args, ctx);
+    return;
+  }
+  await handleKey(args, ctx);
+}
+
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, HELP);
 }
@@ -556,10 +608,10 @@ const handlers: Record<string, Handler> = {
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,
-  '/model': handleModel,
-  '/providers': handleProviders,
-  '/provider': handleProvider,
-  '/key': handleKey,
+  '/model': handleModelDispatch,
+  '/providers': handleConfigHub,
+  '/provider': handleProviderDispatch,
+  '/key': handleKeyDispatch,
   '/ask': handleAsk,
   '/invite': handleInvite,
   '/help': handleHelp,

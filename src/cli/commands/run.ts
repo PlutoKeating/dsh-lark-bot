@@ -8,6 +8,7 @@ import { ApprovalRegistry } from '../../bot/approvals.js';
 import { ConcurrencyStore } from '../../bot/concurrency-store.js';
 import { DensityStore } from '../../bot/density-store.js';
 import { ModelStore } from '../../bot/model-store.js';
+import { WizardStore } from '../../bot/wizard-store.js';
 import { PendingQueue } from '../../bot/pending-queue.js';
 import { QuestionRegistry } from '../../bot/questions.js';
 import { RetentionStore } from '../../bot/retention-store.js';
@@ -191,6 +192,7 @@ export async function startBridgeEngine(
   const questions = new QuestionRegistry();
   const densityStore = new DensityStore();
   const models = new ModelStore();
+  const wizardStore = new WizardStore();
   const dshConfig = new DshProviderManager({ env: process.env });
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
@@ -246,6 +248,37 @@ export async function startBridgeEngine(
           ...attachments.textFileNotes,
         ].filter(Boolean);
         const role = roleStore.roleForScope(scope);
+        const resolvedModel =
+          models.get(scope) ??
+          role?.model ??
+          activeProfile.preferences.model ??
+          (await dshConfig.defaultModel().catch(() => undefined)) ??
+          env.model;
+        let modelRoute: Awaited<ReturnType<DshProviderManager['resolveModelRoute']>>;
+        if (resolvedModel) {
+          try {
+            modelRoute = await dshConfig.resolveModelRoute(resolvedModel);
+          } catch (error) {
+            // A settings read/parse failure is a different problem than a
+            // missing model; report it instead of a misleading "not found".
+            await streaming.sendMarkdown(
+              first.chatId,
+              `⚠️ 读取 dsh 配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
+              { replyTo: first.messageId },
+            );
+            return;
+          }
+        }
+        if (resolvedModel && !modelRoute) {
+          // Surface a clear configuration error instead of letting the dsh
+          // runtime fail with an opaque provider/model mismatch.
+          await streaming.sendMarkdown(
+            first.chatId,
+            `⚠️ 模型 \`${resolvedModel}\` 未在任何已配置 provider 中找到。可用 \`/model\` 查看列表，或用 \`/model add|remove\` 管理。`,
+            { replyTo: first.messageId },
+          );
+          return;
+        }
         const runInput: Parameters<typeof runAgentBatch>[0] = {
           scope,
           chatId: first.chatId,
@@ -268,12 +301,10 @@ export async function startBridgeEngine(
           maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
           images: attachments.imagePaths,
-          model:
-            models.get(scope) ??
-            role?.model ??
-            activeProfile.preferences.model ??
-            (await dshConfig.defaultModel().catch(() => undefined)) ??
-            env.model,
+          ...(modelRoute?.provider === undefined
+            ? {}
+            : { provider: modelRoute.provider }),
+          model: resolvedModel,
         };
         if (activeProfile.preferences.stopGraceMs !== undefined) {
           runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
@@ -308,6 +339,7 @@ export async function startBridgeEngine(
     questions,
     densityStore,
     models,
+    wizardStore,
     dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     defaultModel: activeProfile.preferences.model ?? env.model,

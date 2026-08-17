@@ -50,6 +50,8 @@ export interface RunFlowInput {
   densityStore?: DensityStore;
   channel: StreamingChannel;
   defaultWorkspace: string;
+  /** Provider route resolved from `model` (hot-switch support). */
+  provider?: string;
   model?: string;
   stopGraceMs?: number;
   runTimeoutMs?: number;
@@ -162,6 +164,7 @@ async function runAttempt(
     prompt,
     cwd,
     sessionId,
+    ...(input.provider === undefined ? {} : { provider: input.provider }),
     model: input.model,
     images: input.images,
     stopGraceMs: input.stopGraceMs,

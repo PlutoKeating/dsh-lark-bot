@@ -9,6 +9,7 @@ import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapte
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { WizardStore } from '../../src/bot/wizard-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
@@ -132,6 +133,7 @@ describe('startChannel', () => {
       archiveMaxAgeDays: 90,
       defaultRunTimeoutMs: 300_000,
       models: new ModelStore(),
+      wizardStore: new WizardStore(),
       dshConfig: new DshProviderManager({
         home: join(tmpdir(), 'dsh-lark-bot-test-home'),
       }),
@@ -192,6 +194,7 @@ describe('startChannel', () => {
       archiveMaxAgeDays: 90,
       defaultRunTimeoutMs: 300_000,
       models: new ModelStore(),
+      wizardStore: new WizardStore(),
       dshConfig: new DshProviderManager({
         home: join(tmpdir(), 'dsh-lark-bot-test-home'),
       }),
@@ -250,6 +253,7 @@ describe('startChannel', () => {
       archiveMaxAgeDays: 90,
       defaultRunTimeoutMs: 300_000,
       models: new ModelStore(),
+      wizardStore: new WizardStore(),
       dshConfig: new DshProviderManager({
         home: join(tmpdir(), 'dsh-lark-bot-test-home'),
       }),
@@ -270,5 +274,95 @@ describe('startChannel', () => {
       'chat-1',
       expect.objectContaining({ content: 'another task' }),
     );
+  });
+
+  it('routes wizard card actions to the interactive config flow', async () => {
+    const fake = makeChannel();
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const configStore = new ConfigStore(':memory:');
+    await configStore.load();
+    await configStore.saveProfile('default', {
+      tenant: 'feishu',
+      appId: 'cli_test',
+      appSecret: 'secret',
+      access: { allowedUsers: ['ou_admin'], allowedChats: [], admins: ['ou_admin'] },
+    });
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions,
+      workspaces,
+      activeRuns,
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(configStore, 'default'),
+      pending: pending as never,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    // Admin clicks "添加 Provider" on the hub card.
+    await (fake.handlers.cardAction as (event: unknown) => Promise<void>)({
+      chatId: 'chat-1',
+      operator: { openId: 'ou_admin' },
+      action: { value: { cmd: 'cfg', action: 'provider-add' }, tag: 'button' },
+    });
+    const wizardCard = fake.sent.find((entry) => {
+      return (entry.input as { card?: unknown })?.card !== undefined;
+    });
+    expect(wizardCard).toBeDefined();
+    expect(JSON.stringify(wizardCard?.input)).toContain('openai-completions');
+
+    // Pick the first protocol option (openai-completions).
+    await (fake.handlers.cardAction as (event: unknown) => Promise<void>)({
+      chatId: 'chat-1',
+      operator: { openId: 'ou_admin' },
+      action: {
+        value: { cmd: 'wizard', flow: 'provider-add', step: 0, choose: 0 },
+        tag: 'button',
+      },
+    });
+
+    // Submit the provider id step through the wizard card.
+    await (fake.handlers.cardAction as (event: unknown) => Promise<void>)({
+      chatId: 'chat-1',
+      operator: { openId: 'ou_admin' },
+      action: {
+        value: { cmd: 'wizard', flow: 'provider-add', step: 1, submit: true },
+        tag: 'button',
+        formValue: { answer: 'kingapi' },
+      },
+    });
+    const nextCard = fake.sent[fake.sent.length - 1];
+    expect(JSON.stringify(nextCard?.input)).toContain('Base URL');
   });
 });

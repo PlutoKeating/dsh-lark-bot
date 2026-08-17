@@ -114,11 +114,10 @@ dsh --profile dsh-lark
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录|
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度|
-| `/model` | 查看当前模型、dsh 默认模型与可用模型列表|
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导；选择用按钮、填写用卡片输入、写入前确认）|
 | `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启）|
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
 | `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员）|
-| `/providers` | 查看 dsh 已配置 providers、模型与凭据状态|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
@@ -154,9 +153,19 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
 
 配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 同一存储协议），改动下一请求生效、无需重启：
 
+- **交互式管理卡片**：`/providers`（或 `/provider`、`/model`、`/key`）打开管理卡片，按
+  BotFather 式的多轮向导完成增删改查——能选择的用按钮点选（API 协议、provider、模型、凭据引用），
+  需要填值的用卡片输入（ID、Base URL、模型列表、密钥值），写入前有确认卡，随时可取消。
 - `/model use <id>`：按会话热切换模型（下一轮生效）；`/model default <id>`：写入 dsh 默认模型。
-- `/providers`：查看 provider、模型与凭据状态；`/provider add|update|remove`：管理自定义 provider（需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
-- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，字面密钥不进 settings / 聊天记录。
+- `/providers`：查看 provider、模型与凭据状态；`/provider add|update|remove`：管理自定义 provider
+  （需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
+- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，
+  字面密钥不进 settings / 聊天记录。
+- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要生效还须在其
+  `apiKeyEnv` 字段引用同一名字（`/provider add|update ... --api-key-env <引用名>`，或向导中填写）。
+- **热重载**：桥接在每轮运行前把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
+  在路由变化时自动重建 runtime（下一轮生效）。pi-ai 的 Base URL 填根域名（如
+  `https://www.kingapi.xyz`）会自动补全为 `/v1`。
 
 安全提醒：在飞书会话输入密钥会对可见成员暴露，建议私聊使用或 `--api-key-env` 引用环境变量；bot 不在任何回复中回显密钥值。
 

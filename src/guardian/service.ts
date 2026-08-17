@@ -1271,7 +1271,16 @@ function readDshDefaultModel(
     const file = join(resolveDshHome(home, env), 'settings.yaml');
     const doc = parse(readFileSync(file, 'utf8')) as Record<string, unknown> | undefined;
     const value = doc?.['agent-default-model'];
-    return typeof value === 'string' && value ? value : undefined;
+    if (typeof value === 'string' && value) return value;
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { model?: unknown }).model === 'string'
+    ) {
+      const model = (value as { model: string }).model;
+      return model.length > 0 ? model : undefined;
+    }
+    return undefined;
   } catch {
     return undefined;
   }

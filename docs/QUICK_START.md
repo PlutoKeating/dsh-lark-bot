@@ -81,9 +81,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
-| `/model` `/model use <id>` `/model default <id>` | 查看 / 热切换当前会话模型 / 写入 dsh 默认模型 |
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导） |
+| `/model use <id>` `/model default <id>` | 热切换当前会话模型 / 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId>` | 管理 provider 的模型（管理员） |
-| `/providers` | 查看 dsh providers、模型与凭据状态 |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
@@ -92,9 +92,11 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 模型 / provider / 凭据管理直接读写 dsh 官方配置（`~/.dsh/settings.yaml` 与
 `~/.dsh/.credentials.yaml`，与 dsh Web Settings→Models 同协议），改动下一请求生效：
-`/model use` 按会话热切换模型；`/model default` 写入 `agent-default-model`；
-`/provider add|update` 管理 `deepseek-official` 与自定义 pi-ai provider；
-`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中显示，建议在私聊中使用。
+`/model use` 按会话热切换模型（桥接每轮解析 provider 路由并传给 dsh runtime，SDK 适配器
+路由变化时自动重建，下一轮真实生效）；`/model default` 写入 `{ provider, model }` 双字段的
+`agent-default-model`；`/provider add|update` 管理 `deepseek-official` 与自定义 pi-ai provider
+（Base URL 根域名自动补 `/v1`）；`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中
+显示，建议在私聊中使用。
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
 

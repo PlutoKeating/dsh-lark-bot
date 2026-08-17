@@ -8,6 +8,7 @@ import {
   DEEPSEEK_PROVIDER,
   PIAI_NAMESPACE,
   DshProviderManager,
+  normalizeBaseUrl,
 } from '../../src/config/dsh-config.js';
 
 async function withHome(run: (root: string, manager: DshProviderManager) => Promise<void>): Promise<void> {
@@ -36,16 +37,77 @@ describe('DshProviderManager', () => {
     });
   });
 
-  it('writes and reads the official agent-default-model section without touching other namespaces', async () => {
+  it('writes provider+model into the official agent-default-model section without touching other namespaces', async () => {
     await withHome(async (_root, manager) => {
       await manager.setDefaultModel('deepseek-v4-pro');
       expect(await manager.defaultModel()).toBe('deepseek-v4-pro');
+      expect(await manager.defaultModelSelection()).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-pro',
+      });
 
       await manager.upsertDeepseekProvider({ baseURL: 'https://api.deepseek.com' });
       const settings = await manager.readSettings();
-      expect(settings[AGENT_DEFAULT_MODEL_NAMESPACE]).toEqual({ model: 'deepseek-v4-pro' });
+      expect(settings[AGENT_DEFAULT_MODEL_NAMESPACE]).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-pro',
+      });
       expect((settings['llm-deepseek'] as { baseURL: string }).baseURL).toBe('https://api.deepseek.com');
     });
+  });
+
+  it('rejects a default model that no configured provider owns', async () => {
+    await withHome(async (_root, manager) => {
+      await expect(manager.setDefaultModel('no-such-model')).rejects.toThrow(/未在任何已配置 provider 中找到/);
+    });
+  });
+
+  it('resolves a model to its owning provider, preferring explicit pi-ai entries over deepseek defaults', async () => {
+    await withHome(async (_root, manager) => {
+      expect(await manager.resolveModelRoute('deepseek-v4-flash')).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash',
+      });
+
+      await manager.upsertPiAiProvider({
+        id: 'kingapi',
+        api: 'openai-completions',
+        baseURL: 'https://www.kingapi.xyz',
+        models: [
+          {
+            id: 'doubao-seed-2-0-lite-260428',
+            name: undefined,
+            contextWindow: undefined,
+            maxTokens: undefined,
+          },
+          {
+            id: 'deepseek-v4-flash',
+            name: undefined,
+            contextWindow: undefined,
+            maxTokens: undefined,
+          },
+        ],
+      });
+      expect(await manager.resolveModelRoute('doubao-seed-2-0-lite-260428')).toEqual({
+        provider: 'kingapi',
+        model: 'doubao-seed-2-0-lite-260428',
+      });
+      // Explicitly configured model wins over the deepseek built-in catalog.
+      expect(await manager.resolveModelRoute('deepseek-v4-flash')).toEqual({
+        provider: 'kingapi',
+        model: 'deepseek-v4-flash',
+      });
+    });
+  });
+
+  it('normalizes bare-origin base URLs to /v1 and keeps full chat endpoints', async () => {
+    expect(normalizeBaseUrl('https://www.kingapi.xyz')).toBe('https://www.kingapi.xyz/v1');
+    expect(normalizeBaseUrl('https://kingapi.xyz/')).toBe('https://kingapi.xyz/v1');
+    expect(normalizeBaseUrl('https://kingapi.xyz/v1/chat/completions')).toBe(
+      'https://kingapi.xyz/v1/chat/completions',
+    );
+    expect(normalizeBaseUrl('https://gateway.example/v1')).toBe('https://gateway.example/v1');
+    expect(() => normalizeBaseUrl('not a url')).toThrow(/不是合法 URL/);
   });
 
   it('adds a pi-ai custom provider matching the official schema and preserves exotic model fields', async () => {
