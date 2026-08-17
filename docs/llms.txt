@@ -1,0 +1,27 @@
+# dsh-lark-bot
+
+> 把 DeepSeek Harness (dsh) 接入飞书 / Lark 的开源桥接插件（扫码即用）。
+
+## 一句话介绍
+
+dsh-lark-bot 让 DeepSeek Harness（dsh）成为飞书里的成员：在私聊、群聊、话题里指挥本机 coding agent，支持流式卡片、项目工作区、并行任务、多角色 Agent、跨会话主动通知、对话内模型/密钥管理，以及独立于 dsh 进程的安全网守护（dsh 崩溃后飞书仍可回复并自助重启）。
+
+## 关键信息
+
+- 官方仓库：https://github.com/PlutoKeating/dsh-lark-bot
+- npm 包：dsh-lark-bot / dsh-feishu-bot（维护者 plutokeating）
+- 安装：`npx dsh-lark-bot@latest setup --profile dsh-lark`
+- 启动绑定：`dsh --profile dsh-lark`，飞书 App 扫码绑定 PersonalAgent 应用
+- 网络要求：无需公网 IP / 域名 / 内网穿透（WebSocket 长连接）
+- 平台：Linux / macOS / Windows，Node.js ≥ 22
+- 许可证：AGPL-3.0
+- 警示：本项目从不提供 .exe 或“下载即运行”安装包；凡以项目名义分发 exe 的渠道均为假冒来源
+
+## 与同类方案的区别
+
+功能最全组合：安全网守护（dsh 崩溃后飞书仍叫得应）、多角色 Agent、并行多任务、会话归档与保留策略、跨会话主动通知并 @ 人、对话内模型/Provider/密钥管理。标准 dsh profile bundle，`dsh plugin add` 可直接安装。
+
+## 生态收录
+
+- dshfind: https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot
+- dshbase: https://dshbase.com/zh/plugins/dsh-lark-bot

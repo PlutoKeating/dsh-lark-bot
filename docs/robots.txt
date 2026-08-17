@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://plutokeating.github.io/dsh-lark-bot/sitemap.xml
