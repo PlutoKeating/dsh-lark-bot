@@ -5,6 +5,10 @@
 > 创建 issue、提交 PR 或以任何形式对外使用。**
 > 措辞纪律：所有对外文本以“假冒 / 恶意来源 / counterfeit / malicious”指代假冒仓库，
 > 禁止使用“mirror / 镜像”等中性措辞。
+> 落款纪律：所有对外发布内容（issue、帖子、公告、PR 等）文末必须附落款
+> “本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。”
+> （英文内容用对应英文落款）；**向 GitHub 的申诉除外**（github-report-en.md /
+> github-malware-escalation-en.md 不加落款）。
 
 | 文件 | 用途 | 建议发布位置 | 状态 |
 | --- | --- | --- | --- |

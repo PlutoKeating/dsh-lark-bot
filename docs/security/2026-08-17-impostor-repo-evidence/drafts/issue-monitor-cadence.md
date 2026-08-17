@@ -31,3 +31,7 @@
 
 - 每周至少成功运行一次；假冒仓库出现 Release 附件后 24 小时内完成人工确认与固证
 - 基线状态文件 `~/.dsh-lark/security-monitor-state.json` 持续更新
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。

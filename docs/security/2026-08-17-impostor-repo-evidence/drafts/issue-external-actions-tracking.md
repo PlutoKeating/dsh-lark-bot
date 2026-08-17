@@ -31,3 +31,7 @@
 - 执行前不向敌方暴露任何动作计划；执行后在本 issue 更新状态与结果
 - GitHub 举报走 Spam / Deceptive practices 渠道（对方保留 AGPL + 署名，不走 DMCA）
 - 假冒仓库 Releases 出现附件：立即固证（截图 + API 快照 + 下载附件哈希）→ 走恶意软件升级举报
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。

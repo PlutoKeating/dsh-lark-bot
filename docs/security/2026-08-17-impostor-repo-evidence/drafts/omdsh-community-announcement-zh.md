@@ -30,3 +30,7 @@ https://github.com/PlutoKeating/dsh-lark-bot/blob/staging/docs/security/2026-08-
 持续监控：`pnpm security:monitor`（官方仓库脚本，每周运行）。
 
 请认准官方渠道；如在其他页面看到“下载 exe”入口，欢迎指回本公告。
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。

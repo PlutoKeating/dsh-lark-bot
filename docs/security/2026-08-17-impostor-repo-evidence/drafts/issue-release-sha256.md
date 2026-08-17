@@ -31,3 +31,7 @@ SECURITY.md 已承诺：自 2026-08-17 文档更新后的**下一个 Release 起
 
 - SECURITY.md「官方分发渠道 · Official distribution channels」
 - docs/DOWNLOAD.md「Release 资产说明」
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。

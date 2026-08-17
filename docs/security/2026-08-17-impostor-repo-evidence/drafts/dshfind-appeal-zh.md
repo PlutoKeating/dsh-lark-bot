@@ -46,3 +46,7 @@ disabled; 0 releases; SEO-bait README offering Windows exe downloads) has been a
 on dshfind because it copied the `dsh-plugin` topic. Request: delist the entry or mark it
 "unofficial / impostor" with a link to the official repository. Evidence:
 https://github.com/PlutoKeating/dsh-lark-bot/blob/staging/docs/security/2026-08-17-impostor-repo-evidence/README.md
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。

@@ -31,3 +31,7 @@ https://github.com/PlutoKeating/dsh-lark-bot/blob/staging/docs/security/2026-08-
 
 I suggest pointing this repository's README at the official project or archiving this
 repository to avoid confusing visitors.
+
+---
+
+> This post was guided and reviewed by PlutoKeating and published via dsh-lark-bot.
