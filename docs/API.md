@@ -77,6 +77,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   （`compact` / `standard` / `detailed`）。
 - `DSH_LARK_UPGRADE_REGISTRY`：`dsh-lark-bot upgrade` 探测最新版本的 npm registry，
   默认官方 registry（可指向镜像，issue #10）。
+- `DSH_LARK_UPGRADE_CHECK`：`doctor` 是否探测 npm 最新版本并输出更新提醒（默认开启，
+  `0` 关闭；探测为 best-effort，失败不影响 doctor 结果，issue #15）。
 
 ## 2. 本地状态路径 · Local state paths
 

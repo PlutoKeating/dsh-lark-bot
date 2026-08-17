@@ -1,13 +1,21 @@
 import { stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { buildAgentAdapter } from '../../adapters/index.js';
+import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
+import { readGuardianUnit } from '../../guardian/install.js';
+import { compareVersions, fetchNpmLatestVersionOnce } from '../../upgrade/versions.js';
 import type { StartOptions } from '../../cli.js';
 
 export interface DoctorOptions extends StartOptions {
   version?: string;
   output?: (text: string) => void;
+  /** Injectable npm-latest probe (tests); defaults to a short best-effort fetch. */
+  probeLatestFn?: (packageName: string) => Promise<string | undefined>;
+  /** OS home used to locate the guardian service entry (tests; defaults to homedir()). */
+  guardianRoot?: string;
 }
 
 export interface DoctorResult {
@@ -47,6 +55,41 @@ export async function runDoctorChecks(
     `dsh_command: ${env.dshCommand}`,
     `dsh_args: ${env.dshArgs.join(',')}`,
   ];
+
+  // Update reminder + install-shape drift checks (issue #15). Both are
+  // best-effort: a registry hiccup must never fail doctor, and the checks can
+  // be disabled with DSH_LARK_UPGRADE_CHECK=0.
+  const upgradeCheckEnabled = (process.env.DSH_LARK_UPGRADE_CHECK ?? '1') !== '0';
+  if (upgradeCheckEnabled && options.version) {
+    try {
+      const probe = options.probeLatestFn ?? fetchNpmLatestVersionOnce;
+      const latest = await probe(ownPackageInfo().name);
+      if (latest !== undefined) {
+        lines.push(
+          compareVersions(latest, options.version) > 0
+            ? `upgrade: 有新版本 ${latest}（当前 ${options.version}）；执行 dsh-lark-bot upgrade 更新`
+            : `upgrade: 已是最新（${latest}）`,
+        );
+      }
+    } catch {
+      // Best effort — the reminder must never fail doctor.
+    }
+  }
+  try {
+    const unit = await readGuardianUnit(
+      process.platform,
+      options.guardianRoot ?? homedir(),
+    );
+    if (unit !== undefined) {
+      lines.push(
+        /_npx[\\/]/.test(unit)
+          ? 'guardian: ⚠️ 服务单元指向 npx 缓存路径（npm 清缓存后可能失效）；请重新执行 dsh-lark-bot guardian install'
+          : 'guardian: ok (服务单元路径稳定)',
+      );
+    }
+  } catch {
+    // Best effort.
+  }
 
   let critical = false;
 

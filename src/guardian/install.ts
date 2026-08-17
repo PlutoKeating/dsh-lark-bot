@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ownPackageInfo } from '../adapters/dsh/own-package.js';
+import { resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
 import { captureOutput } from './process.js';
 import {
@@ -41,7 +42,24 @@ export interface InstallResult {
   messages: string[];
 }
 
-function guardianCliEntry(): string {
+/**
+ * Resolve the CLI entry the guardian service should run. Prefers the package
+ * installed inside the dsh profile — a stable path that survives npm cache
+ * pruning. An `npx`-bootstrapped install would otherwise point the service at
+ * `~/.npm/_npx/<hash>/...`, which breaks the moment the npm cache is cleaned
+ * (issue #15). Falls back to the currently running package.
+ */
+export function resolveGuardianCliEntry(dshProfile: string, root: string): string {
+  const profileEntry = join(
+    resolveDshHome(root, process.env),
+    'profiles',
+    dshProfile,
+    'node_modules',
+    ownPackageInfo().name,
+    'dist',
+    'cli.js',
+  );
+  if (existsSync(profileEntry)) return profileEntry;
   return join(ownPackageInfo().root, 'dist', 'cli.js');
 }
 
@@ -188,7 +206,7 @@ export async function installGuardian(
   }
 
   const nodeBin = process.execPath;
-  const cliEntry = guardianCliEntry();
+  const cliEntry = resolveGuardianCliEntry(dshProfile, root);
   const directory = serviceDirectory(process.platform, root);
   await mkdir(directory, { recursive: true });
 

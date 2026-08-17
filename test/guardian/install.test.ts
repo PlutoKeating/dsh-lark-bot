@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import {
   installGuardian,
   launchdPlist,
   readGuardianUnit,
+  resolveGuardianCliEntry,
   systemdUnit,
   windowsStartupCmd,
 } from '../../src/guardian/install.js';
@@ -56,6 +57,35 @@ describe('guardian service units', () => {
     );
     expect(state.dshProfile).toBe('dsh-lark');
     expect(state.safeProfile).toBe('dsh-lark-safe');
+  });
+
+  it('prefers the profile-installed package for the service CLI entry', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-install-entry-'));
+    tempDirs.push(dir);
+    const dshHome = join(dir, '.dsh');
+    const cliPath = join(
+      dshHome,
+      'profiles',
+      'dsh-lark',
+      'node_modules',
+      'dsh-lark-bot',
+      'dist',
+      'cli.js',
+    );
+    process.env.DSH_HOME = dshHome;
+    try {
+      await mkdir(join(cliPath, '..'), { recursive: true });
+      await writeFile(cliPath, '// placeholder\n', 'utf8');
+      expect(resolveGuardianCliEntry('dsh-lark', dir)).toBe(cliPath);
+
+      // Without a profile package the running package is used as fallback.
+      const other = await mkdtemp(join(tmpdir(), 'dsh-install-entry-empty-'));
+      tempDirs.push(other);
+      process.env.DSH_HOME = join(other, '.dsh');
+      expect(resolveGuardianCliEntry('dsh-lark', other)).toContain('dist/cli.js');
+    } finally {
+      delete process.env.DSH_HOME;
+    }
   });
 
   it('writes and removes the systemd unit on Linux', async () => {

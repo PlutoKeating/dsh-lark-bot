@@ -789,6 +789,7 @@ Thanks to the following contributors (by merge / submission time):
 | [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) | 兼容矩阵、升级政策与自动化<br>Compatibility matrix, upgrade policy & automation |
 | [`docs/MANUAL.md`](docs/MANUAL.md) | 完整用户手册<br>Complete user manual |
 | [`docs/adapter-notes.md`](docs/adapter-notes.md) | dsh adapter 接入说明（接口 / 落点 / 路线）<br>How to plug the dsh adapter |
+| [`docs/UPGRADE.md`](docs/UPGRADE.md) | 更新链路架构审查、生效机制与已知边界（issue #15）<br>Upgrade flow architecture, activation & known boundaries |
 | [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md) | 生态兼容与交付标准（实现工程师必读）<br>Ecosystem & delivery standards (for engineers) |
 | [`docs/roadmap.md`](docs/roadmap.md) | 路线图与里程碑<br>Roadmap & milestones |
 | [`docs/PLAN.md`](docs/PLAN.md) | 主线开发计划与验收标准<br>Development plan & acceptance criteria |

@@ -115,6 +115,33 @@ export async function fetchNpmLatestVersion(
   return undefined;
 }
 
+/**
+ * Single-attempt, short-timeout probe of the npm `latest` dist-tag, used by
+ * cheap best-effort checks (e.g. `doctor`'s update reminder). Returns
+ * undefined on any failure — callers treat it as "unknown", never fatal.
+ */
+export async function fetchNpmLatestVersionOnce(
+  packageName: string,
+  registryUrl: string = defaultRegistryUrl(),
+  timeoutMs: number = 5_000,
+  fetcher: typeof fetch = fetch,
+): Promise<string | undefined> {
+  try {
+    const response = await fetcher(
+      `${registryUrl}/${encodeURIComponent(packageName)}/latest`,
+      {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as { version?: unknown };
+    return typeof body.version === 'string' ? body.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build a deterministic `name@version` spec for `dsh plugin add`. */
 export function packageSpecFor(name: string, version: string): string {
   return `${name}@${version}`;
