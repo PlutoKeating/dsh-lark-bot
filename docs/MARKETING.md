@@ -298,30 +298,39 @@
 **稿件已备好**：`docs/runoob-deepseek-harness-feishu-tutorial.md`（母版）与
 `docs/runoob-deepseek-harness-feishu-tutorial.html`（可直接粘贴版）。
 
-> **2026-08-17 更新：** `/tougao` 投稿页当前不可用（Simditor 编辑器 CDN 404、提交地址为空，
-> 点击提交无反应）。已改用**邮件投稿**：把稿件与昵称/邮箱发到 `admin@runoob.com`（抄送
-> `429240967@qq.com`），同时按下面「备选路径」提交 Bug 反馈以争取邀请码。
-> 现成邮件模板见 `docs/runoob-submission-emails.md`。
+**两个概念先分清（重要）**
+
+- **文章投稿（/tougao）**：runoob 官方的内容投稿入口，用于提交原创技术文章，审核通过后由
+  runoob 决定是否发表（编入栏目 / 分享展示）。这是**发布教程页面的唯一官方通道**。
+- **点我分享笔记 / 写笔记（文章底部表单，addnote.php）**：这是**评论性质的笔记功能**——表单
+  `id="commentform"`，隐藏字段为 `comment_post_ID` / `comment_parent`，字段即昵称/邮箱/引用地址，
+  只针对当前文章内容做扩展，提交后挂在原文章下、经管理员审核后展示给其他读者。它**不能**用来发布
+  新的教程页面，只能满足 runoob「分享 2 份本站教程笔记」的邀请码条件（且必须是**本篇文章**的内容
+  扩展，不能贴与当前文章无关的完整教程）。
 
 **投稿步骤**
 
-1. 打开投稿页 https://www.runoob.com/tougao（即「笔记分享」表单）；
-2. 表单填写：
+1. 首选官方通道 https://www.runoob.com/tougao（表单字段：标题 ≤100 字、昵称 ≤20 字、邮箱、
+   引用地址 + 富文本编辑器，正文 ≥100 字）：
    - 笔记标题（≤100 字）：`DeepSeek Harness 连接飞书（dsh-lark-bot 桥接插件）`
    - 昵称（≤20 字）：建议 `dsh-lark-bot` 或你的常用昵称
    - E-Mail：必填，用于接收审核结果
    - 引用地址：填 `https://www.runoob.com/deepseek-harness/`（关联 DeepSeek Harness 栏目，
      提高被编入该栏目的概率）
-3. 正文：把 `runoob-deepseek-harness-feishu-tutorial.html` 的内容整体粘贴进 Simditor 编辑器
-   （正文需 ≥100 字，本稿远超）；粘贴后检查标题层级、代码块与表格是否保留；
-4. 提交后等待审核；「笔记分享」投稿由后台管理员审核，优质原创通过后会被发表/分享；
-5. 投稿通过后，发邮件到 **429240967@qq.com** 申请内测邀请码（这是 runoob 用户中心的注册方式，
+   - 正文：把 `runoob-deepseek-harness-feishu-tutorial.html` 内容整体粘贴进编辑器，
+     检查标题层级、代码块与表格是否保留后提交；
+   - **2026-08-17 实测该页故障**：Simditor 编辑器 CDN 404、提交地址为空，点击提交无反应。
+2. 故障期间改用**邮件投稿**：把稿件（`.md` + `.html` 附件）、昵称、邮箱、引用地址
+   `https://www.runoob.com/deepseek-harness/` 发到 `admin@runoob.com`（抄送
+   `429240967@qq.com`），模板见 `docs/runoob-submission-emails.md`；
+3. 投稿通过后，发邮件到 **429240967@qq.com** 申请内测邀请码（runoob 用户中心注册方式，
    注册后可管理自己的笔记与投稿；官方联系邮箱另有 admin@runoob.com）。
 
 **备选路径（满足其一即可申请邀请码）**
 
 - 提交 3 个有效问题反馈并被采纳；
-- 在任意 runoob 教程文章底部「点我分享笔记」分享 2 份扩展笔记（简单描述 + 代码实例）。
+- 在任意 runoob 教程文章底部「点我分享笔记」分享 2 份**该文章的**扩展笔记（简单描述 + 代码实例）——
+  注意这是文章评论式笔记，不是发布教程页面。
 
 **注意**：runoob 审核的是「优质原创」；投稿不等于自动生成栏目页面，是否编入
 DeepSeek Harness 栏目由 runoob 编辑决定。引用地址填栏目首页可显著提高归位概率。
