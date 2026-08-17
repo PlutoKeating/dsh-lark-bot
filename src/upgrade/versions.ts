@@ -64,26 +64,55 @@ export function isVersionUpgrade(from: string, to: string): boolean {
  * Resolve the npm `latest` dist-tag version for a package. Returns undefined
  * when the registry is unreachable or the package/version is unknown, so the
  * caller can fall back to the running package version (`--force`).
+ *
+ * Production hardening (issue #14): transient registry responses (e.g. an
+ * occasional HTTP 406 from the content-negotiated install endpoint) or a slow
+ * first request must never be misreported as "offline". The probe retries with
+ * backoff and falls back from the npm install Accept header to plain JSON.
  */
+export const NPM_LATEST_ACCEPT_HEADERS = [
+  'application/vnd.npm.install-v1+json',
+  'application/json',
+] as const;
+
+/** Per-request timeout for the npm `latest` probe. */
+export const NPM_LATEST_TIMEOUT_MS = 15_000;
+
+/** Attempts (each tries every Accept header) before giving up. */
+export const NPM_LATEST_ATTEMPTS = 3;
+
+/** Base backoff between attempts (ms). */
+export const NPM_LATEST_RETRY_DELAY_MS = 300;
+
 export async function fetchNpmLatestVersion(
   packageName: string,
   registryUrl: string = defaultRegistryUrl(),
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> {
-  try {
-    const response = await fetcher(
-      `${registryUrl}/${encodeURIComponent(packageName)}/latest`,
-      {
-        headers: { accept: 'application/vnd.npm.install-v1+json' },
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!response.ok) return undefined;
-    const body = (await response.json()) as { version?: unknown };
-    return typeof body.version === 'string' ? body.version : undefined;
-  } catch {
-    return undefined;
+  const url = `${registryUrl}/${encodeURIComponent(packageName)}/latest`;
+  for (let attempt = 1; attempt <= NPM_LATEST_ATTEMPTS; attempt += 1) {
+    for (const accept of NPM_LATEST_ACCEPT_HEADERS) {
+      try {
+        const response = await fetcher(url, {
+          headers: { accept },
+          signal: AbortSignal.timeout(NPM_LATEST_TIMEOUT_MS),
+        });
+        // A definite 404 means the package does not exist on this registry —
+        // no point retrying.
+        if (response.status === 404) return undefined;
+        if (!response.ok) continue;
+        const body = (await response.json()) as { version?: unknown };
+        if (typeof body.version === 'string') return body.version;
+      } catch {
+        // Transient network / timeout error — try the next Accept header,
+        // then back off and retry the whole attempt.
+      }
+    }
+    if (attempt < NPM_LATEST_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, NPM_LATEST_RETRY_DELAY_MS * attempt));
+    }
   }
+  return undefined;
 }
 
 /** Build a deterministic `name@version` spec for `dsh plugin add`. */

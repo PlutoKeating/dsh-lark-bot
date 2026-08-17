@@ -94,4 +94,40 @@ describe('fetchNpmLatestVersion', () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
     await expect(fetchNpmLatestVersion('dsh-lark-bot', 'https://reg.test', fetcher)).resolves.toBeUndefined();
   });
+
+  it('falls back to application/json when the install Accept header is rejected', async () => {
+    const calls: unknown[][] = [];
+    const fetcher = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      calls.push([_url, init]);
+      const accept = (init?.headers as { accept?: string } | undefined)?.accept;
+      if (accept === 'application/vnd.npm.install-v1+json') {
+        return { ok: false, status: 406 } as Response;
+      }
+      return { ok: true, json: async () => ({ version: '0.13.0' }) } as Response;
+    }) as unknown as typeof fetch;
+    await expect(fetchNpmLatestVersion('dsh-lark-bot', 'https://reg.test', fetcher)).resolves.toBe(
+      '0.13.0',
+    );
+    expect(calls.length).toBe(2);
+  });
+
+  it('retries after transient failures and still resolves', async () => {
+    let call = 0;
+    const fetcher = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return call < 3
+        ? ({ ok: false, status: 503 } as Response)
+        : ({ ok: true, json: async () => ({ version: '0.13.0' }) } as Response);
+    }) as unknown as typeof fetch;
+    await expect(fetchNpmLatestVersion('dsh-lark-bot', 'https://reg.test', fetcher)).resolves.toBe(
+      '0.13.0',
+    );
+    expect(call).toBe(3);
+  });
+
+  it('does not retry a definite 404', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response) as unknown as typeof fetch;
+    await expect(fetchNpmLatestVersion('dsh-lark-bot', 'https://reg.test', fetcher)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 });

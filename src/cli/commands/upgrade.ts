@@ -170,7 +170,8 @@ async function resolveTarget(
     }
     write(
       out,
-      '无法获取 npm 最新版本（可能离线）。请检查网络后重试，或使用 --force 以当前版本继续。\n',
+      '无法获取 npm 最新版本（registry 暂时不可用或响应异常）。请稍后重试；' +
+        '也可用 --package <name>@<版本> 指定目标版本，或 --force 以当前版本继续。\n',
     );
     return undefined;
   }
