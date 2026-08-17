@@ -27,7 +27,7 @@ import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
-import { DshProviderManager } from '../../config/dsh-config.js';
+import { DEEPSEEK_PROVIDER, DshProviderManager } from '../../config/dsh-config.js';
 import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { prepareAttachments } from '../../media/attachments.js';
@@ -278,6 +278,12 @@ export async function startBridgeEngine(
             { replyTo: first.messageId },
           );
           return;
+        }
+        // Heal the common "credential named after the provider id" setup
+        // (`/key set kingapi …`) where the provider lacks an apiKeyEnv link;
+        // otherwise the runtime would send unauthenticated requests.
+        if (modelRoute && modelRoute.provider !== DEEPSEEK_PROVIDER) {
+          await dshConfig.linkCredentialRefIfMissing(modelRoute.provider).catch(() => undefined);
         }
         const runInput: Parameters<typeof runAgentBatch>[0] = {
           scope,

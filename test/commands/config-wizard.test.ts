@@ -262,4 +262,53 @@ describe('config wizard', () => {
       void root;
     });
   });
+
+  it('falls back to markdown when the hub card send fails', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      channel.sendCard = vi.fn(async () => {
+        throw new Error('card api unavailable');
+      }) as unknown as CommandChannel['sendCard'];
+      await handleConfigHubAction('refresh', ctx);
+      expect(channel.markdowns.join('\n')).toContain('Provider / 模型 / 凭据管理');
+      expect(channel.markdowns.join('\n')).toContain('deepseek-official');
+    });
+  });
+
+  it('key-set auto-links the ref to the matching pi-ai provider', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      await ctx.dshConfig.upsertPiAiProvider({
+        id: 'kingapi',
+        api: 'openai-completions',
+        baseURL: 'https://www.kingapi.xyz/v1',
+        models: [
+          {
+            id: 'doubao-seed-2-0-lite-260428',
+            name: undefined,
+            contextWindow: undefined,
+            maxTokens: undefined,
+          },
+        ],
+      });
+      await beginWizard(ctx, 'key-set');
+      await handleWizardCardAction(
+        wizardValue(lastCard(channel)),
+        { answer: 'kingapi' },
+        ctx,
+      );
+      await handleWizardCardAction(
+        wizardValue(lastCard(channel)),
+        { answer: 'sk-auto-link' },
+        ctx,
+      );
+      await handleWizardCardAction(confirmValue(lastCard(channel)), undefined, ctx);
+      expect(channel.markdowns.join('\n')).toContain('已自动把 provider `kingapi` 的 apiKeyEnv 关联');
+      const settings = await ctx.dshConfig.readSettings();
+      expect(
+        (
+          (settings['llm-pi-ai'] as { providers: Record<string, Record<string, unknown>> })
+            .providers
+        )['kingapi']?.['apiKeyEnv'],
+      ).toBe('kingapi');
+    });
+  });
 });

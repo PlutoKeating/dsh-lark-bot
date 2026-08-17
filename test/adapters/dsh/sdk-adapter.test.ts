@@ -229,4 +229,58 @@ describe('SdkDshAdapter', () => {
     void second.events;
     await adapter.dispose();
   });
+
+  it('retries the initialize handshake on the transient pi-ai registration race', async () => {
+    let startFailures = 1;
+    let initFailures = 1;
+    const harness = fakeHarness({ provider: 'kingapi', model: 'doubao-seed-2-0-lite-260428' });
+    const originalRun = harness.run.bind(harness);
+    harness.start = vi.fn(async () => {
+      if (startFailures > 0) {
+        startFailures -= 1;
+        throw new Error('no adapter registered for provider "kingapi"');
+      }
+      return undefined;
+    }) as unknown as typeof harness.start;
+    // After the failed handshake the real client swaps in a fresh client;
+    // initialize on the SAME client is polled until llm-pi-ai registers.
+    const client = {
+      start: vi.fn(async () => undefined),
+      initialize: vi.fn(async () => {
+        if (initFailures > 0) {
+          initFailures -= 1;
+          throw new Error('no adapter registered for provider "kingapi"');
+        }
+        return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } };
+      }),
+    };
+    (harness as unknown as { client: unknown }).client = client;
+    harness.run = vi.fn((input, options) => {
+      return harness.start().then(() => originalRun(input, options));
+    }) as unknown as typeof harness.run;
+
+    const adapter = new SdkDshAdapter({
+      launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      harnessFactory: () => harness,
+    });
+
+    const run = adapter.run({
+      runId: 'r10',
+      prompt: 'hi',
+      cwd: '/tmp/a',
+      sessionId: undefined,
+      model: 'doubao-seed-2-0-lite-260428',
+      provider: 'kingapi',
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+    const events = [];
+    for await (const event of run.events) events.push(event);
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    await adapter.dispose();
+  });
 });

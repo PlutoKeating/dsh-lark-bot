@@ -8,6 +8,7 @@ import {
 } from '../config/dsh-config.js';
 import type { ModelStore } from '../bot/model-store.js';
 import type { WizardData, WizardState, WizardStore } from '../bot/wizard-store.js';
+import { log } from '../core/logger.js';
 import {
   renderConfigHubCard,
   renderWizardConfirmStepCard,
@@ -615,7 +616,27 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
       const ref = asString(data.ref)!;
       const value = asString(data.value)!;
       await ctx.dshConfig.setCredential(ref, value);
-      return `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`;
+      const providers = await ctx.dshConfig.listProviders();
+      const target = providers.find(
+        (provider) =>
+          provider.id === ref &&
+          provider.namespace === 'llm-pi-ai' &&
+          provider.credentialRef === undefined,
+      );
+      let autoLinked = false;
+      if (target) {
+        await ctx.dshConfig.upsertPiAiProvider({ id: ref, apiKeyEnv: ref });
+        autoLinked = true;
+      }
+      return [
+        `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`,
+        ...(autoLinked
+          ? [
+              '',
+              `🔗 已自动把 provider \`${ref}\` 的 apiKeyEnv 关联到 \`${ref}\`（下一请求生效）。`,
+            ]
+          : []),
+      ].join('\n');
     },
   },
 
@@ -683,17 +704,24 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
   const options = await stepOptions(step, ctx, state.data);
   if (step.kind === 'options' && options) {
     if (ctx.channel.sendCard) {
-      await ctx.channel.sendCard(
-        ctx.chatId,
-        renderWizardOptionsCard({
+      try {
+        await ctx.channel.sendCard(
+          ctx.chatId,
+          renderWizardOptionsCard({
+            flow: flow.id,
+            step: state.step,
+            question: step.question,
+            options,
+            ...(step.hint === undefined ? {} : { hint: step.hint }),
+          }),
+        );
+        return;
+      } catch (error) {
+        log.warn('wizard', 'card-send-failed', {
           flow: flow.id,
-          step: state.step,
-          question: step.question,
-          options,
-          ...(step.hint === undefined ? {} : { hint: step.hint }),
-        }),
-      );
-      return;
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     const labels = options.map((option) => `\`${option.label}\``).join('、');
     await ctx.channel.sendMarkdown(
@@ -703,17 +731,24 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
     return;
   }
   if (ctx.channel.sendCard) {
-    await ctx.channel.sendCard(
-      ctx.chatId,
-      renderWizardTextStepCard({
+    try {
+      await ctx.channel.sendCard(
+        ctx.chatId,
+        renderWizardTextStepCard({
+          flow: flow.id,
+          step: state.step,
+          question: step.question,
+          ...(step.placeholder === undefined ? {} : { placeholder: step.placeholder }),
+          ...(step.hint === undefined ? {} : { hint: step.hint }),
+        }),
+      );
+      return;
+    } catch (error) {
+      log.warn('wizard', 'card-send-failed', {
         flow: flow.id,
-        step: state.step,
-        question: step.question,
-        ...(step.placeholder === undefined ? {} : { placeholder: step.placeholder }),
-        ...(step.hint === undefined ? {} : { hint: step.hint }),
-      }),
-    );
-    return;
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   await ctx.channel.sendMarkdown(
     ctx.chatId,
@@ -866,11 +901,17 @@ export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
   const defaultSelection = await ctx.dshConfig.defaultModelSelection();
   const currentModel = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
   if (ctx.channel.sendCard) {
-    await ctx.channel.sendCard(
-      ctx.chatId,
-      renderConfigHubCard({ providers, defaultSelection, currentModel }),
-    );
-    return;
+    try {
+      await ctx.channel.sendCard(
+        ctx.chatId,
+        renderConfigHubCard({ providers, defaultSelection, currentModel }),
+      );
+      return;
+    } catch (error) {
+      log.warn('wizard', 'hub-card-send-failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   const lines = providers.map((provider) => {
     const models = provider.models.map((model) => model.id).join(', ') || '(无)';
