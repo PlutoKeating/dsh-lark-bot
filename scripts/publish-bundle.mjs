@@ -23,6 +23,7 @@ export const PUBLISH_FILES = [
   'bin',
   'cordis.patch.yml',
   'README.md',
+  'README_EN.md',
   'SECURITY.md',
   'LICENSE',
 ];
@@ -134,6 +135,7 @@ export async function assemblePackage({ root, name, githubScope, dir }) {
   await copyDirRecursive(join(root, 'dist'), distDest);
   await Promise.all([
     copyFile(join(root, 'README.md'), join(dest, 'README.md')),
+    copyFile(join(root, 'README_EN.md'), join(dest, 'README_EN.md')),
     copyFile(join(root, 'SECURITY.md'), join(dest, 'SECURITY.md')),
     copyFile(join(root, 'LICENSE'), join(dest, 'LICENSE')),
   ]);

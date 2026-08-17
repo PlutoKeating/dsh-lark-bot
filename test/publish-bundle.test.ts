@@ -64,7 +64,7 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
       './notify': { types: './dist/notify.d.ts', import: './dist/notify.js' },
       './ask': { types: './dist/ask.d.ts', import: './dist/ask.js' },
     },
-    files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'SECURITY.md', 'LICENSE'],
+    files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
     dsh: { bundle: { patch: './cordis.patch.yml' } },
     scripts: { build: 'tsup' },
     devDependencies: { typescript: '^5.6.3' },
@@ -78,6 +78,7 @@ async function makeFakeRoot(distFiles: readonly string[] = DIST_FILES, name = 'd
   await Promise.all([
     ...distFiles.map((file) => writeFile(join(root, 'dist', file), 'export const fixture = true;\n')),
     writeFile(join(root, 'README.md'), '# fixture\n'),
+    writeFile(join(root, 'README_EN.md'), '# fixture-en\n'),
     writeFile(join(root, 'SECURITY.md'), 'security\n'),
     writeFile(join(root, 'LICENSE'), 'AGPL-3.0\n'),
     writeFile(join(root, 'cordis.patch.yml'), FAKE_PATCH),
