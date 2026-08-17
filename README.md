@@ -1,26 +1,5 @@
 > [!CAUTION]
-> **⚠️ 官方渠道声明 · Official channels only**
->
-> 唯一官方仓库是 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)；唯一官方 npm 包是
-> `dsh-lark-bot`（同源双包 `dsh-feishu-bot`，维护者 `plutokeating`）。**本项目从不提供 Windows 可执行文件
-> （.exe），也没有任何“下载即运行”的安装包。** 任何以本项目名义提供 exe / “下载后双击运行”的页面、仓库或
-> 第三方分发渠道（例如 `tarraencompassing61/dsh-lark-bot` 这类仿冒仓库）均为**假冒 / 恶意来源**——请勿下载
-> 或运行其中的任何附件。官方安装唯一命令：
->
-> `npx dsh-lark-bot@latest setup --profile dsh-lark`
->
-> The **only official repository** is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot);
-> the **only official npm packages** are `dsh-lark-bot` and `dsh-feishu-bot` (maintainer `plutokeating`).
-> **This project never ships Windows executables (.exe) or any “download-and-run” installer.** Any page,
-> repository, or third-party channel offering such downloads under this project’s name (including impostor
-> repositories like `tarraencompassing61/dsh-lark-bot`) is a **counterfeit / malicious source** — do not download
-> or execute anything from it. The only official install command:
->
-> `npx dsh-lark-bot@latest setup --profile dsh-lark`
->
-> 仿冒仓库停留在 v0.7.0 快照；正版版本差距见上方徽章。Evidence:
-> [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md) ·
-> Official download page: [docs/DOWNLOAD.md](docs/DOWNLOAD.md)
+> **⚠️ 仅认准官方渠道 / Official channels only：** 唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，唯一官方 npm 包 `dsh-lark-bot`（同源双包 `dsh-feishu-bot`，维护者 `plutokeating`）。**本项目从不提供 Windows 可执行文件（.exe），也没有任何“下载即运行”的安装包**——任何以本项目名义提供 exe / “下载后双击运行”的页面、仓库或第三方分发渠道均为**假冒 / 恶意来源**，请勿下载或运行。官方安装唯一命令：`npx dsh-lark-bot@latest setup --profile dsh-lark`。仿冒仓库取证与完整双语声明见文末「假冒仓库警告」及 [docs/security/2026-08-17-impostor-repo-evidence/](docs/security/2026-08-17-impostor-repo-evidence/README.md)。
 
 <h1 align="center">dsh-lark-bot</h1>
 
@@ -52,12 +31,6 @@
 
 </div>
 
-<div align="center">
-
-<a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/card/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind" width="440"></a>
-
-</div>
-
 <p align="center">
   🌐 官网落地页 <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a>
   · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
@@ -65,101 +38,64 @@
 
 ---
 
-## 项目介绍 | What & Why
+## 场景 | The Problem
 
-**用在什么场景？** 你在飞书 / Lark（私聊、群聊、话题）里指挥本机 DeepSeek Harness（`dsh`）
-coding agent：发消息就收流式卡片与工具调用过程，把项目工作区、并行任务、会话归档都收进同一
-个协作流。适合需要多项目隔离、角色分工、并行任务与故障自愈的开发者与团队。
+**你的 DeepSeek Harness 只能“贴身”用？** dsh 跑在本机，每次看进度、改任务都得回到电脑前；离开工位后任务卡住、跑偏甚至 dsh 崩了，你都收不到任何消息——回来才发现白等半天。
 
-**Where does it fit?** Drive your local DeepSeek Harness (`dsh`) coding agent from Feishu /
-Lark — DMs, group chats and topics — with streaming cards, isolated project workspaces,
-parallel tasks, session archival and self-healing when things break.
+**dsh-lark-bot 把遥控器装进你的飞书**：在私聊、群聊、话题里直接指挥本机 dsh coding agent，流式卡片实时看思考与工具调用；任务完成主动推送到你所在的任何群并 @ 你；即使 dsh 崩溃下线，飞书里依然叫得应——发 `/safemode` 进入仅核心安全模式，直接在聊天里定位问题、重启引擎。**这是唯一“dsh 挂了你不会失联”的桥接方案。**
 
-**功能亮点（以下六项为 dsh-lark-bot 全网独有组合）| Highlights (exclusive to dsh-lark-bot)**：
+*Tired of being chained to your desk to drive DeepSeek Harness? dsh-lark-bot turns Feishu / Lark into the remote control for your local coding agent: drive it from your phone, watch streaming cards, get proactive notifications, and keep a safety-net guardian that still answers in Feishu — and can restart the engine — even when dsh is down.*
 
-- 🆘 **Guardian 安全网守护 —— “永远叫得应”**：DSH 进程一崩，其他方案的机器人就变成死号，只能回
-  服务器手动重启；dsh-lark-bot 的守护进程在 DSH 崩溃后**仍然会在飞书回复你**——告诉你引擎已挂、
-  可进入仅核心安全模式，直接在飞书对话里发控制信号把它重启。**唯一“出故障时用户不会失联”的项目。**
-  *When DSH crashes, this bot still answers in Feishu: enter core-only safe mode and send a
-  control signal to restart it. The only project where users never lose contact.*
-- 👥 **多角色 Agent —— “一个机器人，一整个团队”**：在飞书里用 `/role` 切换或指派 PM / 开发 /
-  文档等角色，每个角色有持久化的人设、模型偏好与规则。
-  *Switch or assign PM / dev / docs personas in chat with `/role` — each with its own
-  persisted persona. One bot, a whole team.*
-- ⚡ **并行多任务 —— “不用排队”**：同一群里可以**同时跑多个任务**，各自会话隔离；其他方案同聊
-  串行，上一个没跑完下一个只能等。
-  *Run multiple tasks in the same chat simultaneously with isolated sessions — no queueing.*
-- 🗂 **会话归档与清理 —— “会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留
-  策略；长期使用也不会越积越多。
-  *Archive old tasks and auto-prune with retention policies — your session list stays clean.*
-- 📣 **跨会话主动通知 + @人 —— “活干完了它会来找你”**：Agent 在 A 群跑完任务，可以**主动发消息到
-  B 群或私聊并 @ 你**；而不是“你问它答”。
-  *Agents proactively report to other chats or DMs and @mention you when work finishes.*
-- 🔑 **对话内管理模型和密钥 —— “不用离开飞书”**：`/providers` `/provider` `/key` 直接在聊天里
-  查看、切换供应商、热更新密钥，全程闭环。
-  *View providers, switch vendors and hot-update API keys entirely in chat — no server-side
-  edits.*
+## 能做什么 | What you get
 
----
+**基础能力 / Core**：
 
-## 快速开始 | Quick Start（普通用户先看这里 | for end users）
+- 私聊、群聊、话题（thread）里指挥本机 dsh coding agent，图片 / 文本文件直接发给 bot 即可；
+- 流式卡片实时展示思考、工具调用与结果，支持交互按钮（停止 / 审批 / 问答卡）；
+- 会话自动归档与保留策略；Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-### 1. 安装（唯一路径）| Install (the only path)
+**六项全网独有组合 / Six exclusive capabilities**：
 
-本项目以 **dsh 标准 profile bundle** 交付：一行命令把它装进一个 dsh profile，dsh 启动时以
-标准插件方式加载桥接引擎（`dsh.bundle.patch` 已声明，`dsh plugin add` 可直接安装）。
+- 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。*The only project where users never lose contact.*
+- 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
+- ⚡ **并行多任务——“不用排队”**：同一群聊同时跑多个任务、会话隔离；其他方案只能串行排队。
+- 🗂 **会话归档与清理——“会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留策略。
+- 📣 **跨会话主动通知 + @人——“活干完了它会来找你”**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
+- 🔑 **对话内管理模型和密钥——“不用离开飞书”**：`/providers` `/provider` `/key` 直接查看、切换供应商、热更新密钥。
 
-This project ships as a **standard dsh profile bundle**: one command installs it into a dsh
-profile, and dsh loads the bridge engine as a standard plugin on boot (the package declares
-`dsh.bundle.patch`, so `dsh plugin add` works directly).
+## 30 秒上手 | Quick Start
+
+**前置条件 / Prerequisites（先装好本体，再装遥控器）**：
+
+1. **DeepSeek Harness（`dsh`）已安装并配置好 `DEEPSEEK_API_KEY`** —— dsh-lark-bot 是 dsh 的插件，dsh 才是 agent 本体，缺一不可；
+2. **Node.js ≥ 22.19**（见 `package.json` engines）与一个飞书 / Lark 账号。
+
+**三步上线 / Three steps**：
 
 ```bash
-# 唯一安装命令（无需先全局安装任何东西）| the only install command (no prior global install)
+# ① 一键安装（无需先全局安装任何东西；自动装进 dsh profile，并默认同时安装「安全网守护」）
+# ① One-command install (no prior global install; installs the safety-net guardian by default)
 npx dsh-lark-bot@latest setup --profile dsh-lark
-```
 
-`setup` 会自动完成：发现本机 dsh → 预批准 pnpm 构建策略 → 执行标准的
-`dsh plugin --profile dsh-lark add dsh-lark-bot@<版本>`（版本号由当前包固定，避免 pnpm
-裸名解析到旧版本），并**默认同时安装「安全网守护」**——系统级
-常驻、dsh 全部下线后仍保留飞书救援入口（核心能力之一，见下文「安全网守护」一节）。
-一条命令即完成全部安装。
-
-`setup` automatically: locates your dsh install → pre-approves pnpm's build policy → runs the
-standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running
-package so pnpm never resolves an outdated bare-name release), and **also installs the safety-net
-guardian by default** — a system-level resident process that keeps the Feishu rescue entrance
-alive even when dsh is fully down (one of the core features; see "Safety-net guardian" below).
-One command installs everything.
-
-### 2. 启动并扫码绑定 | Start and bind with one scan
-
-```bash
+# ② 启动 / Start
 dsh --profile dsh-lark
 ```
 
-首次启动会在终端打印二维码：用飞书 / Lark App 扫码创建或选择 PersonalAgent 应用，绑定后
-dsh-lark-bot 的桥接引擎即在 dsh 进程内运行（飞书通道、会话/工作区、卡片、通知回调），
-私聊直接发消息，群聊 / 话题里 `@bot`。常驻与守护由 dsh 自己负责。
+③ 首次启动终端打印二维码 → 飞书 / Lark App 扫码创建或选择 PersonalAgent 应用 → 绑定后私聊直接发消息，群聊 / 话题里 `@bot`。
+*First boot prints a QR code: scan it with the Feishu / Lark app to bind a PersonalAgent app, then DM the bot directly or `@bot` in groups/topics.*
 
-On first boot the terminal prints a QR code: scan it with the Feishu / Lark app to create or
-choose a PersonalAgent app. After binding, the bridge engine runs **inside the dsh process**
-(Feishu channel, sessions/workspaces, cards, notify callback); message it directly in private
-chat, or use `@bot` in groups/topics. dsh owns the daemon lifecycle.
+`setup` 会自动完成：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs）→ 执行标准
+`dsh plugin --profile dsh-lark add dsh-lark-bot@<版本>`（版本号由当前包固定）→ 默认安装「安全网守护」系统服务。
+一条命令即完成全部安装。
 
-已有 PersonalAgent 应用时可在 profile 环境变量中直接提供凭据跳过扫码（见「配置」）：
+> **无需公网 IP / 域名 / 服务器 / 内网穿透**（飞书 WebSocket 出站长连接），Linux / macOS / Windows 通用。
+> 已有 PersonalAgent 应用时可跳过扫码（见「配置」）：`DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu dsh --profile dsh-lark`
+> 升级同样一条命令：`npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes`
 
-With an existing PersonalAgent app, provide credentials via profile env to skip the QR step
-(see Configuration):
+## 完整使用方式 | Full usage
 
-```bash
-DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
-  dsh --profile dsh-lark
-```
+### 常用命令 | Common commands
 
-> 卸载：`dsh plugin --profile dsh-lark remove dsh-lark-bot`。
-> Uninstall: `dsh plugin --profile dsh-lark remove dsh-lark-bot`.
-
-### 3. 基本使用 | Basic usage
 
 在飞书里向 bot 发送普通消息即可开始工作，常用命令：
 
@@ -447,9 +383,53 @@ logs and troubleshooting.
 
 ---
 
+## FAQ（典型用例与常见问题）| FAQ (use cases & common questions)
+
+### 典型用例 | Typical use cases
+
+**Q: 出门在外，想用手机指挥本机的 DeepSeek Harness？**
+
+**A:** 可以。安装并扫码绑定后，用飞书手机 App 给机器人发消息即可指挥本机 dsh coding agent 读代码、跑命令、完成任务；任务完成还能跨会话主动推送并 @ 你。安装只需：`npx dsh-lark-bot@latest setup --profile dsh-lark` → `dsh --profile dsh-lark` → 飞书扫码 → 开聊。
+
+*Q: Can I drive my local DeepSeek Harness from my phone? A: Yes — after the one-command install and a QR scan, message the bot from the Feishu app anywhere.*
+
+**Q: 多个项目 / 多人协作，怎么隔离与分工？**
+
+**A:** 每个会话自动落在独立的 git worktree（`~/.dsh-lark/profiles/<profile>/worktrees/<scope>/`），项目级 `AGENTS.md` 规则自动注入，多项目互不干扰；管理员用 `/role` 定义 PM / 开发 / 文档等角色并绑定到群，用 `/invite` 管理访问白名单；同一群内默认 2 个任务并行（`/concurrency` 调整），`/archive` + `/retention` 控制会话归档与保留。
+
+*Q: How do I isolate projects and split work across a team? A: Per-session git worktrees, project AGENTS.md injection, /role personas, /invite allowlists and parallel runs keep everything isolated.*
+
+**Q: dsh 崩溃 / 掉线后，飞书机器人还能用吗？**
+
+**A:** 能。`setup` 默认安装独立于 dsh 进程的「安全网守护」（systemd / LaunchAgent / Windows 启动项）。dsh 崩溃或无法启动时，守护自动接管飞书通道并先尝试自动重启完整 profile；仍失败时你直接发 `/safemode` 进入仅核心安全模式（官方核心 bundle，不加载任何第三方插件），在聊天里定位 / 修复问题，`/safemode exit` 重启完整 profile 并交还通道。全程不需要命令行。
+
+*Q: Does the bot still work if dsh crashes? A: Yes — the guardian takes over the Feishu channel, and you can restart dsh from chat with /safemode.*
+
+### 常见问题 | Common questions
+
+**Q: DeepSeek Harness 怎么接入飞书？**
+
+**A:** 安装 Node.js ≥ 22 与 DeepSeek Harness（已配置 `DEEPSEEK_API_KEY`），执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 启动并用飞书 App 扫描终端二维码绑定 PersonalAgent 应用。私聊直接发消息，群聊 / 话题里 `@bot`。
+
+**Q: 需要公网 IP、域名或服务器吗？**
+
+**A:** 不需要。飞书通道使用 WebSocket 长连接（出站连接），本机在 NAT 后面也能用，免公网服务器、免域名、免内网穿透。
+
+**Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
+
+**A:** 功能组合最全：安全网守护（dsh 崩溃后飞书仍叫得应）、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合为一体；安装上是标准 dsh profile bundle，`npx dsh-lark-bot@latest setup` 一条命令装进 dsh profile，无需独立 Docker / 后台服务。
+
+**Q: 项目从哪下载？会不会有假冒版本？**
+
+**A:** 唯一官方仓库是 [github.com/PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，唯一官方 npm 包是 `dsh-lark-bot` / `dsh-feishu-bot`（维护者 `plutokeating`）。本项目从不提供 .exe 或“下载即运行”的安装包；任何以项目名义分发 exe 的仓库或页面都是假冒来源，请勿运行（详见文末「假冒仓库警告」）。
+
+---
+
 ## 关键词 | Keywords
 
-`dsh` · `deepseek` · `deepseek harness` · `feishu` · `lark` · `bridge` · `bot`
+`dsh` · `deepseek` · `deepseek harness` · `feishu` · `lark` · `bridge` · `bot` ·
+`chatbot` · `messaging` · `qrcode` · `typescript` · `feishu-bot` · `lark-bot` ·
+`dsh-plugin` · `deepseek-harness` · `im-bridge` · `ai-agent` · `workspace` · `self-healing`
 
 ## 这是什么 | What it is
 
@@ -889,6 +869,13 @@ and relaunches the full profile on `/safemode exit`.
 | [`grinev/opencode-telegram-bot`](https://github.com/grinev/opencode-telegram-bot) | OpenCode 的 Telegram 手机端，另一参照<br>Telegram mobile client for OpenCode; another reference |
 
 ## 社区收录情况 | Community Listings
+
+<div align="center">
+
+<a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/card/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind" width="440"></a>
+
+</div>
+
 
 > 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.14.0（2026-08-17 复核）：
 > Community listing & recommendation status, kept current as update requests land. As of v0.14.0 (re-verified 2026-08-17):
