@@ -1,11 +1,15 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { buildAgentAdapter } from '../../adapters/index.js';
 import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
+import { resolveDshHome } from '../../config/dsh-runtime.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
 import { readGuardianUnit } from '../../guardian/install.js';
+import { readInstalledPackage } from '../../upgrade/detect.js';
+import { loadUpgradeState, upgradeStatePath } from '../../upgrade/state.js';
 import { compareVersions, fetchNpmLatestVersionOnce } from '../../upgrade/versions.js';
 import type { StartOptions } from '../../cli.js';
 
@@ -90,6 +94,39 @@ export async function runDoctorChecks(
   } catch {
     // Best effort.
   }
+  try {
+    const state = await loadUpgradeState(upgradeStatePath(env.home));
+    if (state?.lastUpgrade.pendingRestart === true) {
+      lines.push('upgrade: ⚠️ 上次升级待重启生效（重启 dsh profile 后加载新版本）。');
+    }
+  } catch {
+    // Best effort.
+  }
+  try {
+    // Version-pin drift check for runtime profiles (issue #15): the sdk/acp
+    // profiles link the bridge package; a stale link means the next boot may
+    // re-provision or run an old copy. `dsh-lark-bot upgrade` repairs these.
+    const dshHome = resolveDshHome(homedir(), process.env);
+    const name = ownPackageInfo().name;
+    const installed = await readInstalledPackage(
+      dshHome,
+      env.guardianProfile ?? 'dsh-lark',
+      name,
+    );
+    for (const runtimeProfile of ['dsh-lark-sdk', 'dsh-lark-acp']) {
+      const linked = await runtimeProfileLinkVersion(dshHome, runtimeProfile, name);
+      if (linked === undefined) continue;
+      if (installed !== undefined && linked !== installed.version) {
+        lines.push(
+          `runtime ${runtimeProfile}: ⚠️ 链接版本 ${linked} 与已装 ${installed.version} 不一致；执行 dsh-lark-bot upgrade 修复`,
+        );
+      } else {
+        lines.push(`runtime ${runtimeProfile}: ok (${linked})`);
+      }
+    }
+  } catch {
+    // Best effort.
+  }
 
   let critical = false;
 
@@ -141,6 +178,23 @@ export async function runDoctorChecks(
   }
 
   return { lines, critical };
+}
+
+async function runtimeProfileLinkVersion(
+  dshHome: string,
+  runtimeProfile: string,
+  packageName: string,
+): Promise<string | undefined> {
+  try {
+    const raw = await readFile(
+      join(dshHome, 'profiles', runtimeProfile, 'node_modules', packageName, 'package.json'),
+      'utf8',
+    );
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return typeof parsed.version === 'string' ? parsed.version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<void> {

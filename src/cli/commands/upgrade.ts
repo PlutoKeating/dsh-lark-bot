@@ -383,6 +383,7 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
       profile,
       packageSpec: target.spec,
       guardianInstalled: guardian,
+      pendingRestart: detection.profileProcess !== undefined && !options.restart,
     };
     await saveUpgradeState(stateFile, { schemaVersion: 1, lastUpgrade: record });
     write(

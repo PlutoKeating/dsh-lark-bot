@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   compareVersions,
   fetchNpmLatestVersion,
+  fetchNpmLatestVersionOnce,
   isVersionUpgrade,
   packageSpecFor,
   parseVersion,
@@ -129,5 +130,18 @@ describe('fetchNpmLatestVersion', () => {
     const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response) as unknown as typeof fetch;
     await expect(fetchNpmLatestVersion('dsh-lark-bot', 'https://reg.test', fetcher)).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('probes a mirror registry with the single-attempt helper', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ version: '0.13.1' }) } as Response) as unknown as typeof fetch;
+    await expect(
+      fetchNpmLatestVersionOnce('dsh-lark-bot', 'https://mirror.test', 1_000, fetcher),
+    ).resolves.toBe('0.13.1');
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://mirror.test/dsh-lark-bot/latest',
+      expect.anything(),
+    );
   });
 });

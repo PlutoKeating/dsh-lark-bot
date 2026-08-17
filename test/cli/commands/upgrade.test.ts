@@ -291,6 +291,8 @@ describe('dsh-lark-bot upgrade', () => {
 
     expect(harness.out.join('')).toContain('dsh profile 进程正在运行（pid 4242）');
     expect(harness.restartProfile).not.toHaveBeenCalled();
+    const state = await loadUpgradeState(harness.stateFile);
+    expect(state?.lastUpgrade.pendingRestart).toBe(true);
   });
 
   it('--restart triggers the guardian and profile restart helpers', async () => {
@@ -314,6 +316,8 @@ describe('dsh-lark-bot upgrade', () => {
 
     expect(harness.restartGuardian).toHaveBeenCalled();
     expect(harness.restartProfile).toHaveBeenCalled();
+    const state = await loadUpgradeState(harness.stateFile);
+    expect(state?.lastUpgrade.pendingRestart).toBe(false);
   });
 
   it('--no-guardian skips the guardian install', async () => {
