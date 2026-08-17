@@ -30,4 +30,17 @@ describe('buildReleaseNotes', () => {
     expect(body).not.toContain('### ✨ Features / 新功能');
     expect(body).toContain('### 🐛 Fixes / 修复');
   });
+
+  it('prepends a highlights section when provided', () => {
+    const body = buildReleaseNotes(
+      ['fix: something'],
+      'v0.9.0',
+      'v0.9.1',
+      '## Highlights / 本版亮点\n\n- AI 检索可发现性重构。',
+    );
+    expect(body.startsWith('## Highlights / 本版亮点')).toBe(true);
+    expect(body).toContain('- AI 检索可发现性重构。');
+    expect(body).toContain('## What\'s Changed');
+    expect(body.indexOf('## Highlights')).toBeLessThan(body.indexOf('## What\'s Changed'));
+  });
 });

@@ -62,8 +62,14 @@ jobs:
         run: |
           PREV_TAG="$(git tag --sort=-version:refname | sed -n 2p || true)"
           if [ -n "$PREV_TAG" ]; then
-            node scripts/release-notes.mjs --from "$PREV_TAG" --to "${GITHUB_REF_NAME}" \
-              > "$RUNNER_TEMP/release-notes.md"
+            HIGHLIGHTS="release-highlights/${GITHUB_REF_NAME}.md"
+            if [ -f "$HIGHLIGHTS" ]; then
+              node scripts/release-notes.mjs --from "$PREV_TAG" --to "${GITHUB_REF_NAME}" \
+                --highlights "$HIGHLIGHTS" > "$RUNNER_TEMP/release-notes.md"
+            else
+              node scripts/release-notes.mjs --from "$PREV_TAG" --to "${GITHUB_REF_NAME}" \
+                > "$RUNNER_TEMP/release-notes.md"
+            fi
             echo "notes_file=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_OUTPUT"
           fi
         id: notes

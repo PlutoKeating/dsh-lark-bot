@@ -9,6 +9,7 @@
 // Prints the markdown body to stdout.
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const GROUPS = [
   { prefix: 'feat', label: '✨ Features / 新功能' },
@@ -49,8 +50,11 @@ function group(commit) {
  * Build the release body for `from..to`. Exported for tests; the CLI wrapper
  * below prints it.
  */
-export function buildReleaseNotes(commits, from, to) {
+export function buildReleaseNotes(commits, from, to, highlights = '') {
   const lines = [];
+  if (highlights) {
+    lines.push(highlights.trim(), '', '---', '');
+  }
   lines.push(`## What's Changed`);
   lines.push('');
   for (const { prefix, label } of GROUPS) {
@@ -81,16 +85,25 @@ export function buildReleaseNotes(commits, from, to) {
 }
 
 function parseArgs(argv) {
-  const args = { from: undefined, to: undefined };
+  const args = { from: undefined, to: undefined, highlights: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--from') args.from = argv[i + 1];
     if (argv[i] === '--to') args.to = argv[i + 1];
+    if (argv[i] === '--highlights') args.highlights = argv[i + 1];
   }
   return args;
 }
 
 if (process.argv[1]?.endsWith('release-notes.mjs')) {
-  const { from, to } = parseArgs(process.argv.slice(2));
+  const { from, to, highlights: highlightsPath } = parseArgs(process.argv.slice(2));
   const target = to ?? 'HEAD';
-  process.stdout.write(buildReleaseNotes(gitLog(from, target), from, target));
+  let highlights;
+  if (highlightsPath) {
+    try {
+      highlights = readFileSync(highlightsPath, 'utf8');
+    } catch {
+      console.warn(`[release-notes] no highlights file at ${highlightsPath}, skipping`);
+    }
+  }
+  process.stdout.write(buildReleaseNotes(gitLog(from, target), from, target, highlights));
 }
