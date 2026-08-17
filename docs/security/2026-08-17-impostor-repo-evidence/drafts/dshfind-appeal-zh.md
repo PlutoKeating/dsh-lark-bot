@@ -1,5 +1,5 @@
 ---
-状态: DRAFT · 未授权不发送
+状态: 已发布 · https://github.com/hikariming/dshfind/issues/10
 渠道: hikariming/dshfind issue 或站内联系
 ---
 

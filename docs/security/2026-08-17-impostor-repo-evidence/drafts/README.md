@@ -1,8 +1,8 @@
 # 对外动作与仓库 Issue 草稿 · Drafts
 
-> [!IMPORTANT]
-> 本目录全部文件均为**草稿（DRAFT）**。**未获维护者（PlutoKeating）显式授权前，禁止发送、发布、
-> 创建 issue、提交 PR 或以任何形式对外使用。**
+> [!NOTE]
+> 本目录为对外动作草稿与发布记录。2026-08-17 已按维护者授权发布绝大多数条目（状态见下表）；
+> 未发布条目（GitHub 申诉）在维护者手动提交前禁止对外使用。
 > 措辞纪律：所有对外文本以“假冒 / 恶意来源 / counterfeit / malicious”指代假冒仓库，
 > 禁止使用“mirror / 镜像”等中性措辞。
 > 落款纪律：所有对外发布内容（issue、帖子、公告、PR 等）文末必须附落款
@@ -12,15 +12,15 @@
 
 | 文件 | 用途 | 建议发布位置 | 状态 |
 | --- | --- | --- | --- |
-| `issue-release-sha256.md` | 我方仓库 Issue：Release 资产 SHA-256 校验落地 | PlutoKeating/dsh-lark-bot · issue | 📝 草稿 |
-| `issue-monitor-cadence.md` | 我方仓库 Issue：假冒仓库监控常态化 | PlutoKeating/dsh-lark-bot · issue | 📝 草稿 |
-| `issue-npm-protection.md` | 我方仓库 Issue：npm 相似包名保护决策 | PlutoKeating/dsh-lark-bot · issue | 📝 草稿 |
-| `issue-external-actions-tracking.md` | 我方仓库 Issue：对外动作授权跟踪 | PlutoKeating/dsh-lark-bot · issue | 📝 草稿 |
-| `github-report-en.md` | GitHub 举报假冒仓库（Spam / Deceptive practices） | GitHub Report content | 📝 草稿 |
-| `github-malware-escalation-en.md` | GitHub 恶意软件升级举报（Releases 出现附件时） | GitHub Report content | 📝 草稿 |
-| `dshfind-appeal-zh.md` | dshfind 申诉：假冒条目下架 / 标记 | hikariming/dshfind issue 或站内联系 | 📝 草稿 |
-| `omdsh-reminder-zh.md` | 向 omdsh 官方 / dsh-lark 原作者的安全提醒 | omdsh-dev/community Discussion 或 issue | 📝 草稿 |
-| `omdsh-community-announcement-zh.md` | 我方收录讨论 #11 的官方渠道防伪公告 | omdsh-dev/community Discussion #11 | 📝 草稿 |
-| `impostor-repo-pr-en.md` | 给假冒仓库的“过时副本”信息牌 PR（可选） | tarraencompassing61/dsh-lark-bot PR | 📝 草稿 |
+| `issue-release-sha256.md` | 我方仓库 Issue：Release 资产 SHA-256 校验落地 | [issue #39](https://github.com/PlutoKeating/dsh-lark-bot/issues/39) | ✅ 已发布 |
+| `issue-monitor-cadence.md` | 我方仓库 Issue：假冒仓库监控常态化 | [issue #40](https://github.com/PlutoKeating/dsh-lark-bot/issues/40) | ✅ 已发布 |
+| `issue-npm-protection.md` | 我方仓库 Issue：npm 相似包名保护决策 | [issue #41](https://github.com/PlutoKeating/dsh-lark-bot/issues/41) | ✅ 已发布 |
+| `issue-external-actions-tracking.md` | 我方仓库 Issue：对外动作授权跟踪 | [issue #42](https://github.com/PlutoKeating/dsh-lark-bot/issues/42) | ✅ 已发布 |
+| `github-report-en.md` | GitHub 举报假冒仓库（Spam / Deceptive practices） | GitHub Report content（无 API，需 PlutoKeating 手动提交） | ⏳ 待手动提交 |
+| `github-malware-escalation-en.md` | GitHub 恶意软件升级举报（Releases 出现附件时） | GitHub Report content | ⏸ 待触发 |
+| `dshfind-appeal-zh.md` | dshfind 申诉：假冒条目下架 / 标记 | [hikariming/dshfind#10](https://github.com/hikariming/dshfind/issues/10) | ✅ 已发布 |
+| `omdsh-reminder-zh.md` | 向 omdsh 官方 / dsh-lark 原作者的安全提醒 | [omdsh-dev/community#25](https://github.com/omdsh-dev/community/discussions/25) | ✅ 已发布 |
+| `omdsh-community-announcement-zh.md` | 官方渠道防伪公告 | [omdsh-dev/community#26](https://github.com/omdsh-dev/community/discussions/26)（原目标 #11 评论不可达） | ✅ 已发布 |
+| `impostor-repo-pr-en.md` | 给假冒仓库的“过时副本”信息牌 PR | [tarraencompassing61/dsh-lark-bot#1](https://github.com/tarraencompassing61/dsh-lark-bot/pull/1) | ✅ 已发布 |
 
 触发条件见 `issue-external-actions-tracking.md`。任何草稿发送前需维护者逐份确认。
