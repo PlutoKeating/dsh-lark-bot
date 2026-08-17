@@ -63,3 +63,7 @@ https://github.com/PlutoKeating/dsh-lark-bot/blob/staging/docs/security/2026-08-
 
 祝开发顺利。如有需要，我们的取证脚本（`scripts/monitor-impostor-repo.mjs`）和监控思路
 也欢迎参考。
+
+---
+
+> 本文由 **PlutoKeating** 指导与审核，使用 **dsh-lark-bot** 发布。
