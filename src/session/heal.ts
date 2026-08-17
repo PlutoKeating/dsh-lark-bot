@@ -1,27 +1,54 @@
-import { mkdir, readdir, rename } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Error classes that mean the persisted session does not match the live one
- * (e.g. a second runtime resumed it, or a stale live session overlapped it).
- * These are NOT log corruption: the log must be preserved so the conversation
- * stays recoverable. Only a genuine `corrupt session log / seq gap` is
- * archived (see {@link SESSION_CORRUPT_RE}).
+ * Session self-heal classification.
+ *
+ * The persisted dsh session log can disagree with the live session in two
+ * ways, and they must be handled differently:
+ *
+ * - `broken`: the persisted log does not match the live session (id
+ *   collision / stale live session). The log itself is fine — reset the
+ *   scope binding so the next run starts fresh, keep the history.
+ * - `corrupt`: the persisted log is unreadable / has a sequence gap. Copy
+ *   it out of `$DSH_HOME/sessions` (archive) before resetting so the
+ *   conversation stays recoverable.
+ *
+ * Classification is anchored to the canonical runtime messages so unrelated
+ * text (model output, tool results, log passthrough) can never accidentally
+ * trigger a reset or archive.
  */
-export const SESSION_BROKEN_RE =
-  /id collision|corrupt session log|already has a persisted log|does not match this live session/i;
+export type SessionHealKind = 'corrupt' | 'broken';
 
-/** Errors that mean the log itself is unreadable/inconsistent. */
-export const SESSION_CORRUPT_RE = /corrupt session log|seq gap/i;
+const BROKEN_ANCHORED =
+  /session\s+["'`]?[A-Za-z0-9_-]+["'`]?\s+already has a persisted log(?: on disk)? that does not match this live session(?: \(id collision\))?|does not match this live session\s*\(id collision\)/i;
+
+const CORRUPT_ANCHORED =
+  /corrupt(?:ed)? session log|session log[^\n]{0,80}?\bseq(?:uence)? gap\b|\bseq(?:uence)? gap\b[^\n]{0,80}?session log/i;
+
+/** Classify a session error into a heal kind, or `undefined` when unrelated. */
+export function classifySessionError(message: string): SessionHealKind | undefined {
+  if (BROKEN_ANCHORED.test(message)) return 'broken';
+  if (CORRUPT_ANCHORED.test(message)) return 'corrupt';
+  return undefined;
+}
+
+export interface ArchiveSessionResult {
+  found: boolean;
+  archivePath?: string;
+}
 
 /**
- * Move a session directory out of `$DSH_HOME/sessions` into
- * `~/.dsh-lark/_archived-sessions/<id>-<ts>` so the heal can reset the chat
- * mapping without destroying the conversation history.
- * @returns true when the directory was found and moved.
+ * Copy a session directory out of `$DSH_HOME/sessions` into
+ * `~/.dsh-lark/_archived-sessions/<id>-<ts>` and only then remove the
+ * original, so a partial copy can never lose history and the archive copy is
+ * the recovery source. Returns the archive path for the caller to surface to
+ * the user (auditable + recoverable).
  */
-export async function archiveSessionDir(sessionId: string): Promise<boolean> {
+export async function archiveSessionDir(
+  sessionId: string,
+): Promise<ArchiveSessionResult> {
   const home = homedir();
   const dshHome = process.env.DSH_HOME?.trim() || join(home, '.dsh');
   const root = join(dshHome, 'sessions');
@@ -45,11 +72,13 @@ export async function archiveSessionDir(sessionId: string): Promise<boolean> {
   };
 
   const found = await walk(root);
-  if (found === undefined) return false;
+  if (found === undefined) return { found: false };
 
   const larkHome = process.env.DSH_LARK_HOME?.trim() || join(home, '.dsh-lark');
   const bakRoot = join(larkHome, '_archived-sessions');
+  const archivePath = join(bakRoot, `${sessionId}-${Date.now()}`);
   await mkdir(bakRoot, { recursive: true });
-  await rename(found, join(bakRoot, `${sessionId}-${Date.now()}`));
-  return true;
+  await cp(found, archivePath, { recursive: true, force: true });
+  await rm(found, { recursive: true, force: true });
+  return { found: true, archivePath };
 }

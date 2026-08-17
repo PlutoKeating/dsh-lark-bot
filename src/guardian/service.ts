@@ -97,6 +97,10 @@ export interface GuardianServiceOptions {
   staleMs?: number;
   /** Live-process grace: heartbeat stale this long means the engine is dead. */
   engineDeadMs?: number;
+  /** Cooldown between full-profile relaunch attempts (default 60s). */
+  relaunchCooldownMs?: number;
+  /** How long to wait for a relaunched profile to come up before giving up and taking over (default 15s). */
+  relaunchReadyTimeoutMs?: number;
   /** Consecutive polls dsh must be down before taking over (flap guard). */
   takeoverGracePolls?: number;
   /** Delay between the `/safemode exit` reply and channel disconnect (ms). */
@@ -158,6 +162,8 @@ const MAX_TRANSCRIPT_ENTRIES = 30;
 const SAFE_RUN_TIMEOUT_MS = 10 * 60_000;
 const SAFE_SDK_PROVISION_TIMEOUT_MS = 3 * 60_000;
 const SAFE_CARD_TICK_MS = 5_000;
+const RELAUNCH_COOLDOWN_MS = 60_000;
+const RELAUNCH_READY_TIMEOUT_MS = 15_000;
 
 interface SafeEngine {
   adapter: AgentAdapter;
@@ -183,6 +189,8 @@ export class GuardianService {
       | 'pollMs'
       | 'staleMs'
       | 'engineDeadMs'
+      | 'relaunchCooldownMs'
+      | 'relaunchReadyTimeoutMs'
       | 'takeoverGracePolls'
       | 'sendDelayMs'
       | 'safeAdapterMode'
@@ -214,6 +222,8 @@ export class GuardianService {
   private readonly transcripts = new Map<string, TranscriptEntry[]>();
   private downStreak = 0;
   private lastRelaunchAt: number | undefined;
+  private relaunchPending = false;
+  private relaunchStartedAt: number | undefined;
   private lastHeartbeatFreshAt: number | undefined;
   private timer: NodeJS.Timeout | undefined;
   private ticking = false;
@@ -228,6 +238,8 @@ export class GuardianService {
       pollMs: options.pollMs ?? 2_000,
       staleMs: options.staleMs ?? 15_000,
       engineDeadMs: options.engineDeadMs ?? 120_000,
+      relaunchCooldownMs: options.relaunchCooldownMs ?? RELAUNCH_COOLDOWN_MS,
+      relaunchReadyTimeoutMs: options.relaunchReadyTimeoutMs ?? RELAUNCH_READY_TIMEOUT_MS,
       takeoverGracePolls: options.takeoverGracePolls ?? 2,
       sendDelayMs: options.sendDelayMs ?? 600,
       safeAdapterMode: options.safeAdapterMode ?? 'auto',
@@ -382,6 +394,15 @@ export class GuardianService {
 
       if (up) {
         this.downStreak = 0;
+        if (this.relaunchPending || this.state.relaunchedPid !== undefined) {
+          this.relaunchPending = false;
+          this.relaunchStartedAt = undefined;
+          this.state.relaunchedPid = undefined;
+          await this.save();
+          this.log().info('guardian', 'bridge-relaunch-ready', {
+            dshProfile: this.state.dshProfile,
+          });
+        }
         await this.setSeenUp();
         if (this.state.mode !== 'standby' || this.channel !== undefined) {
           // The full profile came back (or the user started it manually):
@@ -400,26 +421,76 @@ export class GuardianService {
       if (!this.state.profileSeenUp) return; // never observed up: stay silent
       this.downStreak += 1;
       if (this.downStreak < this.options.takeoverGracePolls) return;
-      // Auto-relaunch the bridge so Feishu keeps working without a manual
-      // restart. The spawned process inherits this guardian's env, so run the
-      // guardian with DSH_LARK_ADAPTER=web and the bridge comes back in web
-      // mode (single writer). 60s cooldown prevents a spawn loop.
+      // Auto-relaunch lifecycle: after a relaunch, wait for the bridge to come
+      // up (fresh heartbeat or a live profile process) within a bounded
+      // readiness window. While pending, neither take over the Feishu channel
+      // (avoids a brief double connection) nor spawn again (cooldown).
+      if (this.relaunchPending) {
+        const ready =
+          heartbeatFresh ||
+          (await (this.options.findProcess ?? findProfileProcess)(
+            this.state.dshProfile,
+          )) !== undefined;
+        if (ready) {
+          this.relaunchPending = false;
+          this.relaunchStartedAt = undefined;
+          this.log().info('guardian', 'bridge-relaunch-ready', {
+            dshProfile: this.state.dshProfile,
+          });
+          // The profile is coming up on its own: the next tick's `up` check
+          // will release the channel; do not take over now.
+          return;
+        }
+        if (now - (this.relaunchStartedAt ?? now) > this.options.relaunchReadyTimeoutMs) {
+          this.relaunchPending = false;
+          this.relaunchStartedAt = undefined;
+          this.state.relaunchedPid = undefined;
+          await this.save();
+          this.log().fail('guardian', new Error('bridge relaunch did not come up within the readiness window'), {
+            dshProfile: this.state.dshProfile,
+          });
+        } else {
+          // Still giving the relaunch a chance to boot.
+          return;
+        }
+      }
       let relaunchedNow = false;
       try {
-        const now = (this.options.now ?? Date.now)();
-        if (this.lastRelaunchAt === undefined || now - this.lastRelaunchAt > 60_000) {
+        if (
+          this.lastRelaunchAt === undefined ||
+          now - this.lastRelaunchAt > this.options.relaunchCooldownMs
+        ) {
           const bin = this.dshBin;
-          if (bin && !processAlive) {
-            const spawn = this.options.spawnDetachedFn ?? spawnDetached;
-            const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
-            if (spawned.pid !== undefined) {
-              this.state.relaunchedPid = spawned.pid;
-              this.lastRelaunchAt = now;
-              relaunchedNow = true;
-              await this.save();
-              this.log().info('guardian', 'bridge-relaunched', {
-                pid: spawned.pid,
+          if (bin) {
+            // Re-check immediately before spawning so a profile that came back
+            // between this tick's process check and the spawn is never
+            // double-launched.
+            const stillDown = await (this.options.findProcess ?? findProfileProcess)(
+              this.state.dshProfile,
+            );
+            if (stillDown === undefined) {
+              const spawn = this.options.spawnDetachedFn ?? spawnDetached;
+              const spawned: DetachedSpawn = spawn('node', [
+                bin,
+                '--profile',
+                this.state.dshProfile,
+              ]);
+              if (spawned.pid !== undefined) {
+                this.state.relaunchedPid = spawned.pid;
+                this.lastRelaunchAt = now;
+                this.relaunchPending = true;
+                this.relaunchStartedAt = now;
+                relaunchedNow = true;
+                await this.save();
+                this.log().info('guardian', 'bridge-relaunched', {
+                  pid: spawned.pid,
+                  dshProfile: this.state.dshProfile,
+                });
+              }
+            } else {
+              this.log().warn('guardian', 'bridge-relaunch-skipped', {
                 dshProfile: this.state.dshProfile,
+                pid: stillDown.pid,
               });
             }
           }
@@ -783,7 +854,15 @@ export class GuardianService {
     }
     const spawn = this.options.spawnDetachedFn ?? spawnDetached;
     const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
-    if (spawned.pid !== undefined) this.state.relaunchedPid = spawned.pid;
+    if (spawned.pid !== undefined) {
+      this.state.relaunchedPid = spawned.pid;
+      // Give the relaunched profile the same readiness grace and cooldown as
+      // an automatic relaunch: no immediate double spawn, no channel takeover
+      // while it boots.
+      this.lastRelaunchAt = (this.options.now ?? Date.now)();
+      this.relaunchPending = true;
+      this.relaunchStartedAt = this.lastRelaunchAt;
+    }
     await this.save();
     await this.sendMarkdown(
       msg.chatId,

@@ -122,6 +122,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务空闲超时（默认 10 分钟，
    持续无活动事件才终止，活跃的流式任务不会被误杀）、
    `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。
+   守护检测到 dsh 下线时会先自动重启完整 profile：spawn 前二次进程探测防双实例，就绪窗口
+   （默认 15s）内等待桥接恢复（心跳新鲜或进程存活），失败才转交接管；重启冷却默认 60s。
    守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程本身不依赖任何 dsh /
    Cordis 代码。
 
