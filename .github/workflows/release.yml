@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag name (defaults to the pushed tag ref)'
+        required: false
 
 permissions:
   contents: write
@@ -60,27 +65,56 @@ jobs:
 
       - name: Generate release notes from conventional commits
         run: |
+          TAG="${TAG_INPUT:-${GITHUB_REF_NAME}}"
           PREV_TAG="$(git tag --sort=-version:refname | sed -n 2p || true)"
           if [ -n "$PREV_TAG" ]; then
-            HIGHLIGHTS="release-highlights/${GITHUB_REF_NAME}.md"
+            HIGHLIGHTS="release-highlights/${TAG}.md"
             if [ -f "$HIGHLIGHTS" ]; then
-              node scripts/release-notes.mjs --from "$PREV_TAG" --to "${GITHUB_REF_NAME}" \
+              node scripts/release-notes.mjs --from "$PREV_TAG" --to "$TAG" \
                 --highlights "$HIGHLIGHTS" > "$RUNNER_TEMP/release-notes.md"
             else
-              node scripts/release-notes.mjs --from "$PREV_TAG" --to "${GITHUB_REF_NAME}" \
+              node scripts/release-notes.mjs --from "$PREV_TAG" --to "$TAG" \
                 > "$RUNNER_TEMP/release-notes.md"
             fi
             echo "notes_file=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_OUTPUT"
           fi
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
         id: notes
 
       - name: Publish both npm packages and build release artifacts
-        run: node scripts/publish-dual-packages.mjs --pack-dir release-artifacts
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          SKIP=1
+          for pkg in dsh-lark-bot dsh-feishu-bot; do
+            PUBLISHED="$(npm view "$pkg@$VERSION" version 2>/dev/null || true)"
+            if [ "$PUBLISHED" != "$VERSION" ]; then SKIP=0; fi
+          done
+          if [ "$SKIP" = "1" ]; then
+            echo "::notice::$VERSION already published on npm — skipping publish, packing artifacts only"
+            node scripts/publish-dual-packages.mjs --pack-dir release-artifacts --skip-publish
+          else
+            node scripts/publish-dual-packages.mjs --pack-dir release-artifacts
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Generate SHA-256 checksums for release artifacts
         run: node scripts/generate-release-checksums.mjs release-artifacts
+
+      - name: Remove existing release for tag (idempotent re-release)
+        run: |
+          TAG="${TAG_INPUT:-${GITHUB_REF_NAME}}"
+          ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id 2>/dev/null || true)"
+          if [ -n "$ID" ] && [ "$ID" != "null" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/releases/${ID}" -X DELETE
+            echo "::notice::removed existing release ${ID} for ${TAG}"
+          else
+            echo "no existing release for ${TAG}"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_INPUT: ${{ inputs.tag }}
 
       - name: Publish both packages to GitHub Packages
         run: |
@@ -94,6 +128,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             release-artifacts/*.tgz
             release-artifacts/*.tgz.sha256
