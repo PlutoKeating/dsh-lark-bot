@@ -98,6 +98,16 @@
 8. IndexNow 即时收录已配置：密钥文件 `docs/2a7bb299d031c8950416360bfa35cd94.txt`（**勿删**，删除后
    IndexNow 提交会失败）；提交接口 `https://api.indexnow.org/indexnow`，host 为
    `dsh-lark-bot.arr2018.dpdns.org`，新 URL 上线后可 POST 提交（Bing / Yandex / Naver 均支持）。
+9. **README 可发现性重构（issue #43，2026-08-17）**：用户向内容前置为「场景痛点 → 能做什么 → 30 秒上手 →
+   完整使用方式 → FAQ」五段，自动化 / AI 合规章节（Keywords / 兼容性 / 架构 / 社区收录 / 安全声明等）整体
+   移后并完整保留；安全警告压缩为一行醒目提示 + 文末完整声明，官方渠道与防假冒信息不删减。
+10. **GitHub Topics 扩充至 18 个**：新增 `im-bridge` / `ai-agent` / `workspace` / `self-healing`
+    （对应 bridge / dsh 后端 / 工作区管理 / Guardian），README「关键词」章节同步为同一集合。
+11. **npm 元数据刷新（v0.15.1）**：keywords 补齐 `feishu-plugin` / `lark-integration` / `remote-coding`
+    等场景词（总量 20 个），描述保持中英双语；v0.15.1 发布后 registry 元数据与仓库一致。
+12. **Release notes 支持 Highlights 区块**：`scripts/release-notes.mjs` 新增 `--highlights`，
+    `release-highlights/<tag>.md` 文件在发版时拼接到 release body 顶部（功能亮点 + 安装 / 升级命令）。
+13. **落地页 FAQPage 同步**：补充「多项目 / 多人协作」典型用例问答（与 README FAQ 保持一致）。
 
 ---
 
