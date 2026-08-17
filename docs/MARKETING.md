@@ -298,6 +298,11 @@
 **稿件已备好**：`docs/runoob-deepseek-harness-feishu-tutorial.md`（母版）与
 `docs/runoob-deepseek-harness-feishu-tutorial.html`（可直接粘贴版）。
 
+> **2026-08-17 更新：** `/tougao` 投稿页当前不可用（Simditor 编辑器 CDN 404、提交地址为空，
+> 点击提交无反应）。已改用**邮件投稿**：把稿件与昵称/邮箱发到 `admin@runoob.com`（抄送
+> `429240967@qq.com`），同时按下面「备选路径」提交 Bug 反馈以争取邀请码。
+> 现成邮件模板见 `docs/runoob-submission-emails.md`。
+
 **投稿步骤**
 
 1. 打开投稿页 https://www.runoob.com/tougao（即「笔记分享」表单）；
