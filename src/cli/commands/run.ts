@@ -349,6 +349,14 @@ export async function startBridgeEngine(
     dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     defaultModel: activeProfile.preferences.model ?? env.model,
+    setDefaultModelPreference: async (model: string) => {
+      await configStore.saveProfile(profileName, {
+        tenant: activeProfile.tenant,
+        appId: activeProfile.accounts.appId,
+        appSecret: activeProfile.accounts.appSecret,
+        model,
+      });
+    },
     accessManager: new AccessManager(configStore, profileName),
     pending,
     defaultWorkspace,

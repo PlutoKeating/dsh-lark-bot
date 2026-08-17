@@ -57,6 +57,12 @@ export interface StartChannelDeps {
   dshConfig: DshProviderManager;
   defaultWorkspace: string;
   defaultModel: string;
+  /**
+   * Persist the admin-chosen default model into the bridge profile
+   * preferences so new sessions honor `/model default` even when a profile
+   * preference currently shadows dsh's agent-default-model.
+   */
+  setDefaultModelPreference?: (model: string) => Promise<void>;
   allowedUsers?: string[];
   allowedChats?: string[];
   accessDefaultDeny?: boolean;
@@ -149,6 +155,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         channel: commandChannel,
         defaultWorkspace: deps.defaultWorkspace,
         defaultModel: deps.defaultModel,
+        ...(deps.setDefaultModelPreference
+          ? { setDefaultModelPreference: deps.setDefaultModelPreference }
+          : {}),
         senderId: msg.senderId,
       };
 
@@ -282,7 +291,12 @@ function wizardContextFor(
   event: { chatId: string; operator: { openId: string } },
   deps: Pick<
     StartChannelDeps,
-    'dshConfig' | 'accessManager' | 'models' | 'wizardStore' | 'defaultModel'
+    | 'dshConfig'
+    | 'accessManager'
+    | 'models'
+    | 'wizardStore'
+    | 'defaultModel'
+    | 'setDefaultModelPreference'
   >,
   channel: CommandChannel,
   scope: string,
@@ -297,5 +311,8 @@ function wizardContextFor(
     models: deps.models,
     wizards: deps.wizardStore,
     defaultModel: deps.defaultModel,
+    ...(deps.setDefaultModelPreference
+      ? { setDefaultModelPreference: deps.setDefaultModelPreference }
+      : {}),
   };
 }

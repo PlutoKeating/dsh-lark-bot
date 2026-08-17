@@ -3,6 +3,7 @@ import type { AccessManager } from '../config/access-manager.js';
 import {
   DEEPSEEK_PROVIDER,
   SUPPORTED_PI_AI_PROTOCOLS,
+  normalizeDeepseekBaseUrl,
   normalizeBaseUrl,
   type DshProviderManager,
 } from '../config/dsh-config.js';
@@ -39,6 +40,8 @@ export interface ConfigWizardContext {
   wizards: WizardStore;
   /** Bot fallback model (profile preference / env default). */
   defaultModel: string;
+  /** Persist the admin default into the bridge profile preferences. */
+  setDefaultModelPreference?: (model: string) => Promise<void>;
 }
 
 type StepAnswer = string | string[] | undefined;
@@ -181,7 +184,7 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
           kind: 'text',
           question: 'Base URL',
           placeholder: 'https://www.kingapi.xyz',
-          hint: '形如 https://gateway.example/v1；根域名会自动补全 /v1',
+          hint: '形如 https://gateway.example/v1；根域名会自动补全 /v1，误填 /chat/completions 等完整接口地址会自动去掉末尾路径',
           parse: (raw) => normalizeBaseUrl(asString(raw)?.trim() ?? ''),
         },
         {
@@ -346,8 +349,7 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
             // (it appends its own API paths); only pi-ai gateways get the
             // bare-origin -> /v1 normalization.
             if (asString(data.provider) === DEEPSEEK_PROVIDER) {
-              normalizeBaseUrl(url); // validate protocol, keep the raw value
-              return url;
+              return normalizeDeepseekBaseUrl(url);
             }
             return normalizeBaseUrl(url);
           }
@@ -573,7 +575,8 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
     summary: (_ctx, data) => Promise.resolve(`将写入 dsh 默认模型：\`${asString(data.model)}\``),
     execute: async (ctx, data) => {
       await ctx.dshConfig.setDefaultModel(asString(data.model)!);
-      return `已写入 dsh 默认模型（agent-default-model）：\`${asString(data.model)}\`，新会话生效。`;
+      await ctx.setDefaultModelPreference?.(asString(data.model)!);
+      return `已写入 dsh 默认模型（agent-default-model）：\`${asString(data.model)}\`（同时更新 profile 默认模型），新会话生效。`;
     },
   },
 
