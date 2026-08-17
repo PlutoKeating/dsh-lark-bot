@@ -9,6 +9,7 @@ import {
   PIAI_NAMESPACE,
   DshProviderManager,
   normalizeBaseUrl,
+  normalizeDeepseekBaseUrl,
 } from '../../src/config/dsh-config.js';
 
 async function withHome(run: (root: string, manager: DshProviderManager) => Promise<void>): Promise<void> {
@@ -100,14 +101,34 @@ describe('DshProviderManager', () => {
     });
   });
 
-  it('normalizes bare-origin base URLs to /v1 and keeps full chat endpoints', async () => {
+  it('normalizes base URLs: bare origin to /v1, full API endpoints trimmed', async () => {
     expect(normalizeBaseUrl('https://www.kingapi.xyz')).toBe('https://www.kingapi.xyz/v1');
     expect(normalizeBaseUrl('https://kingapi.xyz/')).toBe('https://kingapi.xyz/v1');
     expect(normalizeBaseUrl('https://kingapi.xyz/v1/chat/completions')).toBe(
-      'https://kingapi.xyz/v1/chat/completions',
+      'https://kingapi.xyz/v1',
+    );
+    expect(normalizeBaseUrl('https://kingapi.xyz/chat/completions')).toBe(
+      'https://kingapi.xyz/v1',
+    );
+    expect(normalizeBaseUrl('https://gateway.example/v1/messages')).toBe(
+      'https://gateway.example/v1',
+    );
+    expect(normalizeBaseUrl('https://gateway.example/v1/responses')).toBe(
+      'https://gateway.example/v1',
     );
     expect(normalizeBaseUrl('https://gateway.example/v1')).toBe('https://gateway.example/v1');
     expect(() => normalizeBaseUrl('not a url')).toThrow(/不是合法 URL/);
+  });
+
+  it('normalizes the deepseek official base URL without forcing /v1', async () => {
+    expect(normalizeDeepseekBaseUrl('https://api.deepseek.com')).toBe('https://api.deepseek.com');
+    expect(normalizeDeepseekBaseUrl('https://api.deepseek.com/v1/chat/completions')).toBe(
+      'https://api.deepseek.com/v1',
+    );
+    expect(normalizeDeepseekBaseUrl('https://api.deepseek.com/chat/completions')).toBe(
+      'https://api.deepseek.com',
+    );
+    expect(() => normalizeDeepseekBaseUrl('not a url')).toThrow(/不是合法 URL/);
   });
 
   it('links a credential ref to a same-named pi-ai provider missing apiKeyEnv', async () => {
