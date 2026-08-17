@@ -107,18 +107,51 @@
     `index.html`、`llms.txt`、`robots.txt`、`sitemap.xml` 四个资产；
   - 自定义域名已绑定：zone `arr2018.dpdns.org` 下 CNAME `dsh-lark-bot → dsh-lark-bot.pages.dev`
     （proxied）；
-  - 后续更新：把 `docs/` 里这四个文件同步到部署目录后执行
-    `wrangler pages deploy <目录> --project-name=dsh-lark-bot`。
+  - **自动部署（已启用）**：GitHub Actions 工作流 [`.github/workflows/cf-pages.yml`](../../.github/workflows/cf-pages.yml)
+    在 push 到 main 时自动把 `docs/` 中四个 web 资产部署到 Pages（需仓库 Secret
+    `CLOUDFLARE_API_TOKEN`，作用域仅限 Pages Write）。push 后无需手动操作；
+  - 手动兜底：`wrangler pages deploy <目录> --project-name=dsh-lark-bot`。
 - **GitHub Pages（备用/回源）**：`https://plutokeating.github.io/dsh-lark-bot/`
   - 已启用，Source = main 分支 `/docs` 目录，push 后自动重建。
 - **去重策略**：两份内容共用同一份源文件，canonical 统一指向正式域名
   `https://dsh-lark-bot.arr2018.dpdns.org/`，搜索引擎只收录正式域名。
-- **sitemap 提交**：
-  - Bing Webmaster Tools（bing.com/webmasters）添加 `dsh-lark-bot.arr2018.dpdns.org` 并提交
-    `https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml`；
-  - Google Search Console 添加同域名资源并提交同 sitemap；
-  - 百度搜索资源平台（ziyuan.baidu.com）可尝试收录（dpdns.org 为动态 DNS 域名，收录优先级低，
-    主攻 Gitee 镜像与 CSDN 内容）。
+- **sitemap 提交清单**：见 §6.1.1。
+
+### 6.1.1 搜索引擎 sitemap 提交清单
+
+目标域名：`https://dsh-lark-bot.arr2018.dpdns.org/`，sitemap：
+`https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml`。
+
+**Bing Webmaster Tools**
+
+- [ ] 打开 bing.com/webmasters，用微软账号登录（支持 GitHub/Google 账号登录）。
+- [ ] 「添加网站」→ 输入 `dsh-lark-bot.arr2018.dpdns.org`；若 GSC 已加过可「从 Google Search Console 导入」。
+- [ ] 验证方式选「DNS 验证」：复制给出的 TXT 记录 → Cloudflare 控制台 → `arr2018.dpdns.org` → DNS →
+      添加 TXT 记录 → 等 1–5 分钟 → 回到 Bing 点验证（验证成功后该 TXT 可删除）。
+- [ ] 「Sitemaps」→ 提交 `https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml`。
+- [ ] 「URL 检查」提交首页，确认状态可抓取、无 blocked。
+
+**Google Search Console**
+
+- [ ] 打开 search.google.com/search-console → 「添加资源」→ 选「网域」→ 输入 `dsh-lark-bot.arr2018.dpdns.org`。
+- [ ] 复制 DNS 验证 TXT 记录 → Cloudflare 控制台添加 TXT → 点「验证」（验证后可删除 TXT）。
+- [ ] 「站点地图」→ 提交 `https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml`。
+- [ ] 「网址检查」→ 输入首页 → 「请求编入索引」。
+- [ ] 3–7 天后检查「网页索引编制」报告：确认落地页已收录、canonical 正确指向正式域名、无重复页。
+
+**百度搜索资源平台（尽力而为）**
+
+- [ ] 打开 ziyuan.baidu.com，注册/登录后「添加站点」→ `dsh-lark-bot.arr2018.dpdns.org`。
+- [ ] 同样用 DNS TXT 验证（Cloudflare 控制台添加）。
+- [ ] 提交 sitemap；百度对 dpdns.org/pages.dev 收录优先级低，主要收录来源仍是 Gitee 镜像与
+      CSDN/知乎内容，若迟迟不收录可改用「普通收录-手动提交」提交首页 URL。
+
+**通用注意**
+
+- 所有验证 TXT 记录验证通过后即可从 Cloudflare 删除，不影响站点。
+- canonical 已统一指向正式域名，双站（Cloudflare + GitHub Pages）不会被重复收录。
+- 提交后如 7 天仍未收录：重新提交 sitemap、确认 robots.txt 没有误拦（当前允许全部抓取）、
+  并在各工具「抓取测试」里确认 200。
 
 ### 6.2 awesome-dsh-plugin 收录（P0，已提交）
 
