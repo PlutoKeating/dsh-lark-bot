@@ -108,6 +108,10 @@
 12. **Release notes 支持 Highlights 区块**：`scripts/release-notes.mjs` 新增 `--highlights`，
     `release-highlights/<tag>.md` 文件在发版时拼接到 release body 顶部（功能亮点 + 安装 / 升级命令）。
 13. **落地页 FAQPage 同步**：补充「多项目 / 多人协作」典型用例问答（与 README FAQ 保持一致）。
+14. **社区收录刷新恢复提交（安全窗口结束，2026-08-17）**：awesome-dsh-plugins 数据刷新 PR
+    （v0.8.0 → v0.15.1）；dshfind #6 跟进评论（v0.10.1 → v0.15.1 一次刷新）；awesome-dsh-plugin
+    PR #1408 跟进评论（v0.15.1 数据）；omdsh-dev Discussion #11 更新说明备妥待人工粘贴
+    （org 级 discussion 无 REST/GraphQL 写接口）。状态与链接见 README「社区收录情况」。
 
 ---
 
