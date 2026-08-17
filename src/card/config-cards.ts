@@ -25,6 +25,8 @@ export interface WizardTextStepCard {
   question: string;
   placeholder?: string;
   hint?: string;
+  /** Block empty submissions client-side; omit for optional fields. */
+  required?: boolean;
 }
 
 export interface WizardConfirmStepCard {
@@ -47,8 +49,24 @@ function button(
   };
 }
 
-function actionRow(actions: object[]): object {
-  return { tag: 'action', actions };
+/**
+ * Feishu card schema 2.0 dropped the legacy `action` container (sub-code
+ * 200861: "cards of schema V2 no longer support this capability"). Buttons
+ * must live directly in `body.elements`; a `column_set` of auto-width
+ * columns reproduces the old horizontal row layout.
+ */
+function buttonRow(buttons: object[]): object {
+  return {
+    tag: 'column_set',
+    flex_mode: 'none',
+    horizontal_spacing: 'default',
+    columns: buttons.map((button) => ({
+      tag: 'column',
+      width: 'auto',
+      vertical_align: 'center',
+      elements: [button],
+    })),
+  };
 }
 
 function wizardValue(flow: string, step: number, extra: Record<string, unknown>): Record<string, unknown> {
@@ -89,22 +107,22 @@ export function renderConfigHubCard(input: ConfigHubInput): object {
             `dsh 默认模型：${defaultLine}`,
           ].join('\n'),
         },
-        actionRow([
+        buttonRow([
           button('➕ 添加 Provider', { cmd: 'cfg', action: 'provider-add' }, 'primary'),
           button('✏️ 修改 Provider', { cmd: 'cfg', action: 'provider-update' }),
           button('🗑 删除 Provider', { cmd: 'cfg', action: 'provider-remove' }, 'danger'),
         ]),
-        actionRow([
+        buttonRow([
           button('🧠 添加模型', { cmd: 'cfg', action: 'model-add' }),
           button('❌ 删除模型', { cmd: 'cfg', action: 'model-remove' }, 'danger'),
           button('🎯 切换模型', { cmd: 'cfg', action: 'model-use' }),
         ]),
-        actionRow([
+        buttonRow([
           button('🏠 设置默认模型', { cmd: 'cfg', action: 'model-default' }),
           button('🔑 设置凭据', { cmd: 'cfg', action: 'key-set' }),
           button('🔓 删除凭据', { cmd: 'cfg', action: 'key-remove' }, 'danger'),
         ]),
-        actionRow([
+        buttonRow([
           button('🔄 刷新', { cmd: 'cfg', action: 'refresh' }),
           button('✖️ 关闭', { cmd: 'cfg', action: 'dismiss' }),
         ]),
@@ -119,7 +137,7 @@ export function renderWizardOptionsCard(input: WizardOptionsStepCard): object {
   const rows: object[] = [];
   for (let index = 0; index < input.options.length; index += 3) {
     rows.push(
-      actionRow(
+      buttonRow(
         input.options
           .slice(index, index + 3)
           .map((option, offset) =>
@@ -128,6 +146,7 @@ export function renderWizardOptionsCard(input: WizardOptionsStepCard): object {
       ),
     );
   }
+  rows.push(buttonRow([cancel]));
   return {
     schema: '2.0',
     config: {
@@ -140,13 +159,16 @@ export function renderWizardOptionsCard(input: WizardOptionsStepCard): object {
           content: [input.question, input.hint ? `\n${input.hint}` : ''].join(''),
         },
         ...rows,
-        actionRow([cancel]),
       ],
     },
   };
 }
 
-/** BotFather-style step card: type a value into the input. */
+/**
+ * BotFather-style step card: type a value into the input. The input and its
+ * submit button are wrapped in a `form` container — schema 2.0 only returns
+ * input values in the callback when the input lives inside a form.
+ */
 export function renderWizardTextStepCard(input: WizardTextStepCard): object {
   return {
     schema: '2.0',
@@ -160,14 +182,23 @@ export function renderWizardTextStepCard(input: WizardTextStepCard): object {
           content: [input.question, input.hint ? `\n${input.hint}` : ''].join(''),
         },
         {
-          tag: 'input',
-          name: 'answer',
-          placeholder: { tag: 'plain_text', content: input.placeholder ?? '请输入…' },
+          tag: 'form',
+          name: `form-${input.flow}-${input.step}`,
+          elements: [
+            {
+              tag: 'input',
+              name: 'answer',
+              ...(input.required === true ? { required: true } : {}),
+              placeholder: { tag: 'plain_text', content: input.placeholder ?? '请输入…' },
+            },
+            {
+              ...button('提交', wizardValue(input.flow, input.step, { submit: true }), 'primary'),
+              form_action_type: 'submit',
+              name: `btn-submit-${input.flow}-${input.step}`,
+            },
+          ],
         },
-        actionRow([
-          button('提交', wizardValue(input.flow, input.step, { submit: true }), 'primary'),
-          button('取消', wizardValue(input.flow, input.step, { cancel: true })),
-        ]),
+        button('取消', wizardValue(input.flow, input.step, { cancel: true })),
       ],
     },
   };
@@ -186,7 +217,7 @@ export function renderWizardConfirmStepCard(input: WizardConfirmStepCard): objec
           tag: 'markdown',
           content: `**确认以下内容？**\n\n${input.summary}`,
         },
-        actionRow([
+        buttonRow([
           button(input.confirmLabel ?? '✅ 确认', wizardValue(input.flow, input.step, { confirm: true }), 'primary'),
           button('取消', wizardValue(input.flow, input.step, { cancel: true })),
         ]),

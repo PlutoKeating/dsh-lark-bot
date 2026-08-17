@@ -12,9 +12,29 @@ describe('question cards', () => {
         kind,
         question: 'Pick one',
         options: ['a', 'b'],
-      }) as { body: { elements: unknown[] } };
+      }) as {
+        body: {
+          elements: Array<{ tag: string; elements?: unknown[]; actions?: unknown[] }>;
+        };
+      };
       expect(card.body.elements.length).toBeGreaterThan(0);
+      expect(card.body.elements.some((element) => element.tag === 'action')).toBe(false);
+      const form = card.body.elements.find((element) => element.tag === 'form');
+      expect(form?.elements).toBeDefined();
     }
+  });
+
+  it('wraps the input and submit button in a form for schema 2.0', () => {
+    const card = renderQuestionCard({
+      id: 'q-2',
+      kind: 'text',
+      question: 'Why?',
+    });
+    const content = JSON.stringify(card);
+    expect(content).toContain('"tag":"form"');
+    expect(content).toContain('"form_action_type":"submit"');
+    expect(content).toContain('"cmd":"question-submit","id":"q-2"');
+    expect(content).not.toContain('"tag":"action"');
   });
 
   it('extracts single-choice answers back to labels', () => {

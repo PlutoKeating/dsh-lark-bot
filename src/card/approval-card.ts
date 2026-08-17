@@ -55,7 +55,21 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
     body: {
       elements: [
         { tag: 'markdown', content: markdown },
-        { tag: 'action', actions },
+        ...(actions.length > 0
+          ? [
+              {
+                tag: 'column_set',
+                flex_mode: 'none',
+                horizontal_spacing: 'default',
+                columns: actions.map((button) => ({
+                  tag: 'column',
+                  width: 'auto',
+                  vertical_align: 'center',
+                  elements: [button],
+                })),
+              },
+            ]
+          : []),
       ],
     },
   };

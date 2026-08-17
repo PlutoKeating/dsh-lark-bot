@@ -738,6 +738,7 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
           flow: flow.id,
           step: state.step,
           question: step.question,
+          ...(step.optional === true ? {} : { required: true }),
           ...(step.placeholder === undefined ? {} : { placeholder: step.placeholder }),
           ...(step.hint === undefined ? {} : { hint: step.hint }),
         }),

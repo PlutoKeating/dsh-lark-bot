@@ -96,7 +96,10 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    路由变化时关闭旧 runtime 并以新路由重建（`/model use` 下一轮真正生效）；`agent-default-model`
    按 dsh 官方 schema 写入 `{ provider, model }` 双字段。管理入口提供 BotFather 式交互卡片
    多轮向导（`src/commands/config-wizard.ts` + `src/card/config-cards.ts`，
-   `src/bot/wizard-store.ts` 持有 per-scope 向导状态）。
+   `src/bot/wizard-store.ts` 持有 per-scope 向导状态）。卡片全部使用 schema 2.0：
+   按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
+   `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
+   回调经 `action.form_value` 取输入值。
 5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
