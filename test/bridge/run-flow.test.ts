@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentAdapter,
   AgentAvailability,
@@ -14,6 +17,15 @@ import {
 import type { StreamingChannel } from '../../src/bridge/types.js';
 import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
+});
 
 function fakeAdapter(events: AgentEvent[]): AgentAdapter {
   return {
@@ -486,6 +498,53 @@ describe('runAgentBatch', () => {
     const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
     expect(lastText).toContain('upstream provider failed mid-task');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
+  });
+
+  it('archives a corrupt session log and resets the scope', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'dsh-heal-flow-'));
+    tempDirs.push(base);
+    vi.stubEnv('DSH_HOME', join(base, 'dsh'));
+    vi.stubEnv('DSH_LARK_HOME', join(base, 'lark'));
+
+    const sessionDir = join(base, 'dsh', 'sessions', 'session-1');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, 'log.jsonl'), '{"seq":1}\n');
+
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+    const adapter = fakeAdapter([
+      { type: 'system', sessionId: 'session-1', cwd: '/tmp/project', model: undefined },
+      { type: 'text', delta: 'working…' },
+      {
+        type: 'error',
+        message: 'session "session-1" corrupt session log: seq gap',
+        terminationReason: 'failed',
+      },
+    ]);
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['new message'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    // The corrupt log was copied to the archive and the original removed.
+    expect(await readdir(join(base, 'dsh', 'sessions'))).toHaveLength(0);
+    const archives = await readdir(join(base, 'lark', '_archived-sessions'));
+    expect(archives.length).toBeGreaterThan(0);
+    // The scope mapping was reset and the user was told where it went.
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
+    const text = fake.messages.join('\n');
+    expect(text).toContain('已归档并重置');
+    expect(text).toContain('_archived-sessions');
   });
 
   it('resolves the run cwd through the workspace manager when present', async () => {
