@@ -51,6 +51,41 @@ function makeArchiver(): SessionArchive {
   } as unknown as SessionArchive;
 }
 
+function makeAccessManager(initial: {
+  allowedUsers?: string[];
+  allowedChats?: string[];
+  admins?: string[];
+} = {}): AccessManager {
+  const state = {
+    allowedUsers: [...(initial.allowedUsers ?? [])],
+    allowedChats: [...(initial.allowedChats ?? [])],
+    admins: [...(initial.admins ?? [])],
+  };
+  return {
+    snapshot: () => ({
+      allowedUsers: [...state.allowedUsers],
+      allowedChats: [...state.allowedChats],
+      admins: [...state.admins],
+    }),
+    addUser: vi.fn(async (id: string) => {
+      state.allowedUsers.push(id);
+    }),
+    addAdmin: vi.fn(async (id: string) => {
+      state.admins.push(id);
+    }),
+    addChat: vi.fn(async (id: string) => {
+      state.allowedChats.push(id);
+    }),
+    removeUser: vi.fn(async (id: string) => {
+      state.allowedUsers = state.allowedUsers.filter((item) => item !== id);
+    }),
+    removeChat: vi.fn(async (id: string) => {
+      state.allowedChats = state.allowedChats.filter((item) => item !== id);
+    }),
+    isAdmin: (id: string | undefined) => Boolean(id && state.admins.includes(id)),
+  } as unknown as AccessManager;
+}
+
 function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     scope: 'chat-a',
@@ -153,6 +188,58 @@ describe('command router', () => {
       expect.stringContaining('ou_owner'),
       { replyTo: 'msg-1' },
     );
+  });
+
+  it('rejects non-admin /invite mutating commands (self-escalation guard)', async () => {
+    const accessManager = makeAccessManager();
+    const ctx = makeContext({ senderId: 'ou_stranger', accessManager });
+    const snapshot = () => ctx.accessManager.snapshot();
+
+    await tryHandleCommand('/invite admin ou_stranger', ctx);
+    expect(snapshot().admins).not.toContain('ou_stranger');
+
+    await tryHandleCommand('/invite user ou_friend', ctx);
+    expect(snapshot().allowedUsers).not.toContain('ou_friend');
+
+    await tryHandleCommand('/invite group oc_room', ctx);
+    expect(snapshot().allowedChats).not.toContain('oc_room');
+
+    await tryHandleCommand('/invite remove user ou_friend', ctx);
+    expect(snapshot().allowedUsers).not.toContain('ou_friend');
+
+    // Every rejection replies with the admin-only message instead of mutating.
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('仅管理员可执行该操作'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('keeps /invite list open for non-admins (read-only)', async () => {
+    const ctx = makeContext({
+      senderId: 'ou_stranger',
+      accessManager: makeAccessManager(),
+    });
+
+    await tryHandleCommand('/invite list', ctx);
+
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('访问白名单'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('lets an admin add another admin via /invite admin', async () => {
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+    });
+
+    await tryHandleCommand('/invite admin ou_new_admin', ctx);
+
+    expect(ctx.accessManager.snapshot().admins).toContain('ou_owner');
+    expect(ctx.accessManager.snapshot().admins).toContain('ou_new_admin');
   });
 
   it('answers /help with the command index including the model/provider commands', async () => {

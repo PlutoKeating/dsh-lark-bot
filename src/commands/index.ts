@@ -462,6 +462,12 @@ async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
   const [kind, ...rest] = args.trim().split(/\s+/);
   const id = rest.join(' ').trim();
 
+  // `/invite list` 为只读，保持开放；其余均为白名单写操作，仅管理员可执行
+  // （首个扫码绑定的 operator 自动成为管理员）。未鉴权时 `/invite admin <自己的
+  // open_id>` 即可自我提权并解锁 /key set、/provider、/notify，因此写操作必须
+  // 与其他特权命令（/role、/notify、/model、/provider、/key）使用同一守卫。
+  if (kind !== 'list' && !requireAdmin(ctx)) return;
+
   if (kind === 'list') {
     const snapshot = ctx.accessManager.snapshot();
     await reply(
@@ -519,6 +525,14 @@ async function handleInvite(args: string, ctx: CommandContext): Promise<void> {
   }
 
   await reply(ctx, '未知 `/invite` 类型，请使用 user / admin / group / list / remove。');
+}
+
+function requireAdmin(ctx: CommandContext): boolean {
+  if (!ctx.accessManager.isAdmin(ctx.senderId)) {
+    void reply(ctx, '仅管理员可执行该操作。');
+    return false;
+  }
+  return true;
 }
 
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
