@@ -77,6 +77,11 @@
       },
       {
         "@type": "Question",
+        "name": "多个项目 / 多人协作，怎么隔离与分工？",
+        "acceptedAnswer": { "@type": "Answer", "text": "每个会话自动落在独立的 git worktree，项目级 AGENTS.md 规则自动注入，多项目互不干扰；管理员用 /role 定义 PM / 开发 / 文档等角色并绑定到群，用 /invite 管理访问白名单；同一群内默认 2 个任务并行（/concurrency 调整），/archive + /retention 控制会话归档与保留。" }
+      },
+      {
+        "@type": "Question",
         "name": "项目从哪下载，会不会有假冒版本？",
         "acceptedAnswer": { "@type": "Answer", "text": "唯一官方仓库是 github.com/PlutoKeating/dsh-lark-bot，唯一官方 npm 包是 dsh-lark-bot / dsh-feishu-bot（维护者 plutokeating）。本项目从不提供 .exe 或“下载即运行”的安装包，任何以项目名义分发 exe 的仓库或页面都是假冒来源，请勿运行。" }
       }
