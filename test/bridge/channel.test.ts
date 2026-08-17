@@ -21,6 +21,7 @@ import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
 
@@ -364,5 +365,60 @@ describe('startChannel', () => {
     });
     const nextCard = fake.sent[fake.sent.length - 1];
     expect(JSON.stringify(nextCard?.input)).toContain('Base URL');
+  });
+
+  it('reports a failing command instead of forwarding it to the agent', async () => {
+    const fake = makeChannel();
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const home = join(tmpdir(), 'dsh-lark-bot-bad-settings');
+    await mkdir(join(home, '.dsh'), { recursive: true });
+    await writeFile(join(home, '.dsh', 'settings.yaml'), 'llm-pi-ai: [broken\n');
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions,
+      workspaces,
+      activeRuns,
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+      message({ messageId: 'm-bad', content: '/providers' }),
+    );
+    const reply = fake.sent.at(-1);
+    expect(JSON.stringify(reply?.input)).toContain('命令执行失败');
+    expect(pending.push).not.toHaveBeenCalled();
   });
 });

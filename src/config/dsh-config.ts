@@ -509,6 +509,26 @@ export class DshProviderManager {
     return true;
   }
 
+  /**
+   * Heal the common misconfiguration where a credential was stored under the
+   * provider id (`/key set kingapi …`) but the provider never got an
+   * apiKeyEnv. Links the ref to the matching pi-ai provider once; returns
+   * true when a link was applied. Idempotent and a no-op when the provider
+   * already has a ref or no matching credential exists.
+   */
+  async linkCredentialRefIfMissing(providerId: string): Promise<boolean> {
+    const settings = await this.readSettings();
+    const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
+    const providers = isMapLike(piAi.providers) ? piAi.providers : {};
+    const section = isMapLike(providers[providerId]) ? providers[providerId] : {};
+    if (typeof section.apiKeyEnv === 'string' && section.apiKeyEnv.length > 0) {
+      return false;
+    }
+    if (!(await this.hasCredential(providerId))) return false;
+    await this.upsertPiAiProvider({ id: providerId, apiKeyEnv: providerId });
+    return true;
+  }
+
   async addPiAiModel(providerId: string, input: DshModelEntry): Promise<void> {
     validateProviderId(providerId);
     const settings = await this.readSettings();

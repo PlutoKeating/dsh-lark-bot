@@ -1,5 +1,9 @@
 import type { DshModelEntry, DshProviderSummary } from '../config/dsh-config.js';
-import { DEEPSEEK_PROVIDER, SUPPORTED_PI_AI_PROTOCOLS } from '../config/dsh-config.js';
+import {
+  DEEPSEEK_PROVIDER,
+  PIAI_NAMESPACE,
+  SUPPORTED_PI_AI_PROTOCOLS,
+} from '../config/dsh-config.js';
 import type { CommandContext } from './index.js';
 
 interface ParsedArgs {
@@ -347,9 +351,32 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
       await reply(ctx, `写入失败：${error instanceof Error ? error.message : String(error)}`);
       return;
     }
+    // The user's intuitive flow is `/key set <providerId> <value>`; if the
+    // ref matches a pi-ai provider that has no apiKeyEnv yet, link it so the
+    // credential actually authenticates that provider's requests.
+    const providers = await ctx.dshConfig.listProviders();
+    const target = providers.find(
+      (provider) =>
+        provider.id === ref &&
+        provider.namespace === PIAI_NAMESPACE &&
+        provider.credentialRef === undefined,
+    );
+    let autoLinked = false;
+    if (target) {
+      await ctx.dshConfig.upsertPiAiProvider({ id: ref, apiKeyEnv: ref });
+      autoLinked = true;
+    }
     await reply(
       ctx,
-      `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`,
+      [
+        `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`,
+        ...(autoLinked
+          ? [
+              '',
+              `🔗 已自动把 provider \`${ref}\` 的 apiKeyEnv 关联到 \`${ref}\`（下一请求生效）。`,
+            ]
+          : []),
+      ].join('\n'),
     );
     return;
   }

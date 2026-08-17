@@ -155,4 +155,19 @@ describe('model slash commands', () => {
       expect(lastReply(ctx)).toContain('--api-key-env');
     });
   });
+
+  it('/key set auto-links the credential ref to the matching pi-ai provider', async () => {
+    await withContext(async (ctx, root) => {
+      ctx.senderId = 'ou_admin';
+      await handleProvider(
+        'add kingapi --api openai-completions --base-url https://www.kingapi.xyz --model doubao-seed-2-0-lite-260428',
+        ctx,
+      );
+      await handleKey('set kingapi sk-auto-link-secret', ctx);
+      expect(lastReply(ctx)).toContain('已自动把 provider `kingapi` 的 apiKeyEnv 关联');
+
+      const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
+      expect(settings).toContain('apiKeyEnv: kingapi');
+    });
+  });
 });

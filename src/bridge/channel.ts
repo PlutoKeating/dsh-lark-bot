@@ -152,9 +152,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         senderId: msg.senderId,
       };
 
-      const handled = await tryHandleCommand(msg.content, context).catch((error: unknown) => {
+      const handled = await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
+        // A failing command must surface to the user, not be silently
+        // forwarded to the agent (which would reply with an unrelated agent
+        // error and look like the command does not exist).
         log.fail('channel-command', error, { scope });
-        return false;
+        try {
+          await commandChannel.sendMarkdown(
+            msg.chatId,
+            `⚠️ 命令执行失败：${error instanceof Error ? error.message : String(error)}`,
+            { replyTo: msg.messageId },
+          );
+        } catch {
+          // best effort
+        }
+        return true;
       });
       if (!handled) {
         // While a run is flushing or the scope is blocked, a new message is

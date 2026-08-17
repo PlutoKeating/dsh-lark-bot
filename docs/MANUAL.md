@@ -136,8 +136,12 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
 - **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要使用该密钥，其
   `apiKeyEnv` 必须引用同一名字（`/provider update <id> --api-key-env <引用名>` 或向导中填写）。
+  引用名与 provider ID 相同且 provider 未设 `apiKeyEnv` 时，`/key set` 自动补关联；已存在的
+  老配置在下次运行时也会自动补齐。
 - **热重载**：每轮运行前桥接把模型解析为「provider + model」路由并传给 dsh runtime；SDK 适配器
-  在路由变化时自动重建 runtime，`/model use` 的下一轮生效是真实行为（issue #47 修复）。
+  在路由变化时自动重建 runtime，`/model use` 的下一轮生效是真实行为（issue #47 修复）；
+  因 dsh runtime 启动后异步注册 llm-pi-ai 路由，桥接会轮询重试握手（issue #47 二次修复）。
+  命令执行失败会直接回复错误，不再被误转发给 agent；卡片发送失败自动降级为文字列表。
 
 除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
 （`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在

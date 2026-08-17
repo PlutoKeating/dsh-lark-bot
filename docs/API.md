@@ -206,6 +206,7 @@ export class DshProviderManager {
   defaultModelSelection(): Promise<{ provider: string; model: string } | undefined>;
   resolveProviderForModel(modelId: string): Promise<DshProviderSummary | undefined>;
   resolveModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
+  linkCredentialRefIfMissing(providerId: string): Promise<boolean>;
   setDefaultModel(model: string): Promise<void>;
   upsertDeepseekProvider(input: { baseURL?; apiKeyEnv?; apiKey? }): Promise<void>;
   removeDeepseekProvider(): Promise<void>;
@@ -233,6 +234,9 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器
 （`src/adapters/dsh/sdk-adapter.ts`）在路由变化时关闭旧 harness 并以新路由重建，
 因此 `/model use` 的「下一轮生效」承诺真实落地（issue #47）。
+`linkCredentialRefIfMissing()` 在运行前把「凭据名 == provider ID」的老配置自动补齐
+`apiKeyEnv` 关联。dsh runtime 启动后异步注册 llm-pi-ai 路由（约几百毫秒），
+`SdkDshAdapter` 对 initialize 握手做同进程轮询重试（issue #47 二次修复）。
 
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
