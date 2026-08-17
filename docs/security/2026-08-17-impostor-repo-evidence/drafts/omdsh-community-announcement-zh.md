@@ -1,5 +1,5 @@
 ---
-状态: 已发布 · https://github.com/omdsh-dev/community/discussions/26（原目标 Discussion #11 评论不可达，改发新讨论）
+状态: 已发布 · https://github.com/omdsh-dev/community/discussions/25（内容已调整为面向 omdsh 社区的事件提醒；原 #26 已关闭并入）
 渠道: omdsh-dev/community Discussion #11（我方收录讨论）追加评论
 ---
 
