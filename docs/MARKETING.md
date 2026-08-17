@@ -115,7 +115,7 @@
 15. **README 单语化（中文优先，v0.15.2）**：为对齐 SEO/GEO/AEO 目标，README.md 删除全部英文
     标题/描述/正文，仅保留中文（技术术语、命令、代码与 GitHub Topics 关键词除外）；新增
     `README_EN.md` 为最终中文版的完整英文翻译，并在中文 README 顶部提供「英文版」入口；
-    npm 包自 v0.15.2 起同时携带两份 README。
+    npm 包自 v0.15.3 起同时携带两份 README（发布管线 `PUBLISH_FILES` 同步）。
 
 ---
 
