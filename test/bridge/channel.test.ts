@@ -468,6 +468,130 @@ describe('startChannel', () => {
     );
   });
 
+  it('routes polled no-at group messages through the live pipeline without duplicating events', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const fake = makeChannel();
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const historyItem = (messageId: string) => ({
+      messageId,
+      chatId: 'oc-group',
+      createTime: 10_001,
+      senderId: 'ou-allowed',
+      senderType: 'user',
+      messageType: 'text',
+      deleted: false,
+    });
+    const groupHistorySource = {
+      listMessages: vi.fn().mockResolvedValue({
+        items: [historyItem('om-event'), historyItem('om-polled')],
+        hasMore: false,
+      }),
+      fetchMessage: vi.fn().mockImplementation(async (messageId: string) =>
+        message({
+          messageId,
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-allowed',
+          senderType: 'user',
+          senderIsBot: false,
+          content: messageId === 'om-event' ? 'event copy' : 'without mention',
+          createTime: 10_001,
+        }),
+      ),
+    };
+    const scopeDirectory = {
+      register: vi.fn(),
+      knownChats: () => [{ chatId: 'oc-group', chatMode: 'group' as const }],
+      resolve: vi.fn(),
+      resolveChat: vi.fn(),
+      knownScopes: vi.fn().mockReturnValue(['oc-group']),
+      flush: vi.fn(),
+    };
+    let bridge: Awaited<ReturnType<typeof startChannel>> | undefined;
+    try {
+      bridge = await startChannel({
+        appId: 'cli_test',
+        appSecret: 'secret',
+        tenant: 'feishu',
+        adapter: fakeAdapter(),
+        sessions: new SessionStore(':memory:'),
+        workspaces: new WorkspaceStore(':memory:'),
+        activeRuns: new ActiveRuns(),
+        runPolicies: new RunPolicyStore(),
+        concurrencyStore: new ConcurrencyStore(),
+        defaultScopeConcurrency: 2,
+        retentionStore: new RetentionStore(),
+        roleStore: new RoleStore(':memory:'),
+        scopeDirectory: scopeDirectory as never,
+        archiver: {
+          archive: vi.fn(),
+          list: vi.fn().mockResolvedValue([]),
+          prune: vi.fn().mockResolvedValue(0),
+        } as never,
+        defaultRetention: 40,
+        archiveMax: 50,
+        archiveMaxAgeDays: 90,
+        defaultRunTimeoutMs: 300_000,
+        models: new ModelStore(),
+        wizardStore: new WizardStore(),
+        dshConfig: new DshProviderManager({
+          home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+        }),
+        defaultModel: 'deepseek-v4-flash',
+        accessManager: {
+          snapshot: () => ({
+            allowedUsers: ['ou-allowed'],
+            allowedChats: [],
+            admins: [],
+          }),
+        } as never,
+        pending: pending as never,
+        defaultWorkspace: '/tmp/project',
+        eventFreshnessMs: 600_000,
+        groupNoAt: true,
+        groupPollMs: 3_000,
+        groupHistorySource,
+        createChannel: fake.createChannel,
+      });
+
+      await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+        message({
+          messageId: 'om-event',
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-allowed',
+          senderType: 'user',
+          content: 'live event',
+          createTime: 10_001,
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      expect(pending.push.mock.calls.map(([, msg]) => msg.messageId)).toEqual([
+        'om-event',
+        'om-polled',
+      ]);
+      expect(groupHistorySource.fetchMessage).toHaveBeenCalledTimes(1);
+      expect(scopeDirectory.register).toHaveBeenCalledWith(
+        'oc-group',
+        'oc-group',
+        undefined,
+        'group',
+      );
+    } finally {
+      await bridge?.disconnect();
+      vi.useRealTimers();
+    }
+  });
+
   it('routes wizard card actions to the interactive config flow', async () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');

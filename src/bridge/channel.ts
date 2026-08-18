@@ -26,6 +26,10 @@ import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { adaptLarkChannel } from './lark-channel.js';
+import {
+  GroupMessagePoller,
+  type GroupHistorySource,
+} from './group-message-poller.js';
 import type { ScopeDirectory } from './scope-directory.js';
 
 export interface StartChannelDeps {
@@ -67,6 +71,10 @@ export interface StartChannelDeps {
   allowedChats?: string[];
   accessDefaultDeny?: boolean;
   eventFreshnessMs?: number;
+  groupNoAt?: boolean;
+  groupPollMs?: number;
+  /** Injectable history source for deterministic tests. */
+  groupHistorySource?: GroupHistorySource;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
 }
@@ -109,93 +117,105 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
 
   const streaming = adaptLarkChannel(channel);
   const commandChannel: CommandChannel = streaming;
+  let groupPoller: GroupMessagePoller | undefined;
+
+  const processMessage = async (
+    msg: NormalizedMessage,
+    alreadyClaimed = false,
+  ): Promise<void> => {
+    if (groupPoller && !alreadyClaimed && !groupPoller.claim(msg.messageId)) return;
+    const scope = scopeForMessage(msg);
+    deps.scopeDirectory?.register(
+      scope,
+      msg.chatId,
+      msg.threadId,
+      msg.chatMode ?? msg.chatType,
+    );
+    if (
+      deps.eventFreshnessMs !== undefined &&
+      deps.eventFreshnessMs > 0 &&
+      !isEventFresh(msg.createTime, deps.eventFreshnessMs)
+    ) {
+      log.warn('channel', 'stale-message-dropped', {
+        scope,
+        ageMs: Date.now() - msg.createTime,
+      });
+      return;
+    }
+    const context = {
+      scope,
+      chatId: msg.chatId,
+      messageId: msg.messageId,
+      threadId: msg.threadId,
+      chatMode: msg.chatMode ?? msg.chatType,
+      sessions: deps.sessions,
+      workspaces: deps.workspaces,
+      activeRuns: deps.activeRuns,
+      runPolicies: deps.runPolicies,
+      concurrencyStore: deps.concurrencyStore,
+      defaultScopeConcurrency: deps.defaultScopeConcurrency,
+      retentionStore: deps.retentionStore,
+      roleStore: deps.roleStore,
+      scopeDirectory: deps.scopeDirectory ?? EMPTY_SCOPE_DIRECTORY,
+      archiver: deps.archiver,
+      defaultRetention: deps.defaultRetention,
+      archiveMax: deps.archiveMax,
+      archiveMaxAgeDays: deps.archiveMaxAgeDays,
+      defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
+      accessManager: deps.accessManager,
+      approvals: deps.approvals,
+      questions: deps.questions,
+      densityStore: deps.densityStore,
+      models: deps.models,
+      wizardStore: deps.wizardStore,
+      dshConfig: deps.dshConfig,
+      channel: commandChannel,
+      defaultWorkspace: deps.defaultWorkspace,
+      defaultModel: deps.defaultModel,
+      ...(deps.setDefaultModelPreference
+        ? { setDefaultModelPreference: deps.setDefaultModelPreference }
+        : {}),
+      senderId: msg.senderId,
+    };
+
+    const handled = await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
+      // A failing command must surface to the user, not be silently
+      // forwarded to the agent (which would reply with an unrelated agent
+      // error and look like the command does not exist).
+      log.fail('channel-command', error, { scope });
+      try {
+        await commandChannel.sendMarkdown(
+          msg.chatId,
+          `⚠️ 命令执行失败：${error instanceof Error ? error.message : String(error)}`,
+          { replyTo: msg.messageId },
+        );
+      } catch {
+        // best effort
+      }
+      return true;
+    });
+    if (!handled) {
+      // While a run is flushing or the scope is blocked, a new message is
+      // not processed immediately. Acknowledge the queue position so the
+      // user always knows the message was received and will be worked on.
+      const queued = deps.pending.size(scope);
+      const busy =
+        queued > 0 ||
+        deps.pending.isFlushing(scope) ||
+        deps.pending.isBlocked(scope);
+      if (busy) {
+        await commandChannel.sendMarkdown(
+          msg.chatId,
+          `⏳ 已收到，当前排队中（队列 ${queued + 1} 条）。任务开始后会在这里实时显示进度。`,
+          { replyTo: msg.messageId },
+        );
+      }
+      deps.pending.push(scope, msg);
+    }
+  };
 
   channel.on({
-    message: async (msg) => {
-      const scope = scopeForMessage(msg);
-      deps.scopeDirectory?.register(scope, msg.chatId, msg.threadId);
-      if (
-        deps.eventFreshnessMs !== undefined &&
-        deps.eventFreshnessMs > 0 &&
-        !isEventFresh(msg.createTime, deps.eventFreshnessMs)
-      ) {
-        log.warn('channel', 'stale-message-dropped', {
-          scope,
-          ageMs: Date.now() - msg.createTime,
-        });
-        return;
-      }
-      const context = {
-        scope,
-        chatId: msg.chatId,
-        messageId: msg.messageId,
-        threadId: msg.threadId,
-        chatMode: msg.chatMode ?? msg.chatType,
-        sessions: deps.sessions,
-        workspaces: deps.workspaces,
-        activeRuns: deps.activeRuns,
-        runPolicies: deps.runPolicies,
-        concurrencyStore: deps.concurrencyStore,
-        defaultScopeConcurrency: deps.defaultScopeConcurrency,
-        retentionStore: deps.retentionStore,
-        roleStore: deps.roleStore,
-        scopeDirectory: deps.scopeDirectory ?? EMPTY_SCOPE_DIRECTORY,
-        archiver: deps.archiver,
-        defaultRetention: deps.defaultRetention,
-        archiveMax: deps.archiveMax,
-        archiveMaxAgeDays: deps.archiveMaxAgeDays,
-        defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
-        accessManager: deps.accessManager,
-        approvals: deps.approvals,
-        questions: deps.questions,
-        densityStore: deps.densityStore,
-        models: deps.models,
-        wizardStore: deps.wizardStore,
-        dshConfig: deps.dshConfig,
-        channel: commandChannel,
-        defaultWorkspace: deps.defaultWorkspace,
-        defaultModel: deps.defaultModel,
-        ...(deps.setDefaultModelPreference
-          ? { setDefaultModelPreference: deps.setDefaultModelPreference }
-          : {}),
-        senderId: msg.senderId,
-      };
-
-      const handled = await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
-        // A failing command must surface to the user, not be silently
-        // forwarded to the agent (which would reply with an unrelated agent
-        // error and look like the command does not exist).
-        log.fail('channel-command', error, { scope });
-        try {
-          await commandChannel.sendMarkdown(
-            msg.chatId,
-            `⚠️ 命令执行失败：${error instanceof Error ? error.message : String(error)}`,
-            { replyTo: msg.messageId },
-          );
-        } catch {
-          // best effort
-        }
-        return true;
-      });
-      if (!handled) {
-        // While a run is flushing or the scope is blocked, a new message is
-        // not processed immediately. Acknowledge the queue position so the
-        // user always knows the message was received and will be worked on.
-        const queued = deps.pending.size(scope);
-        const busy =
-          queued > 0 ||
-          deps.pending.isFlushing(scope) ||
-          deps.pending.isBlocked(scope);
-        if (busy) {
-          await commandChannel.sendMarkdown(
-            msg.chatId,
-            `⏳ 已收到，当前排队中（队列 ${queued + 1} 条）。任务开始后会在这里实时显示进度。`,
-            { replyTo: msg.messageId },
-          );
-        }
-        deps.pending.push(scope, msg);
-      }
-    },
+    message: processMessage,
     cardAction: async (event) => {
       const value =
         event.action.value && typeof event.action.value === 'object'
@@ -294,10 +314,82 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   });
 
   await channel.connect();
+  if (deps.groupNoAt && deps.scopeDirectory) {
+    groupPoller = new GroupMessagePoller({
+      pollIntervalMs: deps.groupPollMs ?? 3_000,
+      freshnessMs: deps.eventFreshnessMs ?? 600_000,
+      source: deps.groupHistorySource ?? larkGroupHistorySource(channel),
+      knownChats: () => deps.scopeDirectory?.knownChats() ?? [],
+      access: () => deps.accessManager.snapshot(),
+      onMessage: (message) => processMessage(message, true),
+    });
+    groupPoller.start();
+    if (deps.accessManager.snapshot().allowedUsers.length === 0) {
+      log.warn('group-poller', 'no-allowed-users', {
+        reason: 'group no-at polling requires an explicit allowedUsers entry',
+      });
+    }
+    log.info('group-poller', 'started', { pollIntervalMs: deps.groupPollMs ?? 3_000 });
+  }
   return {
     channel,
-    disconnect: () => channel.disconnect(),
+    disconnect: async () => {
+      await groupPoller?.stop();
+      await channel.disconnect();
+    },
   };
+}
+
+function larkGroupHistorySource(channel: LarkChannel): GroupHistorySource {
+  return {
+    async listMessages(input) {
+      const response = await channel.rawClient.im.message.list({
+        params: {
+          container_id_type: 'chat',
+          container_id: input.chatId,
+          start_time: input.startTime,
+          sort_type: 'ByCreateTimeAsc',
+          page_size: input.pageSize,
+          ...(input.pageToken ? { page_token: input.pageToken } : {}),
+        },
+      });
+      if (response.code !== undefined && response.code !== 0) {
+        throw new Error(
+          `Feishu message history failed (${response.code}): ${response.msg ?? 'unknown error'}`,
+        );
+      }
+      const items = (response.data?.items ?? []).flatMap((item) => {
+        const messageId = item.message_id;
+        const senderId = item.sender?.id;
+        const createTime = normalizeHistoryTime(item.create_time);
+        if (!messageId || !senderId || createTime === undefined) return [];
+        return [{
+          messageId,
+          chatId: item.chat_id ?? input.chatId,
+          createTime,
+          senderId,
+          senderType: item.sender?.sender_type ?? '',
+          messageType: item.msg_type ?? '',
+          deleted: item.deleted === true,
+        }];
+      });
+      const pageToken = response.data?.page_token;
+      return {
+        items,
+        hasMore: response.data?.has_more === true,
+        ...(pageToken ? { pageToken } : {}),
+      };
+    },
+    fetchMessage: (messageId) => channel.fetchMessage(messageId),
+    getChatMode: (chatId) => channel.getChatMode(chatId),
+  };
+}
+
+function normalizeHistoryTime(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed < 1_000_000_000_000 ? parsed * 1_000 : parsed;
 }
 
 async function settleActionCard(

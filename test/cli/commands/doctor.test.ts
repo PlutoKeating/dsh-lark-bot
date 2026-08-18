@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runDoctor } from '../../../src/cli/commands/doctor.js';
 import { ConfigStore } from '../../../src/config/profile-store.js';
+import { ScopeDirectory } from '../../../src/bridge/scope-directory.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -12,6 +13,7 @@ afterEach(() => {
   delete process.env.DSH_LARK_DSH_ARGS;
   delete process.env.DSH_LARK_ADAPTER;
   delete process.env.DSH_LARK_UPGRADE_CHECK;
+  delete process.env.DSH_LARK_GROUP_NO_AT;
   delete process.env.DSH_HOME;
   process.exitCode = 0;
 });
@@ -198,6 +200,82 @@ describe('runDoctor', () => {
     }
     expect(outputChunks.join('')).toContain(
       'runtime dsh-lark-sdk: ⚠️ 链接版本 0.13.0 与已装 0.13.1 不一致',
+    );
+  });
+
+  it('probes group history access when no-at polling is enabled', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-group-'));
+    process.env.DSH_LARK_HOME = root;
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
+    process.env.DSH_LARK_UPGRADE_CHECK = '0';
+    process.env.DSH_LARK_GROUP_NO_AT = 'true';
+    const store = new ConfigStore(join(root, 'config.json'));
+    await store.load();
+    await store.saveProfile('default', {
+      tenant: 'feishu',
+      appId: 'cli_test',
+      appSecret: 'secret',
+      workspace: join(root, 'workspace'),
+      access: { allowedUsers: ['ou_allowed'] },
+    });
+    const scopes = new ScopeDirectory(join(root, 'profiles', 'default', 'scopes.json'));
+    await scopes.load();
+    scopes.register('oc_group', 'oc_group', undefined, 'group');
+    await scopes.flush();
+    const probe = vi.fn().mockResolvedValue({ ok: true });
+    const outputChunks: string[] = [];
+
+    try {
+      await runDoctor({
+        version: 'test',
+        output: (text) => outputChunks.push(text),
+        probeGroupHistoryFn: probe,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+
+    expect(probe).toHaveBeenCalledWith({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      chatId: 'oc_group',
+    });
+    expect(outputChunks.join('')).toContain('group_no_at: ok (群消息历史权限可用)');
+  });
+
+  it('explains why enabled no-at polling cannot be probed yet', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-group-empty-'));
+    process.env.DSH_LARK_HOME = root;
+    process.env.DSH_LARK_DSH_COMMAND = 'node';
+    process.env.DSH_LARK_ADAPTER = 'headless';
+    process.env.DSH_LARK_UPGRADE_CHECK = '0';
+    process.env.DSH_LARK_GROUP_NO_AT = 'true';
+    const store = new ConfigStore(join(root, 'config.json'));
+    await store.load();
+    await store.saveProfile('default', {
+      tenant: 'feishu',
+      appId: 'cli_test',
+      appSecret: 'secret',
+      workspace: join(root, 'workspace'),
+    });
+    const probe = vi.fn();
+    const outputChunks: string[] = [];
+
+    try {
+      await runDoctor({
+        version: 'test',
+        output: (text) => outputChunks.push(text),
+        probeGroupHistoryFn: probe,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(outputChunks.join('')).toContain(
+      'group_no_at: blocked (请先配置 allowed_users，并在目标群中 @ 机器人一次)',
     );
   });
 });
