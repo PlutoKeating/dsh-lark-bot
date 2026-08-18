@@ -101,7 +101,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
    审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
-   完成 UI 收尾；确认/撤回均为 best-effort，失败只记录结构化日志，不能阻塞 agent 继续运行。
+   完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
+   失败只记录结构化日志，不能阻塞 agent 继续运行。
 5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需

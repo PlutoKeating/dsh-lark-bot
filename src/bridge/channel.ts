@@ -204,6 +204,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       const scope = event.raw
         ? await resolveCardScope(event.chatId, event.raw as { message?: { thread_id?: string } })
         : event.chatId;
+      const threadId = cardActionThreadId(event.raw);
       if (value?.cmd === 'stop') {
         await deps.activeRuns.interrupt(scope);
         return;
@@ -213,10 +214,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         const settled = deps.approvals.resolve(scope, value.id, outcome);
         if (!settled) return;
         const allowed = outcome === 'allowed-once';
-        await settleActionCard(
+        void settleActionCard(
           channel,
           event.chatId,
           event.messageId,
+          threadId,
           allowed
             ? '✅ **已允许** — 该操作已获授权执行'
             : '⛔ **已拒绝** — 该操作未获授权',
@@ -241,10 +243,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           );
           const settled = deps.questions.resolve(scope, value.id, answer);
           if (!settled) return;
-          await settleActionCard(
+          void settleActionCard(
             channel,
             event.chatId,
             event.messageId,
+            threadId,
             '✅ **已提交** — 回答已记录，任务将继续执行',
             scope,
             'question',
@@ -301,12 +304,16 @@ async function settleActionCard(
   channel: Pick<LarkChannel, 'send' | 'recallMessage'>,
   chatId: string,
   messageId: string,
+  threadId: string | undefined,
   markdown: string,
   scope: string,
   kind: 'approval' | 'question',
 ): Promise<void> {
   try {
-    await channel.send(chatId, { markdown });
+    await channel.send(chatId, { markdown }, {
+      replyTo: messageId,
+      ...(threadId ? { replyInThread: true } : {}),
+    });
   } catch (error) {
     log.warn('channel', `${kind}-confirm-failed`, {
       scope,
@@ -323,6 +330,14 @@ async function settleActionCard(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+function cardActionThreadId(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const message = (raw as { message?: unknown }).message;
+  if (!message || typeof message !== 'object') return undefined;
+  const threadId = (message as { thread_id?: unknown }).thread_id;
+  return typeof threadId === 'string' && threadId ? threadId : undefined;
 }
 
 const EMPTY_SCOPE_DIRECTORY: ScopeDirectory = {

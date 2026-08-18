@@ -110,7 +110,7 @@ describe('startChannel', () => {
   it('confirms and recalls an approval card after resolving the permission request', async () => {
     const fake = makeChannel();
     const approvals = new ApprovalRegistry();
-    const outcome = approvals.register('chat-1', {
+    const outcome = approvals.register('chat-1:thread-1', {
       id: 'approval-1',
       sessionId: 'session-1',
       toolName: 'write_file',
@@ -158,16 +158,66 @@ describe('startChannel', () => {
       createChannel: fake.createChannel,
     });
 
-    await (fake.handlers.cardAction as (event: unknown) => Promise<void>)({
+    const response = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
       chatId: 'chat-1',
       messageId: 'approval-card-message',
       operator: { openId: 'user-1' },
       action: { value: { cmd: 'approve', id: 'approval-1', outcome: 'allow' } },
+      raw: { message: { thread_id: 'thread-1' } },
     });
 
     await expect(outcome).resolves.toBe('allowed-once');
-    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已允许');
-    expect(fake.recalled).toEqual(['approval-card-message']);
+    expect(response).toEqual({
+      toast: { type: 'success', content: '已允许' },
+    });
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已允许');
+      expect(fake.sent.at(-1)?.options).toEqual({
+        replyTo: 'approval-card-message',
+        replyInThread: true,
+      });
+      expect(fake.recalled).toEqual(['approval-card-message']);
+    });
+
+    const confirmFailureOutcome = approvals.register('chat-1:thread-1', {
+      id: 'approval-2',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: undefined,
+      options: [],
+    });
+    vi.mocked(fake.channel.send).mockRejectedValueOnce(new Error('confirm unavailable'));
+    await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'approval-card-confirm-failure',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'approve', id: 'approval-2', outcome: 'allow' } },
+      raw: { message: { thread_id: 'thread-1' } },
+    });
+    await expect(confirmFailureOutcome).resolves.toBe('allowed-once');
+    await vi.waitFor(() => {
+      expect(fake.recalled).toContain('approval-card-confirm-failure');
+    });
+
+    const recallFailureOutcome = approvals.register('chat-1:thread-1', {
+      id: 'approval-3',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: undefined,
+      options: [],
+    });
+    vi.mocked(fake.channel.recallMessage).mockRejectedValueOnce(new Error('recall unavailable'));
+    await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'approval-card-recall-failure',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'approve', id: 'approval-3', outcome: 'reject' } },
+      raw: { message: { thread_id: 'thread-1' } },
+    });
+    await expect(recallFailureOutcome).resolves.toBe('rejected');
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已拒绝');
+    });
   });
 
   it('confirms and recalls a question card after recording the submitted answer', async () => {
@@ -219,7 +269,7 @@ describe('startChannel', () => {
       createChannel: fake.createChannel,
     });
 
-    await (fake.handlers.cardAction as (event: unknown) => Promise<void>)({
+    const response = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
       chatId: 'chat-1',
       messageId: 'question-card-message',
       operator: { openId: 'user-1' },
@@ -230,8 +280,14 @@ describe('startChannel', () => {
     });
 
     await expect(pendingQuestion.promise).resolves.toBe('Yes');
-    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已提交');
-    expect(fake.recalled).toEqual(['question-card-message']);
+    expect(response).toEqual({
+      toast: { type: 'success', content: '回答已提交' },
+    });
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已提交');
+      expect(fake.sent.at(-1)?.options).toEqual({ replyTo: 'question-card-message' });
+      expect(fake.recalled).toEqual(['question-card-message']);
+    });
   });
 
   it('routes slash commands to the command channel and queues ordinary messages', async () => {
