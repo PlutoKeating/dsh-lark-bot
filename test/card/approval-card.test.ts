@@ -7,6 +7,7 @@ describe('renderApprovalCard', () => {
       id: 'call-1',
       toolName: 'bash',
       reason: 'run tests',
+      actionScope: 'chat:member:u1',
       options: [
         { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
         { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
@@ -26,8 +27,18 @@ describe('renderApprovalCard', () => {
         ?.flatMap((column) => column.elements)
         .filter((button) => button.tag === 'button')
         .map((button) => button.value) ?? [];
-    expect(values).toContainEqual({ cmd: 'approve', id: 'call-1', outcome: 'allow' });
-    expect(values).toContainEqual({ cmd: 'approve', id: 'call-1', outcome: 'reject' });
+    expect(values).toContainEqual({
+      cmd: 'approve',
+      id: 'call-1',
+      outcome: 'allow',
+      scope: 'chat:member:u1',
+    });
+    expect(values).toContainEqual({
+      cmd: 'approve',
+      id: 'call-1',
+      outcome: 'reject',
+      scope: 'chat:member:u1',
+    });
   });
 
   it('skips the button row when there is nothing to approve or reject', () => {

@@ -169,6 +169,16 @@ export class RunPolicyStore {
 `src/bot/concurrency-store.ts` 提供内存级 `ConcurrencyStore`，按 scope 覆盖并行 run 上限；
 `/concurrency [N|default]` 读写，覆盖值优先于 `DSH_LARK_SCOPE_CONCURRENCY`（默认 2）。
 
+`src/bot/isolation-store.ts` 提供持久化 `IsolationStore`（`<profile>/isolation.json`，0600），
+按 chat 保存 `group|topic|member`。`src/bridge/scope-isolation.ts` 是消息与 card action 共用的纯
+scope resolver：私聊始终用 chat ID；group 共用 chat ID；topic 使用 `chat:thread`；member 使用
+`chat:member:open_id`。`/isolation` 只读对所有成员开放，修改仅管理员；切换不触碰已有 store。
+运行、审批与问答卡的 action value 固化创建时 scope，避免模式切换后重算而失联；`/stop` 同时
+遍历操作者当前可达的 group / topic / member scope。成员模式缺少 sender identity 时拒绝路由，
+不会降级为共享群 scope。带 member scope 的 card action 还必须由同一 `open_id` 操作，其他成员
+或缺失 operator identity 时失败关闭；group / topic 卡保持共享群既有语义。运行卡的 owner 从
+入队时已经固化的 member scope 还原，不重读当前策略。
+
 `src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
 （`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
 `interrupt(scope)` 终止全部并返回数量，`interruptRun(scope, runId)` 定向终止单个。
@@ -520,7 +530,7 @@ export interface Logger {
   卸载 / 状态查询（见 §10）。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、

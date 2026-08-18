@@ -29,11 +29,13 @@ describe('question cards', () => {
       id: 'q-2',
       kind: 'text',
       question: 'Why?',
+      actionScope: 'chat:member:u1',
     });
     const content = JSON.stringify(card);
     expect(content).toContain('"tag":"form"');
     expect(content).toContain('"form_action_type":"submit"');
     expect(content).toContain('"cmd":"question-submit","id":"q-2"');
+    expect(content).toContain('"scope":"chat:member:u1"');
     expect(content).not.toContain('"tag":"action"');
   });
 

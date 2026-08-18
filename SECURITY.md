@@ -49,7 +49,7 @@
    run 结束 / dispose 时所有挂起审批卡结算为拒绝（`src/bot/approvals.ts`）。
 9. **管理操作鉴权**：飞书会话内对 dsh 配置与访问白名单的写操作（`/model default`、
    `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
-   与 `/invite remove …`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
+   与 `/invite remove …`），以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。
 10. **本地回调隔离**：`lark_notify` 工具的回调服务只绑定 `127.0.0.1`，每次启动生成随机
@@ -81,6 +81,12 @@
 - 安全网守护相关文件：`~/.dsh-lark/guardian.json` 与
   `~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（均 `0600`）；守护读取的飞书凭据
   来自 `~/.dsh-lark/config.json`（`0600`），日志按既有规则脱敏。
+- 群聊隔离模式保存在 `~/.dsh-lark/profiles/<profile>/isolation.json`（`0600`）。成员模式会把
+  飞书 `open_id` 作为 durable scope owner，因而该标识也会出现在对应 session、scope directory、
+  worktree 与 archive 的本地索引或路径中，并显示在共享群的运行卡片上。成员模式隔离的是 agent
+  上下文与会话数据，**不是群消息可见性**：任务输入、进度卡和回复仍发送到共享群，群内其他成员
+  仍可看到；其他成员不能操作该 member scope 的停止、审批或问答卡，缺失 operator identity 时也
+  拒绝操作。涉及私密内容时请改用私聊。
 
 ## 报告渠道 · Reporting
 

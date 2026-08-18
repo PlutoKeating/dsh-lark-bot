@@ -18,6 +18,7 @@
 | P13 | 唯一安装-部署-使用路径：dsh profile bundle 内嵌运行 | ✅ 完成（0.7.0） |
 | P14 | 安全网守护（issue #6）：独立于 dsh 进程的飞书救援通道 + 仅核心安全模式自愈 | ✅ 完成（0.8.0） |
 | P15 | 安全模式实时可见性：SDK 流式引擎优先 + headless 活动卡回退、超时 / 停止 / 忙碌回执、正常模式排队回执与卡住提示 | ✅ 完成（0.10.0） |
+| P19 | 群聊 group / topic / member 会话隔离、持久化切换与成员轮次标记（issue #17） | ✅ 完成 |
 
 ## 2. P1 验收标准
 
@@ -34,6 +35,8 @@
 ## 3. P2 验收标准
 
 - [x] `/cd` 与 `/ws` 工作目录切换
+- [x] 群聊 `/isolation group|topic|member` 持久化 scope 路由；切换不删除既有各级会话数据
+- [x] 成员隔离运行卡显示 scope owner（仅隔离 agent 上下文，不改变共享群消息可见性）
 - [x] git worktree 隔离
 - [x] 项目级 `AGENTS.md` 注入
 - [x] 命名工作区最近使用索引
@@ -85,6 +88,8 @@
 15. ✅ 安全网守护（issue #6）：`src/guardian/` 独立进程 + 心跳 + 仅核心安全模式 +
     `/safemode` 控制信号 + `guardian install|uninstall|status|run`；`setup` 默认安装守护
     （`--no-guardian` 可跳过）
+16. ✅ 群聊会话隔离（issue #17）：管理员以 `/isolation group|topic|member` 切换后续消息 scope，
+    消息与卡片动作共用路由，成员模式在群卡显示 owner；既有各级 session / worktree / archive 保留。
 
 ## 9. P14 安全网守护 · 验收标准（issue #6）
 

@@ -41,12 +41,12 @@ function summaryText(state: RunState): string {
   return '思考中';
 }
 
-function stopButton(): object {
+function stopButton(scope: string | undefined): object {
   return {
     tag: 'button',
     text: { tag: 'plain_text', content: '⏹ 终止' },
     type: 'danger',
-    value: { cmd: 'stop' },
+    value: { cmd: 'stop', ...(scope ? { scope } : {}) },
   };
 }
 
@@ -67,8 +67,14 @@ function usageLine(state: RunState): string {
   return parts.length ? `（tokens ${parts.join(' · ')}）` : '';
 }
 
+function ownerLine(state: RunState): object | undefined {
+  return state.scopeOwner ? noteMd(`👤 成员隔离会话：${state.scopeOwner}`) : undefined;
+}
+
 function renderStandard(state: RunState, now: number): object {
   const elements: object[] = [];
+  const owner = ownerLine(state);
+  if (owner) elements.push(owner);
 
   if (state.reasoning.content) {
     elements.push(
@@ -103,7 +109,7 @@ function renderStandard(state: RunState, now: number): object {
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now));
-    elements.push(stopButton());
+    elements.push(stopButton(state.actionScope));
   }
 
   return {
@@ -117,12 +123,15 @@ function renderStandard(state: RunState, now: number): object {
 }
 
 function renderCompact(state: RunState, now: number): object {
-  const elements: object[] = [noteMd(summaryText(state))];
+  const elements: object[] = [];
+  const owner = ownerLine(state);
+  if (owner) elements.push(owner);
+  elements.push(noteMd(summaryText(state)));
   if (state.terminal === 'running' && state.footer) {
     elements.push(footerStatus(state.footer, state, now));
   }
   if (state.terminal === 'running') {
-    elements.push(stopButton());
+    elements.push(stopButton(state.actionScope));
   }
   return {
     schema: '2.0',
@@ -136,6 +145,8 @@ function renderCompact(state: RunState, now: number): object {
 
 function renderDetailed(state: RunState, now: number): object {
   const elements: object[] = [];
+  const owner = ownerLine(state);
+  if (owner) elements.push(owner);
 
   if (state.reasoning.content) {
     elements.push(
@@ -177,7 +188,7 @@ function renderDetailed(state: RunState, now: number): object {
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now));
-    elements.push(stopButton());
+    elements.push(stopButton(state.actionScope));
   }
 
   return {

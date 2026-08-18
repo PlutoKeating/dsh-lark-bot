@@ -25,6 +25,10 @@ export interface RunState {
   terminal: Terminal;
   errorMsg: string | undefined;
   idleTimeoutMinutes: number | undefined;
+  /** Visible owner marker for member-isolated group runs. */
+  scopeOwner: string | undefined;
+  /** Immutable scope encoded into run-card actions across isolation switches. */
+  actionScope: string | undefined;
   /** Wall-clock start of the run (ms epoch); set by the runner, not reduce(). */
   startedAtMs: number | undefined;
   /** Last moment an agent event arrived (ms epoch); drives the stall hint. */
@@ -39,6 +43,8 @@ export const initialState: RunState = {
   terminal: 'running',
   errorMsg: undefined,
   idleTimeoutMinutes: undefined,
+  scopeOwner: undefined,
+  actionScope: undefined,
   startedAtMs: undefined,
   lastActivityMs: undefined,
 };

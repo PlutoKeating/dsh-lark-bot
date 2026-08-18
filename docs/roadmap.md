@@ -21,6 +21,7 @@
 | **P16 Web 单写者适配器** Web single-writer adapter | `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`），网页端成为**唯一写者**，从根上消除多写者会话损坏；配套 web watcher（issue #8 补丁包 / PR #9） | ✅ 已完成 Done（0.11.0） |
 | **P17 一键彻底升级** One-command upgrade | `dsh-lark-bot upgrade`：包本体 + guardian 幂等重装重启 + runtime profile 链接修复及陈旧 SDK/ACP 依赖即时重装 + doctor 验证；`--check` / `--restart` / `--rollback` / `--force` / `--no-guardian`；运行中实例安全；旧版本经 `npx dsh-lark-bot@latest upgrade` 引导（issue #10） | ✅ 已完成 Done（0.12.0；runtime 版本迁移于 #51 补强） |
 | **P18 更新体验与热管理** Update experience & hot management | 更新链路架构审查（docs/UPGRADE.md）；doctor 更新提醒（`DSH_LARK_UPGRADE_CHECK`）；guardian 单元稳定路径（避免 npx 缓存）；运行中实例排队重启 / 热重载 / 版本 pin 漂移自愈（issue #15） | 🚧 进行中 In progress |
+| **P19 群聊会话隔离** Group session isolation | `/isolation group|topic|member` 持久化选择；消息与卡片动作共用 scope 路由；成员轮次在群卡中明确标记，既有各级会话数据保持可恢复（issue #17） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -74,6 +75,9 @@
   SDK 预置失败自动回退 headless 活动卡；新增单任务空闲超时看门狗（真正 stop 子进程）、
   `/safemode stop`、卡片 ⏹ 按钮、同 scope 忙碌回执与 `guardian-safe` 结构化日志；正常模式
   补充排队回执与“已运行 Ns / 无响应 Ns”卡片提示。
+- **P19 done（issue #17）**：群聊管理员可用 `/isolation group|topic|member` 选择共享群、话题或
+  成员级会话；切换仅改变后续消息的 scope 路由，不删除既有 session / worktree / archive；成员
+  模式在共享群运行卡中显示 owner。该能力只隔离 agent 上下文，不改变群消息对群成员的可见性。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
@@ -101,4 +105,5 @@ P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-b
 `dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — background service (removed
 in 0.7.0, superseded by in-process bundle loading);
 P6 — model / provider / credential management in chat via the official dsh config protocol
-(0.5.0); P7 — compatibility matrix, upstream radar and real CI probe (0.5.1).
+(0.5.0); P7 — compatibility matrix, upstream radar and real CI probe (0.5.1);
+P19 — persistent group/topic/member session isolation with visible run ownership (issue #17).

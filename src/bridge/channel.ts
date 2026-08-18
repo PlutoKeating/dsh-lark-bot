@@ -11,6 +11,7 @@ import type { RetentionStore } from '../bot/retention-store.js';
 import type { RoleStore } from '../bot/role-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { WizardStore } from '../bot/wizard-store.js';
+import type { IsolationStore } from '../bot/isolation-store.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import {
   handleConfigHubAction,
@@ -31,6 +32,7 @@ import {
   type GroupHistorySource,
 } from './group-message-poller.js';
 import type { ScopeDirectory } from './scope-directory.js';
+import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
 
 export interface StartChannelDeps {
   appId: string;
@@ -45,6 +47,7 @@ export interface StartChannelDeps {
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   roleStore: RoleStore;
+  isolationStore?: IsolationStore;
   scopeDirectory?: ScopeDirectory;
   archiver: SessionArchive;
   defaultRetention: number;
@@ -119,6 +122,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
 
   const streaming = adaptLarkChannel(channel);
   const commandChannel: CommandChannel = streaming;
+  const isolationStore = deps.isolationStore ?? EMPTY_ISOLATION_STORE;
   let groupPoller: GroupMessagePoller | undefined;
 
   const processMessage = async (
@@ -126,12 +130,19 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     alreadyClaimed = false,
   ): Promise<void> => {
     if (groupPoller && !alreadyClaimed && !groupPoller.claim(msg.messageId)) return;
-    const scope = scopeForMessage(msg);
+    const chatMode = msg.chatMode ?? msg.chatType;
+    const isolationMode = isolationStore.get(msg.chatId);
+    const scope = isolatedScope({
+      chatId: msg.chatId,
+      chatMode,
+      ...(msg.threadId ? { threadId: msg.threadId } : {}),
+      ...(msg.senderId ? { senderId: msg.senderId } : {}),
+    }, isolationMode);
     deps.scopeDirectory?.register(
       scope,
       msg.chatId,
       msg.threadId,
-      msg.chatMode ?? msg.chatType,
+      chatMode,
     );
     if (
       deps.eventFreshnessMs !== undefined &&
@@ -149,7 +160,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       chatId: msg.chatId,
       messageId: msg.messageId,
       threadId: msg.threadId,
-      chatMode: msg.chatMode ?? msg.chatType,
+      chatMode,
+      isolationStore,
+      isolationMode,
       sessions: deps.sessions,
       workspaces: deps.workspaces,
       activeRuns: deps.activeRuns,
@@ -237,10 +250,23 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         event.action.value && typeof event.action.value === 'object'
           ? (event.action.value as Record<string, unknown>)
           : undefined;
-      const scope = event.raw
-        ? await resolveCardScope(event.chatId, event.raw as { message?: { thread_id?: string } })
-        : event.chatId;
       const threadId = cardActionThreadId(event.raw);
+      const currentScope = isolatedScope({
+        chatId: event.chatId,
+        chatMode: threadId ? 'topic' : 'group',
+        ...(threadId ? { threadId } : {}),
+        ...(event.operator?.openId ? { senderId: event.operator.openId } : {}),
+      }, isolationStore.get(event.chatId));
+      const requestedScope = typeof value?.scope === 'string' ? value.scope : undefined;
+      if (
+        requestedScope !== undefined &&
+        !canOperateCardScope(requestedScope, event.chatId, event.operator?.openId)
+      ) {
+        return {
+          toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+        };
+      }
+      const scope = requestedScope ?? currentScope;
       if (value?.cmd === 'stop') {
         await deps.activeRuns.interrupt(scope);
         return;
@@ -349,6 +375,16 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   };
 }
 
+function canOperateCardScope(
+  scope: string,
+  chatId: string,
+  operatorId: string | undefined,
+): boolean {
+  if (scope !== chatId && !scope.startsWith(`${chatId}:`)) return false;
+  const memberOwner = memberOwnerForScope(scope, chatId);
+  return memberOwner === undefined || memberOwner === operatorId;
+}
+
 function larkGroupHistorySource(channel: LarkChannel): GroupHistorySource {
   return {
     async listMessages(input) {
@@ -449,17 +485,10 @@ const EMPTY_SCOPE_DIRECTORY: ScopeDirectory = {
   flush: async () => {},
 } as unknown as ScopeDirectory;
 
-function scopeForMessage(msg: NormalizedMessage): string {
-  if (msg.chatMode === 'topic' && msg.threadId) return `${msg.chatId}:${msg.threadId}`;
-  return msg.chatId;
-}
-
-async function resolveCardScope(
-  chatId: string,
-  raw: { message?: { thread_id?: string } },
-): Promise<string> {
-  return raw.message?.thread_id ? `${chatId}:${raw.message.thread_id}` : chatId;
-}
+const EMPTY_ISOLATION_STORE: Pick<IsolationStore, 'get' | 'set'> = {
+  get: () => 'topic',
+  set: () => {},
+};
 
 function wizardContextFor(
   event: { chatId: string; operator: { openId: string } },

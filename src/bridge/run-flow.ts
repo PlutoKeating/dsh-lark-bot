@@ -57,6 +57,8 @@ export interface RunFlowInput {
   runTimeoutMs?: number;
   images?: string[];
   replyTo?: string;
+  /** Visible member identity when the group uses member-isolated scopes. */
+  scopeOwner?: string;
 }
 
 export async function runAgentBatch(input: RunFlowInput): Promise<void> {
@@ -186,6 +188,8 @@ async function runAttempt(
     ...initialState,
     startedAtMs: now,
     lastActivityMs: now,
+    scopeOwner: input.scopeOwner,
+    actionScope: input.scope,
   };
   const stopRequested = { value: false };
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;
@@ -447,6 +451,7 @@ export function approvalHandlerFor(
           toolName: request.toolName,
           reason: request.reason,
           options: request.options,
+          actionScope: input.scope,
         }),
       );
     } catch (error) {
@@ -476,7 +481,10 @@ export function questionHandlerFor(
       ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
     });
     try {
-      await input.channel.sendCard(input.chatId, renderQuestionCard({ ...question, id }));
+      await input.channel.sendCard(
+        input.chatId,
+        renderQuestionCard({ ...question, id, actionScope: input.scope }),
+      );
     } catch (error) {
       log.fail('question-card', error, { scope: input.scope });
       input.questions.settleAll(input.scope);
