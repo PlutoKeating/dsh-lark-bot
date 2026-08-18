@@ -7,6 +7,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
+import { profilePackageMatches } from './profile-package.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
 export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
@@ -126,21 +127,13 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
   return lines.join('\n');
 }
 
-function sdkServerInstalled(profileRoot: string): boolean {
-  const candidates = [
-    join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE),
-    join(profileRoot, '..', 'node_modules', SDK_SERVER_PACKAGE),
-  ];
-  return candidates.some((path) => existsSync(path));
-}
-
 export function isSdkProfileReady(profileRoot: string): boolean {
   const own = ownPackageInfo();
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    sdkServerInstalled(profileRoot) &&
+    profilePackageMatches(profileRoot, SDK_SERVER_PACKAGE, SDK_SERVER_VERSION) &&
     ownPackageLinked(profileRoot, own)
   );
 }

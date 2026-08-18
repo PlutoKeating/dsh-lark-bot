@@ -187,7 +187,7 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - `--rollback`: reinstall the version recorded before the last upgrade (`~/.dsh-lark/upgrade-state.json`);
 - `--force`: reinstall the running version when npm is unreachable (offline);
 - `--no-guardian`: skip the guardian upgrade;
-- **Runtime-profile consistency repair**: after upgrading, the own-package links of `dsh-lark-sdk` / `dsh-lark-acp` are re-pointed to the new version (avoiding re-provisioning on the next start).
+- **Runtime-profile consistency repair**: after upgrading, the own-package links of `dsh-lark-sdk` / `dsh-lark-acp` are re-pointed and stale SDK-server / ACP dependencies are idempotently reinstalled immediately.
 
 Pass `--yes` to skip the interactive confirmation (non-interactive runs fail closed without it). Alternatives:
 
@@ -256,7 +256,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 ## Compatibility
 
-- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.6** (last verified 2026-08-15: SDK JSON-RPC / ACP runtime handshake + real streaming task verification), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for pinned versions, the upgrade policy and automated probing, and [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details.
+- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.7** (last verified 2026-08-19: clean temporary install plus SDK JSON-RPC and ACP initialize handshakes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC7_AUDIT.md`](docs/DSH_RC7_AUDIT.md) for rc.7 risks and verification boundaries.
 - **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
 - **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public server, domain or tunneling required).
 - The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native session continuation and token-level streaming events); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** (approval cards); `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
@@ -362,7 +362,7 @@ pnpm build
 pnpm check:publish-bundle   # verifies dist matches every export & the CLI entry (release gate)
 pnpm ci:local
 pnpm release:check   # ci:local + upstream consistency check
-pnpm compat:probe    # installs pinned dsh into a temp DSH_HOME and runs a real SDK handshake
+pnpm compat:probe    # temp-installs pinned dsh; probes SDK/ACP plus SDK tool/resume
 pnpm dsh:upstream    # compares npm upstream stable with the pinned matrix
 pnpm security:monitor # impostor-repo & npm copycat monitor (recommended weekly)
 ```
@@ -457,7 +457,7 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/bot/` | Run registry, queueing, approval/question registries |
 | `src/commands/` | Slash commands |
 | `src/cli/` | CLI entry: setup / doctor / upgrade / hidden run |
-| `src/upgrade/` | One-command upgrade (issue #10): version probe, upgrade state, running-state detection, restart helpers, runtime link repair |
+| `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |
 | `src/guardian/` | Safety-net guardian: heartbeat, process watch, core-only safe profile, takeover state machine, service install |
 | `src/config/` | Profile, config, access & dsh config management |
 | `src/core/` | Structured logging |

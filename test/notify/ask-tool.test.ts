@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 import { apply as applyAskTool, ASK_TOOL_TIMEOUT_MS } from '../../src/notify/ask-tool.js';
+import type { RawToolDefinition as ToolDefinition } from '../../src/notify/raw-tool.js';
 
 const originalFetch = globalThis.fetch;
 

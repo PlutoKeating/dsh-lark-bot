@@ -33,7 +33,8 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
   dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`ask` 为
   `lark_ask_user` 问答卡工具插件，SDK / ACP runtime profile 自动装配。
-- `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.6 依赖链一致）。
+- `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.7 依赖链一致）；
+  不直接声明 `dsh-tools`，工具通过宿主 registry 注册以保持单实例。
 - pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报
   `ERR_PNPM_IGNORED_BUILDS`，按官方 publish 指引在 profile 的 `pnpm-workspace.yaml` 加入
   `allowBuilds: { protobufjs: true }` 后重试（与官方 dsh-lark-channel 行为一致）。
@@ -119,7 +120,7 @@ P1 代码完成后，实现工程师在提交前逐项确认：
 
 - [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
 - [x] README 九章节均已填实（无遗留 `🚧` 占位）
-- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.6，2026-08-15）
+- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.7，2026-08-19）
 - [x] 「权限与数据」章节完整披露风险
 - [x] `pnpm typecheck` 通过（L3）
 - [x] 至少完成一次最小任务的运行实测并记录环境（L4：SDK / ACP runtime 握手 + 真实任务流式，

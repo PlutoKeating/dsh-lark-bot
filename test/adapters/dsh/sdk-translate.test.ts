@@ -85,6 +85,14 @@ describe('translateSessionEvent', () => {
     );
     expect(turnError).toEqual([{ type: 'error', message: 'boom', terminationReason: 'failed' }]);
   });
+
+  it('does not misclassify rc.7 max-token turn boundaries as fatal session errors', () => {
+    const events = translateSessionEvent(
+      { type: 'turn/end', data: { turn: 1, reason: { kind: 'max-tokens' } } },
+      { emitted: new Set<string>() },
+    );
+    expect(events).toEqual([]);
+  });
 });
 
 function fakeHarness(): DeepSeekHarness {

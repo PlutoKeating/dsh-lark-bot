@@ -8,7 +8,7 @@
 ## 1. 核心结论 · TL;DR
 
 - 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
-- **两条官方接入路线均已实测**（2026-08-15 最后验证）：
+- **两条官方接入路线均已实测**（2026-08-19 最后验证）：
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
     runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
     **reasoning-delta / text-delta token 级流式**，支持 thinking 展示与 typewriter 卡片。
@@ -177,11 +177,19 @@ runtime 均自动装配。
 3. **审批**：ACP 的 `session/request_permission`（一次性 allow/reject）映射飞书审批卡
    （`src/card/approval-card.ts` + `src/bot/approvals.ts`，run 结束时结算所有挂起审批）；
    SDK 协议未实现审批流。
-4. **dsh 是 developer preview**：接口会破坏性变更，dsh 相关代码全部隔离在 `src/adapters/dsh/`。
+4. **dsh 是 developer preview**：接口会破坏性变更；协议 adapter 隔离在
+   `src/adapters/dsh/`，宿主工具 registry 兼容 seam 隔离在 `src/notify/` 的 raw-schema 边界。
    锁定版本、升级政策与自动化探测见 [`COMPATIBILITY.md`](COMPATIBILITY.md)；
    版本常量统一取自 `src/config/dsh-compat.ts`。
 5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层 `package.json` engines 为 `>=22.19`。统一用 ≥22.19。
-6. **dsh-type-meta 404 已解除**：rc.1/rc.6 依赖链全部发布，官方 SDK/ACP 现可直接安装。
+6. **rc.7 精确锁定**：SDK client/server、ACP 与完整 peer 图均解析到 rc.7；npm 包族的
+   `latest` / `next` 不同步，不能用裸 dist-tag 代替矩阵。托管 profile 会核对实际 manifest
+   version 并自动修复旧 rc.6 安装。
+7. **工具单实例边界**：`lark_notify` / `lark_ask_user` 使用宿主接受的 raw JSON Schema
+   definition，本包不直接 import `dsh-tools`，避免 scheduler Symbol 双实例。
+8. **ACP rc.7 图片**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP，并在 runtime 宣告
+   image capability 后发送原生 base64 block；不支持时显式失败。当前 channel 尚无图片出站
+   契约，ACP assistant 图片会显示降级文本。详见 `DSH_RC7_AUDIT.md`。
 
 ---
 

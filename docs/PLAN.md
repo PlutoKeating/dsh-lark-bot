@@ -104,7 +104,8 @@
 ## 7. 当前阻塞 · Current blocker
 
 - ~~`dsh-type-meta` 404 阻塞~~：**已复核并解除**（2026-08-14）。当前 npm registry 上
-  `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6` / `@deepseek-ai/dsh-acp@0.1.0-rc.6` 的真实依赖链为
+  （历史实施基线；当前已由 #51 升级至 rc.7）`@deepseek-ai/dsh-sdk-client@0.1.0-rc.6` /
+  `@deepseek-ai/dsh-acp@0.1.0-rc.6` 的真实依赖链为
   `@deepseek-ai/cordis@^4.0.1`、`dsh-llm` / `dsh-session` / `dsh-invariants` / `dsh-sdk-protocol` / `dsh-user-approval` 等，
   **全部已发布且可安装**，`dsh-type-meta` 已不在依赖链中（详见第 8 节验证记录）。
 - 本地验证：`dsh --profile dsh-lark`（bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay）
@@ -134,7 +135,7 @@
 | # | 动作 | 验收 |
 | --- | --- | --- |
 | P0-1 | 验证 npm 依赖链（`dsh-type-meta` 404 已解除） | registry 实测通过 ✅ |
-| P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
+| P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`（历史值；当前 rc.7）、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
 | P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark-sdk` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
 | P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
 | P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
