@@ -89,6 +89,20 @@ describe('model slash commands', () => {
     });
   });
 
+  it('/model use accepts an explicit provider/model route', async () => {
+    await withContext(async (ctx) => {
+      await ctx.dshConfig.upsertPiAiProvider({
+        id: 'gateway',
+        api: 'openai-completions',
+        baseURL: 'https://gateway.example/v1',
+        models: [{ id: 'shared', name: undefined, contextWindow: undefined, maxTokens: undefined }],
+      });
+      await handleModel('use gateway/shared', ctx);
+      expect(ctx.models.get('chat-a')).toBe('gateway/shared');
+      expect(lastReply(ctx)).toContain('gateway/shared');
+    });
+  });
+
   it('/model default requires admin and writes agent-default-model', async () => {
     await withContext(async (ctx, root) => {
       const preferenceSaved: string[] = [];

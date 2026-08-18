@@ -83,6 +83,8 @@ export interface CommandContext {
   dshConfig: DshProviderManager;
   defaultRunTimeoutMs: number;
   defaultModel: string;
+  /** Resolve role/profile/dsh/env precedence without a per-scope override. */
+  resolveDefaultModel?: () => Promise<string | undefined>;
   /** Persist the admin default into the bridge profile preferences. */
   setDefaultModelPreference?: (model: string) => Promise<void>;
   senderId: string | undefined;
@@ -554,6 +556,7 @@ function wizardContext(ctx: CommandContext): ConfigWizardContext {
     models: ctx.models,
     wizards: ctx.wizardStore,
     defaultModel: ctx.defaultModel,
+    ...(ctx.resolveDefaultModel ? { resolveDefaultModel: ctx.resolveDefaultModel } : {}),
   };
 }
 

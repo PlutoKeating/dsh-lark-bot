@@ -262,7 +262,7 @@ describe('config wizard', () => {
     });
   });
 
-  it('hub refresh renders a card with management buttons', async () => {
+  it('hub refresh renders direct model choices, marks the current model, and offers reset', async () => {
     await withContext(async (ctx, _root, channel) => {
       await handleConfigHubAction('refresh', ctx);
       const card = lastCard(channel);
@@ -270,6 +270,83 @@ describe('config wizard', () => {
       expect(content).toContain('provider-add');
       expect(content).toContain('key-set');
       expect(content).toContain('model-use');
+      expect(content).toContain('✅ deepseek-v4-flash');
+      expect(content).toContain('model-use-direct');
+      expect(content).toContain('model-reset');
+    });
+  });
+
+  it('applies and resets a model directly from the hub card', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      await handleConfigHubAction(
+        'model-use-direct',
+        ctx,
+        { model: 'deepseek-v4-pro' },
+      );
+      expect(ctx.models.get('chat-a')).toBe('deepseek-official/deepseek-v4-pro');
+      expect(channel.markdowns.join('\n')).toContain('下一轮消息生效');
+
+      await handleConfigHubAction('model-reset', ctx);
+      expect(ctx.models.get('chat-a')).toBeUndefined();
+      expect(channel.markdowns.join('\n')).toContain('已恢复默认模型');
+    });
+  });
+
+  it('uses the effective role/default precedence when marking and resetting models', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      ctx.resolveDefaultModel = async () => 'deepseek-v4-pro';
+      await handleConfigHubAction('refresh', ctx);
+      expect(JSON.stringify(lastCard(channel))).toContain('✅ deepseek-v4-pro');
+
+      ctx.models.set(ctx.scope, 'deepseek-official/deepseek-v4-flash');
+      await handleConfigHubAction('model-reset', ctx);
+      expect(channel.markdowns.join('\n')).toContain('`deepseek-v4-pro`');
+    });
+  });
+
+  it('keeps reset available without models and routes direct choices by provider', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      await ctx.dshConfig.removeDeepseekModel('deepseek-v4-flash');
+      await ctx.dshConfig.removeDeepseekModel('deepseek-v4-pro');
+      await handleConfigHubAction('refresh', ctx);
+      expect(JSON.stringify(lastCard(channel))).toContain('model-reset');
+
+      await ctx.dshConfig.upsertPiAiProvider({
+        id: 'gateway',
+        api: 'openai-completions',
+        baseURL: 'https://gateway.example/v1',
+        models: [{ id: 'shared-model', name: undefined, contextWindow: undefined, maxTokens: undefined }],
+      });
+      await handleConfigHubAction('model-use-direct', ctx, {
+        provider: 'gateway',
+        model: 'shared-model',
+      });
+      expect(ctx.models.get(ctx.scope)).toBe('gateway/shared-model');
+    });
+  });
+
+  it('preserves the provider from dsh default selection for duplicate model ids', async () => {
+    await withContext(async (ctx, _root, channel) => {
+      for (const id of ['gateway-a', 'gateway-b']) {
+        await ctx.dshConfig.upsertPiAiProvider({
+          id,
+          displayName: id,
+          api: 'openai-completions',
+          baseURL: `https://${id}.example/v1`,
+          models: [{ id: 'shared', name: undefined, contextWindow: undefined, maxTokens: undefined }],
+        });
+      }
+      await ctx.dshConfig.setDefaultModel('gateway-b/shared');
+      ctx.resolveDefaultModel = async () => {
+        const selection = await ctx.dshConfig.defaultModelSelection();
+        return selection ? `${selection.provider}/${selection.model}` : undefined;
+      };
+
+      await handleConfigHubAction('refresh', ctx);
+      const card = JSON.stringify(lastCard(channel));
+      expect(card).toContain('shared · gateway-a');
+      expect(card).toContain('✅ shared · gateway-b');
+      expect(card).not.toContain('✅ shared · gateway-a');
     });
   });
 

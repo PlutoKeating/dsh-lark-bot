@@ -114,8 +114,8 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/retention [N\|default]` | View or set the live message retention window (overflow is archived) |
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | Archive / list / clean session transcripts |
 | `/density [compact\|standard\|detailed]` | View or set card density |
-| `/model`、`/providers`、`/provider`、`/key` | Open the interactive management hub (BotFather-style multi-turn wizard: tap-button selections, card text inputs, confirm-before-write) |
-| `/model use <id>` | Hot-switch the current session model (effective next message, no restart) |
+| `/model`, `/providers`, `/provider`, `/key` | Open the interactive hub (tap a model or restore the default; management writes use a multi-turn wizard) |
+| `/model use <provider/model>` | Hot-switch the current session model (a unique bare model ID also works; effective next message, no restart) |
 | `/model default <id>` | Write the dsh default model `agent-default-model` (admin) |
 | `/model add\|remove <provider> <modelId>` | Add / remove a provider model (admin) |
 | `/provider add\|update\|remove <id>` | Manage providers (admin; deepseek-official and custom pi-ai) |
@@ -155,10 +155,11 @@ Skip it with `setup --no-guardian`; remove it later with `dsh-lark-bot guardian 
 Configuration is persisted the official dsh way (the same storage protocol as the dsh Web **Settings → Models** page); changes take effect on the next request without restarting the bot:
 
 - **Interactive management hub**: `/providers` (or bare `/provider`, `/model`, `/key`) opens a
-  management card. BotFather-style multi-turn wizards cover add/update/remove flows — pick
+  management card. The active model is marked with ✅; tap another model or restore the default,
+  effective on the next turn without losing context. BotFather-style multi-turn wizards cover add/update/remove flows — pick
   options (API protocol, provider, model, credential ref) with buttons, type values (ID, Base URL,
   model list, key value) into card inputs, review on a confirm card, and cancel any time.
-- `/model use <id>`: hot-switch the model for this session (effective next message); `/model default <id>`: write the dsh default model.
+- `/model use <provider/model>`: hot-switch an exact provider route (a unique bare model ID also works; effective next message); `/model default <id>`: write the dsh default model.
 - `/providers`: show providers, models and credential status; `/provider add|update|remove`: manage custom providers (needs `--api` / `--base-url` / at least one `--model`, matching the official schema) or `deepseek-official`.
 - `/key set|remove|list`: read / write `~/.dsh/.credentials.yaml` (0600); settings keep only `apiKeyEnv` references — literal keys never enter settings or chat history.
 - **Hot reload**: before each run the bridge resolves the model into a `provider + model` route and

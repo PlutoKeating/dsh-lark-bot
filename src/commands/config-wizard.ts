@@ -40,6 +40,8 @@ export interface ConfigWizardContext {
   wizards: WizardStore;
   /** Bot fallback model (profile preference / env default). */
   defaultModel: string;
+  /** Effective default after role/profile/dsh/env precedence, excluding scope override. */
+  resolveDefaultModel?: () => Promise<string | undefined>;
   /** Persist the admin default into the bridge profile preferences. */
   setDefaultModelPreference?: (model: string) => Promise<void>;
 }
@@ -903,12 +905,19 @@ export async function handleWizardCardAction(
 export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
   const providers = await ctx.dshConfig.listProviders();
   const defaultSelection = await ctx.dshConfig.defaultModelSelection();
-  const currentModel = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
+  const currentModel =
+    ctx.models.get(ctx.scope) ??
+    (await ctx.resolveDefaultModel?.()) ??
+    ctx.defaultModel;
+  const currentRoute = await ctx.dshConfig.resolveModelRoute(currentModel);
+  const currentSelection = currentRoute
+    ? `${currentRoute.provider}/${currentRoute.model}`
+    : currentModel;
   if (ctx.channel.sendCard) {
     try {
       await ctx.channel.sendCard(
         ctx.chatId,
-        renderConfigHubCard({ providers, defaultSelection, currentModel }),
+        renderConfigHubCard({ providers, defaultSelection, currentModel, currentSelection }),
       );
       return;
     } catch (error) {
@@ -931,12 +940,42 @@ export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
 export async function handleConfigHubAction(
   action: string,
   ctx: ConfigWizardContext,
+  value: Record<string, unknown> = {},
 ): Promise<void> {
   switch (action) {
     case 'refresh':
       await showConfigHub(ctx);
       return;
     case 'dismiss':
+      return;
+    case 'model-use-direct': {
+      const provider = typeof value.provider === 'string' ? value.provider : '';
+      const model = typeof value.model === 'string' ? value.model : '';
+      const selection = provider ? `${provider}/${model}` : model;
+      const route = await ctx.dshConfig.resolveModelRoute(selection);
+      if (!route) {
+        await ctx.channel.sendMarkdown(ctx.chatId, '⚠️ 该模型已不可用，请刷新后重试。');
+        return;
+      }
+      const qualified = `${route.provider}/${route.model}`;
+      ctx.models.set(ctx.scope, qualified);
+      await ctx.channel.sendMarkdown(
+        ctx.chatId,
+        `已热切换当前会话模型：\`${qualified}\`（下一轮消息生效，上下文保留）。`,
+      );
+      await showConfigHub(ctx);
+      return;
+    }
+    case 'model-reset':
+      ctx.models.clear(ctx.scope);
+      {
+        const restored = (await ctx.resolveDefaultModel?.()) ?? ctx.defaultModel;
+      await ctx.channel.sendMarkdown(
+        ctx.chatId,
+          `已恢复默认模型：\`${restored}\`（下一轮消息生效，上下文保留）。`,
+      );
+      }
+      await showConfigHub(ctx);
       return;
     case 'provider-add':
     case 'provider-update':

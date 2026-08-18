@@ -90,8 +90,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
 | `/archive clean` | 清理过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
-| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导；选择用按钮、填值用卡片输入、写入前确认） |
-| `/model use <id>` | 热切换当前会话模型（下一轮生效） |
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
+| `/model use <provider/model>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID；下一轮生效） |
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
 | `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
@@ -119,11 +119,12 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `~/.dsh/.credentials.yaml`，与 dsh Web **Settings → Models** 页面同一协议），改动在下一个
 请求生效、无需重启 bot：
 
-- **交互式管理卡片（推荐）**：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片，
-  按 BotFather 式多轮向导完成增删改查：能选择的用按钮点选（API 协议、provider、模型、凭据引用），
+- **交互式管理卡片（推荐）**：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片；
+  当前模型带 ✅ 标记，可直接点选其他模型或恢复默认（下一轮生效且保留上下文）。增删改查按
+  BotFather 式多轮向导完成：能选择的用按钮点选（API 协议、provider、模型、凭据引用），
   需要填值的用卡片输入（ID、Base URL、模型列表、密钥值），写入前有确认卡，随时可取消；
   向导 30 分钟无操作自动过期。文字命令与卡片向导等价、可混用。
-- `/model use <id>`：按会话热切换模型，下一轮消息即用新模型；`/model reset` 恢复默认。
+- `/model use <provider/model>`：按会话精确路由并热切换模型（也兼容唯一模型 ID），下一轮消息即用新模型；`/model reset` 恢复默认。
 - `/model default <id>`：写入 dsh 的 `agent-default-model`（`{ provider, model }`，provider 由
   桥接自动解析），作为新会话的默认模型。
 - `/providers`：展示 dsh 已配置的 provider、模型与凭据状态（DeepSeek 官方 + 自定义 pi-ai）。

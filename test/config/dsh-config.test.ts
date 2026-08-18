@@ -69,6 +69,11 @@ describe('DshProviderManager', () => {
         provider: DEEPSEEK_PROVIDER,
         model: 'deepseek-v4-flash',
       });
+      expect(await manager.resolveModelRoute('deepseek-official/deepseek-v4-flash')).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash',
+      });
+      expect(await manager.resolveModelRoute('missing/deepseek-v4-flash')).toBeUndefined();
 
       await manager.upsertPiAiProvider({
         id: 'kingapi',

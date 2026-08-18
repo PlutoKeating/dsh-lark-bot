@@ -193,7 +193,8 @@ export class ModelStore {
 }
 ```
 
-飞书命令 `/model use <id>` 写该 store（下一轮消息生效），`/model reset` 清除覆盖。
+飞书命令 `/model use <provider/model>` 写该 store（也兼容唯一模型 ID，下一轮消息生效），
+`/model reset` 清除覆盖。
 
 `src/config/dsh-config.ts` 的 `DshProviderManager` 直接读写 dsh 官方配置文件，与
 `dsh` Web **Settings → Models** 页面共用同一存储协议，改动在下一个请求生效、无需重启：
@@ -249,9 +250,14 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
+主卡将全部可用模型渲染为直接操作按钮，以 ✅ 标记按 scope / role / profile / dsh / env
+优先级解析出的实际当前模型，并始终提供“恢复默认”；按钮携带明确的 `provider/model` 路由，
+直接切换只写 per-scope `ModelStore`，下一轮生效且不清空会话上下文。文字命令同样接受
+`/model use <provider/model>`，并继续兼容无歧义的裸模型 ID。
 per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作过期）；卡片 action
 `value.cmd === 'wizard'`（携带 `submit` / `choose` / `confirm` / `cancel` 标记）与 `cfg` 系列
-在 `src/bridge/channel.ts` 的 `cardAction` 路由中接线（写操作仅管理员）。
+在 `src/bridge/channel.ts` 的 `cardAction` 路由中接线（provider、凭据和全局默认等持久化写操作
+仅管理员；per-scope 模型热切换与 `/model use` 一致，对普通会话成员开放）。
 所有卡片均为 schema 2.0：按钮直接放 `body.elements`（横向成组用 `column_set`
 自动宽列，飞书 2.0 已废弃 `action` 容器，旧容器会被 Open Platform 以 sub-code 200861
 拒绝）；需要收集输入/选择的步骤把 `input` / `select_static` 与 `form_action_type: "submit"`

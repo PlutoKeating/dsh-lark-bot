@@ -114,8 +114,8 @@ dsh --profile dsh-lark
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
 | `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录|
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度|
-| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导；选择用按钮、填写用卡片输入、写入前确认）|
-| `/model use <id>` | 热切换当前会话模型（下一轮生效，无需重启）|
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；管理写操作走多轮向导）|
+| `/model use <provider/model>` | 热切换当前会话模型（也兼容唯一模型 ID；下一轮生效，无需重启）|
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
 | `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员）|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
@@ -155,10 +155,11 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
 
 配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 同一存储协议），改动下一请求生效、无需重启：
 
-- **交互式管理卡片**：`/providers`（或 `/provider`、`/model`、`/key`）打开管理卡片，按
-  BotFather 式的多轮向导完成增删改查——能选择的用按钮点选（API 协议、provider、模型、凭据引用），
+- **交互式管理卡片**：`/providers`（或 `/provider`、`/model`、`/key`）打开管理卡片；当前模型带
+  ✅ 标记，可直接点选其他模型或“恢复默认”，下一轮生效且保留上下文。增删改查按
+  BotFather 式的多轮向导完成——能选择的用按钮点选（API 协议、provider、模型、凭据引用），
   需要填值的用卡片输入（ID、Base URL、模型列表、密钥值），写入前有确认卡，随时可取消。
-- `/model use <id>`：按会话热切换模型（下一轮生效）；`/model default <id>`：写入 dsh 默认模型。
+- `/model use <provider/model>`：按会话精确路由并热切换模型（也兼容唯一模型 ID，下一轮生效）；`/model default <id>`：写入 dsh 默认模型。
 - `/providers`：查看 provider、模型与凭据状态；`/provider add|update|remove`：管理自定义 provider
   （需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，
