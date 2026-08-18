@@ -136,7 +136,11 @@ export class GroupMessagePoller {
       );
       for (const item of items) {
         const current = this.watermarks.get(chatId) ?? watermark;
-        if (item.createTime < current.createTime || item.chatId !== chatId) continue;
+        const atOrBeforeWatermark =
+          item.createTime < current.createTime ||
+          (item.createTime === current.createTime &&
+            item.messageId <= current.messageId);
+        if (atOrBeforeWatermark || item.chatId !== chatId) continue;
         if (!this.shouldProcess(item)) {
           this.advanceWatermark(chatId, item);
           continue;

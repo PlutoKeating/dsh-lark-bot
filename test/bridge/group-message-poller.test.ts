@@ -234,6 +234,9 @@ describe('GroupMessagePoller', () => {
     });
 
     await poller.pollOnce();
+    for (let index = 0; index <= 10_000; index += 1) {
+      poller.claim(`om-evict-${index}`);
+    }
     await poller.pollOnce();
 
     expect(source.listMessages).toHaveBeenNthCalledWith(2, {

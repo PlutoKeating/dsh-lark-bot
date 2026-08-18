@@ -514,6 +514,20 @@ describe('startChannel', () => {
       knownScopes: vi.fn().mockReturnValue(['oc-group']),
       flush: vi.fn(),
     };
+    vi.mocked(fake.channel.connect).mockImplementation(async () => {
+      await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+        message({
+          messageId: 'om-event',
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-allowed',
+          senderType: 'user',
+          content: 'live event during connect',
+          createTime: 10_001,
+        }),
+      );
+    });
     let bridge: Awaited<ReturnType<typeof startChannel>> | undefined;
     try {
       bridge = await startChannel({
@@ -561,18 +575,6 @@ describe('startChannel', () => {
         createChannel: fake.createChannel,
       });
 
-      await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
-        message({
-          messageId: 'om-event',
-          chatId: 'oc-group',
-          chatType: 'group',
-          chatMode: 'group',
-          senderId: 'ou-allowed',
-          senderType: 'user',
-          content: 'live event',
-          createTime: 10_001,
-        }),
-      );
       await vi.advanceTimersByTimeAsync(3_000);
 
       expect(pending.push.mock.calls.map(([, msg]) => msg.messageId)).toEqual([

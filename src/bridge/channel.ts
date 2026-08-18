@@ -214,6 +214,17 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     }
   };
 
+  if (deps.groupNoAt && deps.scopeDirectory) {
+    groupPoller = new GroupMessagePoller({
+      pollIntervalMs: deps.groupPollMs ?? 3_000,
+      freshnessMs: deps.eventFreshnessMs ?? 600_000,
+      source: deps.groupHistorySource ?? larkGroupHistorySource(channel),
+      knownChats: () => deps.scopeDirectory?.knownChats() ?? [],
+      access: () => deps.accessManager.snapshot(),
+      onMessage: (message) => processMessage(message, true),
+    });
+  }
+
   channel.on({
     message: processMessage,
     cardAction: async (event) => {
@@ -314,15 +325,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   });
 
   await channel.connect();
-  if (deps.groupNoAt && deps.scopeDirectory) {
-    groupPoller = new GroupMessagePoller({
-      pollIntervalMs: deps.groupPollMs ?? 3_000,
-      freshnessMs: deps.eventFreshnessMs ?? 600_000,
-      source: deps.groupHistorySource ?? larkGroupHistorySource(channel),
-      knownChats: () => deps.scopeDirectory?.knownChats() ?? [],
-      access: () => deps.accessManager.snapshot(),
-      onMessage: (message) => processMessage(message, true),
-    });
+  if (groupPoller) {
     groupPoller.start();
     if (deps.accessManager.snapshot().allowedUsers.length === 0) {
       log.warn('group-poller', 'no-allowed-users', {

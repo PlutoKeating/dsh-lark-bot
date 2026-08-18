@@ -77,7 +77,7 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 dsh --profile dsh-lark
 ```
 
-③ On first boot the terminal prints a QR code → scan it with the Feishu / Lark app to create or choose a PersonalAgent app → after binding, DM the bot directly or use `@bot` in groups/topics.
+③ On first boot the terminal prints a QR code → scan it with the Feishu / Lark app to create or choose a PersonalAgent app → after binding, DM the bot directly; groups/topics use `@bot` by default, with an explicitly enabled allowlist-protected no-@ mode available.
 
 `setup` automatically: locates your local dsh → pre-approves pnpm's build policy (protobufjs) → runs the standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running package) → installs the safety-net guardian system service. One command installs everything.
 
@@ -231,7 +231,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: How do I connect DeepSeek Harness to Feishu?**
 
-**A:** Install Node.js ≥ 22 and DeepSeek Harness (with `DEEPSEEK_API_KEY` configured), run `npx dsh-lark-bot@latest setup --profile dsh-lark`, then `dsh --profile dsh-lark` and scan to bind. DM the bot directly, or use `@bot` in groups/topics.
+**A:** Install Node.js ≥ 22 and DeepSeek Harness (with `DEEPSEEK_API_KEY` configured), run `npx dsh-lark-bot@latest setup --profile dsh-lark`, then `dsh --profile dsh-lark` and scan to bind. DM the bot directly; groups/topics use `@bot` by default, or can use the opt-in no-@ mode described below.
 
 **Q: Do I need a public IP, domain or server?**
 
@@ -296,6 +296,8 @@ Core environment variables:
 | `DSH_LARK_WEB_PUSH` | `true` | `web` adapter: push web-GUI turn completions to Feishu and auto-switch the chat mapping (`0` disables) |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | Reject private chats when no allowlist is configured |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | Stale-message rejection window (0 disables) |
+| `DSH_LARK_GROUP_NO_AT` | `false` | Poll registered groups for messages without @; requires `im:message.group_msg` and a non-empty `allowed_users` list |
+| `DSH_LARK_GROUP_POLL_MS` | `3000` | No-@ group polling interval in milliseconds (minimum 1000) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | Grace period after SIGTERM before SIGKILL |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | Concurrent runs per scope (1 = strictly serial) |
@@ -327,6 +329,7 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at `~/.dsh-lark/config.json` (file mode 600).
 - **File system**: reads / writes the working directories you choose with `/cd` and `/ws` (including running shell commands and modifying files).
 - **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and task context sent to the DeepSeek API.
+- **Optional group history**: only with `DSH_LARK_GROUP_NO_AT=true`, the bridge polls groups/topics previously registered by an event. It accepts only post-start, non-deleted messages from explicitly allowlisted human users and deduplicates them against live events. This lets the bot read group messages that do not mention it; grant `im:message.group_msg` only after confirming that this matches your team's privacy policy.
 - **Local callback**: when the `lark_notify` tool runs, the dsh runtime subprocess calls the bridge process back over a random 127.0.0.1 port with a per-boot token (loopback only).
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).
@@ -336,7 +339,7 @@ All data flows only between this machine, Feishu and DeepSeek; nothing is collec
 
 ## Troubleshooting
 
-Run `dsh-lark-bot doctor` first; it checks the profile and working directory and performs a real availability probe for the current adapter (`sdk` / `acp` / `headless` runtime handshake).
+Run `dsh-lark-bot doctor` first; it checks the profile and working directory and performs a real availability probe for the current adapter (`sdk` / `acp` / `headless` runtime handshake). When no-@ group polling is enabled, it also probes the history API against one registered group.
 
 Common issues:
 
