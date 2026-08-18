@@ -58,7 +58,10 @@ export class GroupMessagePoller {
   private readonly now: () => number;
   private readonly startedAt: number;
   private readonly seen = new Set<string>();
-  private readonly watermarks = new Map<string, { createTime: number; messageId: string }>();
+  private readonly watermarks = new Map<
+    string,
+    { createTime: number; messageIds: Set<string> }
+  >();
   private timer: NodeJS.Timeout | undefined;
   private inFlight: Promise<void> | undefined;
 
@@ -118,12 +121,12 @@ export class GroupMessagePoller {
   ): Promise<void> {
     const watermark = this.watermarks.get(chatId) ?? {
       createTime: this.startedAt,
-      messageId: '',
+      messageIds: new Set<string>(),
     };
     const startTime = String(Math.floor(watermark.createTime / 1_000));
     let pageToken: string | undefined;
     const usedTokens = new Set<string>();
-    for (let pageNumber = 0; pageNumber < 20; pageNumber += 1) {
+    while (true) {
       const page = await this.options.source.listMessages({
         chatId,
         startTime,
@@ -139,7 +142,7 @@ export class GroupMessagePoller {
         const atOrBeforeWatermark =
           item.createTime < current.createTime ||
           (item.createTime === current.createTime &&
-            item.messageId <= current.messageId);
+            current.messageIds.has(item.messageId));
         if (atOrBeforeWatermark || item.chatId !== chatId) continue;
         if (!this.shouldProcess(item)) {
           this.advanceWatermark(chatId, item);
@@ -171,15 +174,13 @@ export class GroupMessagePoller {
 
   private advanceWatermark(chatId: string, item: GroupHistoryItem): void {
     const current = this.watermarks.get(chatId);
-    if (
-      !current ||
-      item.createTime > current.createTime ||
-      (item.createTime === current.createTime && item.messageId > current.messageId)
-    ) {
+    if (!current || item.createTime > current.createTime) {
       this.watermarks.set(chatId, {
         createTime: item.createTime,
-        messageId: item.messageId,
+        messageIds: new Set([item.messageId]),
       });
+    } else if (item.createTime === current.createTime) {
+      current.messageIds.add(item.messageId);
     }
   }
 

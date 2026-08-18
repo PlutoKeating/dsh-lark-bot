@@ -258,6 +258,55 @@ describe('GroupMessagePoller', () => {
     ]);
   });
 
+  it('does not lose reverse-id messages at the same timestamp across more than 20 pages', async () => {
+    const onMessage = vi.fn().mockResolvedValue(undefined);
+    const source = {
+      listMessages: vi.fn().mockImplementation(
+        async ({ pageToken }: { pageToken: string | undefined }) => {
+          const pageIndex = pageToken ? Number(pageToken.slice(1)) : 0;
+          const messageId = `om-${String(21 - pageIndex).padStart(2, '0')}`;
+          return {
+            items: [
+              {
+                messageId,
+                chatId: 'oc-group',
+                createTime: 12_000,
+                senderId: 'ou-allowed',
+                senderType: 'user',
+                messageType: 'text',
+                deleted: false,
+              },
+            ],
+            hasMore: pageIndex < 20,
+            ...(pageIndex < 20 ? { pageToken: `p${pageIndex + 1}` } : {}),
+          };
+        },
+      ),
+      fetchMessage: vi.fn().mockImplementation(async (messageId: string) =>
+        normalizedMessage({ messageId, createTime: 12_000 }),
+      ),
+    };
+    const poller = new GroupMessagePoller({
+      pollIntervalMs: 3_000,
+      freshnessMs: 600_000,
+      source,
+      knownChats: () => [{ chatId: 'oc-group', chatMode: 'group' }],
+      access: () => ({ allowedUsers: ['ou-allowed'], allowedChats: [] }),
+      onMessage,
+      now: () => 10_000,
+    });
+
+    await poller.pollOnce();
+
+    expect(source.listMessages).toHaveBeenCalledTimes(21);
+    expect(onMessage).toHaveBeenCalledTimes(21);
+    expect(onMessage.mock.calls.map(([message]) => message.messageId)).toEqual(
+      Array.from({ length: 21 }, (_, index) =>
+        `om-${String(21 - index).padStart(2, '0')}`,
+      ),
+    );
+  });
+
   it('polls on the configured interval and stops without leaving a timer active', async () => {
     vi.useFakeTimers();
     const source = {
