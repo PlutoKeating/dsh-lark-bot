@@ -426,6 +426,13 @@ export async function buildAgentAdapter(
   `settleAll(scope, 'cancelled')`）。
 - `src/bot/questions.ts`：`QuestionRegistry`，`/ask` 问答卡注册与答案回写会话。
 
+审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`cardAction` 成功结算
+`ApprovalRegistry` / `QuestionRegistry` 后返回原生 toast、发送终态 Markdown 确认，并通过
+`LarkChannel.recallMessage(messageId)` 撤回原卡；确认消息回复原 `messageId` 并保留话题上下文。
+toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effort 异步收尾，失败只写
+`approval-confirm-failed` / `approval-recall-failed` / `question-confirm-failed` /
+`question-recall-failed` 日志，不改变已结算的审批结果或答案（issue #48）。
+
 ## 5. 安全模块 · Security
 
 `src/config/security.ts` 提供：
