@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { log } from '../core/logger.js';
 import type { MentionTarget } from '../bridge/types.js';
 import type { AskPayload, AskResult } from './ask-handler.js';
+import type { PlanPayload, PlanResult } from './plan-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -33,6 +34,8 @@ export interface NotifyServerDeps {
   ) => Promise<void>;
   /** Optional handler for the `lark_ask_user` question-card channel. */
   ask?: (payload: AskPayload) => Promise<AskResult>;
+  /** Optional handler for the `lark_request_plan_approval` channel. */
+  plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
 }
 
 /**
@@ -48,6 +51,7 @@ export class NotifyServer {
   private readonly deps: NotifyServerDeps;
   url: string | undefined;
   askUrl: string | undefined;
+  planUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -66,6 +70,7 @@ export class NotifyServer {
         const address = server.address() as AddressInfo;
         this.url = `http://127.0.0.1:${String(address.port)}/notify`;
         this.askUrl = `http://127.0.0.1:${String(address.port)}/ask`;
+        this.planUrl = `http://127.0.0.1:${String(address.port)}/plan`;
         resolve();
       });
     });
@@ -113,6 +118,45 @@ export class NotifyServer {
           return;
         }
         respond(200, { ok: true, ...(result.answer === undefined ? {} : { answer: result.answer }) });
+        return;
+      }
+      if (req.url === '/plan') {
+        if (!this.deps.plan) {
+          respond(404, { ok: false, error: 'plan channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as PlanPayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.plan?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and plan are required' });
+          return;
+        }
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        req.once('aborted', abort);
+        const onResponseClose = (): void => {
+          if (!res.writableEnded) abort();
+        };
+        res.once('close', onResponseClose);
+        let result: PlanResult;
+        try {
+          result = await this.deps.plan(payload, controller.signal);
+        } finally {
+          req.off('aborted', abort);
+          res.off('close', onResponseClose);
+        }
+        if (!result.ok) {
+          respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, {
+          ok: true,
+          decision: result.decision,
+          ...(result.feedback ? { feedback: result.feedback } : {}),
+        });
         return;
       }
       if (req.url !== '/notify') {

@@ -9,6 +9,7 @@ import {
   acpPatchYaml,
   acpProfileRoot,
   ensureAcpProfile,
+  isAcpManagedProfileCurrent,
   isAcpProfileReady,
   resolveAcpLaunch,
 } from '../../../src/adapters/dsh/acp-runtime.js';
@@ -40,6 +41,9 @@ describe('resolveAcpLaunch', () => {
     expect(patch).toContain("id: lark-notify");
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
+    expect(patch).toContain("id: lark-plan-approval");
+    expect(patch).toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).toContain('use lark_request_plan_approval');
   });
 
   it('resolves the discovered bin with the ACP profile', () => {
@@ -67,6 +71,8 @@ describe('ensureAcpProfile', () => {
     expect(result.ok).toBe(true);
     expect(result.created).toBe(true);
     expect(isAcpProfileReady(root)).toBe(true);
+    expect(isAcpManagedProfileCurrent(root, 'deepseek-official', 'deepseek-v4-flash')).toBe(true);
+    expect(isAcpManagedProfileCurrent(root, 'other-provider', 'deepseek-v4-flash')).toBe(false);
     expect(acpPatchYaml('deepseek-official', 'deepseek-v4-flash')).toContain(
       'provider: deepseek-official',
     );

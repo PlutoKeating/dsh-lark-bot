@@ -28,11 +28,13 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   `dsh.bundle.patch` → `./cordis.patch.yml`，支持 `dsh plugin --profile <name> add
   dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
   bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
-  与 `lark-notify`（标准工具行）。
-- `./plugin`、`./invariant`、`./notify`、`./ask` 四个子路径导出随包发布：`plugin` 为 bundle
+  与 `lark-notify`、`lark-plan-approval`（标准工具行）。
+- `./plugin`、`./invariant`、`./notify`、`./ask`、`./plan` 五个子路径导出随包发布：`plugin` 为 bundle
   行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
   dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`ask` 为
-  `lark_ask_user` 问答卡工具插件，SDK / ACP runtime profile 自动装配。
+  `lark_ask_user` 问答卡工具插件，`plan` 为 `lark_request_plan_approval` 计划门禁；SDK / ACP
+  runtime profile 自动装配，宿主 bundle 同时装配 plan 供 Web agent 使用；该插件还通过宿主
+  `tools/pre-execute` 在当前 turn 批准前阻断 mutating/execute/`run_code` 调用。
 - `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.7 依赖链一致）；
   不直接声明 `dsh-tools`，工具通过宿主 registry 注册以保持单实例。
 - pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报

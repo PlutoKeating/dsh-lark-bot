@@ -8,6 +8,7 @@ import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { RetentionStore } from '../bot/retention-store.js';
 import type { RoleStore } from '../bot/role-store.js';
 import type { IsolationStore, ScopeIsolationMode } from '../bot/isolation-store.js';
+import type { PlanApprovalRegistry } from '../bot/plan-approvals.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
@@ -46,7 +47,7 @@ export interface CommandChannel {
     markdown: string,
     options?: SendOptions,
   ): Promise<void>;
-  sendCard?(chatId: string, card: object): Promise<void>;
+  sendCard?(chatId: string, card: object): Promise<unknown>;
   /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
   createChat?(opts: {
     name: string;
@@ -81,6 +82,7 @@ export interface CommandContext {
   archiveMaxAgeDays: number;
   approvals: ApprovalRegistry | undefined;
   questions: QuestionRegistry | undefined;
+  plans?: PlanApprovalRegistry;
   densityStore: DensityStore | undefined;
   models: ModelStore;
   wizardStore: WizardStore;

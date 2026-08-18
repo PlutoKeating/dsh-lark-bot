@@ -277,7 +277,7 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
 当前 rc.7 runtime profile 会校验物理安装包的精确版本，不能仅凭目录存在判定 ready；
-`lark_notify` / `lark_ask_user` 直接向宿主 registry 注册 raw JSON Schema tool definition，
+`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 直接向宿主 registry 注册 raw JSON Schema tool definition，
 不携带第二份 `dsh-tools`。完整审计见 [`DSH_RC7_AUDIT.md`](DSH_RC7_AUDIT.md)。
 
 `src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 `retention` 条对话
@@ -444,18 +444,26 @@ export async function buildAgentAdapter(
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
 - `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
   `extractQuestionAnswer(kind, value, options)`。
+- `src/card/plan-approval-card.ts`：`renderPlanApprovalCard(input)`（可选 feedback + approve / revise）。
 - `src/card/density.ts`：`CardDensity` 与 `parseCardDensity`。
 - `src/bot/density-store.ts`：per-scope 卡片密度覆盖；`/density` 命令读写。
 - `src/bot/approvals.ts`：`ApprovalRegistry`，pending 审批注册与结算（run 结束 / dispose 时
   `settleAll(scope, 'cancelled')`）。
 - `src/bot/questions.ts`：`QuestionRegistry`，`/ask` 问答卡注册与答案回写会话。
+- `src/bot/plan-approvals.ts`：`PlanApprovalRegistry`，计划门禁按 immutable scope + session 注册、决策与精确取消。
 
-审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`cardAction` 成功结算
-`ApprovalRegistry` / `QuestionRegistry` 后返回原生 toast、发送终态 Markdown 确认，并通过
+计划、审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`cardAction` 成功结算
+对应 registry 后返回原生 toast、发送终态 Markdown 确认，并通过
 `LarkChannel.recallMessage(messageId)` 撤回原卡；确认消息回复原 `messageId` 并保留话题上下文。
 toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effort 异步收尾，失败只写
-`approval-confirm-failed` / `approval-recall-failed` / `question-confirm-failed` /
+`plan-confirm-failed` / `plan-recall-failed` / `approval-confirm-failed` / `approval-recall-failed` / `question-confirm-failed` /
 `question-recall-failed` 日志，不改变已结算的审批结果或答案（issue #48）。
+
+`src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
+`tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、命令执行与 `run_code`；通过 token 鉴权的
+`POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
+发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
+SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
 
 ## 5. 安全模块 · Security
 
@@ -501,6 +509,8 @@ export interface Logger {
 - `dsh-lark-bot/ask`：`lark_ask_user` 工具（见 §9），agent 需要用户拍板 / 补充信息时
   通过问答卡向飞书会话提问并等待答案，配置缺省时读取 `DSH_LARK_ASK_URL` /
   `DSH_LARK_NOTIFY_TOKEN` 环境变量。
+- `dsh-lark-bot/plan`：`lark_request_plan_approval` 工具（见 §9），完整计划消息 + 决策卡，
+  配置缺省时读取 `DSH_LARK_PLAN_URL` / `DSH_LARK_NOTIFY_TOKEN`。
 
 常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是默认安装的
 「安全网守护」（见 §10）：它独立于 dsh / Cordis 常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
@@ -549,10 +559,11 @@ export interface Logger {
   `invariants` 注册表登记包归属（与官方 dsh-lark-channel/invariant 同契约）。
 - `./notify`（`src/notify/tool.ts`）：`lark-notify` 工具插件（见 §9）。
 - `./ask`（`src/notify/ask-tool.ts`）：`lark-ask` 问答卡工具插件（见 §9）。
+- `./plan`（`src/notify/plan-tool.ts`）：`lark-plan-approval` 计划门禁工具插件（见 §9）。
 
 `dsh plugin --profile <name> add dsh-lark-bot`（或一行 `dsh-lark-bot setup`）后，profile 的
 `dsh.profile.bundles` 会追加 `dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层（
-`dsh-lark-bot/plugin` + `lark-notify` 两行）。
+`dsh-lark-bot/plugin` + `lark-notify` + `lark-plan-approval`）。
 
 ## 9. 桥接层 · Bridge
 
@@ -597,10 +608,17 @@ export interface Logger {
 回到 agent 循环。问答卡等待期间 run 超时看门狗暂停（`QuestionRegistry.pendingCount`
 / `onSettled`），用户答完卡后重新计时。
 
+同一服务器还提供 `POST /plan`（`server.planUrl` / `DSH_LARK_PLAN_URL`）。
+`buildPlanHandler` 以 session id 定位当前 scope，先发完整 Markdown 计划，再以
+`PlanApprovalRegistry` + `renderPlanApprovalCard` 等待批准 / 继续规划和可选 feedback。
+`src/notify/plan-tool.ts` 注册 `lark_request_plan_approval`（无固定 tool timeout，生命周期服从当前
+run 的 AbortSignal）；决策作为工具结果返回同一 agent turn。pending plan 与 question 都会暂停 run
+idle watchdog；plan 按 session 计数/结算，callback 断开或 run 结束只取消对应 session，并终态提示、撤回失效卡。
+
 SDK / ACP runtime profile（`src/adapters/dsh/sdk-runtime.ts` / `acp-runtime.ts`）会在
 `cordis.patch.yml` 插入 `lark-notify` 行，并把当前 bridge 包以 `link:` 依赖加入 profile，
-同时插入 `lark-ask` 行，因此 `lark_notify` 与 `lark_ask_user` 在 `sdk` 与 `acp` 两种
-adapter 下都自动可用（`headless` 无 runtime profile，不提供这两个工具）。
+同时插入 `lark-ask` 与 `lark-plan-approval` 行，因此三个 bridge 工具在 `sdk` 与 `acp` 两种
+adapter 下都自动可用；宿主 bundle 也插入 plan tool 供 Web agent 使用（`headless` 无工具回调）。
 
 ## 10. 安全网守护 · Safety-net guardian（issue #6）
 

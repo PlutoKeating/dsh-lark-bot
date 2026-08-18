@@ -25,6 +25,7 @@ const textResponse = (text) => [
 async function startCompatServer() {
   const notifications = [];
   const questions = [];
+  const plans = [];
   const server = createServer((request, response) => {
     let raw = '';
     request.on('data', (chunk) => { raw += String(chunk); });
@@ -41,6 +42,12 @@ async function startCompatServer() {
         response.end(JSON.stringify({ ok: true, answer: 'compat-answer' }));
         return;
       }
+      if (request.url === '/plan') {
+        plans.push(JSON.parse(raw));
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ ok: true, decision: 'approved', feedback: 'compat-approved' }));
+        return;
+      }
       if (request.url !== '/v1/chat/completions') {
         response.writeHead(404).end();
         return;
@@ -55,11 +62,49 @@ async function startCompatServer() {
       const isAsk = serializedInput.includes('Call lark_ask_user once.');
       const hasAskResult = serializedInput.includes('compat-ask-call') &&
         serializedInput.includes('compat-answer');
+      const isPlan = serializedInput.includes('Call lark_request_plan_approval once.');
+      const hasPlanResult = serializedInput.includes('compat-plan-call') &&
+        serializedInput.includes('compat-approved');
+      const isPlanGate = serializedInput.includes('Verify the enforced plan gate.');
+      const hasGateDenial = serializedInput.includes('compat-gate-denied') &&
+        serializedInput.includes('blocked until the current turn calls lark_request_plan_approval');
+      const hasGateApproval = serializedInput.includes('compat-gate-plan') &&
+        serializedInput.includes('compat-approved');
+      const hasGateExecution = serializedInput.includes('compat-gate-bash') &&
+        serializedInput.includes('compat-gate-ok');
       const hasNotifyResult = serializedInput.includes('Message sent to compat-chat');
       const events = isResume
         ? textResponse(hasPersistedFirstTurn ? 'resume-ok' : 'resume-history-missing')
+        : isPlanGate && hasGateExecution
+          ? textResponse('plan-gate-ok')
+          : isPlanGate && hasGateApproval
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-gate-bash', type: 'function', function: { name: 'bash', arguments: '{"command":"printf compat-gate-ok","description":"Print plan gate success marker"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
+          : isPlanGate && hasGateDenial
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-gate-plan', type: 'function', function: { name: 'lark_request_plan_approval', arguments: '{"plan":"1. verify denial\\n2. run approved command"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
+          : isPlanGate
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-gate-denied', type: 'function', function: { name: 'bash', arguments: '{"command":"printf must-not-run","description":"Attempt command before plan approval"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
         : hasAskResult
           ? textResponse('ask-ok')
+          : hasPlanResult
+            ? textResponse('plan-ok')
+            : isPlan
+              ? [
+                JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-plan-call', type: 'function', function: { name: 'lark_request_plan_approval', arguments: '{"plan":"1. inspect\\n2. execute"}' } }] }, index: 0, finish_reason: null }] }),
+                JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+                '[DONE]',
+              ]
           : isAsk
             ? [
               JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-ask-call', type: 'function', function: { name: 'lark_ask_user', arguments: '{"question":"compat question","kind":"text"}' } }] }, index: 0, finish_reason: null }] }),
@@ -85,6 +130,7 @@ async function startCompatServer() {
     url: `http://127.0.0.1:${address.port}`,
     notifications,
     questions,
+    plans,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };
 }
@@ -128,6 +174,7 @@ async function main() {
     DSH_LARK_WORKSPACE: workspace,
     DSH_LARK_NOTIFY_URL: `${compatServer.url}/notify`,
     DSH_LARK_ASK_URL: `${compatServer.url}/ask`,
+    DSH_LARK_PLAN_URL: `${compatServer.url}/plan`,
     DSH_LARK_NOTIFY_TOKEN: 'compat-token',
     COMPAT_API_KEY: 'compat-local-key',
   };
@@ -326,7 +373,17 @@ async function main() {
       if (compatServer.questions.length !== 1) {
         throw new Error(`lark_ask_user execution count mismatch: ${compatServer.questions.length}`);
       }
-      console.log('[probe] sdk task/notify/ask/resume ok against local OpenAI-compatible fixture');
+      const planned = await harness.run(
+        'Verify the enforced plan gate.',
+        { sessionId: 'compat-plan-session' },
+      );
+      if (planned.finalResponse !== 'plan-gate-ok') {
+        throw new Error(`unexpected plan-gate response: ${JSON.stringify(planned.finalResponse)}`);
+      }
+      if (compatServer.plans.length !== 1) {
+        throw new Error(`plan tool execution count mismatch: ${compatServer.plans.length}`);
+      }
+      console.log('[probe] sdk task/notify/ask/enforced-plan-gate/resume ok against local OpenAI-compatible fixture');
     } finally {
       await harness.close();
     }

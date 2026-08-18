@@ -83,7 +83,7 @@ export function acpPatchYaml(provider: string, model: string): string {
     '- id: system-prompt',
     '  config:',
     '    persona: >-',
-    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
+    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}. Before substantial or high-risk repository actions, use lark_request_plan_approval and wait for approval.',
     '',
     '- id: hmr',
     '  disabled: true',
@@ -104,6 +104,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Plan gate (same contract as the SDK runtime).
+    '- insert:',
+    '    - id: lark-plan-approval',
+    `      name: '${own.name}/plan'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
   ].join('\n');
 }
 
@@ -116,6 +124,21 @@ export function isAcpProfileReady(profileRoot: string): boolean {
     profilePackageMatches(profileRoot, ACP_PACKAGE, ACP_VERSION) &&
     ownPackageLinked(profileRoot, own)
   );
+}
+
+/** Package readiness plus the exact managed ACP overlay for the active route. */
+export function isAcpManagedProfileCurrent(
+  profileRoot: string,
+  provider: string,
+  model: string,
+): boolean {
+  if (!isAcpProfileReady(profileRoot)) return false;
+  try {
+    return readFileSync(join(profileRoot, 'cordis.patch.yml'), 'utf8') ===
+      acpPatchYaml(provider, model);
+  } catch {
+    return false;
+  }
 }
 
 /**

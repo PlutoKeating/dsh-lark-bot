@@ -5,6 +5,7 @@ import { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { QuestionRegistry } from '../bot/questions.js';
+import type { PlanApprovalRegistry } from '../bot/plan-approvals.js';
 import {
   finalizeIfRunning,
   initialState,
@@ -47,6 +48,7 @@ export interface RunFlowInput {
   maxConcurrency?: number;
   approvals?: ApprovalRegistry;
   questions?: QuestionRegistry;
+  plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
   channel: StreamingChannel;
   defaultWorkspace: string;
@@ -196,6 +198,7 @@ async function runAttempt(
   let timedOut = false;
   let assistantOutput = '';
   let sawActivity = false;
+  let activeSessionId = sessionId;
   const density = input.densityStore?.get(input.scope) ?? 'standard';
 
   try {
@@ -272,6 +275,7 @@ async function runAttempt(
               assistantOutput += event.delta;
             }
             if (event.type === 'system' && event.sessionId) {
+              activeSessionId = event.sessionId;
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
             }
             if (event.type !== 'system' && event.type !== 'error') {
@@ -285,7 +289,7 @@ async function runAttempt(
         };
 
         // Idle watchdog: armed once, then re-armed on every agent event (and
-        // after a question card is answered). Only a run that goes silent for
+        // after a human decision card is answered). Only a run that goes silent for
         // the configured window is stopped — active work is never cut short.
         const timeoutPromise =
           timeoutMs > 0
@@ -294,8 +298,12 @@ async function runAttempt(
                   if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
                   timeoutTimer = setTimeout(() => {
                     if (timedOut) return;
-                    if (input.questions?.pendingCount(input.scope)) {
-                      // A question card is awaiting the user: keep the task
+                    if (
+                      input.questions?.pendingCount(input.scope) ||
+                      (activeSessionId !== undefined &&
+                        input.plans?.pendingCount(input.scope, activeSessionId))
+                    ) {
+                      // A question or plan card is awaiting the user: keep the task
                       // alive; the onSettled handler re-arms once answered.
                       armTimeout?.();
                       return;
@@ -310,11 +318,17 @@ async function runAttempt(
             : undefined;
         // The user answered a card: restart a full idle window so time spent
         // waiting for input never eats into the next stretch of work.
-        const unsubscribeSettled = timeoutPromise
-          ? input.questions?.onSettled(input.scope, () => {
-              if (timedOut) return;
-              if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
-              armTimeout?.();
+        const rearmAfterHumanInput = (): void => {
+          if (timedOut) return;
+          if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+          armTimeout?.();
+        };
+        const unsubscribeQuestion = timeoutPromise
+          ? input.questions?.onSettled(input.scope, rearmAfterHumanInput)
+          : undefined;
+        const unsubscribePlan = timeoutPromise
+          ? input.plans?.onSettled(input.scope, (settledSessionId) => {
+              if (settledSessionId === activeSessionId) rearmAfterHumanInput();
             })
           : undefined;
 
@@ -332,7 +346,8 @@ async function runAttempt(
         } finally {
           clearInterval(ticker);
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
-          unsubscribeSettled?.();
+          unsubscribeQuestion?.();
+          unsubscribePlan?.();
         }
       },
       replyOptions,
@@ -416,6 +431,9 @@ async function runAttempt(
     if (input.questions) {
       input.questions.settleAll(input.scope);
     }
+    if (input.plans && activeSessionId !== undefined) {
+      input.plans.settleSession(input.scope, activeSessionId);
+    }
   }
 }
 
@@ -435,7 +453,7 @@ async function pruneArchives(input: RunFlowInput): Promise<void> {
 export function approvalHandlerFor(
   input: {
     approvals: ApprovalRegistry | undefined;
-    channel: { sendCard?: (chatId: string, card: object) => Promise<void> };
+    channel: { sendCard?: (chatId: string, card: object) => Promise<unknown> };
     chatId: string;
     scope: string;
   },
@@ -467,7 +485,7 @@ export function approvalHandlerFor(
 export function questionHandlerFor(
   input: {
     questions: QuestionRegistry | undefined;
-    channel: { sendCard?: (chatId: string, card: object) => Promise<void> };
+    channel: { sendCard?: (chatId: string, card: object) => Promise<unknown> };
     chatId: string;
     scope: string;
   },

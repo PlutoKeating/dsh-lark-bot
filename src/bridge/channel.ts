@@ -12,6 +12,7 @@ import type { RoleStore } from '../bot/role-store.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { WizardStore } from '../bot/wizard-store.js';
 import type { IsolationStore } from '../bot/isolation-store.js';
+import type { PlanApprovalRegistry } from '../bot/plan-approvals.js';
 import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
 import {
   handleConfigHubAction,
@@ -58,6 +59,7 @@ export interface StartChannelDeps {
   pending: PendingQueue<NormalizedMessage>;
   approvals?: ApprovalRegistry;
   questions?: QuestionRegistry;
+  plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
   models: ModelStore;
   wizardStore: WizardStore;
@@ -180,6 +182,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       accessManager: deps.accessManager,
       approvals: deps.approvals,
       questions: deps.questions,
+      ...(deps.plans ? { plans: deps.plans } : {}),
       densityStore: deps.densityStore,
       models: deps.models,
       wizardStore: deps.wizardStore,
@@ -320,6 +323,36 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         }
         return;
       }
+      if (value?.cmd === 'plan-submit' && typeof value.id === 'string' && deps.plans) {
+        const decision = value.decision === 'approved' ? 'approved' : 'revise';
+        const rawFeedback = event.action.formValue?.feedback;
+        const feedback = typeof rawFeedback === 'string' && rawFeedback.trim()
+          ? rawFeedback.trim()
+          : undefined;
+        const settled = deps.plans.resolve(scope, value.id, {
+          decision,
+          ...(feedback ? { feedback } : {}),
+        });
+        if (!settled) return;
+        const approved = decision === 'approved';
+        void settleActionCard(
+          channel,
+          event.chatId,
+          event.messageId,
+          threadId,
+          approved
+            ? '✅ **计划已批准** — 任务将自动继续执行'
+            : `📝 **继续规划**${feedback ? ` — 已记录意见：${feedback}` : ''}`,
+          scope,
+          'plan',
+        );
+        return {
+          toast: {
+            type: approved ? 'success' : 'info',
+            content: approved ? '计划已批准' : '已要求继续规划',
+          },
+        };
+      }
       if (value?.cmd === 'wizard' && deps.wizardStore) {
         try {
           await handleWizardCardAction(
@@ -444,7 +477,7 @@ async function settleActionCard(
   threadId: string | undefined,
   markdown: string,
   scope: string,
-  kind: 'approval' | 'question',
+  kind: 'approval' | 'question' | 'plan',
 ): Promise<void> {
   try {
     await channel.send(chatId, { markdown }, {

@@ -3,9 +3,10 @@
  *
  * The SDK / ACP runtime profiles (`dsh-lark-sdk` / `dsh-lark-acp`) link this
  * package in via `node_modules/<name> -> <package root>` so their patch rows
- * (`dsh-lark-bot/plugin`, `lark-notify`, `lark-ask`) resolve. After a package
+ * (`dsh-lark-bot/plugin`, `lark-notify`, `lark-ask`, `lark-plan-approval`) resolve. After a package
  * upgrade the link still points at the OLD package root; the readiness checks
- * (`isSdkProfileReady` / `isAcpProfileReady`) treat that as not-ready and the
+ * (`isSdkManagedProfileCurrent` / `isAcpManagedProfileCurrent`) treat that as
+ * not-ready and the
  * next boot re-provisions the profile. This module performs the targeted
  * fix — re-link the own package and idempotently re-provision stale upstream
  * runtime packages — so upgraded profiles stay ready immediately.
@@ -18,14 +19,14 @@ import { ownPackageInfo } from '../adapters/dsh/own-package.js';
 import {
   DEFAULT_SDK_PROFILE,
   ensureSdkProfile,
-  isSdkProfileReady,
+  isSdkManagedProfileCurrent,
   sdkProfileRoot,
 } from '../adapters/dsh/sdk-runtime.js';
 import {
   DEFAULT_ACP_PROFILE,
   acpProfileRoot,
   ensureAcpProfile,
-  isAcpProfileReady,
+  isAcpManagedProfileCurrent,
 } from '../adapters/dsh/acp-runtime.js';
 
 export interface RuntimeProfileState {
@@ -83,23 +84,28 @@ export async function repairRuntimeProfiles(
   const sdkRoot = sdkProfileRoot(options.dshHome, DEFAULT_SDK_PROFILE, managedEnv);
   const acpRoot = acpProfileRoot(options.dshHome, DEFAULT_ACP_PROFILE, managedEnv);
   const preservedAcpRoute = existingAcpRoute(acpRoot);
+  const acpRoute = {
+    provider: preservedAcpRoute?.provider ?? options.provider ?? 'deepseek-official',
+    model: preservedAcpRoute?.model ?? options.model ?? 'deepseek-v4-flash',
+  };
 
   const targets = [
     {
       profile: DEFAULT_SDK_PROFILE as 'dsh-lark-sdk',
       root: sdkRoot,
-      isReady: isSdkProfileReady,
+      isReady: isSdkManagedProfileCurrent,
       ensure: () => ensureSdk({ home: options.dshHome, env: managedEnv }),
     },
     {
       profile: DEFAULT_ACP_PROFILE as 'dsh-lark-acp',
       root: acpRoot,
-      isReady: isAcpProfileReady,
+      isReady: (root: string) =>
+        isAcpManagedProfileCurrent(root, acpRoute.provider, acpRoute.model),
       ensure: () => ensureAcp({
         home: options.dshHome,
         env: managedEnv,
-        provider: preservedAcpRoute?.provider ?? options.provider ?? 'deepseek-official',
-        model: preservedAcpRoute?.model ?? options.model ?? 'deepseek-v4-flash',
+        provider: acpRoute.provider,
+        model: acpRoute.model,
       }),
     },
   ];

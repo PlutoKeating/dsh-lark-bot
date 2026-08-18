@@ -47,12 +47,17 @@
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
 8. **审批**：ACP 模式下敏感操作通过 `session/request_permission` 以飞书审批卡一问一答；
    run 结束 / dispose 时所有挂起审批卡结算为拒绝（`src/bot/approvals.ts`）。
+   SDK / ACP / Web agent 对较大或高风险动作还会通过 `lark_request_plan_approval` 暂停；同一 turn
+   未批准时 pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。完整计划发到当前飞书
+   会话，只有卡片批准后才继续；继续规划会把可选文字意见返回 agent。run/callback 结束时只取消
+   所属 session 的挂起门禁。该门禁是人机确认层，不替代 dsh sandbox 或 ACP 的逐工具权限审批。
 9. **管理操作鉴权**：飞书会话内对 dsh 配置与访问白名单的写操作（`/model default`、
    `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
    与 `/invite remove …`），以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。
-10. **本地回调隔离**：`lark_notify` 工具的回调服务只绑定 `127.0.0.1`，每次启动生成随机
+10. **本地回调隔离**：`lark_notify`、`lark_ask_user` 与 `lark_request_plan_approval` 工具的回调
+    服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
 11. **安全网守护（默认随 `setup` 安装）**：
     - 守护是独立于 dsh / Cordis 的最小进程，只读取本地状态与进程命令行（`ps`，不读内存），

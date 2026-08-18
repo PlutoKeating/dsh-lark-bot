@@ -36,7 +36,11 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
   return {
     ...base,
     async sendCard(chatId, card, options) {
-      await channel.send(chatId, { card }, toLarkSendOptions(options));
+      const result = await channel.send(chatId, { card }, toLarkSendOptions(options));
+      return result.messageId;
+    },
+    async recallMessage(messageId) {
+      await channel.recallMessage(messageId);
     },
     async createChat(opts) {
       return channel.createChat(opts);

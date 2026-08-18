@@ -164,8 +164,9 @@ SDK / ACP 模式需要对应 runtime profile：
 `src/adapters/dsh/acp-runtime.ts`）在首次启动时创建 profile 并 `pnpm install` 插件，幂等且可自愈
 （部分创建状态也会补齐）。stdout 保留给 JSON-RPC 协议；overlay 禁用了 `user-questions`
 （IM 无法回达的原生 `ask_user_question` 默认拒绝）与 HMR；agent 提问改走桥接自建
-`lark_ask_user` 工具（`dsh-lark-bot/ask` + bridge `POST /ask` 问答卡），SDK / ACP
-runtime 均自动装配。
+`lark_ask_user` 工具（`dsh-lark-bot/ask` + bridge `POST /ask` 问答卡）与
+`lark_request_plan_approval`（`dsh-lark-bot/plan` + bridge `POST /plan` 计划消息/决策卡），
+SDK / ACP runtime 均自动装配。
 
 ---
 
@@ -185,7 +186,7 @@ runtime 均自动装配。
 6. **rc.7 精确锁定**：SDK client/server、ACP 与完整 peer 图均解析到 rc.7；npm 包族的
    `latest` / `next` 不同步，不能用裸 dist-tag 代替矩阵。托管 profile 会核对实际 manifest
    version 并自动修复旧 rc.6 安装。
-7. **工具单实例边界**：`lark_notify` / `lark_ask_user` 使用宿主接受的 raw JSON Schema
+7. **工具单实例边界**：`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 使用宿主接受的 raw JSON Schema
    definition，本包不直接 import `dsh-tools`，避免 scheduler Symbol 双实例。
 8. **ACP rc.7 图片**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP，并在 runtime 宣告
    image capability 后发送原生 base64 block；不支持时显式失败。当前 channel 尚无图片出站

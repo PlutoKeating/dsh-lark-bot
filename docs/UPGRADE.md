@@ -17,7 +17,7 @@
 | 组件 Component | 路径 Path | 说明 Notes |
 | :--- | :--- | :--- |
 | 包本体 Package | `~/.dsh/profiles/<profile>/node_modules/dsh-lark-bot` | pnpm 安装（vendor tgz 或 npm），`dsh plugin add <name>@<version>` 更新 |
-| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接一致性修复及陈旧 SDK/ACP 依赖即时重装 |
+| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接、上游依赖及 managed overlay 精确一致性，重写 ACP overlay 时保留当前 provider/model route |
 | guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向 CLI 入口；**必须指向稳定路径**（见 §5） |
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
@@ -45,7 +45,8 @@
 2. `resolveTarget`：`--rollback` → `--package <name>@<version>` → npm latest；
 3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
-5. runtime profile 链接修复（sdk/acp own-package）并幂等重装陈旧 SDK server / ACP 依赖；
+5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
+   包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；
 6. `doctor` 升级后验证；
 7. 记录 `upgrade-state.json`（支持 `--rollback`）。
 
@@ -75,6 +76,7 @@
 | 回滚 | `upgrade-state.json` + `--rollback` | 已支持 |
 | 运行中实例待生效 | `pendingRestart` 记录 + doctor 提示 | 已实现 |
 | runtime 链接漂移 | doctor 检测 sdk/acp 链接版本与已装版本不一致 | 已实现 |
+| runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写 | 已实现 + 单测覆盖 |
 
 ### 6.1 npx 引导回归矩阵 · Bootstrap regression matrix
 
@@ -120,5 +122,6 @@ cordis hmr 与 SDK runtime 的连接保持），属于架构演进方向，不�
 - [x] `/version` 命令 + 桥接周期检测（日志 / 可选飞书通知，按版本去重）
 - [x] `npx` 引导回归矩阵（镜像 / 离线 / 指定版本 / 回滚 / 406 / Windows 单测覆盖）
 - [x] 运行中实例：`pendingRestart` 记录 + doctor 提示 + `--restart` / `--rollback`
-- [x] 版本 pin 一致性：guardian 单元路径、runtime 链接漂移（doctor 检测）+ upgrade 修复
+- [x] 版本 pin / runtime 一致性：guardian 单元路径、runtime 链接与上游依赖、managed overlay
+  精确内容（ACP 保留 provider/model route）均由 upgrade 检测并修复
 - [x] 最小重启窗口 + 安全网兜底 + 回滚；热重载分析落盘（架构演进方向，边界明确）

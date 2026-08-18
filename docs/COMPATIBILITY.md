@@ -51,7 +51,8 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
    上游一致性检查）。
 5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走 SDK / ACP runtime 初始化握手，并用本地
-   OpenAI-compatible fixture 验证 SDK 任务、`lark_notify` / `lark_ask_user` 回调与同一
+   OpenAI-compatible fixture 验证 SDK 任务、`lark_notify` / `lark_ask_user` /
+   `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 批准后实际执行的 pre-execute 顺序与同一
    session 的持久历史续接。
 6. **实机回归**：重启 profile（`dsh --profile <name>`，或守护模式下
    `dsh-lark-bot guardian status` 观察接管/交还）后运行 `dsh-lark-bot doctor`，

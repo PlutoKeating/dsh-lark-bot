@@ -82,6 +82,9 @@
 ### 4.4 审批与安全（approval & security）
 - 用户白名单 + 访问控制（`/invite user/admin/group`）。
 - 逐操作审批（卡片按钮回调 / 命令式确认兜底）。
+- 关键任务计划门禁（issue #18）：完整计划先作为普通消息发出，再用带可选文字意见的卡片批准执行
+  或继续规划；决定回写原 agent turn，等待期间按 session 暂停 idle watchdog；当前 turn 未批准时
+  runtime pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。
 - 沙箱隔离（dsh 自带 sandbox capability，含 landlock）。
 - 空闲超时看门狗 `/timeout`（agent 持续 N 分钟无输出 / 无活动事件自动终止；活跃的流式任务
   不会被误杀）。

@@ -15,6 +15,7 @@ import { RetentionStore } from '../../bot/retention-store.js';
 import { RoleStore } from '../../bot/role-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { IsolationStore } from '../../bot/isolation-store.js';
+import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -24,6 +25,7 @@ import type { StreamingChannel } from '../../bridge/types.js';
 import { startWebSessionWatcher, type WebMuxProvider, type WebSessionWatcher } from '../../adapters/dsh/web-watcher.js';
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
+import { buildPlanHandler } from '../../notify/plan-handler.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -194,6 +196,7 @@ export async function startBridgeEngine(
   const retentionStore = new RetentionStore();
   const approvals = new ApprovalRegistry();
   const questions = new QuestionRegistry();
+  const plans = new PlanApprovalRegistry();
   const densityStore = new DensityStore();
   const models = new ModelStore();
   const wizardStore = new WizardStore();
@@ -228,6 +231,26 @@ export async function startBridgeEngine(
           if (!streaming) throw new Error('bridge channel is not ready');
           if (!streaming.sendCard) throw new Error('bridge channel does not support cards');
           await streaming.sendCard(chatId, card, options);
+        },
+      },
+    }),
+    plan: buildPlanHandler({
+      sessions,
+      scopeDirectory,
+      plans,
+      channel: {
+        sendMarkdown: async (chatId, markdown, options) => {
+          if (!streaming) throw new Error('bridge channel is not ready');
+          await streaming.sendMarkdown(chatId, markdown, options);
+        },
+        sendCard: async (chatId, card, options) => {
+          if (!streaming) throw new Error('bridge channel is not ready');
+          if (!streaming.sendCard) throw new Error('bridge channel does not support cards');
+          return streaming.sendCard(chatId, card, options);
+        },
+        recallMessage: async (messageId: string) => {
+          if (!streaming?.recallMessage) throw new Error('bridge channel does not support recall');
+          await streaming.recallMessage(messageId);
         },
       },
     }),
@@ -305,6 +328,7 @@ export async function startBridgeEngine(
           ...(role === undefined ? {} : { role }),
           approvals,
           questions,
+          plans,
           densityStore,
           channel: streaming,
           defaultWorkspace,
@@ -351,6 +375,7 @@ export async function startBridgeEngine(
     archiveMaxAgeDays: env.archiveMaxAgeDays,
     approvals,
     questions,
+    plans,
     densityStore,
     models,
     wizardStore,
@@ -407,6 +432,7 @@ export async function startBridgeEngine(
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
   process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
+  process.env.DSH_LARK_PLAN_URL = notifyServer.planUrl ?? '';
   const heartbeat = startHeartbeat(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,

@@ -8,6 +8,7 @@ export default defineConfig({
     invariant: 'src/invariant.ts',
     notify: 'src/notify/tool.ts',
     ask: 'src/notify/ask-tool.ts',
+    plan: 'src/notify/plan-tool.ts',
   },
   format: ['esm'],
   target: 'node22',
