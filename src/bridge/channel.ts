@@ -210,8 +210,25 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       }
       if (value?.cmd === 'approve' && typeof value.id === 'string' && deps.approvals) {
         const outcome = value.outcome === 'allow' ? 'allowed-once' : 'rejected';
-        deps.approvals.resolve(scope, value.id, outcome);
-        return;
+        const settled = deps.approvals.resolve(scope, value.id, outcome);
+        if (!settled) return;
+        const allowed = outcome === 'allowed-once';
+        await settleActionCard(
+          channel,
+          event.chatId,
+          event.messageId,
+          allowed
+            ? '✅ **已允许** — 该操作已获授权执行'
+            : '⛔ **已拒绝** — 该操作未获授权',
+          scope,
+          'approval',
+        );
+        return {
+          toast: {
+            type: allowed ? 'success' : 'info',
+            content: allowed ? '已允许' : '已拒绝',
+          },
+        };
       }
       if (value?.cmd === 'question-submit' && typeof value.id === 'string' && deps.questions) {
         const question = deps.questions.get(scope, value.id);
@@ -222,8 +239,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             form?.answer,
             question.options,
           );
-          deps.questions.resolve(scope, value.id, answer);
+          const settled = deps.questions.resolve(scope, value.id, answer);
+          if (!settled) return;
+          await settleActionCard(
+            channel,
+            event.chatId,
+            event.messageId,
+            '✅ **已提交** — 回答已记录，任务将继续执行',
+            scope,
+            'question',
+          );
+          return {
+            toast: { type: 'success', content: '回答已提交' },
+          };
         }
+        return;
       }
       if (value?.cmd === 'wizard' && deps.wizardStore) {
         try {
@@ -265,6 +295,34 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     channel,
     disconnect: () => channel.disconnect(),
   };
+}
+
+async function settleActionCard(
+  channel: Pick<LarkChannel, 'send' | 'recallMessage'>,
+  chatId: string,
+  messageId: string,
+  markdown: string,
+  scope: string,
+  kind: 'approval' | 'question',
+): Promise<void> {
+  try {
+    await channel.send(chatId, { markdown });
+  } catch (error) {
+    log.warn('channel', `${kind}-confirm-failed`, {
+      scope,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  try {
+    await channel.recallMessage(messageId);
+  } catch (error) {
+    log.warn('channel', `${kind}-recall-failed`, {
+      scope,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 const EMPTY_SCOPE_DIRECTORY: ScopeDirectory = {
