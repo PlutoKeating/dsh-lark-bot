@@ -60,7 +60,10 @@
 > 当前版本未实现。
 
 ### 4.2 会话管理（session）
-- 每个 chat / topic / thread / 文档评论 → 独立 session，互不串扰。
+- 私聊始终独立；群聊默认按 topic/thread 隔离。管理员可用
+  `/isolation group|topic|member` 切换整群共享、话题独立或成员独立，策略按 chat 持久化；
+  切换不迁移或删除旧 scope，会话可在切回后继续，旧运行的停止 / 审批 / 问答动作仍可达。
+  成员任务卡按入队 scope 显示发送者 open_id，不受排队期间的策略切换影响。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
 - 中断命令：`/new`、`/cd`、`/ws use`、`/stop` 可打断当前任务。
 - 会话续跑 `/resume`、状态查询 `/status`。

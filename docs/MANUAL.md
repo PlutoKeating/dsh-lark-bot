@@ -77,6 +77,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 的并行任务数 |
+| `/isolation [group\|topic\|member]` | 查看或设置本群会话隔离（设置仅管理员） |
 | `/role list` | 查看角色列表与当前 scope 绑定 |
 | `/role show <id>` | 查看角色详情 |
 | `/role set <id>` | 为当前 scope 绑定角色（下一轮生效） |
@@ -213,7 +214,10 @@ dsh-lark-bot guardian uninstall
 
 ## 5. 会话与工作区 · Sessions & workspaces
 
-- 每个飞书私聊、群聊、话题对应独立 scope。
+- 私聊始终独立；群聊默认按话题隔离 scope。管理员可用 `/isolation group|topic|member` 改为
+  整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /
+  问答卡继续绑定原 scope，`/stop` 也覆盖操作者可达的旧 scope。成员任务卡显示入队时固化的 owner。
+  注意：成员模式只隔离 agent 上下文，不隐藏共享群里的输入、进度卡或回复；这些内容仍对群成员可见。
 - 每个 scope 默认保存最近 40 条对话（`/retention` 调整，`DSH_LARK_RETENTION_MSGS` 配置默认值）。
 - 同一 scope 默认允许 2 个任务并行（`/concurrency` 或 `DSH_LARK_SCOPE_CONCURRENCY` 调整，
   1 为严格串行）；并行 run 各持独立 dsh session 与 runId，共享 scope 的会话转写与工作区，

@@ -14,10 +14,12 @@ import { QuestionRegistry } from '../../bot/questions.js';
 import { RetentionStore } from '../../bot/retention-store.js';
 import { RoleStore } from '../../bot/role-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
+import { IsolationStore } from '../../bot/isolation-store.js';
 import { startChannel } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
+import { memberOwnerForScope } from '../../bridge/scope-isolation.js';
 import type { StreamingChannel } from '../../bridge/types.js';
 import { startWebSessionWatcher, type WebMuxProvider, type WebSessionWatcher } from '../../adapters/dsh/web-watcher.js';
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
@@ -168,6 +170,7 @@ export async function startBridgeEngine(
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
   const roleStore = new RoleStore(paths.profilePath(profileName, 'roles.json'));
   const scopeDirectory = new ScopeDirectory(paths.profilePath(profileName, 'scopes.json'));
+  const isolationStore = new IsolationStore(paths.profilePath(profileName, 'isolation.json'));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -176,6 +179,7 @@ export async function startBridgeEngine(
     workspaces.load(),
     roleStore.load(),
     scopeDirectory.load(),
+    isolationStore.load(),
   ]);
 
   const adapter =
@@ -286,6 +290,7 @@ export async function startBridgeEngine(
         if (modelRoute && modelRoute.provider !== DEEPSEEK_PROVIDER) {
           await dshConfig.linkCredentialRefIfMissing(modelRoute.provider).catch(() => undefined);
         }
+        const scopeOwner = memberOwnerForScope(scope, first.chatId);
         const runInput: Parameters<typeof runAgentBatch>[0] = {
           scope,
           chatId: first.chatId,
@@ -304,6 +309,7 @@ export async function startBridgeEngine(
           channel: streaming,
           defaultWorkspace,
           replyTo: first.messageId,
+          ...(scopeOwner ? { scopeOwner } : {}),
           runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
           maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
@@ -337,6 +343,7 @@ export async function startBridgeEngine(
     defaultScopeConcurrency: env.scopeConcurrency,
     retentionStore,
     roleStore,
+    isolationStore,
     scopeDirectory,
     archiver,
     defaultRetention: env.retentionMsgs,
@@ -460,6 +467,7 @@ export async function startBridgeEngine(
         workspaces.flush(),
         roleStore.flush(),
         scopeDirectory.flush(),
+        isolationStore.flush(),
       ]);
     },
   };

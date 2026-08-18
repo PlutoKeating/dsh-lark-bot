@@ -105,6 +105,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/stop` | Stop the current task |
 | `/timeout [N\|off\|default]` | View or set the current session run timeout |
 | `/concurrency [N\|default]` | View or set the concurrent-run limit for this scope (default 2) |
+| `/isolation [group\|topic\|member]` | View or set this group's session isolation (admin to change) |
 | `/role list`、`/role show <id>` | List roles / show a role |
 | `/role set <id>`、`/role clear` | Bind / unbind a role for this scope |
 | `/role save <id> <name> [--persona text] [--model <id>] [--tools <csv>] [--rules text]` | Create / update a role (admin) |
@@ -129,6 +130,13 @@ Images in Feishu messages are downloaded to the local media directory and passed
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
 Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts them all.
+
+**Group session isolation**: admins can switch `/isolation group|topic|member` between one shared
+group scope, per-topic scopes, and per-member scopes. `topic` remains the default. Switching only changes
+how future messages are routed; existing sessions are retained and resume when their mode is selected again.
+Stop, approval and question actions created before a switch remain bound to their original scope, while
+`/stop` also covers the actor's reachable pre-switch scopes. Member-isolated run cards show the sender open_id. Policies persist in
+`~/.dsh-lark/profiles/<profile>/isolation.json`.
 
 **Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name> --persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` and bind one to the current scope with `/role set <id>`; every run carries the role instructions, and the role model wins below the per-session `/model use` override. Role definitions persist in `~/.dsh-lark/profiles/<profile>/roles.json`.
 
@@ -331,6 +339,10 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **File system**: reads / writes the working directories you choose with `/cd` and `/ws` (including running shell commands and modifying files).
 - **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and task context sent to the DeepSeek API.
 - **Optional group history**: only with `DSH_LARK_GROUP_NO_AT=true`, the bridge polls groups/topics previously registered by an event. It accepts only post-start, non-deleted messages from explicitly allowlisted human users and deduplicates them against live events. This lets the bot read group messages that do not mention it; grant `im:message.group_msg` only after confirming that this matches your team's privacy policy.
+- **Member-isolation identity and group visibility**: `member` mode writes the sender `open_id` into local
+  session/scope-directory/worktree/archive indexes or paths derived from `isolation.json`, and shows it on the
+  shared group run card. It isolates agent context, not group-message visibility: prompts, progress cards and
+  replies remain visible to the group; other members cannot operate that member's run cards.
 - **Local callback**: when the `lark_notify` tool runs, the dsh runtime subprocess calls the bridge process back over a random 127.0.0.1 port with a per-boot token (loopback only).
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).
@@ -454,7 +466,7 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/workspace/` | Project workspace, git worktree isolation & rule injection |
 | `src/adapters/` | Agent backend adapters (sdk / acp / headless / web single-writer) |
 | `src/card/` | Streaming card state & rendering |
-| `src/bot/` | Run registry, queueing, approval/question registries |
+| `src/bot/` | Run registry, queueing, approval/question registries, group isolation policies |
 | `src/commands/` | Slash commands |
 | `src/cli/` | CLI entry: setup / doctor / upgrade / hidden run |
 | `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |

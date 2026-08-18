@@ -110,7 +110,7 @@ describe('startChannel', () => {
   it('confirms and recalls an approval card after resolving the permission request', async () => {
     const fake = makeChannel();
     const approvals = new ApprovalRegistry();
-    const outcome = approvals.register('chat-1:thread-1', {
+    const outcome = approvals.register('chat-1:member:user-1', {
       id: 'approval-1',
       sessionId: 'session-1',
       toolName: 'write_file',
@@ -162,7 +162,14 @@ describe('startChannel', () => {
       chatId: 'chat-1',
       messageId: 'approval-card-message',
       operator: { openId: 'user-1' },
-      action: { value: { cmd: 'approve', id: 'approval-1', outcome: 'allow' } },
+      action: {
+        value: {
+          cmd: 'approve',
+          id: 'approval-1',
+          outcome: 'allow',
+          scope: 'chat-1:member:user-1',
+        },
+      },
       raw: { message: { thread_id: 'thread-1' } },
     });
 
@@ -223,7 +230,7 @@ describe('startChannel', () => {
   it('confirms and recalls a question card after recording the submitted answer', async () => {
     const fake = makeChannel();
     const questions = new QuestionRegistry();
-    const pendingQuestion = questions.register('chat-1', {
+    const pendingQuestion = questions.register('chat-1:member:user-1', {
       question: 'Deploy now?',
       kind: 'single',
       options: ['Yes', 'No'],
@@ -274,7 +281,11 @@ describe('startChannel', () => {
       messageId: 'question-card-message',
       operator: { openId: 'user-1' },
       action: {
-        value: { cmd: 'question-submit', id: pendingQuestion.id },
+        value: {
+          cmd: 'question-submit',
+          id: pendingQuestion.id,
+          scope: 'chat-1:member:user-1',
+        },
         formValue: { answer: 'Yes' },
       },
     });
@@ -301,6 +312,11 @@ describe('startChannel', () => {
       isFlushing: vi.fn().mockReturnValue(false),
       isBlocked: vi.fn().mockReturnValue(false),
     };
+    let isolationMode: 'group' | 'topic' | 'member' = 'topic';
+    const isolationStore = {
+      get: () => isolationMode,
+      set: (_chatId: string, mode: 'group' | 'topic' | 'member') => { isolationMode = mode; },
+    };
 
     await startChannel({
       appId: 'cli_test',
@@ -315,6 +331,7 @@ describe('startChannel', () => {
       defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
       roleStore: new RoleStore(':memory:'),
+      isolationStore: isolationStore as never,
       archiver: {
         archive: vi.fn(),
         list: vi.fn().mockResolvedValue([]),
@@ -348,14 +365,42 @@ describe('startChannel', () => {
       message({ content: 'build this feature' }),
     );
     expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({ content: 'build this feature' }));
+
+    isolationMode = 'member';
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+      message({
+        messageId: 'msg-member',
+        chatType: 'group',
+        chatMode: 'group',
+        senderId: 'user-2',
+        content: 'private workbench',
+      }),
+    );
+    expect(pending.push).toHaveBeenCalledWith(
+      'chat-1:member:user-2',
+      expect.objectContaining({ content: 'private workbench' }),
+    );
   });
 
-  it('interrupts the topic scope when a card stop button is pressed', async () => {
+  it('interrupts the card run scope after isolation mode switches', async () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');
     const workspaces = new WorkspaceStore(':memory:');
     const activeRuns = new ActiveRuns();
     const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(1);
+    const approvals = new ApprovalRegistry();
+    const questions = new QuestionRegistry();
+    approvals.register('chat-1:member:user-1', {
+      id: 'member-approval',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: undefined,
+      options: [],
+    });
+    const memberQuestion = questions.register('chat-1:member:user-1', {
+      question: 'Proceed?',
+      kind: 'text',
+    });
     const pending = {
       push: vi.fn(),
       size: vi.fn().mockReturnValue(0),
@@ -376,6 +421,8 @@ describe('startChannel', () => {
       defaultScopeConcurrency: 2,
       retentionStore: new RetentionStore(),
       roleStore: new RoleStore(':memory:'),
+      approvals,
+      questions,
       archiver: {
         archive: vi.fn(),
         list: vi.fn().mockResolvedValue([]),
@@ -401,13 +448,54 @@ describe('startChannel', () => {
       chatId: string;
       action: { value: unknown };
       raw: { message?: { thread_id?: string } };
+      operator?: { openId: string };
     }) => Promise<void>)({
       chatId: 'chat-1',
-      action: { value: { cmd: 'stop' } },
+      action: { value: { cmd: 'stop', scope: 'chat-1:member:user-1' } },
       raw: { message: { thread_id: 'thread-9' } },
+      operator: { openId: 'user-1' },
     });
 
-    expect(interrupt).toHaveBeenCalledWith('chat-1:thread-9');
+    expect(interrupt).toHaveBeenCalledWith('chat-1:member:user-1');
+
+    interrupt.mockClear();
+    for (const value of [
+      { cmd: 'stop', scope: 'chat-1:member:user-1' },
+      {
+        cmd: 'approve',
+        id: 'member-approval',
+        outcome: 'allow',
+        scope: 'chat-1:member:user-1',
+      },
+      {
+        cmd: 'question-submit',
+        id: memberQuestion.id,
+        scope: 'chat-1:member:user-1',
+      },
+    ]) {
+      const rejected = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+        chatId: 'chat-1',
+        action: { value, formValue: { answer: 'yes' } },
+        raw: { message: { thread_id: 'thread-9' } },
+        operator: { openId: 'user-2' },
+      });
+      expect(rejected).toEqual({
+        toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+      });
+    }
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(approvals.pendingCount('chat-1:member:user-1')).toBe(1);
+    expect(questions.pendingCount('chat-1:member:user-1')).toBe(1);
+
+    const missingOperator = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      action: { value: { cmd: 'stop', scope: 'chat-1:member:user-1' } },
+      raw: { message: { thread_id: 'thread-9' } },
+    });
+    expect(missingOperator).toEqual({
+      toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+    });
+    expect(interrupt).not.toHaveBeenCalled();
   });
 
   it('acknowledges the queue position when the scope is already busy', async () => {

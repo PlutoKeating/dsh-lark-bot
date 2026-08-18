@@ -7,6 +7,7 @@ import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { RetentionStore } from '../bot/retention-store.js';
 import type { RoleStore } from '../bot/role-store.js';
+import type { IsolationStore, ScopeIsolationMode } from '../bot/isolation-store.js';
 import type { AccessManager } from '../config/access-manager.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
@@ -37,6 +38,7 @@ import {
   latestVersion,
   upgradeCheckEnabled,
 } from '../upgrade/update-check.js';
+import { reachableScopes } from '../bridge/scope-isolation.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -70,6 +72,8 @@ export interface CommandContext {
   defaultScopeConcurrency: number;
   retentionStore: RetentionStore;
   roleStore: RoleStore;
+  isolationStore?: Pick<IsolationStore, 'get' | 'set'>;
+  isolationMode?: ScopeIsolationMode;
   scopeDirectory: ScopeDirectory;
   archiver: SessionArchive;
   defaultRetention: number;
@@ -108,6 +112,7 @@ const HELP = [
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
   '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
+  '- `/isolation [group|topic|member]` — 查看或设置本群会话隔离模式（设置仅管理员）',
   '- `/role list|show <id>|set <id>|clear` — 查看 / 绑定角色',
   '- `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` — 创建/更新角色（管理员）',
   '- `/role remove <id>` — 删除角色（管理员）',
@@ -291,6 +296,11 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
     ctx.chatMode === 'topic' ? `${ctx.scope}（话题独立 session）` : ctx.scope;
   const runLines = active.map((run) => `  - \`${run.runId}\``);
   const roleLine = role ? `🎭 **role**: \`${role.id}\` (${role.name})` : undefined;
+  const isolationLine = ctx.chatMode === 'p2p'
+    ? '🔒 **isolation**: `p2p`（私聊天然隔离）'
+    : `🔒 **isolation**: \`${ctx.isolationMode ?? 'topic'}\`${
+      ctx.isolationMode === 'member' && ctx.senderId ? `（本轮成员：\`${ctx.senderId}\`）` : ''
+    }`;
 
   await reply(
     ctx,
@@ -298,10 +308,40 @@ async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
       `🧭 **scope**: \`${scopeLabel}\``,
       `📁 **cwd**: \`${cwd}\``,
       `🔗 **session**: \`${session}\``,
+      isolationLine,
       ...(roleLine ? [roleLine] : []),
       `🏃 **active runs**: ${String(active.length)}`,
       ...runLines,
     ].join('\n'),
+  );
+}
+
+async function handleIsolation(args: string, ctx: CommandContext): Promise<void> {
+  if (ctx.chatMode === 'p2p') {
+    await reply(ctx, '当前是私聊，scope 已按会话天然隔离，无需设置。');
+    return;
+  }
+  const mode = args.trim().toLowerCase();
+  if (!mode) {
+    await reply(
+      ctx,
+      `当前群会话隔离模式：**${ctx.isolationStore?.get(ctx.chatId) ?? 'topic'}**。可用 \`/isolation group|topic|member\` 切换。`,
+    );
+    return;
+  }
+  if (mode !== 'group' && mode !== 'topic' && mode !== 'member') {
+    await reply(ctx, '用法：`/isolation group|topic|member`');
+    return;
+  }
+  if (!requireAdmin(ctx)) return;
+  if (!ctx.isolationStore) {
+    await reply(ctx, '当前运行环境未启用群聊隔离策略存储。');
+    return;
+  }
+  ctx.isolationStore.set(ctx.chatId, mode);
+  await reply(
+    ctx,
+    `已将本群隔离模式设为 **${mode}**，从下一条消息起生效。已有 group / topic / member scope 与会话数据均保留，切回后可继续使用。`,
   );
 }
 
@@ -342,10 +382,19 @@ async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
 }
 
 async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
-  const stopped = await ctx.activeRuns.interrupt(ctx.scope);
+  const scopes = reachableScopes({
+    chatId: ctx.chatId,
+    chatMode: ctx.chatMode,
+    ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+    ...(ctx.senderId ? { senderId: ctx.senderId } : {}),
+  });
+  let stopped = 0;
+  for (const scope of scopes) stopped += await ctx.activeRuns.interrupt(scope);
   await reply(
     ctx,
-    stopped > 0 ? `已请求终止当前 scope 的全部 ${String(stopped)} 个任务。` : '当前没有运行中的任务。',
+    stopped > 0
+      ? `已请求终止当前及切换前隔离 scope 的全部 ${String(stopped)} 个任务。`
+      : '当前及切换前隔离 scope 均没有运行中的任务。',
   );
 }
 
@@ -608,6 +657,7 @@ const handlers: Record<string, Handler> = {
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/concurrency': handleConcurrency,
+  '/isolation': handleIsolation,
   '/role': handleRole,
   '/notify': handleNotify,
   '/retention': handleRetention,

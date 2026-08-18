@@ -102,6 +102,8 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
     defaultScopeConcurrency: 2,
     retentionStore: new RetentionStore(),
     roleStore: new RoleStore(':memory:'),
+    isolationStore: { get: () => 'topic', set: () => {} },
+    isolationMode: 'topic',
     scopeDirectory: new ScopeDirectory(':memory:'),
     archiver: makeArchiver(),
     defaultRetention: 40,
@@ -157,6 +159,62 @@ describe('command router', () => {
 
     await tryHandleCommand('/timeout default', ctx);
     expect(ctx.runPolicies.get('chat-a')).toBeUndefined();
+  });
+
+  it('lets only admins change group isolation while preserving existing scopes', async () => {
+    let mode: 'group' | 'topic' | 'member' = 'topic';
+    const set = vi.fn((_chatId: string, next: typeof mode) => { mode = next; });
+    const isolationStore = { get: () => mode, set };
+    const accessManager = makeAccessManager({ admins: ['ou_owner'] });
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/default', ['old'], 'group history');
+    sessions.recordExchange('chat-a:thread-1', '/tmp/default', ['old'], 'topic history');
+    const ctx = makeContext({
+      chatMode: 'group',
+      senderId: 'ou_guest',
+      accessManager,
+      sessions,
+      isolationStore,
+      isolationMode: 'topic',
+    });
+
+    await tryHandleCommand('/isolation member', ctx);
+    expect(set).not.toHaveBeenCalled();
+
+    ctx.senderId = 'ou_owner';
+    await tryHandleCommand('/isolation member', ctx);
+    expect(set).toHaveBeenCalledWith('chat-a', 'member');
+    expect(mode).toBe('member');
+    expect(sessions.historyFor('chat-a', '/tmp/default')).toHaveLength(2);
+    expect(sessions.historyFor('chat-a:thread-1', '/tmp/default')).toHaveLength(2);
+  });
+
+  it('/stop reaches the actor scopes created before an isolation switch', async () => {
+    const activeRuns = new ActiveRuns();
+    const interrupt = vi.spyOn(activeRuns, 'interrupt').mockImplementation(async (scope) =>
+      scope === 'chat-a:member:ou_actor' ? 1 : 0,
+    );
+    const ctx = makeContext({
+      activeRuns,
+      chatMode: 'topic',
+      threadId: 'thread-1',
+      senderId: 'ou_actor',
+      scope: 'chat-a',
+      isolationMode: 'group',
+    });
+
+    await tryHandleCommand('/stop', ctx);
+
+    expect(interrupt.mock.calls.map(([scope]) => scope)).toEqual([
+      'chat-a',
+      'chat-a:thread-1',
+      'chat-a:member:ou_actor',
+    ]);
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('全部 1 个任务'),
+      { replyTo: 'msg-1' },
+    );
   });
 
   it('shows recent conversation context for /resume', async () => {

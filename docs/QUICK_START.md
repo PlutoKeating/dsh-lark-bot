@@ -90,6 +90,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数 |
+| `/isolation [group\|topic\|member]` | 查看或设置群聊会话隔离（设置仅管理员） |
 | `/role set <id>`、`/role list` | 绑定 / 查看多角色 Agent |
 | `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
@@ -178,6 +179,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
 - scope 目录：`~/.dsh-lark/profiles/<profile>/scopes.json`
+- 群聊隔离策略：`~/.dsh-lark/profiles/<profile>/isolation.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`

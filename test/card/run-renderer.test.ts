@@ -24,4 +24,17 @@ describe('renderCard', () => {
     expect(text).toContain('⏱ 65s');
     expect(text).toContain('无响应 65s');
   });
+
+  it('marks the owner of a member-isolated group run', () => {
+    const card = renderCard({
+      ...initialState,
+      scopeOwner: 'ou_member',
+      actionScope: 'chat:member:ou_member',
+    }) as {
+      body: { elements: unknown[] };
+    };
+    const serialized = JSON.stringify(card.body.elements);
+    expect(serialized).toContain('成员隔离会话：ou_member');
+    expect(serialized).toContain('"scope":"chat:member:ou_member"');
+  });
 });

@@ -5,6 +5,7 @@ export interface ApprovalCardInput {
   toolName: string;
   reason: string | undefined;
   options: readonly ApprovalOption[];
+  actionScope?: string;
 }
 
 /**
@@ -31,7 +32,12 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
             tag: 'button',
             text: { tag: 'plain_text', content: `✅ ${allow.name}` },
             type: 'primary',
-            value: { cmd: 'approve', id: input.id, outcome: 'allow' },
+            value: {
+              cmd: 'approve',
+              id: input.id,
+              outcome: 'allow',
+              ...(input.actionScope ? { scope: input.actionScope } : {}),
+            },
           },
         ]
       : []),
@@ -41,7 +47,12 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
             tag: 'button',
             text: { tag: 'plain_text', content: `⛔ ${reject.name}` },
             type: 'danger',
-            value: { cmd: 'approve', id: input.id, outcome: 'reject' },
+            value: {
+              cmd: 'approve',
+              id: input.id,
+              outcome: 'reject',
+              ...(input.actionScope ? { scope: input.actionScope } : {}),
+            },
           },
         ]
       : []),

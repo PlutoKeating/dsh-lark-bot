@@ -6,6 +6,7 @@ export interface QuestionCardInput {
   question: string;
   options?: string[];
   placeholder?: string;
+  actionScope?: string;
 }
 
 function formElement(input: QuestionCardInput): object {
@@ -60,7 +61,11 @@ export function renderQuestionCard(input: QuestionCardInput): object {
               tag: 'button',
               text: { tag: 'plain_text', content: '提交' },
               type: 'primary',
-              value: { cmd: 'question-submit', id: input.id },
+              value: {
+                cmd: 'question-submit',
+                id: input.id,
+                ...(input.actionScope ? { scope: input.actionScope } : {}),
+              },
               form_action_type: 'submit',
               name: `btn-submit-${input.id}`,
             },

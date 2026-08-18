@@ -60,7 +60,7 @@ export function buildAskHandler(
     try {
       await deps.channel.sendCard(
         destination.chatId,
-        renderQuestionCard({ ...input, id }),
+        renderQuestionCard({ ...input, id, actionScope: scope }),
         destination.threadId ? { threadId: destination.threadId } : undefined,
       );
     } catch (error) {

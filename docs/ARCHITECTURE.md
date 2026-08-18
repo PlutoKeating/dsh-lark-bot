@@ -25,7 +25,7 @@
         ▼
 ┌──────────────────────────────────────────┐
 │  session/  会话路由与持久化                │
-│  · chat / topic(thread) → scope key        │
+│  · chat / topic / member → scope key       │
 │  · 排队合并、scope 内并行 run、中断、访问控制 │
 │  · 保留窗口 + 归档（文件 / Git 仓库）        │
 └──────────────────────────────────────────┘
@@ -80,7 +80,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 
 ## 关键决策 · Key Decisions
 
-1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。PersonalAgent 群事件默认只覆盖 @ 消息；可通过 `DSH_LARK_GROUP_NO_AT=true` 显式启用历史 API 增量轮询。轮询仅面向 `ScopeDirectory` 已登记的 group/topic，以 per-chat 水位和跨实时/轮询 message ID claim 去重，经过与实时事件相同的白名单、freshness、bot/system/deleted 过滤及消息处理管线；进程启动时间作为初始水位，不回放历史积压。该模式要求非空显式用户白名单与 `im:message.group_msg` 权限，并由 `doctor` 做 best-effort 实际权限探测。
+1. **飞书通道与 scope 隔离**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode`。`IsolationStore`（`<profile>/isolation.json`）按 chat 持久化 `group|topic|member` 策略，默认 `topic` 保持原有普通群/话题行为；成员模式生成 `<chat>:member:<open_id>`。消息入队时即固化 scope，owner 从该 scope 还原；运行 / 审批 / 问答 card action 携带创建时 scope，member action 还要求 operator `open_id` 与 owner 一致，`/stop` 遍历当前操作者可达的 group / topic / member scopes，因此切换策略不会孤立旧运行或越权操作其他成员会话。任务卡显示 owner。切换只影响后续路由，不迁移或删除旧 scope 数据。PersonalAgent 群事件默认只覆盖 @ 消息；可通过 `DSH_LARK_GROUP_NO_AT=true` 显式启用历史 API 增量轮询。轮询仅面向 `ScopeDirectory` 已登记的 group/topic，以 per-chat 水位和跨实时/轮询 message ID claim 去重，经过与实时事件相同的白名单、freshness、bot/system/deleted 过滤及消息处理管线；进程启动时间作为初始水位，不回放历史积压。该模式要求非空显式用户白名单与 `im:message.group_msg` 权限，并由 `doctor` 做 best-effort 实际权限探测。
 2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端。默认走官方
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
@@ -157,7 +157,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
 | `src/card/` | 流式卡片状态与渲染 |
-| `src/bot/` | 运行注册、消息排队 |
+| `src/bot/` | 运行注册、消息排队、群聊隔离策略持久化 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |

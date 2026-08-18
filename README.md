@@ -105,6 +105,7 @@ dsh --profile dsh-lark
 | `/stop` | 终止当前任务|
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时|
 | `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数（默认 2）|
+| `/isolation [group\|topic\|member]` | 查看或设置本群会话隔离模式（设置仅管理员）|
 | `/role list`、`/role show <id>` | 查看角色列表 / 详情|
 | `/role set <id>`、`/role clear` | 为当前 scope 绑定 / 解除角色|
 | `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` | 创建 / 更新角色（管理员）|
@@ -129,6 +130,12 @@ dsh --profile dsh-lark
 **`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
 同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；`/status` 查看全部运行中的 run，`/stop` 一次性终止。
+
+**群聊会话隔离**：管理员可用 `/isolation group|topic|member` 在“整群共享 / 话题独立 /
+成员独立”之间切换；默认 `topic` 保持既有行为。切换只改变后续消息的 scope 路由，不迁移或
+删除已有会话，切回即可继续；切换前已发出的停止 / 审批 / 问答卡仍绑定原 scope，`/stop` 也会
+覆盖当前成员可达的切换前 scope。成员模式的任务卡会显示发送者 open_id，避免误把别人的上下文
+当成当前对话。策略持久化在 `~/.dsh-lark/profiles/<profile>/isolation.json`。
 
 **多角色 Agent**：管理员用 `/role save <id> <name> --persona <文案> [--model <id>] [--tools <csv>] [--rules <文案>]` 定义 PM / 开发 / 文档等角色，`/role set <id>` 绑定到当前 scope；每个 run 携带角色 persona 与规则，角色模型低于每会话 `/model use`。角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`。
 
@@ -359,6 +366,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
 - **可选群消息历史**：仅当 `DSH_LARK_GROUP_NO_AT=true` 时，轮询曾经通过事件登记的群聊 / 话题；只处理启动后的、未删除的白名单真人消息，并与实时事件按 message ID 去重。该模式会让 bot 读取群内未 @ 它的消息，需管理员授予 `im:message.group_msg` 权限并确认符合团队隐私政策。
+- **成员隔离标识与群可见性**：`member` 模式把发送者 `open_id` 写入本机 `isolation.json` 派生的
+  session / scope directory / worktree / archive 索引或路径，并显示在共享群任务卡。它只隔离 agent
+  上下文，不隐藏群消息：输入、进度卡与回复仍对群成员可见；其他成员不能操作该成员的任务卡。
 - **本地回调**：运行 `lark_notify` 工具时，dsh runtime 子进程通过 `127.0.0.1` 随机端口 +
   每启动随机 token 回调 bridge 进程（仅本机回环，不监听公网）。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
@@ -504,7 +514,7 @@ pnpm publish:dual
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入|
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者）|
 | `src/card/` | 流式卡片状态与渲染|
-| `src/bot/` | 运行注册、消息排队、审批/问答注册表|
+| `src/bot/` | 运行注册、消息排队、审批/问答注册表、群聊隔离策略|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run`|
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|
