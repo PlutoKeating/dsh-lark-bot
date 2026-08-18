@@ -30,6 +30,8 @@ export interface RuntimeEnv {
   stopGraceMs: number;
   accessDefaultDeny: boolean;
   eventFreshnessMs: number;
+  groupNoAt: boolean;
+  groupPollMs: number;
   heartbeatMs: number;
   guardianDisabled: boolean;
   guardianProfile: string;
@@ -53,6 +55,9 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_MAX_TOKENS`：可选，SDK-created agent 的每请求输出 token 上限。
 - `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
 - `DSH_LARK_EVENT_FRESHNESS_MS`：过期消息拒绝窗口（默认 `600000`，`0` 关闭）。
+- `DSH_LARK_GROUP_NO_AT`：是否轮询已登记群聊的未 @ 消息（默认 `false`）；开启时必须配置
+  非空 `allowedUsers`，并要求应用具有 `im:message.group_msg` 权限。
+- `DSH_LARK_GROUP_POLL_MS`：无 @ 群消息轮询间隔（默认 `3000`，最小 `1000` 毫秒）。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行空闲超时（持续无活动事件才终止，活跃任务不会被误杀），
   默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
@@ -543,8 +548,16 @@ export interface Logger {
 （自动拼接 `<at>` 提及标记），`threadId` 映射为 `replyInThread`。
 
 `src/bridge/scope-directory.ts` 提供持久化 `ScopeDirectory`（`<profile>/scopes.json`）：每个
-入站消息注册 scope → `{chatId, threadId}`，`resolve(scope)` / `resolveChat(chatId)` 用于
+入站消息注册 scope → `{chatId, threadId, chatMode}`，`resolve(scope)` / `resolveChat(chatId)` 用于
 跨会话出站；`/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
+
+`src/bridge/group-message-poller.ts` 提供 opt-in `GroupMessagePoller`（issue #50）：通过飞书
+`im.message.list` 对 `ScopeDirectory` 中已知的 group/topic 做增量轮询，再使用
+`LarkChannel.fetchMessage` 归一化并复用实时消息处理管线。每个 chat 维护内存水位，实时事件与
+轮询路径共享 message ID claim；分页按创建时间升序处理。轮询只接受进程启动后的、fresh、
+未删除、非 system、非 bot 且位于显式 `allowedUsers`（以及可选 `allowedChats`）中的消息；单群
+失败不阻塞其他群，处理失败不会推进该消息水位。`doctor` 在功能开启且已有登记群时真实探测
+历史 API 权限。
 
 `src/notify/server.ts` 提供 `NotifyServer`：127.0.0.1 回环 HTTP 服务，`POST /notify` 以
 `token` 鉴权，解析 scope/chat 后调用注入的 `send(destination, {text, mentions})`；token 由

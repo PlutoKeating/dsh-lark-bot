@@ -1,7 +1,9 @@
 import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { createLarkChannel } from '@larksuite/channel';
 import { buildAgentAdapter } from '../../adapters/index.js';
+import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { resolveDshHome } from '../../config/dsh-runtime.js';
@@ -20,6 +22,13 @@ export interface DoctorOptions extends StartOptions {
   probeLatestFn?: (packageName: string) => Promise<string | undefined>;
   /** OS home used to locate the guardian service entry (tests; defaults to homedir()). */
   guardianRoot?: string;
+  /** Injectable Feishu group-history probe (tests). */
+  probeGroupHistoryFn?: (input: {
+    appId: string;
+    appSecret: string;
+    tenant: 'feishu' | 'lark';
+    chatId: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export interface DoctorResult {
@@ -149,6 +158,42 @@ export async function runDoctorChecks(
     if (!profile.accounts.appId || !profile.accounts.appSecret) critical = true;
   }
 
+  if (env.groupNoAt && profile) {
+    if (profile.access.allowedUsers.length === 0) {
+      lines.push(
+        'group_no_at: blocked (请先配置 allowed_users，并在目标群中 @ 机器人一次)',
+      );
+    } else {
+      const scopes = new ScopeDirectory(paths.profilePath(profileName, 'scopes.json'));
+      await scopes.load();
+      const target = scopes
+        .knownChats()
+        .find((chat) => chat.chatMode === 'group' || chat.chatMode === 'topic');
+      if (!target) {
+        lines.push('group_no_at: pending (请先在目标群中 @ 机器人一次以登记群聊)');
+      } else {
+        try {
+          const probe = options.probeGroupHistoryFn ?? probeGroupHistoryAccess;
+          const result = await probe({
+            appId: profile.accounts.appId,
+            appSecret: profile.accounts.appSecret,
+            tenant: profile.tenant,
+            chatId: target.chatId,
+          });
+          lines.push(
+            result.ok
+              ? 'group_no_at: ok (群消息历史权限可用)'
+              : `group_no_at: unavailable (${result.error ?? '请检查 im:message.group_msg 权限'})`,
+          );
+        } catch (error) {
+          lines.push(
+            `group_no_at: unavailable (${error instanceof Error ? error.message : String(error)})`,
+          );
+        }
+      }
+    }
+  }
+
   const workspace =
     options.workspace ??
     profile?.workspaces.default ??
@@ -180,6 +225,38 @@ export async function runDoctorChecks(
   }
 
   return { lines, critical };
+}
+
+async function probeGroupHistoryAccess(input: {
+  appId: string;
+  appSecret: string;
+  tenant: 'feishu' | 'lark';
+  chatId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const channel = createLarkChannel({
+    appId: input.appId,
+    appSecret: input.appSecret,
+    domain:
+      input.tenant === 'lark'
+        ? 'https://open.larksuite.com'
+        : 'https://open.feishu.cn',
+    source: 'dsh-lark-bot-doctor',
+  });
+  const response = await channel.rawClient.im.message.list({
+    params: {
+      container_id_type: 'chat',
+      container_id: input.chatId,
+      sort_type: 'ByCreateTimeDesc',
+      page_size: 1,
+    },
+  });
+  if (response.code !== undefined && response.code !== 0) {
+    return {
+      ok: false,
+      error: `Feishu API ${response.code}: ${response.msg ?? 'unknown error'}`,
+    };
+  }
+  return { ok: true };
 }
 
 async function runtimeProfileLinkVersion(

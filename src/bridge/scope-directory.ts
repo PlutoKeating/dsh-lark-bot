@@ -6,6 +6,7 @@ export interface ScopeEntry {
   scope: string;
   chatId: string;
   threadId: string | undefined;
+  chatMode?: 'p2p' | 'group' | 'topic';
   lastSeenAt: string;
 }
 
@@ -39,12 +40,19 @@ export class ScopeDirectory {
     }
   }
 
-  register(scope: string, chatId: string, threadId: string | undefined): void {
+  register(
+    scope: string,
+    chatId: string,
+    threadId: string | undefined,
+    chatMode?: 'p2p' | 'group' | 'topic',
+  ): void {
     const existing = this.data.entries[scope];
+    const resolvedChatMode = chatMode ?? existing?.chatMode;
     this.data.entries[scope] = {
       scope,
       chatId,
       threadId: threadId ?? existing?.threadId,
+      ...(resolvedChatMode ? { chatMode: resolvedChatMode } : {}),
       lastSeenAt: new Date().toISOString(),
     };
     this.schedulePersist();
@@ -66,6 +74,25 @@ export class ScopeDirectory {
 
   knownScopes(): string[] {
     return Object.keys(this.data.entries);
+  }
+
+  /** Unique chats observed by the bridge, including their persisted mode. */
+  knownChats(): Array<{
+    chatId: string;
+    chatMode: 'p2p' | 'group' | 'topic' | undefined;
+  }> {
+    const chats = new Map<
+      string,
+      { chatId: string; chatMode: 'p2p' | 'group' | 'topic' | undefined }
+    >();
+    for (const entry of Object.values(this.data.entries)) {
+      const existing = chats.get(entry.chatId);
+      chats.set(entry.chatId, {
+        chatId: entry.chatId,
+        chatMode: entry.chatMode ?? existing?.chatMode,
+      });
+    }
+    return [...chats.values()];
   }
 
   async flush(): Promise<void> {

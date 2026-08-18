@@ -43,7 +43,19 @@ dsh 以标准插件方式加载桥接引擎；首次启动（无凭据时）终�
 2. 使用飞书 App 扫码。
 3. 选择或创建 PersonalAgent 应用。
 4. 绑定成功后，桥接引擎在 dsh 进程内运行并发送欢迎卡片到私聊。
-5. 直接发送消息即可开始使用；群聊中需要 `@bot`。
+5. 直接发送消息即可开始使用；群聊默认需要 `@bot`。
+
+如需让 bot 接收群内未 @ 它的消息，先在目标群 `@bot` 一次以登记群聊，确认发送人已在
+`allowed_users`（扫码操作者默认加入，也可用 `/invite user <open_id>`），为应用授予
+`im:message.group_msg`，再以以下环境变量启动：
+
+```bash
+DSH_LARK_GROUP_NO_AT=true DSH_LARK_GROUP_POLL_MS=3000 dsh --profile dsh-lark
+```
+
+这是显式 opt-in：bridge 只轮询已登记群聊，只处理启动后的白名单真人消息，不回放历史积压；
+请在开启前确认群成员知情并符合组织的数据与隐私政策。开启后可运行 `dsh-lark-bot doctor`
+验证历史消息权限。
 
 在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
 

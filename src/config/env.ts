@@ -25,6 +25,10 @@ export interface RuntimeEnv {
   maxTokens: number | undefined;
   runTimeoutMs: number;
   stopGraceMs: number;
+  /** Opt-in group history polling to receive messages that do not mention the bot. */
+  groupNoAt: boolean;
+  /** Poll interval for group no-at history reads (minimum 1000ms). */
+  groupPollMs: number;
   /** Max agent runs allowed concurrently per scope (default 2). */
   scopeConcurrency: number;
   /** Live messages kept per scope before overflow is archived (default 40). */
@@ -66,6 +70,7 @@ const DEFAULTS = {
   model: 'deepseek-v4-flash',
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
+  groupPollMs: 3_000,
   scopeConcurrency: 2,
   retentionMsgs: 40,
   archiveMax: 50,
@@ -188,6 +193,21 @@ function parsePositiveIntMin(value: string | undefined, fallback: number, name: 
   return parsed;
 }
 
+function parseIntAtLeast(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  name: string,
+): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < minimum) {
+    throw new Error(`${name} must be an integer >= ${minimum}, got "${raw}"`);
+  }
+  return parsed;
+}
+
 export function loadRuntimeEnv(
   source: NodeJS.ProcessEnv = process.env,
 ): RuntimeEnv {
@@ -222,6 +242,13 @@ export function loadRuntimeEnv(
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
     stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
+    groupNoAt: parseBoolean(source.DSH_LARK_GROUP_NO_AT, false),
+    groupPollMs: parseIntAtLeast(
+      source.DSH_LARK_GROUP_POLL_MS,
+      DEFAULTS.groupPollMs,
+      1_000,
+      'DSH_LARK_GROUP_POLL_MS',
+    ),
     scopeConcurrency: parseMinOneInt(
       source.DSH_LARK_SCOPE_CONCURRENCY,
       DEFAULTS.scopeConcurrency,
