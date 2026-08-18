@@ -248,11 +248,12 @@ export async function startBridgeEngine(
           ...attachments.textFileNotes,
         ].filter(Boolean);
         const role = roleStore.roleForScope(scope);
+        const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
         const resolvedModel =
           models.get(scope) ??
           role?.model ??
           activeProfile.preferences.model ??
-          (await dshConfig.defaultModel().catch(() => undefined)) ??
+          (dshDefault ? `${dshDefault.provider}/${dshDefault.model}` : undefined) ??
           env.model;
         let modelRoute: Awaited<ReturnType<DshProviderManager['resolveModelRoute']>>;
         if (resolvedModel) {
@@ -310,7 +311,7 @@ export async function startBridgeEngine(
           ...(modelRoute?.provider === undefined
             ? {}
             : { provider: modelRoute.provider }),
-          model: resolvedModel,
+          model: modelRoute?.model ?? resolvedModel,
         };
         if (activeProfile.preferences.stopGraceMs !== undefined) {
           runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
@@ -349,6 +350,15 @@ export async function startBridgeEngine(
     dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     defaultModel: activeProfile.preferences.model ?? env.model,
+    resolveDefaultModel: async (scope: string) => {
+      const higherPriority =
+        roleStore.roleForScope(scope)?.model ?? activeProfile.preferences.model;
+      if (higherPriority) return higherPriority;
+      const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
+      return dshDefault
+        ? `${dshDefault.provider}/${dshDefault.model}`
+        : env.model;
+    },
     setDefaultModelPreference: async (model: string) => {
       await configStore.saveProfile(profileName, {
         tenant: activeProfile.tenant,

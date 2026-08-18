@@ -4,6 +4,7 @@ export interface ConfigHubInput {
   providers: DshProviderSummary[];
   defaultSelection: { provider: string; model: string } | undefined;
   currentModel: string;
+  currentSelection: string;
 }
 
 export interface WizardOption {
@@ -88,6 +89,29 @@ export function renderConfigHubCard(input: ConfigHubInput): object {
   const defaultLine = input.defaultSelection
     ? `\`${input.defaultSelection.model}\`（provider \`${input.defaultSelection.provider}\`）`
     : '（未设置）';
+  const modelIdCounts = new Map<string, number>();
+  for (const provider of input.providers) {
+    for (const model of provider.models) {
+      modelIdCounts.set(model.id, (modelIdCounts.get(model.id) ?? 0) + 1);
+    }
+  }
+  const modelButtons = input.providers.flatMap((provider) =>
+    provider.models.map((model) => {
+      const selection = `${provider.id}/${model.id}`;
+      const current = selection === input.currentSelection;
+      return (
+      button(
+          `${current ? '✅ ' : ''}${model.id}${(modelIdCounts.get(model.id) ?? 0) > 1 ? ` · ${provider.displayName}` : ''}`,
+          { cmd: 'cfg', action: 'model-use-direct', provider: provider.id, model: model.id },
+          current ? 'primary' : 'default',
+        )
+      );
+    }),
+  );
+  const modelRows: object[] = [];
+  for (let index = 0; index < modelButtons.length; index += 3) {
+    modelRows.push(buttonRow(modelButtons.slice(index, index + 3)));
+  }
 
   return {
     schema: '2.0',
@@ -107,6 +131,20 @@ export function renderConfigHubCard(input: ConfigHubInput): object {
             `dsh 默认模型：${defaultLine}`,
           ].join('\n'),
         },
+        ...[
+          ...(modelRows.length > 0
+            ? [
+              {
+                tag: 'markdown',
+                content: '**快速切换模型**（点击后下一轮消息生效）',
+              },
+              ...modelRows,
+            ]
+            : []),
+          buttonRow([
+            button('↩️ 恢复默认', { cmd: 'cfg', action: 'model-reset' }),
+          ]),
+        ],
         buttonRow([
           button('➕ 添加 Provider', { cmd: 'cfg', action: 'provider-add' }, 'primary'),
           button('✏️ 修改 Provider', { cmd: 'cfg', action: 'provider-update' }),

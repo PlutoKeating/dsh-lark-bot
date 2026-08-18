@@ -94,8 +94,10 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    模型切换通过每轮请求的 provider/model 路由与 dsh 热发布生效：桥接在每轮运行前调用
    `DshProviderManager.resolveModelRoute()` 把模型解析为「provider + model」，SDK 适配器在
    路由变化时关闭旧 runtime 并以新路由重建（`/model use` 下一轮真正生效）；`agent-default-model`
-   按 dsh 官方 schema 写入 `{ provider, model }` 双字段。管理入口提供 BotFather 式交互卡片
-   多轮向导（`src/commands/config-wizard.ts` + `src/card/config-cards.ts`，
+   按 dsh 官方 schema 写入 `{ provider, model }` 双字段。管理入口的主卡直接列出模型并以
+   `provider/model` 路由执行 per-scope 热切换、标记按「scope > role > profile > dsh > env」
+   解析出的实际当前模型，且始终提供“恢复默认”；增删 provider / 模型 / 凭据等写操作继续使用
+   BotFather 式交互卡片多轮向导（`src/commands/config-wizard.ts` + `src/card/config-cards.ts`，
    `src/bot/wizard-store.ts` 持有 per-scope 向导状态）。卡片全部使用 schema 2.0：
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，

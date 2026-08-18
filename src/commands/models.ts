@@ -74,12 +74,11 @@ function formatProviders(providers: readonly DshProviderSummary[]): string {
   return lines.join('\n');
 }
 
-async function findModelOwner(
+async function resolveModelSelection(
   ctx: CommandContext,
-  id: string,
-): Promise<DshProviderSummary | undefined> {
-  const providers = await ctx.dshConfig.listProviders();
-  return providers.find((provider) => provider.models.some((model) => model.id === id));
+  selection: string,
+): Promise<{ provider: string; model: string } | undefined> {
+  return ctx.dshConfig.resolveModelRoute(selection);
 }
 
 function deepseekModelInput(args: {
@@ -115,7 +114,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
         '**可用模型**（dsh 已配置）：',
         ...(modelLines.length > 0 ? modelLines : ['（暂无）']),
         '',
-        '用法：`/model use <id>`、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>]`',
+        '用法：`/model use <provider/model>`（也兼容唯一模型 ID）、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>]`',
       ].join('\n'),
     );
     return;
@@ -124,16 +123,17 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
   if (sub === 'use') {
     const id = rest.join(' ').trim();
     if (!id) {
-      await reply(ctx, '用法：`/model use <modelId>`');
+      await reply(ctx, '用法：`/model use <provider/model>`（也兼容唯一模型 ID）');
       return;
     }
-    const provider = await findModelOwner(ctx, id);
-    if (!provider) {
+    const route = await resolveModelSelection(ctx, id);
+    if (!route) {
       await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`);
       return;
     }
-    ctx.models.set(ctx.scope, id);
-    await reply(ctx, `已热切换当前会话模型：\`${id}\`（下一轮消息生效，无需重启 bot）。`);
+    const selection = id.includes('/') ? `${route.provider}/${route.model}` : route.model;
+    ctx.models.set(ctx.scope, selection);
+    await reply(ctx, `已热切换当前会话模型：\`${selection}\`（下一轮消息生效，无需重启 bot）。`);
     return;
   }
 
@@ -149,8 +149,8 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
       await reply(ctx, '用法：`/model default <modelId>`');
       return;
     }
-    const provider = await findModelOwner(ctx, id);
-    if (!provider) {
+    const route = await resolveModelSelection(ctx, id);
+    if (!route) {
       await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`);
       return;
     }

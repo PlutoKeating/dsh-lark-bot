@@ -93,8 +93,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
-| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（BotFather 式多轮向导） |
-| `/model use <id>` `/model default <id>` | 热切换当前会话模型 / 写入 dsh 默认模型 |
+| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
+| `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId>` | 管理 provider 的模型（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |

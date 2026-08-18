@@ -402,11 +402,21 @@ export class DshProviderManager {
     return providers.find((provider) => provider.models.some((model) => model.id === modelId));
   }
 
-  /** Resolve the full route (provider + model) for a model id. */
-  async resolveModelRoute(modelId: string): Promise<DshModelSelection | undefined> {
-    const provider = await this.resolveProviderForModel(modelId);
+  /** Resolve a bare model id or an explicit `<provider>/<model>` selection. */
+  async resolveModelRoute(selection: string): Promise<DshModelSelection | undefined> {
+    const separator = selection.indexOf('/');
+    if (separator > 0) {
+      const providerId = selection.slice(0, separator);
+      const modelId = selection.slice(separator + 1);
+      const provider = (await this.listProviders()).find(
+        (candidate) => candidate.id === providerId,
+      );
+      if (!provider?.models.some((model) => model.id === modelId)) return undefined;
+      return { provider: provider.id, model: modelId };
+    }
+    const provider = await this.resolveProviderForModel(selection);
     if (!provider) return undefined;
-    return { provider: provider.id, model: modelId };
+    return { provider: provider.id, model: selection };
   }
 
   async setDefaultModel(model: string): Promise<void> {

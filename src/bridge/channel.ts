@@ -61,6 +61,8 @@ export interface StartChannelDeps {
   dshConfig: DshProviderManager;
   defaultWorkspace: string;
   defaultModel: string;
+  /** Resolve role/profile/dsh/env precedence without a per-scope override. */
+  resolveDefaultModel?: (scope: string) => Promise<string | undefined>;
   /**
    * Persist the admin-chosen default model into the bridge profile
    * preferences so new sessions honor `/model default` even when a profile
@@ -172,6 +174,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       channel: commandChannel,
       defaultWorkspace: deps.defaultWorkspace,
       defaultModel: deps.defaultModel,
+      ...(deps.resolveDefaultModel
+        ? { resolveDefaultModel: () => deps.resolveDefaultModel!(scope) }
+        : {}),
       ...(deps.setDefaultModelPreference
         ? { setDefaultModelPreference: deps.setDefaultModelPreference }
         : {}),
@@ -306,6 +311,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           await handleConfigHubAction(
             typeof value.action === 'string' ? value.action : '',
             wizardContextFor(event, deps, commandChannel, scope),
+            value,
           );
         } catch (error) {
           log.fail('channel-wizard', error, { scope });
@@ -464,6 +470,7 @@ function wizardContextFor(
     | 'models'
     | 'wizardStore'
     | 'defaultModel'
+    | 'resolveDefaultModel'
     | 'setDefaultModelPreference'
   >,
   channel: CommandChannel,
@@ -479,6 +486,9 @@ function wizardContextFor(
     models: deps.models,
     wizards: deps.wizardStore,
     defaultModel: deps.defaultModel,
+    ...(deps.resolveDefaultModel
+      ? { resolveDefaultModel: () => deps.resolveDefaultModel!(scope) }
+      : {}),
     ...(deps.setDefaultModelPreference
       ? { setDefaultModelPreference: deps.setDefaultModelPreference }
       : {}),
