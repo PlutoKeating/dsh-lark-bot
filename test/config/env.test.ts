@@ -16,6 +16,8 @@ describe('loadRuntimeEnv', () => {
     expect(env.model).toBe('deepseek-v4-flash');
     expect(env.runTimeoutMs).toBe(300_000);
     expect(env.stopGraceMs).toBe(5_000);
+    expect(env.groupNoAt).toBe(false);
+    expect(env.groupPollMs).toBe(3_000);
     expect(env.heartbeatMs).toBe(5_000);
     expect(env.guardianDisabled).toBe(false);
     expect(env.guardianProfile).toBe('dsh-lark');
@@ -71,5 +73,17 @@ describe('loadRuntimeEnv', () => {
     expect(env.guardianStaleMs).toBe(20_000);
     expect(env.guardianEngineDeadMs).toBe(180_000);
     expect(env.heartbeatMs).toBe(10_000);
+  });
+
+  it('parses group no-at polling settings and rejects unsafe intervals', () => {
+    const env = loadRuntimeEnv({
+      DSH_LARK_GROUP_NO_AT: 'true',
+      DSH_LARK_GROUP_POLL_MS: '5000',
+    });
+    expect(env.groupNoAt).toBe(true);
+    expect(env.groupPollMs).toBe(5_000);
+    expect(() => loadRuntimeEnv({ DSH_LARK_GROUP_POLL_MS: '999' })).toThrow(
+      /DSH_LARK_GROUP_POLL_MS/,
+    );
   });
 });

@@ -362,6 +362,8 @@ export async function startBridgeEngine(
     defaultWorkspace,
     accessDefaultDeny: env.accessDefaultDeny,
     eventFreshnessMs: env.eventFreshnessMs,
+    groupNoAt: env.groupNoAt,
+    groupPollMs: env.groupPollMs,
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
     ...(options.createChannel ? { createChannel: options.createChannel } : {}),

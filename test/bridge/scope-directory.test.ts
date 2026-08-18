@@ -11,8 +11,8 @@ describe('ScopeDirectory', () => {
     try {
       const dir = new ScopeDirectory(path);
       await dir.load();
-      dir.register('chat-a', 'oc_group', undefined);
-      dir.register('chat-b:thread-1', 'oc_topic', 'thread-1');
+      dir.register('chat-a', 'oc_group', undefined, 'group');
+      dir.register('chat-b:thread-1', 'oc_topic', 'thread-1', 'topic');
       await dir.flush();
 
       expect(dir.resolve('chat-a')).toEqual({ chatId: 'oc_group', threadId: undefined });
@@ -27,6 +27,10 @@ describe('ScopeDirectory', () => {
       await reloaded.load();
       expect(reloaded.resolve('chat-b:thread-1')?.threadId).toBe('thread-1');
       expect(reloaded.knownScopes().sort()).toEqual(['chat-a', 'chat-b:thread-1']);
+      expect(reloaded.knownChats()).toEqual([
+        { chatId: 'oc_group', chatMode: 'group' },
+        { chatId: 'oc_topic', chatMode: 'topic' },
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

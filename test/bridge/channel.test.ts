@@ -7,8 +7,10 @@ import type {
 } from '@larksuite/channel';
 import type { AgentAdapter, AgentAvailability, AgentRun } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ApprovalRegistry } from '../../src/bot/approvals.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
+import { QuestionRegistry } from '../../src/bot/questions.js';
 import { WizardStore } from '../../src/bot/wizard-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
@@ -29,11 +31,13 @@ function makeChannel(): {
   channel: LarkChannel;
   handlers: Handlers;
   sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }>;
+  recalled: string[];
   createChannel: (options?: LarkChannelOptions) => LarkChannel;
   createOptions: Record<string, unknown> | undefined;
 } {
   const handlers: Handlers = {};
   const sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }> = [];
+  const recalled: string[] = [];
 
   const channel = {
     on(next: Handlers) {
@@ -48,6 +52,9 @@ function makeChannel(): {
       },
     ),
     stream: vi.fn().mockResolvedValue(undefined),
+    recallMessage: vi.fn().mockImplementation(async (messageId: string) => {
+      recalled.push(messageId);
+    }),
   } as unknown as LarkChannel;
 
   let createOptions: Record<string, unknown> | undefined;
@@ -55,6 +62,7 @@ function makeChannel(): {
     channel,
     handlers,
     sent,
+    recalled,
     get createOptions() {
       return createOptions;
     },
@@ -99,6 +107,189 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('confirms and recalls an approval card after resolving the permission request', async () => {
+    const fake = makeChannel();
+    const approvals = new ApprovalRegistry();
+    const outcome = approvals.register('chat-1:thread-1', {
+      id: 'approval-1',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: 'write outside the workspace',
+      options: [],
+    });
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: {
+        push: vi.fn(),
+        size: vi.fn().mockReturnValue(0),
+        isFlushing: vi.fn().mockReturnValue(false),
+        isBlocked: vi.fn().mockReturnValue(false),
+      } as never,
+      approvals,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    const response = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'approval-card-message',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'approve', id: 'approval-1', outcome: 'allow' } },
+      raw: { message: { thread_id: 'thread-1' } },
+    });
+
+    await expect(outcome).resolves.toBe('allowed-once');
+    expect(response).toEqual({
+      toast: { type: 'success', content: '已允许' },
+    });
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已允许');
+      expect(fake.sent.at(-1)?.options).toEqual({
+        replyTo: 'approval-card-message',
+        replyInThread: true,
+      });
+      expect(fake.recalled).toEqual(['approval-card-message']);
+    });
+
+    const confirmFailureOutcome = approvals.register('chat-1:thread-1', {
+      id: 'approval-2',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: undefined,
+      options: [],
+    });
+    vi.mocked(fake.channel.send).mockRejectedValueOnce(new Error('confirm unavailable'));
+    await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'approval-card-confirm-failure',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'approve', id: 'approval-2', outcome: 'allow' } },
+      raw: { message: { thread_id: 'thread-1' } },
+    });
+    await expect(confirmFailureOutcome).resolves.toBe('allowed-once');
+    await vi.waitFor(() => {
+      expect(fake.recalled).toContain('approval-card-confirm-failure');
+    });
+
+    const recallFailureOutcome = approvals.register('chat-1:thread-1', {
+      id: 'approval-3',
+      sessionId: 'session-1',
+      toolName: 'write_file',
+      reason: undefined,
+      options: [],
+    });
+    vi.mocked(fake.channel.recallMessage).mockRejectedValueOnce(new Error('recall unavailable'));
+    await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'approval-card-recall-failure',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'approve', id: 'approval-3', outcome: 'reject' } },
+      raw: { message: { thread_id: 'thread-1' } },
+    });
+    await expect(recallFailureOutcome).resolves.toBe('rejected');
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已拒绝');
+    });
+  });
+
+  it('confirms and recalls a question card after recording the submitted answer', async () => {
+    const fake = makeChannel();
+    const questions = new QuestionRegistry();
+    const pendingQuestion = questions.register('chat-1', {
+      question: 'Deploy now?',
+      kind: 'single',
+      options: ['Yes', 'No'],
+    });
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: {
+        push: vi.fn(),
+        size: vi.fn().mockReturnValue(0),
+        isFlushing: vi.fn().mockReturnValue(false),
+        isBlocked: vi.fn().mockReturnValue(false),
+      } as never,
+      questions,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    const response = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'question-card-message',
+      operator: { openId: 'user-1' },
+      action: {
+        value: { cmd: 'question-submit', id: pendingQuestion.id },
+        formValue: { answer: 'Yes' },
+      },
+    });
+
+    await expect(pendingQuestion.promise).resolves.toBe('Yes');
+    expect(response).toEqual({
+      toast: { type: 'success', content: '回答已提交' },
+    });
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已提交');
+      expect(fake.sent.at(-1)?.options).toEqual({ replyTo: 'question-card-message' });
+      expect(fake.recalled).toEqual(['question-card-message']);
+    });
+  });
+
   it('routes slash commands to the command channel and queues ordinary messages', async () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');
@@ -275,6 +466,132 @@ describe('startChannel', () => {
       'chat-1',
       expect.objectContaining({ content: 'another task' }),
     );
+  });
+
+  it('routes polled no-at group messages through the live pipeline without duplicating events', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const fake = makeChannel();
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const historyItem = (messageId: string) => ({
+      messageId,
+      chatId: 'oc-group',
+      createTime: 10_001,
+      senderId: 'ou-allowed',
+      senderType: 'user',
+      messageType: 'text',
+      deleted: false,
+    });
+    const groupHistorySource = {
+      listMessages: vi.fn().mockResolvedValue({
+        items: [historyItem('om-event'), historyItem('om-polled')],
+        hasMore: false,
+      }),
+      fetchMessage: vi.fn().mockImplementation(async (messageId: string) =>
+        message({
+          messageId,
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-allowed',
+          senderType: 'user',
+          senderIsBot: false,
+          content: messageId === 'om-event' ? 'event copy' : 'without mention',
+          createTime: 10_001,
+        }),
+      ),
+    };
+    const scopeDirectory = {
+      register: vi.fn(),
+      knownChats: () => [{ chatId: 'oc-group', chatMode: 'group' as const }],
+      resolve: vi.fn(),
+      resolveChat: vi.fn(),
+      knownScopes: vi.fn().mockReturnValue(['oc-group']),
+      flush: vi.fn(),
+    };
+    vi.mocked(fake.channel.connect).mockImplementation(async () => {
+      await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+        message({
+          messageId: 'om-event',
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-allowed',
+          senderType: 'user',
+          content: 'live event during connect',
+          createTime: 10_001,
+        }),
+      );
+    });
+    let bridge: Awaited<ReturnType<typeof startChannel>> | undefined;
+    try {
+      bridge = await startChannel({
+        appId: 'cli_test',
+        appSecret: 'secret',
+        tenant: 'feishu',
+        adapter: fakeAdapter(),
+        sessions: new SessionStore(':memory:'),
+        workspaces: new WorkspaceStore(':memory:'),
+        activeRuns: new ActiveRuns(),
+        runPolicies: new RunPolicyStore(),
+        concurrencyStore: new ConcurrencyStore(),
+        defaultScopeConcurrency: 2,
+        retentionStore: new RetentionStore(),
+        roleStore: new RoleStore(':memory:'),
+        scopeDirectory: scopeDirectory as never,
+        archiver: {
+          archive: vi.fn(),
+          list: vi.fn().mockResolvedValue([]),
+          prune: vi.fn().mockResolvedValue(0),
+        } as never,
+        defaultRetention: 40,
+        archiveMax: 50,
+        archiveMaxAgeDays: 90,
+        defaultRunTimeoutMs: 300_000,
+        models: new ModelStore(),
+        wizardStore: new WizardStore(),
+        dshConfig: new DshProviderManager({
+          home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+        }),
+        defaultModel: 'deepseek-v4-flash',
+        accessManager: {
+          snapshot: () => ({
+            allowedUsers: ['ou-allowed'],
+            allowedChats: [],
+            admins: [],
+          }),
+        } as never,
+        pending: pending as never,
+        defaultWorkspace: '/tmp/project',
+        eventFreshnessMs: 600_000,
+        groupNoAt: true,
+        groupPollMs: 3_000,
+        groupHistorySource,
+        createChannel: fake.createChannel,
+      });
+
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      expect(pending.push.mock.calls.map(([, msg]) => msg.messageId)).toEqual([
+        'om-event',
+        'om-polled',
+      ]);
+      expect(groupHistorySource.fetchMessage).toHaveBeenCalledTimes(1);
+      expect(scopeDirectory.register).toHaveBeenCalledWith(
+        'oc-group',
+        'oc-group',
+        undefined,
+        'group',
+      );
+    } finally {
+      await bridge?.disconnect();
+      vi.useRealTimers();
+    }
   });
 
   it('routes wizard card actions to the interactive config flow', async () => {

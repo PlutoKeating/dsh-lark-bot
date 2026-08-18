@@ -77,7 +77,7 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 dsh --profile dsh-lark
 ```
 
-③ 首次启动终端打印二维码 → 飞书 / Lark App 扫码创建或选择 PersonalAgent 应用 → 绑定后私聊直接发消息，群聊 / 话题里 `@bot`。
+③ 首次启动终端打印二维码 → 飞书 / Lark App 扫码创建或选择 PersonalAgent 应用 → 绑定后私聊直接发消息；群聊 / 话题默认 `@bot`，也可显式开启受白名单保护的无 @ 模式。
 
 `setup` 自动完成：定位本机 dsh → 预批准 pnpm 构建策略 → 标准 `dsh plugin add` → 默认安装「安全网守护」系统服务，一条命令完成全部安装。
 
@@ -135,6 +135,8 @@ dsh --profile dsh-lark
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本），回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
+
+审批卡与问答卡提交后会立即显示成功提示、发送一条终态确认并撤回原卡，避免按钮仍停留在聊天中造成“未生效”的误解；确认或撤回失败不会影响已经提交给 agent 的审批结果或答案。
 
 **安全网守护**：独立于 dsh 进程、系统级常驻的最小守护进程（systemd / LaunchAgent / Windows 启动项），默认随 `setup` 安装。dsh 正常时静默；dsh 下线或无法 boot（如第三方插件破坏 profile 组合）时自动接管飞书通道，无需命令行即可自救：
 
@@ -240,7 +242,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: DeepSeek Harness 怎么接入飞书？**
 
-**A:** 安装 Node.js ≥ 22 与 DeepSeek Harness（已配置 `DEEPSEEK_API_KEY`），执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 扫码绑定即可。私聊直接发消息，群聊 / 话题里 `@bot`。
+**A:** 安装 Node.js ≥ 22 与 DeepSeek Harness（已配置 `DEEPSEEK_API_KEY`），执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 扫码绑定即可。私聊直接发消息；群聊 / 话题默认 `@bot`，也可按下文的权限与白名单要求开启无 @ 模式。
 
 **Q: 需要公网 IP、域名或服务器吗？**
 
@@ -322,6 +324,8 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成时推送到飞书并自动切换会话映射（`0` 关闭）|
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊|
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）|
+| `DSH_LARK_GROUP_NO_AT` | `false` | 开启已登记群聊的无 @ 历史轮询；要求 `im:message.group_msg` 权限和非空 `allowed_users` |
+| `DSH_LARK_GROUP_POLL_MS` | `3000` | 无 @ 群消息轮询间隔（毫秒，最小 1000）|
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）|
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期|
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行）|
@@ -353,6 +357,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
+- **可选群消息历史**：仅当 `DSH_LARK_GROUP_NO_AT=true` 时，轮询曾经通过事件登记的群聊 / 话题；只处理启动后的、未删除的白名单真人消息，并与实时事件按 message ID 去重。该模式会让 bot 读取群内未 @ 它的消息，需管理员授予 `im:message.group_msg` 权限并确认符合团队隐私政策。
 - **本地回调**：运行 `lark_notify` 工具时，dsh runtime 子进程通过 `127.0.0.1` 随机端口 +
   每启动随机 token 回调 bridge 进程（仅本机回环，不监听公网）。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
@@ -369,7 +374,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 ## 排障
 
 先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并对当前 adapter 做真实可用性探测
-（`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）。
+（`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）；启用无 @ 群消息后，还会使用一个已登记群聊探测历史消息权限。
 
 常见问题：
 

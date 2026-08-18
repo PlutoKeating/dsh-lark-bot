@@ -80,7 +80,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 
 ## 关键决策 · Key Decisions
 
-1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。
+1. **飞书通道**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode` 以区分普通群聊与话题 scope，免公网服务器、免域名、免内网穿透。PersonalAgent 群事件默认只覆盖 @ 消息；可通过 `DSH_LARK_GROUP_NO_AT=true` 显式启用历史 API 增量轮询。轮询仅面向 `ScopeDirectory` 已登记的 group/topic，以 per-chat 水位和跨实时/轮询 message ID claim 去重，经过与实时事件相同的白名单、freshness、bot/system/deleted 过滤及消息处理管线；进程启动时间作为初始水位，不回放历史积压。该模式要求非空显式用户白名单与 `im:message.group_msg` 权限，并由 `doctor` 做 best-effort 实际权限探测。
 2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端。默认走官方
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
@@ -100,6 +100,9 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
+   审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
+   完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
+   失败只记录结构化日志，不能阻塞 agent 继续运行。
 5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
