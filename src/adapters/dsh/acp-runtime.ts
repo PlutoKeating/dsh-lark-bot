@@ -7,6 +7,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
+import { profilePackageMatches } from './profile-package.js';
 
 export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
 export const ACP_VERSION = DSH_COMPATIBILITY.acp;
@@ -106,21 +107,13 @@ export function acpPatchYaml(provider: string, model: string): string {
   ].join('\n');
 }
 
-function acpPluginInstalled(profileRoot: string): boolean {
-  const candidates = [
-    join(profileRoot, 'node_modules', ACP_PACKAGE),
-    join(profileRoot, '..', 'node_modules', ACP_PACKAGE),
-  ];
-  return candidates.some((path) => existsSync(path));
-}
-
 export function isAcpProfileReady(profileRoot: string): boolean {
   const own = ownPackageInfo();
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    acpPluginInstalled(profileRoot) &&
+    profilePackageMatches(profileRoot, ACP_PACKAGE, ACP_VERSION) &&
     ownPackageLinked(profileRoot, own)
   );
 }

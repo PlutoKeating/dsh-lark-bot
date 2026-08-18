@@ -207,7 +207,8 @@
 - **一行命令**：`npx dsh-lark-bot@latest upgrade --profile <name> --yes`（旧版本无 upgrade
   命令，经 npx 拉取最新版执行，实现对任意旧用户的一行彻底更新）。
 - **覆盖范围**：包本体（`dsh plugin add <name>@<latest>`）+ guardian（幂等重装并重启服务）+
-  runtime profile（dsh-lark-sdk / dsh-lark-acp own-package 链接修复）+ 升级后 `doctor` 验证。
+  runtime profile（dsh-lark-sdk / dsh-lark-acp own-package 链接修复 + 陈旧 SDK/ACP 依赖
+  即时重装）+ 升级后 `doctor` 验证。
 - **运行中实例安全**：默认不中断运行中 dsh profile（只提示重启命令，配置 / 会话 / 凭据不受
   影响）；`--restart` 可选自动重启 guardian 与受管 profile。
 - **可回滚 / 可重入**：每次变更记录 `~/.dsh-lark/upgrade-state.json`，`--rollback` 精确回滚到

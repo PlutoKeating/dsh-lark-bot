@@ -266,6 +266,9 @@ per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作�
 dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
+当前 rc.7 runtime profile 会校验物理安装包的精确版本，不能仅凭目录存在判定 ready；
+`lark_notify` / `lark_ask_user` 直接向宿主 registry 注册 raw JSON Schema tool definition，
+不携带第二份 `dsh-tools`。完整审计见 [`DSH_RC7_AUDIT.md`](DSH_RC7_AUDIT.md)。
 
 `src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 `retention` 条对话
 （默认 40），`recordExchange` 支持传入 `{ retention, onArchive }`：超出保留窗口的消息先交给
@@ -503,7 +506,8 @@ export interface Logger {
 - `dsh-lark-bot upgrade [--profile <name>] [--check] [--yes] [--no-guardian] [--restart]
   [--rollback] [--force] [--package <spec>]`：一行命令彻底升级（issue #10）——检测已装 /
   运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → **修复
-  `dsh-lark-sdk` / `dsh-lark-acp` runtime profile 的 own-package 链接** → 幂等重装并
+  `dsh-lark-sdk` / `dsh-lark-acp` runtime profile 的 own-package 链接并重装陈旧的
+  SDK server / ACP 依赖** → 幂等重装并
   重启 guardian 服务 → `doctor` 验证。运行中实例默认只提示重启命令（不中断会话）；
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；

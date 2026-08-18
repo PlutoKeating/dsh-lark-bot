@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ACP_PACKAGE,
+  ACP_VERSION,
   DEFAULT_ACP_PROFILE,
   acpPatchYaml,
   acpProfileRoot,
@@ -24,7 +25,10 @@ function installPlugin(root: string) {
     const own = ownPackageInfo();
     const pluginRoot = join(root, 'node_modules', ...ACP_PACKAGE.split('/'));
     await mkdir(pluginRoot, { recursive: true });
-    await writeFile(join(pluginRoot, 'package.json'), JSON.stringify({ name: ACP_PACKAGE }));
+    await writeFile(
+      join(pluginRoot, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
+    );
     await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
   };
 }
@@ -98,7 +102,7 @@ describe('ensureAcpProfile', () => {
     await mkdir(join(root, 'node_modules', ...ACP_PACKAGE.split('/')), { recursive: true });
     await writeFile(
       join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
-      JSON.stringify({ name: ACP_PACKAGE }),
+      JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
     );
     await mkdir(join(root, 'node_modules', own.name), { recursive: true });
     await writeFile(
@@ -138,5 +142,21 @@ describe('ensureAcpProfile', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.error).toContain('registry unreachable');
+  });
+
+  it('rejects an otherwise complete profile with a stale ACP version', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-acp-old-version-'));
+    tempDirs.push(home);
+    const root = acpProfileRoot(home, DEFAULT_ACP_PROFILE);
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, 'package.json'), '{}');
+    await writeFile(join(root, 'cordis.yml'), '[]\n');
+    await writeFile(join(root, 'cordis.patch.yml'), '[]\n');
+    await installPlugin(root)();
+    await writeFile(
+      join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.6' }),
+    );
+    expect(isAcpProfileReady(root)).toBe(false);
   });
 });

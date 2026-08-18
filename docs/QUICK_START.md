@@ -6,6 +6,7 @@
 
 - Node.js ≥ 22.19
 - 已安装 DeepSeek Harness（`dsh`）并配置 `DEEPSEEK_API_KEY`
+- 当前兼容基线为 dsh `0.1.0-rc.7`；托管 SDK / ACP runtime 会自动修复旧版本 profile
 - 一个飞书 / Lark 账号
 
 ## 2. 安装（唯一路径）

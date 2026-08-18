@@ -10,14 +10,14 @@
 
 - 任何安装形态（含 v0.7.0 前的遗留形态、旧版本、`npx` 引导）都能可靠、可回滚地升级到最新；
 - 升级不丢配置 / 会话 / 凭据；运行中实例不被无提示打断（或提供明确、可接受的生效路径）；
-- 版本信息处处一致：profile 包 / runtime profile 链接 / guardian 服务单元 / npm / 兼容矩阵。
+- 版本信息处处一致：profile 包 / runtime profile 链接及 SDK/ACP 依赖 / guardian 服务单元 / npm / 兼容矩阵。
 
 ## 2. 组件与路径总览 · Components
 
 | 组件 Component | 路径 Path | 说明 Notes |
 | :--- | :--- | :--- |
 | 包本体 Package | `~/.dsh/profiles/<profile>/node_modules/dsh-lark-bot` | pnpm 安装（vendor tgz 或 npm），`dsh plugin add <name>@<version>` 更新 |
-| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接一致性修复 |
+| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接一致性修复及陈旧 SDK/ACP 依赖即时重装 |
 | guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向 CLI 入口；**必须指向稳定路径**（见 §5） |
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
@@ -45,7 +45,7 @@
 2. `resolveTarget`：`--rollback` → `--package <name>@<version>` → npm latest；
 3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
-5. runtime profile 链接修复（sdk/acp own-package）；
+5. runtime profile 链接修复（sdk/acp own-package）并幂等重装陈旧 SDK server / ACP 依赖；
 6. `doctor` 升级后验证；
 7. 记录 `upgrade-state.json`（支持 `--rollback`）。
 

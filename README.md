@@ -196,7 +196,7 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - `--force`：无法访问 npm（离线）时按当前运行版本重装；
 - `--no-guardian`：跳过守护升级；
 - **runtime profile 一致性修复**：升级后自动把 `dsh-lark-sdk` / `dsh-lark-acp` 的
-  own-package 链接重指到新版本（避免下次启动重新预置）。
+  own-package 链接重指到新版本，并当场幂等重装版本陈旧的 SDK server / ACP 依赖。
 
 无需交互确认时加 `--yes`（非交互环境不带 `--yes` 会安全中止）。其余方式：
 
@@ -267,10 +267,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 兼容性
 
-- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.6**（最后验证 2026-08-15：SDK JSON-RPC / ACP runtime 握手 +
-  真实任务流式验证），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
+- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.7**（最后验证 2026-08-19：临时安装 + SDK JSON-RPC / ACP runtime initialize 握手），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
   具体锁定版本、升级政策与自动化探测见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)，
-  adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)。
+  adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)，rc.7 差异、已知风险和
+  自动/人工验证边界见 [`docs/DSH_RC7_AUDIT.md`](docs/DSH_RC7_AUDIT.md)。
 - **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
@@ -400,7 +400,7 @@ pnpm build
 pnpm check:publish-bundle   # 校验 dist 与全部 exports/bin 入口一致（发布前防线）
 pnpm ci:local
 pnpm release:check   # ci:local + 上游一致性检查
-pnpm compat:probe    # 临时 DSH_HOME 安装锁定版 dsh，跑真实 SDK 握手
+pnpm compat:probe    # 临时安装锁定版 dsh，验证 SDK/ACP 握手及 SDK 工具/续接
 pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵
 pnpm security:monitor # 假冒仓库与仿冒包监控（建议每周）
 ```
@@ -507,7 +507,7 @@ pnpm publish:dual
 | `src/bot/` | 运行注册、消息排队、审批/问答注册表|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run`|
-| `src/upgrade/` | 一键升级（issue #10）：版本探测、升级状态、运行检测、guardian/profile 重启助手、runtime 链接修复|
+| `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|
 | `src/guardian/` | 安全网守护：心跳、进程观察、仅核心安全 profile、接管状态机、系统服务安装|
 | `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理|
 | `src/core/` | 结构化日志|

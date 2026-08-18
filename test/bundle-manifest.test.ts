@@ -8,6 +8,7 @@ describe('dsh bundle manifest', () => {
       exports?: Record<string, unknown>;
       files?: string[];
       peerDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
     };
     expect(pkg.dsh?.bundle?.patch).toBe('./cordis.patch.yml');
     expect(pkg.exports?.['./plugin']).toBeDefined();
@@ -15,6 +16,9 @@ describe('dsh bundle manifest', () => {
     expect(pkg.exports?.['./notify']).toBeDefined();
     expect(pkg.files).toContain('cordis.patch.yml');
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis']).toMatch(/^(\^|>=)/);
+    // Tool plugins register raw JSON-Schema definitions against the host
+    // registry; a direct dsh-tools dependency can create a second Symbol realm.
+    expect(pkg.dependencies?.['@deepseek-ai/dsh-tools']).toBeUndefined();
   });
 
   it('ships a bundle patch whose row references the plugin entry', async () => {

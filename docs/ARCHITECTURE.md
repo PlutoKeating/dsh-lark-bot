@@ -85,7 +85,11 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
    `DSH_LARK_ADAPTER=web` 走本地 dsh web agent（`session.prompt` + `/api/events.mux`，单写者，根治双写）。
-   桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约，dsh 漂移只影响 `src/adapters/dsh/`。
+   桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约；dsh 协议漂移集中在
+   `src/adapters/dsh/`，宿主工具 registry 漂移集中在 `src/notify/` 的 raw-schema 注册边界。
+   当前兼容基线为 rc.7；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
+   核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
+   block；出站图片在 channel 增加二进制能力前输出明确降级提示。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
 4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写
    dsh 官方配置存储（`~/.dsh/settings.yaml` + `~/.dsh/.credentials.yaml`），与 dsh Web
@@ -113,6 +117,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    持久化 scope → chat/thread 映射；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
+   `lark_notify` / `lark_ask_user` 以宿主支持的 raw JSON Schema definition 注册，不运行时
+   导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
 7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
@@ -120,7 +126,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `guardian run|install|uninstall|status`，README 只记录这一条路径。
 9. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
-   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复 → `doctor` 升级后验证；
+   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复与陈旧上游依赖幂等重装
+   → `doctor` 升级后验证；
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
    通过 `npx dsh-lark-bot@latest upgrade` 引导：npx 拉取最新版执行升级。
@@ -153,7 +160,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/bot/` | 运行注册、消息排队 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |
-| `src/upgrade/` | 一键升级（issue #10）：版本探测、升级状态记录、运行状态检测、guardian / profile 重启助手、runtime profile 链接修复 |
+| `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |
