@@ -109,4 +109,15 @@ describe('archive slash commands', () => {
       { replyTo: 'msg-1' },
     );
   });
+
+  it('lists and cleans archives only for the current workspace', async () => {
+    const ctx = makeContext();
+    await tryHandleCommand('/archive list', ctx);
+    expect(ctx.archiver.list).toHaveBeenCalledWith('chat-a', '/tmp/default');
+
+    await tryHandleCommand('/archive clean', ctx);
+    expect(ctx.archiver.prune).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'chat-a', cwd: '/tmp/default',
+    }));
+  });
 });

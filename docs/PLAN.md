@@ -38,6 +38,7 @@
 ## 3. P2 验收标准
 
 - [x] `/cd` 与 `/ws` 工作目录切换
+- [x] scope + workspace 独立 session：切换中断旧 workspace active run 但保留会话，A → B → A 恢复，`/new` 仅清当前工作区（issue #26）
 - [x] 群聊 `/isolation group|topic|member` 持久化 scope 路由；切换不删除既有各级会话数据
 - [x] 成员隔离运行卡显示 scope owner（仅隔离 agent 上下文，不改变共享群消息可见性）
 - [x] git worktree 隔离

@@ -92,10 +92,18 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
    block；出站图片在 channel 增加二进制能力前输出明确降级提示。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
-   `SessionStore` 在同一 `sessions.json` 中分别保存 transcript/session binding 与 per-scope
-   session metrics；run-flow 只接收 adapter 翻译出的真实 `usage` / `context_usage` 事件并累计，
-   不从文本长度推算。累计 token 归属 scope，最近 context 快照则按产生它的 native session 与 canonical
-   provider/model 分别保存；`/status` 只展示和当前身份匹配的快照，并发 run 不互相覆盖，切换后的旧值按不可得处理。
+   `SessionStore` schema 2 在同一 `sessions.json` 中按 scope + canonical workspace cwd 分别保存
+   transcript、native binding 与 metrics；schema 1 在启动时按 `WorkspaceStore` 当前选择迁移。消息入队
+   时固化 workspace，切换期间不会把旧任务重路由。`/cd` / `/ws use` 中断原 workspace 的 active run，
+   但保留其 session / transcript / metrics / archive，A → B → A 恢复 A；`/new` / `/reset` 只清当前
+   workspace。Git worktree 由 scope + base path hash 派生，同 scope 的不同项目不共用目录；schema 1
+   迁移先从旧 scope-only worktree 的 Git registry 解析 owning repo，把 session 与旧 retention archive
+   header 归回真实项目（逐文件原子、半完成可识别并在下次启动幂等重试，归档仓库留下 migration
+   commit）；全部成功后才持久化 session schema 2。请求项目
+   匹配 owner 时才 `git worktree move` 原位迁移；不匹配则保留旧树并为当前项目建新树。run-flow 只接收 adapter 翻译出的真实 `usage` /
+   `context_usage` 事件并累计，不从文本长度推算。累计 token 归属 workspace，最近 context 快照按
+   workspace、native session 与 canonical provider/model 分别保存；`/status` 的 run / pending 和
+   `/archive list|clean` 都只展示或操作当前 workspace，并发 run 不互相覆盖。
    `/status` 的纯 renderer 从 stores/registries 组装可刷新卡；refresh action
    固化 scope，并复用 member owner 授权后通过消息 `messageId` 原位更新。
 4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写

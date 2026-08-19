@@ -112,7 +112,7 @@ const HELP = [
   '',
   '- `/new` `/reset` — 开始新会话',
   '- `/newg <群名>` — 自动新建群聊（拉你入群）并开新会话，当前会话保留',
-  '- `/cd <path>` — 切换工作目录并重置会话',
+  '- `/cd <path>` — 切换到该目录的独立会话（切回可继续）',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看可刷新状态卡、上下文/token 用量与待处理卡',
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
@@ -148,8 +148,9 @@ async function reply(ctx: CommandContext, markdown: string): Promise<void> {
 }
 
 async function handleNew(_args: string, ctx: CommandContext): Promise<void> {
-  const interrupted = await ctx.activeRuns.interrupt(ctx.scope);
-  ctx.sessions.clear(ctx.scope);
+  const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+  const interrupted = await ctx.activeRuns.interruptWorkspace(ctx.scope, cwd);
+  ctx.sessions.clear(ctx.scope, cwd);
   await reply(
     ctx,
     interrupted > 0 ? `已中断 ${String(interrupted)} 个任务并开始新会话。` : '已开始新会话。',
@@ -221,10 +222,15 @@ async function handleCd(args: string, ctx: CommandContext): Promise<void> {
     return;
   }
   const cwd = resolve(path);
-  await ctx.activeRuns.interrupt(ctx.scope);
+  const previous = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+  const interrupted = cwd === previous
+    ? 0
+    : await ctx.activeRuns.interruptWorkspace(ctx.scope, previous);
   ctx.workspaces.setCwd(ctx.scope, cwd);
-  ctx.sessions.clear(ctx.scope);
-  await reply(ctx, `已切换工作目录：\`${cwd}\`，会话已重置。`);
+  await reply(
+    ctx,
+    `已切换工作目录：\`${cwd}\`；该工作区的会话会独立恢复。${interrupted > 0 ? `已中断原工作区 ${String(interrupted)} 个运行中任务（会话数据保留）。` : ''}`,
+  );
 }
 
 async function handleWs(args: string, ctx: CommandContext): Promise<void> {
@@ -274,11 +280,16 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
       await reply(ctx, `未找到工作空间：**${name}**`);
       return;
     }
-    await ctx.activeRuns.interrupt(ctx.scope);
+    const previous = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+    const interrupted = cwd === previous
+      ? 0
+      : await ctx.activeRuns.interruptWorkspace(ctx.scope, previous);
     ctx.workspaces.setCwd(ctx.scope, cwd);
     ctx.workspaces.touchNamed(name);
-    ctx.sessions.clear(ctx.scope);
-    await reply(ctx, `已切换到工作空间：**${name}** → \`${cwd}\``);
+    await reply(
+      ctx,
+      `已切换到工作空间：**${name}** → \`${cwd}\`；该工作区的会话会独立恢复。${interrupted > 0 ? `已中断原工作区 ${String(interrupted)} 个运行中任务（会话数据保留）。` : ''}`,
+    );
     return;
   }
 
@@ -318,15 +329,19 @@ export async function statusCardInputFor(
   ctx: StatusContext,
 ): Promise<StatusCardInput> {
   const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
-  const sessionId = ctx.sessions.getRaw(ctx.scope)?.sessionId;
-  const active = ctx.activeRuns.list(ctx.scope);
+  const sessionId = ctx.sessions.getRaw(ctx.scope, cwd)?.sessionId;
+  const active = ctx.activeRuns.listWorkspace(ctx.scope, cwd);
   const role = ctx.roleStore.roleForScope(ctx.scope);
   const model =
     ctx.models.get(ctx.scope) ??
     await ctx.resolveDefaultModel?.() ??
     ctx.defaultModel;
   const modelIdentity = await canonicalModelIdentity(ctx.dshConfig, model);
-  const storedMetrics = ctx.sessions.metricsFor(ctx.scope, { sessionId, model: modelIdentity });
+  const storedMetrics = ctx.sessions.metricsFor(
+    ctx.scope,
+    cwd,
+    { sessionId, model: modelIdentity },
+  );
   const configuredWindow =
     storedMetrics?.contextWindow ??
     await configuredContextWindow(ctx.dshConfig, model);
@@ -337,6 +352,18 @@ export async function statusCardInputFor(
           ...(configuredWindow === undefined ? {} : { contextWindow: configuredWindow }),
         }
       : undefined;
+  const pendingOwners = new Set<string>();
+  if (sessionId) pendingOwners.add(sessionId);
+  pendingOwners.add(`workspace:${cwd}`);
+  for (const run of active) pendingOwners.add(run.runId);
+  const pendingForWorkspace = (
+    registry: { pendingCount(scope: string, sessionId?: string): number } | undefined,
+  ): number => {
+    if (!registry) return 0;
+    let count = 0;
+    for (const owner of pendingOwners) count += registry.pendingCount(ctx.scope, owner);
+    return count;
+  };
   return {
     scope: ctx.scope,
     cwd,
@@ -348,9 +375,9 @@ export async function statusCardInputFor(
     role: role ? `\`${role.id}\` (${role.name})` : undefined,
     metrics,
     pending: {
-      approvals: ctx.approvals?.pendingCount(ctx.scope) ?? 0,
-      questions: ctx.questions?.pendingCount(ctx.scope) ?? 0,
-      plans: ctx.plans?.pendingCount(ctx.scope) ?? 0,
+      approvals: pendingForWorkspace(ctx.approvals),
+      questions: pendingForWorkspace(ctx.questions),
+      plans: pendingForWorkspace(ctx.plans),
     },
   };
 }
@@ -581,11 +608,13 @@ async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
     await reply(ctx, '问答卡未启用（请确认 questions 已接线）。');
     return;
   }
+  const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
   const answer = await questionHandlerFor({
     questions: ctx.questions,
     channel: ctx.channel,
     chatId: ctx.chatId,
     scope: ctx.scope,
+    ownerSessionId: ctx.sessions.getRaw(ctx.scope, cwd)?.sessionId ?? `workspace:${cwd}`,
     sendOptions: {
       replyTo: ctx.messageId,
       ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
@@ -597,7 +626,9 @@ async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
   });
   if (answer !== undefined) {
     const text = Array.isArray(answer) ? answer.join('、') : answer;
-    ctx.sessions.recordExchange(ctx.scope, ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace, [text], undefined);
+    // The question belongs to the workspace selected when its card was sent.
+    // A later /cd must not redirect the answer into another project's history.
+    ctx.sessions.recordExchange(ctx.scope, cwd, [text], undefined);
     await reply(ctx, `已记录你的回答，并写入会话上下文。`);
   } else {
     await reply(ctx, '未收到回答（卡片可能已超时或被忽略）。');

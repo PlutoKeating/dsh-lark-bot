@@ -36,4 +36,17 @@ describe('ActiveRuns', () => {
     expect(runs.delete('chat-a', 'run-2')).toBe(true);
     expect(runs.has('chat-a')).toBe(false);
   });
+
+  it('interrupts only runs owned by the selected workspace', async () => {
+    const runs = new ActiveRuns();
+    const stopA = vi.fn().mockResolvedValue(undefined);
+    const stopB = vi.fn().mockResolvedValue(undefined);
+    runs.set('chat-a', { runId: 'run-a', workspaceCwd: '/tmp/a', stop: stopA });
+    runs.set('chat-a', { runId: 'run-b', workspaceCwd: '/tmp/b', stop: stopB });
+
+    await expect(runs.interruptWorkspace('chat-a', '/tmp/b')).resolves.toBe(1);
+    expect(stopA).not.toHaveBeenCalled();
+    expect(stopB).toHaveBeenCalledOnce();
+    expect(runs.listWorkspace('chat-a', '/tmp/a').map((run) => run.runId)).toEqual(['run-a']);
+  });
 });

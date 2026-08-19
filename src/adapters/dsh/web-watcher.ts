@@ -29,6 +29,15 @@ export interface WebSessionWatcher {
   close(): void;
 }
 
+/** Resolve Web execution cwd back to the bridge's canonical workspace key. */
+export function webWorkspaceCwd(
+  sessions: SessionStore,
+  sessionId: string,
+  executionCwd: string,
+): string {
+  return sessions.workspaceForSession(sessionId) ?? executionCwd;
+}
+
 interface TurnBuffer {
   userText: string;
   assistantText: string;
@@ -125,12 +134,17 @@ export function startWebSessionWatcher(input: WebSessionWatcherInput): WebSessio
       const dest = scopeDirectory.resolve(scope);
       if (!dest) continue;
       try {
-        const current = sessions.getRaw(scope)?.sessionId;
+        // A bridge-created Git session executes in a generated worktree, but
+        // its durable identity remains the user-selected project directory.
+        // Prefer the SessionStore's native-session index so a Web continuation
+        // cannot create a second workspace keyed by the generated worktree.
+        const workspaceCwd = webWorkspaceCwd(sessions, sid, meta.cwd);
+        const current = sessions.getRaw(scope, workspaceCwd)?.sessionId;
         if (current !== sid) {
-          sessions.set(scope, sid, meta.cwd);
-          if (meta.cwd) workspaces.setCwd(scope, meta.cwd);
+          sessions.set(scope, sid, workspaceCwd);
+          if (workspaceCwd) workspaces.setCwd(scope, workspaceCwd);
         }
-        sessions.recordExchange(scope, meta.cwd, userText ? [userText] : [], assistantText);
+        sessions.recordExchange(scope, workspaceCwd, userText ? [userText] : [], assistantText);
         const head =
           assistantText.length > 600 ? `${assistantText.slice(0, 600)}…` : assistantText;
         const title = meta.title || sid.slice(0, 24);

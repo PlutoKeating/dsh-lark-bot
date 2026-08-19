@@ -16,6 +16,7 @@ import { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import {
+  statusCardInputFor,
   tryHandleCommand,
   type CommandChannel,
   type CommandContext,
@@ -139,15 +140,15 @@ describe('command router', () => {
   it('sends /status as a refreshable card with current scope metrics', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a', 'session-1', '/tmp/default');
-    sessions.recordUsage('chat-a', { inputTokens: 10, outputTokens: 4 });
-    sessions.recordContextUsage('chat-a', {
+    sessions.recordUsage('chat-a', '/tmp/default', { inputTokens: 10, outputTokens: 4 });
+    sessions.recordContextUsage('chat-a', '/tmp/default', {
       usedTokens: 32,
       contextWindow: 128,
       sessionId: 'session-1',
       model: 'deepseek-official/deepseek-v4-flash',
     });
     const activeRuns = new ActiveRuns();
-    activeRuns.set('chat-a', { runId: 'run-1', stop: vi.fn() });
+    activeRuns.set('chat-a', { runId: 'run-1', workspaceCwd: '/tmp/default', stop: vi.fn() });
     const approvals = new ApprovalRegistry();
     void approvals.register('chat-a', {
       id: 'approval-1',
@@ -157,7 +158,7 @@ describe('command router', () => {
       options: [],
     });
     const questions = new QuestionRegistry();
-    void questions.register('chat-a', { question: 'Continue?', kind: 'text' });
+    void questions.register('chat-a', { question: 'Continue?', kind: 'text' }, 'session-1');
     const plans = new PlanApprovalRegistry();
     void plans.register('chat-a', 'session-1');
     const sendCard = vi.fn().mockResolvedValue('status-message');
@@ -237,7 +238,7 @@ describe('command router', () => {
   it('does not reuse a context snapshot after the effective model changes', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a', 'session-1', '/tmp/default');
-    sessions.recordContextUsage('chat-a', {
+    sessions.recordContextUsage('chat-a', '/tmp/default', {
       usedTokens: 32,
       contextWindow: 128,
       sessionId: 'session-1',
@@ -264,7 +265,7 @@ describe('command router', () => {
   it('matches a bare effective model to its canonical provider route', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a', 'session-1', '/tmp/default');
-    sessions.recordContextUsage('chat-a', {
+    sessions.recordContextUsage('chat-a', '/tmp/default', {
       usedTokens: 48,
       contextWindow: 256,
       sessionId: 'session-1',
@@ -291,13 +292,99 @@ describe('command router', () => {
     expect(json).toContain('48 / 256（18.8%）');
   });
 
-  it('routes /cd and updates the workspace', async () => {
+  it('switches /cd by interrupting the old workspace run without clearing its session', async () => {
     const ctx = makeContext();
+    ctx.sessions.set('chat-a', 'session-a', '/tmp/default');
+    ctx.sessions.recordExchange('chat-a', '/tmp/default', ['context a'], 'answer a');
+    const stop = vi.fn();
+    ctx.activeRuns.set('chat-a', { runId: 'run-a', workspaceCwd: '/tmp/default', stop });
     const handled = await tryHandleCommand('/cd /tmp/project', ctx);
 
     expect(handled).toBe(true);
     expect(ctx.workspaces.cwdFor('chat-a')).toBe('/tmp/project');
+    expect(ctx.sessions.resumeFor('chat-a', '/tmp/default')).toBe('session-a');
+    expect(ctx.sessions.historyFor('chat-a', '/tmp/default')).toHaveLength(2);
+    expect(stop).toHaveBeenCalledOnce();
     expect(ctx.channel.sendMarkdown).toHaveBeenCalled();
+  });
+
+  it('/new clears only the currently selected workspace session', async () => {
+    const ctx = makeContext();
+    ctx.sessions.set('chat-a', 'session-a', '/tmp/default');
+    ctx.sessions.set('chat-a', 'session-b', '/tmp/project-b');
+    ctx.workspaces.setCwd('chat-a', '/tmp/project-b');
+
+    await tryHandleCommand('/new', ctx);
+
+    expect(ctx.sessions.resumeFor('chat-a', '/tmp/project-b')).toBeUndefined();
+    expect(ctx.sessions.resumeFor('chat-a', '/tmp/default')).toBe('session-a');
+  });
+
+  it('/ws use stops the old workspace run and restores the named workspace session', async () => {
+    const ctx = makeContext();
+    ctx.workspaces.saveNamed('project-a', '/tmp/project-a');
+    ctx.workspaces.setCwd('chat-a', '/tmp/project-b');
+    ctx.sessions.set('chat-a', 'session-a', '/tmp/project-a');
+    const stopB = vi.fn().mockResolvedValue(undefined);
+    ctx.activeRuns.set('chat-a', {
+      runId: 'run-b', workspaceCwd: '/tmp/project-b', stop: stopB,
+    });
+
+    await tryHandleCommand('/ws use project-a', ctx);
+
+    expect(ctx.workspaces.cwdFor('chat-a')).toBe('/tmp/project-a');
+    expect(ctx.sessions.resumeFor('chat-a', '/tmp/project-a')).toBe('session-a');
+    expect(stopB).toHaveBeenCalledOnce();
+  });
+
+  it('/status counts pending interactions only for the current workspace owners', async () => {
+    const approvals = new ApprovalRegistry();
+    const questions = new QuestionRegistry();
+    const plans = new PlanApprovalRegistry();
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-a', '/tmp/default');
+    const approvalA = approvals.register('chat-a', {
+      id: 'approval-a', sessionId: 'session-a', toolName: 'terminal', reason: undefined, options: [],
+    }, 'session-a');
+    void approvalA;
+    approvals.register('chat-a', {
+      id: 'approval-b', sessionId: 'session-b', toolName: 'terminal', reason: undefined, options: [],
+    }, 'session-b');
+    questions.register('chat-a', { kind: 'text', question: 'A?' }, 'session-a');
+    questions.register('chat-a', { kind: 'text', question: 'B?' }, 'session-b');
+    plans.register('chat-a', 'session-a');
+    plans.register('chat-a', 'session-b');
+    const input = await statusCardInputFor(makeContext({ sessions, approvals, questions, plans }));
+
+    expect(input.pending).toEqual({ approvals: 1, questions: 1, plans: 1 });
+  });
+
+  it('/ask records its answer in the workspace captured before a later switch', async () => {
+    const questions = new QuestionRegistry();
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const sendCard = vi.fn().mockResolvedValue('question-card');
+    const ctx = makeContext({
+      questions,
+      sessions,
+      workspaces,
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendCard,
+      },
+    });
+
+    const command = tryHandleCommand('/ask Why?', ctx);
+    await vi.waitFor(() => expect(questions.pendingForMessage('question-card')).toBeDefined());
+    workspaces.setCwd('chat-a', '/tmp/project-b');
+    const pending = questions.pendingForMessage('question-card')!;
+    questions.resolve('chat-a', pending.id, 'Because');
+    await command;
+
+    expect(sessions.historyFor('chat-a', '/tmp/default')).toEqual([
+      { role: 'user', content: 'Because' },
+    ]);
+    expect(sessions.historyFor('chat-a', '/tmp/project-b')).toEqual([]);
   });
 
   it('leaves non-command text untouched', async () => {

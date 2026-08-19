@@ -25,6 +25,7 @@
 | 升级状态 | `~/.dsh-lark/upgrade-state.json` | `--rollback` 的版本快照 |
 | 多机器人 fleet | `~/.dsh-lark/fleet.json` | 每个实例指向独立 dsh profile 与 `bots/<name>/dsh` DSH_HOME；升级状态与重启仍按 profile 管理 |
 | 兼容矩阵 | `docs/COMPATIBILITY.md` | 版本 pin 与上游一致性的单一事实来源 |
+| 会话/worktree/archive schema | `<bridge-profile>/sessions.json` + `worktrees/` + `archives/` | 首次启动从旧 worktree 的 Git registry 核验 owning repo，把 schema 1 会话与旧 retention archive header 归回真实项目；owner 匹配时原位迁移，不匹配时保留旧树并另建 hashed worktree |
 
 ## 3. 版本探测 · Version probing（#14 修复后的语义）
 
@@ -49,11 +50,16 @@
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
    包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；
-6. 带 `--restart` 时先探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
+6. 新版 bridge 首次启动时迁移 workspace session schema；若存在旧版 scope-only Git worktree，先从
+   Git registry 解析 owning repo；先以逐文件原子、半完成可重试的幂等流程把旧 execution-cwd
+   retention archive header 归回该项目并生成 migration commit，全部成功后才提交 session schema 2。
+   请求 base 匹配 owner 时原位移动到 path-hash
+   目录；不匹配或不可验证时保留旧树，并为当前 base 新建独立树，避免错误迁移或覆盖 dirty state；
+7. 带 `--restart` 时先探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
    重启（显式 upgrade 操作可覆盖先前 stop intent），未安装才回退旧的 detached process 重启，
    避免重复 dsh 实例；
-7. `doctor` 升级后验证；
-8. 记录 `upgrade-state.json`（支持 `--rollback`）。
+8. `doctor` 升级后验证；
+9. 记录 `upgrade-state.json`（支持 `--rollback`）。
 
 ## 5. 生效机制与关键修复 · Activation & hardening
 
@@ -87,6 +93,7 @@
 | 运行中实例待生效 | `pendingRestart` 记录 + doctor 提示 | 已实现 |
 | runtime 链接漂移 | doctor 检测 sdk/acp 链接版本与已装版本不一致 | 已实现 |
 | runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写 | 已实现 + 单测覆盖 |
+| schema 1 workspace/worktree/archive | 从旧树核验 owning repo并归属 session/retention archive；owner 匹配时原位移动，不匹配时保留旧树并为当前项目另建 | 已实现 + 单测覆盖 owner match/mismatch/archive rebind |
 | 多机器人版本漂移 | 每个实例是独立 dsh profile，单次 upgrade 不做 fleet-wide mutation | `bot list` 后逐 profile 升级并 doctor |
 
 ### 6.1 npx 引导回归矩阵 · Bootstrap regression matrix

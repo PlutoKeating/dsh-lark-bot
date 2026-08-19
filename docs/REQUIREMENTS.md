@@ -67,18 +67,22 @@
   切换不迁移或删除旧 scope，会话可在切回后继续，旧运行的停止 / 审批 / 问答动作仍可达。
   成员任务卡按入队 scope 显示发送者 open_id，不受排队期间的策略切换影响。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
-- 中断命令：`/new`、`/cd`、`/ws use`、`/stop` 可打断当前任务。
+- 中断命令：`/new` 只打断并清空当前 workspace 的任务；`/stop` 仍可打断 scope 内任务。
+  `/cd`、`/ws use` 切换前中断旧 workspace 的 active run，但其 native session、transcript、指标与归档保留。
 - 会话续跑 `/resume`；`/status` 以可原位刷新的卡片展示工作区、有效模型、session、active runs、
   版本、真实 context used/limit/percentage、累计 input/output/cache token 与待审批/提问/计划数。
-  上游不可得字段必须显示“暂无”，不得估算；成员 scope 状态卡只允许 owner 刷新。
+  上游不可得字段必须显示“暂无”，不得估算；pending 只统计当前 workspace 的 session/run，成员 scope 状态卡只允许 owner 刷新。
 - **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
-  为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope 保留窗口，
-  超窗消息自动归档；`/archive list` 查看、`/archive clean` 按保留策略清理
+  为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope + workspace 保留窗口，
+  超窗消息自动归档；`/archive list` 查看、`/archive clean` 只按当前 workspace 的保留策略清理
   （`DSH_LARK_ARCHIVE_MAX` / `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`）。
 
 ### 4.3 项目工作区管理（workspace，核心差异化）
-- `/cd <path>` 切换工作目录；`/ws save/use/list/remove` 管理命名工作区。
-- **git worktree / 分支隔离**：每个会话绑定独立工作区，互不串改。
+- `/cd <path>` 切换工作目录；`/ws save/use/list/remove` 管理命名工作区；同一 scope 按 canonical cwd
+  保存独立 session，A → B → A 会恢复 A 的 native session 与上下文。
+- **git worktree / 分支隔离**：worktree 由 scope + 项目路径共同派生，不同项目互不串改；旧 scope-only
+  worktree 先核验 owning repo 并把会话、旧 retention 归档归回真实项目，匹配时 Git 原位迁移，
+  不匹配时保留旧树并另建新树。
 - **项目级规则注入**：每项目注入 AGENTS.md / dsh preset / cordis.yml。
 - **上下文持久化**：append-only session log，支持 fork / resume / 回放。
 - **自然问答续接**：等待问答卡期间可提交表单或直接回复卡片；回复按 card messageId、topic 与 member owner 精确路由，单选/多选也接受自由文本补充，答案到达后原 agent turn 自动继续。

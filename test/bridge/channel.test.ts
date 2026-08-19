@@ -183,8 +183,8 @@ describe('startChannel', () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-1', 'session-1', '/tmp/project');
-    sessions.recordUsage('chat-1', { inputTokens: 25, outputTokens: 5 });
-    sessions.recordContextUsage('chat-1', {
+    sessions.recordUsage('chat-1', '/tmp/project', { inputTokens: 25, outputTokens: 5 });
+    sessions.recordContextUsage('chat-1', '/tmp/project', {
       usedTokens: 40,
       contextWindow: 100,
       sessionId: 'session-1',
@@ -688,7 +688,10 @@ describe('startChannel', () => {
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
       message({ content: 'build this feature' }),
     );
-    expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({ content: 'build this feature' }));
+    expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      content: 'build this feature',
+      workspaceCwd: '/tmp/project',
+    }));
 
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
       messageId: 'unmentioned-group',
@@ -698,6 +701,19 @@ describe('startChannel', () => {
       mentionedBot: false,
     }));
     expect(pending.push).toHaveBeenCalledTimes(1);
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'switch-workspace',
+      content: '/cd /tmp/project-b',
+    }));
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'workspace-b-task',
+      content: 'work in project b',
+    }));
+    expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      content: 'work in project b',
+      workspaceCwd: '/tmp/project-b',
+    }));
 
     isolationMode = 'member';
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
@@ -712,7 +728,7 @@ describe('startChannel', () => {
     );
     expect(pending.push).toHaveBeenCalledWith(
       'chat-1:member:user-2',
-      expect.objectContaining({ content: 'private workbench' }),
+      expect.objectContaining({ content: 'private workbench', workspaceCwd: '/tmp/project' }),
     );
   });
 

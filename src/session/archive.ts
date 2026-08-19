@@ -4,6 +4,7 @@ import { access, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/pro
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { log } from '../core/logger.js';
+import { writeFileAtomic } from '../platform/atomic-write.js';
 import type { ChatMessage } from './store.js';
 
 const execFileAsync = promisify(execFile);
@@ -33,7 +34,11 @@ export interface ArchiveInput {
 }
 
 export interface ArchivePruneOptions {
-  /** Keep at most this many archives per scope (oldest removed first). */
+  /** Limit pruning to one bridge scope. */
+  scope?: string;
+  /** Limit pruning to one canonical workspace within the scope. */
+  cwd?: string;
+  /** Keep at most this many archives per scope + workspace (oldest removed first). */
   maxArchives?: number;
   /** Remove archives older than this many milliseconds. */
   maxAgeMs?: number;
@@ -179,7 +184,7 @@ export class SessionArchive {
     };
   }
 
-  async list(scope?: string): Promise<ArchiveRecord[]> {
+  async list(scope?: string, cwd?: string): Promise<ArchiveRecord[]> {
     const records: ArchiveRecord[] = [];
     const scopeDirs: Array<{ name: string; dir: string }> = [];
     if (scope === undefined) {
@@ -203,7 +208,7 @@ export class SessionArchive {
         const jsonlPath = join(dir, `${id}.jsonl`);
         const header = await readArchiveHeader(jsonlPath);
         if (!header) continue;
-        records.push({
+        const record: ArchiveRecord = {
           archiveId: id,
           scope: header.scope ?? entry.name,
           cwd: header.cwd,
@@ -214,7 +219,8 @@ export class SessionArchive {
           jsonlPath,
           markdownPath,
           gitCommit: undefined,
-        });
+        };
+        if (cwd === undefined || record.cwd === cwd) records.push(record);
       }
     }
     return records.sort(
@@ -224,18 +230,80 @@ export class SessionArchive {
     );
   }
 
-  /** Remove archives beyond per-scope count/age limits. Returns the number removed. */
+  /**
+   * Rebind schema-1 retention archives from their generated execution
+   * worktree to the canonical user project. Both representations are updated
+   * with per-file atomic replacements. Partial JSONL/Markdown completion is
+   * detected on retry; schema adoption happens only after this method returns.
+   */
+  async rebindWorkspaceCwd(scope: string, fromCwd: string, toCwd: string): Promise<number> {
+    if (fromCwd === toCwd) return 0;
+    const scopeDir = join(this.archiveDir, slugify(scope));
+    if (!(await exists(scopeDir))) return 0;
+    const files = await readdir(scopeDir);
+    const ids = new Set(files.flatMap((file) => {
+      if (file.endsWith('.jsonl')) return [file.slice(0, -'.jsonl'.length)];
+      if (file.endsWith('.md')) return [file.slice(0, -'.md'.length)];
+      return [];
+    }));
+    let migrated = 0;
+    for (const id of ids) {
+      // Require both siblings. A missing/corrupt migration input must keep the
+      // schema-1 retry marker instead of being silently skipped as invisible.
+      const jsonlPath = join(scopeDir, `${id}.jsonl`);
+      const markdownPath = join(scopeDir, `${id}.md`);
+      const [jsonl, markdown] = await Promise.all([
+        readFile(jsonlPath, 'utf8'),
+        readFile(markdownPath, 'utf8'),
+      ]);
+      const [first = '', ...rest] = jsonl.split('\n');
+      const header = JSON.parse(first) as Record<string, unknown>;
+      const jsonNeedsMigration = header.cwd === fromCwd;
+      const jsonAlreadyMigrated = header.cwd === toCwd;
+      if (!jsonNeedsMigration && !jsonAlreadyMigrated) continue;
+      const markdownMigration = replaceArchiveMetadataCwd(markdown, fromCwd, toCwd);
+      const markdownNeedsMigration = markdownMigration.changed;
+      if (!jsonNeedsMigration && !markdownNeedsMigration) continue;
+      header.cwd = toCwd;
+      const nextJsonl = [JSON.stringify(header), ...rest].join('\n');
+      const nextMarkdown = markdownMigration.markdown;
+      await Promise.all([
+        writeFileAtomic(jsonlPath, nextJsonl),
+        writeFileAtomic(markdownPath, nextMarkdown),
+      ]);
+      migrated += 1;
+    }
+    if (migrated > 0) {
+      try {
+        await this.ensureGit();
+        await this.runGit(['add', '-A', '.'], this.archiveDir);
+        await this.runGit(
+          ['commit', '-m', `migrate ${String(migrated)} archive workspace reference(s)`, '--no-verify'],
+          this.archiveDir,
+        );
+      } catch (error) {
+        log.warn('archive', 'git-workspace-migration-commit-failed', {
+          scope,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return migrated;
+  }
+
+  /** Remove archives beyond per-scope + workspace count/age limits. */
   async prune(options: ArchivePruneOptions = {}): Promise<number> {
-    const records = await this.list();
-    const byScope = new Map<string, ArchiveRecord[]>();
+    const records = await this.list(options.scope, options.cwd);
+    const byWorkspace = new Map<string, ArchiveRecord[]>();
     for (const record of records) {
-      const bucket = byScope.get(record.scope) ?? [];
+      const key = `${record.scope}\0${record.cwd ?? ''}`;
+      const bucket = byWorkspace.get(key) ?? [];
       bucket.push(record);
-      byScope.set(record.scope, bucket);
+      byWorkspace.set(key, bucket);
     }
     const now = Date.now();
     let removed = 0;
-    for (const [scope, scoped] of byScope) {
+    for (const [, scoped] of byWorkspace) {
       // Newest first: prune from the oldest end while keeping the newest
       // `maxArchives` records within the age window.
       const ordered = [...scoped].sort(
@@ -257,7 +325,11 @@ export class SessionArchive {
           await safeRemove(record.markdownPath);
           await safeRemove(record.jsonlPath);
           removed += 1;
-          log.info('archive', 'pruned', { scope, archiveId: record.archiveId });
+          log.info('archive', 'pruned', {
+            scope: record.scope,
+            cwd: record.cwd,
+            archiveId: record.archiveId,
+          });
         } else {
           keep.push(record);
           keptCount += 1;
@@ -292,6 +364,21 @@ export class SessionArchive {
     }
     this.gitInitialized = true;
   }
+}
+
+function replaceArchiveMetadataCwd(
+  markdown: string,
+  fromCwd: string,
+  toCwd: string,
+): { markdown: string; changed: boolean } {
+  const lines = markdown.split('\n');
+  const transcriptStart = lines.findIndex((line) => line.startsWith('## '));
+  const metadataEnd = transcriptStart < 0 ? lines.length : transcriptStart;
+  const fromLine = `- cwd: \`${fromCwd}\``;
+  const index = lines.slice(0, metadataEnd).findIndex((line) => line === fromLine);
+  if (index < 0) return { markdown, changed: false };
+  lines[index] = `- cwd: \`${toCwd}\``;
+  return { markdown: lines.join('\n'), changed: true };
 }
 
 async function defaultRunGit(args: string[], cwd: string): Promise<string> {

@@ -77,6 +77,51 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('resumes each workspace independently across A to B to A switches', async () => {
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const observed: Array<{ cwd: string; sessionId: string | undefined }> = [];
+    const adapter: AgentAdapter = {
+      id: 'workspace-test',
+      displayName: 'workspace test',
+      resumeCapable: true,
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(options): AgentRun {
+        const cwd = options.cwd ?? '';
+        observed.push({ cwd, sessionId: options.sessionId });
+        const id = options.sessionId ?? (cwd.endsWith('a') ? 'session-a' : 'session-b');
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield { type: 'system' as const, sessionId: id, cwd, model: undefined };
+            yield { type: 'final_text' as const, content: `done ${cwd}` };
+            yield { type: 'done' as const, sessionId: id, terminationReason: 'normal' as const };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const shared = {
+      scope: 'chat-workspaces', chatId: 'chat-workspaces', adapter, sessions, workspaces,
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/a',
+    };
+
+    await runAgentBatch({ ...shared, messages: ['a1'], workspaceCwd: '/tmp/a' });
+    await runAgentBatch({ ...shared, messages: ['b1'], workspaceCwd: '/tmp/b' });
+    await runAgentBatch({ ...shared, messages: ['a2'], workspaceCwd: '/tmp/a' });
+
+    expect(observed).toEqual([
+      { cwd: '/tmp/a', sessionId: undefined },
+      { cwd: '/tmp/b', sessionId: undefined },
+      { cwd: '/tmp/a', sessionId: 'session-a' },
+    ]);
+    expect(sessions.resumeFor('chat-workspaces', '/tmp/b')).toBe('session-b');
+    expect(sessions.historyFor('chat-workspaces', '/tmp/a')).toHaveLength(4);
+    expect(sessions.historyFor('chat-workspaces', '/tmp/b')).toHaveLength(2);
+  });
+
   it('includes exact trusted peer identities and handoff instructions in the agent prompt', async () => {
     let prompt = '';
     const adapter = fakeAdapter([
@@ -362,7 +407,7 @@ describe('runAgentBatch', () => {
       defaultWorkspace: '/tmp/project',
     });
 
-    expect(sessions.metricsFor('chat-metrics', {
+    expect(sessions.metricsFor('chat-metrics', '/tmp/project', {
       sessionId: 'session-metrics',
       model: 'm',
     })).toEqual({
@@ -444,11 +489,11 @@ describe('runAgentBatch', () => {
     await aContextReady;
 
     expect(sessions.resumeFor('chat-concurrent', '/tmp/project')).toBe('session-b');
-    expect(sessions.metricsFor('chat-concurrent', {
+    expect(sessions.metricsFor('chat-concurrent', '/tmp/project', {
       sessionId: 'session-b',
       model: 'gateway/m',
     })).toEqual({ contextUsedTokens: 20, contextWindow: 100 });
-    expect(sessions.metricsFor('chat-concurrent', {
+    expect(sessions.metricsFor('chat-concurrent', '/tmp/project', {
       sessionId: 'session-a',
       model: 'gateway/m',
     })).toEqual({ contextUsedTokens: 80, contextWindow: 100 });
@@ -962,7 +1007,7 @@ describe('runAgentBatch', () => {
 
     const sessions = new SessionStore(':memory:');
     sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
-    sessions.recordUsage('chat-a', { inputTokens: 12, outputTokens: 4 });
+    sessions.recordUsage('chat-a', '/tmp/project', { inputTokens: 12, outputTokens: 4 });
     sessions.set('chat-a', 'session-1', '/tmp/project');
     const fake = makeChannel();
     const adapter = fakeAdapter([
@@ -999,7 +1044,7 @@ describe('runAgentBatch', () => {
       { role: 'user', content: 'new message' },
       { role: 'assistant', content: 'working…' },
     ]);
-    expect(sessions.metricsFor('chat-a')).toEqual({ inputTokens: 12, outputTokens: 4 });
+    expect(sessions.metricsFor('chat-a', '/tmp/project')).toEqual({ inputTokens: 12, outputTokens: 4 });
     const text = fake.messages.join('\n');
     expect(text).toContain('已归档并重置');
     expect(text).toContain('_archived-sessions');

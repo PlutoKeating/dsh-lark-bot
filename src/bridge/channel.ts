@@ -42,6 +42,8 @@ import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
 import { ReconnectNotifier } from './reconnect-notifier.js';
 import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 
+export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
+
 export interface StartChannelDeps {
   appId: string;
   appSecret: string;
@@ -63,7 +65,7 @@ export interface StartChannelDeps {
   archiveMaxAgeDays: number;
   defaultRunTimeoutMs: number;
   accessManager: AccessManager;
-  pending: PendingQueue<NormalizedMessage>;
+  pending: PendingQueue<QueuedMessage>;
   approvals?: ApprovalRegistry;
   questions?: QuestionRegistry;
   plans?: PlanApprovalRegistry;
@@ -333,12 +335,14 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           { replyTo: msg.messageId },
         );
       }
+      const workspaceCwd = deps.workspaces.cwdFor(scope) ?? deps.defaultWorkspace;
       deps.pending.push(scope, botSender
         ? {
             ...msg,
             content: `[来自可信机器人 ${msg.senderName ?? msg.senderId} 的交接]\n${msg.content}`,
+            workspaceCwd,
           }
-        : msg);
+        : { ...msg, workspaceCwd });
     }
   };
 

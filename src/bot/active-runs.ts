@@ -1,5 +1,6 @@
 export interface ActiveRunHandle {
   runId: string;
+  workspaceCwd?: string;
   stop(): Promise<void>;
 }
 
@@ -30,6 +31,14 @@ export class ActiveRuns {
     return this.runs.get(scope)?.size ?? 0;
   }
 
+  listWorkspace(scope: string, workspaceCwd: string): ActiveRunHandle[] {
+    return this.list(scope).filter((run) => run.workspaceCwd === workspaceCwd);
+  }
+
+  countWorkspace(scope: string, workspaceCwd: string): number {
+    return this.listWorkspace(scope, workspaceCwd).length;
+  }
+
   has(scope: string): boolean {
     return (this.runs.get(scope)?.size ?? 0) > 0;
   }
@@ -48,6 +57,17 @@ export class ActiveRuns {
     if (!scoped || scoped.size === 0) return 0;
     const handles = [...scoped.values()];
     this.runs.delete(scope);
+    await Promise.allSettled(handles.map((handle) => handle.stop()));
+    return handles.length;
+  }
+
+  /** Stop only runs captured for one workspace, preserving sibling projects. */
+  async interruptWorkspace(scope: string, workspaceCwd: string): Promise<number> {
+    const scoped = this.runs.get(scope);
+    if (!scoped) return 0;
+    const handles = [...scoped.values()].filter((run) => run.workspaceCwd === workspaceCwd);
+    for (const handle of handles) scoped.delete(handle.runId);
+    if (scoped.size === 0) this.runs.delete(scope);
     await Promise.allSettled(handles.map((handle) => handle.stop()));
     return handles.length;
   }
