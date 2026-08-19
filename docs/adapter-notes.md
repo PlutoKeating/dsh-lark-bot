@@ -120,8 +120,9 @@ type AgentEvent =
   `session.event`（`assistant/chunk` 的 reasoning/text/tool 增量）+ `finalResponse` 映射成
   `AgentEvent`。
 
-**SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）；
-approval 流未实现（需 ACP 模式）。
+**SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）。SDK JSON-RPC
+本身没有 server→client approval RPC，但 managed profile 在 runtime 内装配 rc.7 `approval/request`
+answerer + `tools/pre-execute` 强制门禁，经 bridge `/approval` 提供逐工具卡片确认，因此默认安装不再要求切换 ACP。
 
 ### 路线 B：ACP 服务器（审批）
 
@@ -170,7 +171,8 @@ SDK / ACP 模式需要对应 runtime profile：
 （IM 无法回达的原生 `ask_user_question` 默认拒绝）与 HMR；agent 提问改走桥接自建
 `lark_ask_user` 工具（`dsh-lark-bot/ask` + bridge `POST /ask` 问答卡）与
 `lark_request_plan_approval`（`dsh-lark-bot/plan` + bridge `POST /plan` 计划消息/决策卡），
-SDK / ACP runtime 均自动装配。问答卡提交与直接回复卡片的自由文本共用同一 pending promise；
+SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 则保留原生 permission bridge。
+问答卡提交与直接回复卡片的自由文本共用同一 pending promise；
 回复按 card messageId 定向，bridge 负责 topic/member 授权，adapter 契约无需新增事件。
 
 ---
@@ -180,9 +182,9 @@ SDK / ACP runtime 均自动装配。问答卡提交与直接回复卡片的自�
 1. **流式差异**：SDK 有 token 级流式（`assistant/chunk` 的 `reasoning-delta` / `text-delta`）；
    ACP 按 committed 文本块发 `agent_message_chunk`。两种都走 `AgentEvent` 事件流渲染卡片。
 2. **会话续跑**：SDK 用 `session(id?)` + JSONL 持久化实现原生 resume；ACP 仅全新会话。
-3. **审批**：ACP 的 `session/request_permission`（一次性 allow/reject）映射飞书审批卡
-   （`src/card/approval-card.ts` + `src/bot/approvals.ts`，run 结束时结算所有挂起审批）；
-   SDK 协议未实现审批流。
+3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.7 `approval/request` answerer
+   都映射一次性 allow/reject 飞书卡；registry 按 scope + owner session + request id 精确结算，
+   并发 run、单卡失败与 callback abort 不会取消其他任务。
 4. **dsh 是 developer preview**：接口会破坏性变更；协议 adapter 隔离在
    `src/adapters/dsh/`，宿主工具 registry 兼容 seam 隔离在 `src/notify/` 的 raw-schema 边界。
    锁定版本、升级政策与自动化探测见 [`COMPATIBILITY.md`](COMPATIBILITY.md)；
@@ -191,7 +193,7 @@ SDK / ACP runtime 均自动装配。问答卡提交与直接回复卡片的自�
 6. **rc.7 精确锁定**：SDK client/server、ACP 与完整 peer 图均解析到 rc.7；npm 包族的
    `latest` / `next` 不同步，不能用裸 dist-tag 代替矩阵。托管 profile 会核对实际 manifest
    version 并自动修复旧 rc.6 安装。
-7. **工具单实例边界**：`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 使用宿主接受的 raw JSON Schema
+7. **宿主注册单实例边界**：`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 使用宿主接受的 raw JSON Schema，approval answerer 使用 structural event listener；
    definition，本包不直接 import `dsh-tools`，避免 scheduler Symbol 双实例。
 8. **ACP rc.7 图片**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP，并在 runtime 宣告
    image capability 后发送原生 base64 block；不支持时显式失败。当前 channel 尚无图片出站

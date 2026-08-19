@@ -95,7 +95,7 @@ function mapApprovalOutcome(
   outcome: ApprovalOutcome,
   options: RequestPermissionRequest['options'],
 ): RequestPermissionResponse {
-  if (outcome === 'cancelled') {
+  if (outcome === 'cancelled' || outcome === 'unavailable') {
     return { outcome: { outcome: 'cancelled' } };
   }
   const wanted: 'allow_once' | 'reject_once' =
@@ -246,10 +246,12 @@ export class AcpDshAdapter implements AgentAdapter {
         }
         const approval: ApprovalRequest = {
           id: request.toolCall.toolCallId,
+          callId: request.toolCall.toolCallId,
           sessionId: request.sessionId,
           toolName:
             typeof request.toolCall.title === 'string' ? request.toolCall.title : 'tool',
-          reason: undefined,
+          reason: approvalReason(request),
+          toolInput: request.toolCall.rawInput,
           options: request.options.map((item) => ({
             optionId: item.optionId,
             name: item.name,
@@ -376,6 +378,16 @@ export class AcpDshAdapter implements AgentAdapter {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   }
+}
+
+function approvalReason(request: RequestPermissionRequest): string {
+  const rawInput = request.toolCall.rawInput;
+  if (
+    isRecord(rawInput) && typeof rawInput.description === 'string' &&
+    rawInput.description.trim() !== ''
+  ) return rawInput.description;
+  const title = typeof request.toolCall.title === 'string' ? request.toolCall.title : 'tool';
+  return `Execute high-risk tool ${title}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

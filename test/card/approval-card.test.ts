@@ -7,6 +7,7 @@ describe('renderApprovalCard', () => {
       id: 'call-1',
       toolName: 'bash',
       reason: 'run tests',
+      toolInput: { command: 'pnpm test', cwd: '/workspace' },
       actionScope: 'chat:member:u1',
       options: [
         { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
@@ -39,6 +40,8 @@ describe('renderApprovalCard', () => {
       outcome: 'reject',
       scope: 'chat:member:u1',
     });
+    expect(JSON.stringify(card)).toContain('pnpm test');
+    expect(JSON.stringify(card)).toContain('run tests');
   });
 
   it('skips the button row when there is nothing to approve or reject', () => {
@@ -49,5 +52,20 @@ describe('renderApprovalCard', () => {
       options: [],
     }) as { body: { elements: Array<{ tag: string }> } };
     expect(card.body.elements.some((element) => element.tag === 'column_set')).toBe(false);
+  });
+
+  it('redacts secrets and truncates multibyte card text by UTF-8 bytes', () => {
+    const card = renderApprovalCard({
+      id: 'approval-safe', toolName: 'bash',
+      reason: `Use Bearer abcdefghijklmnop ${'理由'.repeat(1200)}`,
+      toolInput: { command: `curl -H 'Authorization: Bearer secret-token-12345' ${'你'.repeat(2000)}` },
+      options: [],
+    });
+    const serialized = JSON.stringify(card);
+    expect(serialized).not.toContain('abcdefghijklmnop');
+    expect(serialized).not.toContain('secret-token-12345');
+    expect(serialized).toContain('[redacted]');
+    expect(serialized).toContain('已截断');
+    expect(serialized).not.toContain('\ud800');
   });
 });

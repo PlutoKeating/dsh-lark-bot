@@ -31,7 +31,7 @@ export interface SdkRuntimeOptions {
   profile?: string;
   /**
    * Mount the bridge callback tools (`lark_notify`, `lark_ask_user`, and
-   * `lark_request_plan_approval`) in the runtime overlay. The full bridge needs
+   * `lark_request_plan_approval`, and the one-shot approval answerer) in the runtime overlay. The full bridge needs
    * them; the guardian's core-only safe profile must not (it has no callback
    * server). Defaults to `true`.
    */
@@ -131,6 +131,14 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       `      name: '${own.name}/plan'`,
       '      config:',
       '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+      // Default-runtime answerer for the official dsh user-approval seam.
+      '- insert:',
+      '    - id: lark-approval-answerer',
+      `      name: '${own.name}/approval'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_APPROVAL_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
     );

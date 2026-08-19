@@ -151,6 +151,8 @@ Stop, plan, approval and question actions created before a switch remain bound t
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
 
+**Default per-action approval**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.7's official `approval/request` seam into Feishu. Before a high-risk tool executes, a card shows the tool, reason, call identity and any arguments the bridge has observed, with **Allow once** / **Reject**. Waiting has no fixed deadline and pauses only the owning run's idle watchdog. A grant applies to that call only; rejection returns as a tool result so the agent can continue with a safer approach. ACP keeps its native `session/request_permission` path; all paths share the same card and session-precise lifecycle.
+
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
 moves, command execution and `run_code` in that turn until a plan is approved. The bridge sends the complete Markdown plan as a normal
@@ -304,7 +306,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 - **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.7** (last verified 2026-08-19: clean temporary install plus SDK JSON-RPC and ACP initialize handshakes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC7_AUDIT.md`](docs/DSH_RC7_AUDIT.md) for rc.7 risks and verification boundaries.
 - **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
 - **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public server, domain or tunneling required).
-- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native session continuation and token-level streaming events); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** (approval cards); `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
+- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, and the rc.7 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## Known limitations
 
@@ -334,7 +336,7 @@ Core environment variables:
 | `DSH_LARK_WORKSPACE` | unset | Default working directory for new sessions |
 | `DSH_LARK_DSH_COMMAND` | auto-discovered | dsh launch command; usually not needed |
 | `DSH_LARK_DSH_ARGS` | auto-discovered | dsh launch args, comma-separated; usually not needed |
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk` (default) / `acp` (approval) / `headless` (legacy) / `web` (local dsh web agent, single writer) |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk` (default, approval answerer) / `acp` (protocol-native approval) / `headless` (legacy) / `web` (local dsh web agent, single writer) |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | Model provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | Default model |
 | `DSH_LARK_MAX_TOKENS` | unset | Per-request output token cap for SDK agents |
@@ -385,9 +387,9 @@ This tool runs **locally**; before installing, be aware that it accesses:
   owner can refresh its card, but a status card already sent to a shared group follows normal group visibility.
 - **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
   the reply anchor that places later agent question cards back in the original topic.
-- **Local callback**: `lark_notify`, `lark_ask_user` and `lark_request_plan_approval` call the bridge over a
+- **Local callback**: `lark_notify`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
   random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
-  current Feishu / Lark conversation.
+  current Feishu / Lark conversation. Approval reasons/arguments are visible to members of a shared group.
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).
 - **Safety-net guardian (installed by default with `setup`)**: a system-level resident process reads the Feishu credentials from `~/.dsh-lark/config.json`; it takes over the same bot's Feishu long connection only after dsh goes down and scans local processes (command lines via `ps` only, no memory access). On `/safemode` it provisions a core-only dsh profile (headless or SDK JSON-RPC runtime, both without third-party plugins) and runs one task per message; the SDK engine provides real-time streaming events via the official `dsh-sdk-jsonrpc-server` subprocess.
@@ -500,7 +502,7 @@ Thanks to the following contributors (by merge / submission time):
 Feishu / Lark ──WebSocket long connection──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4
 ```
 
-The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to the official DeepSeek Harness SDK (`DSH_LARK_ADAPTER=sdk`), with an optional ACP approval mode and the legacy headless fallback.
+The core idea: **decouple the Feishu channel from the agent backend**. The bridge layer follows the battle-tested `lark-channel-bridge` approach (WebSocket long-connection + streaming cards + session routing); the agent backend is abstracted behind an adapter, defaulting to the approval-enabled official DeepSeek Harness SDK (`DSH_LARK_ADAPTER=sdk`), with protocol-native ACP approval and a legacy headless fallback.
 
 The safety-net guardian (`src/guardian/`) installed by default runs as a separate resident process: silent while dsh is up, it takes over the Feishu channel when dsh goes down, accepts `/safemode` control signals, runs a restricted core-only conversation (`dsh-base` + `dsh-headless`) for self-healing, and relaunches the full profile on `/safemode exit`.
 

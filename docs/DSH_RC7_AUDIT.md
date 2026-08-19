@@ -8,10 +8,13 @@
 `0.1.0-rc.7`。重新生成的 lockfile 中不存在 `@deepseek-ai/dsh-*@0.1.0-rc.6`，
 临时 DSH_HOME 中的官方 rc.7 SDK 与 ACP runtime 均完成真实 initialize 握手；SDK 还通过
 本地 OpenAI-compatible fixture 完成任务、`lark_notify` / `lark_ask_user` /
-`lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 批准后真实执行顺序和带第一轮
+`lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → 官方 `approval/request`
+一次性批准 → 真实执行顺序、拒绝一次性审批后 agent 继续替代通知路径，以及带第一轮
 历史哨兵的同一 session 续接。
 
-`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 向宿主 `ctx.tools` 注册原始 JSON Schema
+`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 向宿主 `ctx.tools` 注册原始 JSON Schema；
+`dsh-lark-bot/approval` 以 structural listener 接入官方 `approval/request` waterfall，并以宿主
+`tools/pre-execute` 强制确保 rc.7 未主动询问的高风险工具也必须逐次确认。
 `ToolDefinition`，本包不再直接依赖或运行时导入 `@deepseek-ai/dsh-tools`。这避免插件副本
 与宿主工具运行时各持有一份模块级 Symbol。根 lockfile 仍会因 SDK client 的 peer 图包含
 一份 rc.7 `dsh-tools`；它属于 SDK client 进程依赖图，不会被两个工具插件 import。
@@ -58,7 +61,7 @@
 | `sdk-adapter.ts` / `sdk-translate.ts` | rc.7 类型检查及现有 initialize、resume、reasoning/text/tool/usage、stop、route-rebind 回归通过；无协议代码改动 |
 | `acp-adapter.ts` | initialize/审批/终止回归通过；新增 capability-gated 原生图片 prompt 与出站图片显式降级 |
 | `sdk-runtime.ts` / `acp-runtime.ts` | profile ready 改为核验实际 rc.7 manifest，旧版本自动重装 |
-| `notify/tool.ts` / `notify/ask-tool.ts` | 移除 `defineTool` 运行时 import，改用宿主接受的 raw JSON Schema 定义并自行验证参数 |
+| `notify/tool.ts` / `notify/ask-tool.ts` / `notify/approval-answerer.ts` | 工具使用宿主 raw JSON Schema；审批 answerer 不直接 import dsh approval 包，以 structural event seam 回调 bridge |
 | `dsh-config.ts` | rc.7 settings 存储 schema 无需改动；继续使用官方 namespace 与原子 patch 协议 |
 | session heal/archive | 未新增会话事件；保留非破坏性 archive/heal，未把上游 #3191/#3198 误标为已修复 |
 | Guardian / headless / web | 单元/集成回归覆盖启动、接管、退出与 adapter 契约；本次未改变三者协议 |
@@ -68,7 +71,8 @@
 已自动完成：typecheck、全量单测、构建、发布包检查、依赖图/版本漂移检查，以及在临时
 DSH_HOME 安装官方 dsh/base rc.7 后的 SDK server 与 ACP initialize 握手。探针使用本地
 OpenAI-compatible HTTP fixture 驱动真实 SDK 协议循环，验证 `lark_notify`、
-`lark_ask_user` / `lark_request_plan_approval` 工具回调、未批准 `bash` 的 pre-execute 拒绝与批准后真实执行，
+`lark_ask_user` / `lark_request_plan_approval` 工具回调、未批准 `bash` 的 pre-execute 拒绝、计划批准后的
+官方 one-shot approval 允许后的真实执行、拒绝后继续替代工具路径，
 以及同一 `compat-session` 的续接；续接响应必须观察到第一轮工具调用、
 工具结果与最终回答哨兵，不会仅凭第二轮 prompt 通过。该探针不需要外部模型密钥，也不会
 产生收费请求。

@@ -107,7 +107,10 @@ describe('AcpDshAdapter.run', () => {
     });
     expect(events.at(-1)).toMatchObject({ terminationReason: 'normal' });
     expect(onApprovalRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'call-1', toolName: 'bash' }),
+      expect.objectContaining({
+        id: 'call-1', callId: 'call-1', toolName: 'bash',
+        reason: 'Execute high-risk tool bash',
+      }),
     );
   }, 10_000);
 

@@ -9,7 +9,7 @@
 | P0 | 仓库、文档、CI、脚手架 | ✅ 完成 |
 | P1 | 飞书 bot + dsh 单会话往返 | ✅ 完成 |
 | P2 | 项目工作区管理 | ✅ 完成（SDK 原生 session 已接入） |
-| P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
+| P3 | 审批、调度、沙箱 | 🚧 进行中（SDK/Web/ACP 逐操作审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
 | P5 | 正常 dsh profile 后台托管（开机自启 + 自动重启 + 状态/日志/生命周期） | ✅ 完成（#23；保持单一 dsh runtime） |
 | P6 | 模型 / provider / 凭据管理（飞书命令） | ✅ 完成（0.5.0） |
@@ -57,7 +57,7 @@
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
-- [x] 卡片审批（ACP `session/request_permission` + 审批卡）
+- [x] 默认逐操作卡片审批（SDK / Web `approval/request` + ACP `session/request_permission`，issue #24）
 - [x] 问答卡（单选 / 多选 / 自由文本；支持直接回复卡片并按 messageId 精确续接）
 - [x] 关键任务计划门禁（完整计划消息 → 批准 / 继续规划 + feedback → 原 agent turn 自动续跑）
 - [x] 异步任务队列（scope 内并行 run + 消息批量合并；workflow 编排仍待上游能力）
@@ -137,8 +137,9 @@
    「独立 bridge runtime vs dsh 插件」双路径；`service` 只做同一 profile 的 OS 托管。
    `AgentAdapter` 抽象保留，agent 后端可换。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
-3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
-   （`@deepseek-ai/dsh-acp` + `@agentclientprotocol/sdk` 的 `ClientSideConnection` + `dsh-user-approval`）。
+3. **审批复用官方 seam**：ACP adapter 使用 `session/request_permission`；默认 SDK / Web 不要求
+   JSON-RPC server→client 扩展，而是在对应 runtime 内装配官方 rc.7 `approval/request` waterfall
+   answerer，经 bridge `/approval` 回调展示同一张一次性卡。
 4. **唯一自研差异化**：git worktree 工作区管理 + AGENTS.md 注入 + 多 agent 抽象，继续投入。
 5. **License 维持 AGPL-3.0**（所有者决策项，见 8.7）；`package.json.homepage` 已存在，无需新增。
 
@@ -161,8 +162,9 @@
 | P0-8 | `src/adapters/dsh/acp-adapter.ts`：`AcpDshAdapter`（`ClientSideConnection` + `newSession` + `requestPermission` → 审批回调） | 单元测试（mock ACP server） |
 | P0-9 | `src/card/approval-card.ts`：审批卡（allow-once / reject-once 按钮） | 渲染测试 |
 | P0-10 | `src/card/question-card.ts`：问答卡（单选 / 多选 / 自由文本） | 渲染 + 答案提取测试 |
-| P0-11 | `src/bot/approvals.ts`：pending 审批注册表 + run 结束/dispose 时结算所有挂起审批卡 | 生命周期测试 |
+| P0-11 | `src/bot/approvals.ts`：pending 审批按 scope + session + request id 精确注册/结算 | 并发生命周期测试 |
 | P0-12 | 桥接接线：`run-flow` 提供 `onApprovalRequest`（发卡 + 等待按钮）、`channel.ts` 处理 `cmd=approve` | 集成测试 |
+| P0-13 | `./approval` + `/approval`：默认 SDK / Web 接入 rc.7 one-shot approval answerer | raw listener、HTTP、真实 compat probe |
 
 ### 8.4 P1：安全模块（借鉴 dsh-lark-bridge）
 

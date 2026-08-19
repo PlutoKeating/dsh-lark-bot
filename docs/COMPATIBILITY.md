@@ -7,7 +7,7 @@
 
 ## 1. 兼容矩阵
 
-> 最后验证：2026-08-19（临时 DSH_HOME 安装 + SDK / ACP initialize；SDK 本地任务、notify/ask 工具回调与 session 续接实测）。
+> 最后验证：2026-08-19（临时 DSH_HOME 安装 + SDK / ACP initialize；SDK 本地任务、notify/ask/plan/one-shot approval 回调与 session 续接实测）。
 
 | 组件 | 锁定版本 | 说明 |
 | :--- | :--- | :--- |
@@ -52,8 +52,8 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走 SDK / ACP runtime 初始化握手，并用本地
    OpenAI-compatible fixture 验证 SDK 任务、`lark_notify` / `lark_ask_user` /
-   `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 批准后实际执行的 pre-execute 顺序与同一
-   session 的持久历史续接。
+   `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → rc.7 one-shot approval → 实际执行的顺序、
+   one-shot 拒绝后 agent 继续替代工具路径，以及同一 session 的持久历史续接。
 6. **实机回归**：重启 profile（`dsh --profile <name>`，或守护模式下
    `dsh-lark-bot guardian status` 观察接管/交还）后运行 `dsh-lark-bot doctor`，
    确认 dsh profile 中插件装载正常（`dsh --profile <name>` 内引擎启动）；飞书会话内跑一轮真实任务。
@@ -66,7 +66,7 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 | 机制 | 位置 | 作用 |
 | :--- | :--- | :--- |
 | 上游雷达 | `scripts/check-dsh-upstream.mjs` + `.github/workflows/dsh-upstream.yml`（每周一 03:17 UTC + 手动触发） | 分列 `latest` / `next` / highest，校验矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
-| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，跑 SDK / ACP initialize，并验证 SDK 本地任务、notify/ask 回调与持久历史续接 |
+| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，跑 SDK / ACP initialize，并验证 SDK 本地任务、notify/ask/plan/one-shot approval 允许与拒绝后继续、持久历史续接 |
 | 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性） | 本地全量门禁 |
 
 ## 5. 风险披露

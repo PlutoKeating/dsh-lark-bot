@@ -5,6 +5,7 @@ import { log } from '../core/logger.js';
 import type { MentionTarget } from '../bridge/types.js';
 import type { AskPayload, AskResult } from './ask-handler.js';
 import type { PlanPayload, PlanResult } from './plan-handler.js';
+import type { ApprovalPayload, ApprovalResult } from './approval-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -36,6 +37,8 @@ export interface NotifyServerDeps {
   ask?: (payload: AskPayload) => Promise<AskResult>;
   /** Optional handler for the `lark_request_plan_approval` channel. */
   plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
+  /** Optional handler for dsh rc.7 one-shot tool approval requests. */
+  approval?: (payload: ApprovalPayload, signal?: AbortSignal) => Promise<ApprovalResult>;
 }
 
 /**
@@ -52,6 +55,7 @@ export class NotifyServer {
   url: string | undefined;
   askUrl: string | undefined;
   planUrl: string | undefined;
+  approvalUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -71,6 +75,7 @@ export class NotifyServer {
         this.url = `http://127.0.0.1:${String(address.port)}/notify`;
         this.askUrl = `http://127.0.0.1:${String(address.port)}/ask`;
         this.planUrl = `http://127.0.0.1:${String(address.port)}/plan`;
+        this.approvalUrl = `http://127.0.0.1:${String(address.port)}/approval`;
         resolve();
       });
     });
@@ -157,6 +162,41 @@ export class NotifyServer {
           decision: result.decision,
           ...(result.feedback ? { feedback: result.feedback } : {}),
         });
+        return;
+      }
+      if (req.url === '/approval') {
+        if (!this.deps.approval) {
+          respond(404, { ok: false, error: 'approval channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as ApprovalPayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.toolName?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and toolName are required' });
+          return;
+        }
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        req.once('aborted', abort);
+        const onResponseClose = (): void => {
+          if (!res.writableEnded) abort();
+        };
+        res.once('close', onResponseClose);
+        let result: ApprovalResult;
+        try {
+          result = await this.deps.approval(payload, controller.signal);
+        } finally {
+          req.off('aborted', abort);
+          res.off('close', onResponseClose);
+        }
+        if (!result.ok || !result.outcome) {
+          respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, { ok: true, outcome: result.outcome });
         return;
       }
       if (req.url !== '/notify') {

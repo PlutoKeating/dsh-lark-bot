@@ -16,6 +16,7 @@ describe('dsh bundle manifest', () => {
     expect(pkg.exports?.['./notify']).toBeDefined();
     expect(pkg.exports?.['./ask']).toBeDefined();
     expect(pkg.exports?.['./plan']).toBeDefined();
+    expect(pkg.exports?.['./approval']).toBeDefined();
     expect(pkg.files).toContain('cordis.patch.yml');
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis']).toMatch(/^(\^|>=)/);
     // Tool plugins register raw JSON-Schema definitions against the host
@@ -29,6 +30,7 @@ describe('dsh bundle manifest', () => {
     expect(patch).toContain('id: dsh-lark-bot');
     expect(patch).toContain('id: lark-notify');
     expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).toContain("name: 'dsh-lark-bot/approval'");
     expect(patch).toContain('DSH_LARK_DISABLED');
   });
 });

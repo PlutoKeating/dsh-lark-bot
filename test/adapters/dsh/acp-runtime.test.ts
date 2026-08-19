@@ -43,6 +43,7 @@ describe('resolveAcpLaunch', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
     expect(patch).toContain("id: lark-plan-approval");
     expect(patch).toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).toContain('use lark_request_plan_approval');
   });
 

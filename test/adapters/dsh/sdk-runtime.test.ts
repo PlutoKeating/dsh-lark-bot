@@ -29,6 +29,8 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
     expect(patch).toContain("id: lark-plan-approval");
     expect(patch).toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).toContain("id: lark-approval-answerer");
+    expect(patch).toContain("name: 'dsh-lark-bot/approval'");
     expect(patch).toContain('use lark_request_plan_approval');
   });
 
@@ -39,6 +41,7 @@ describe('resolveSdkLaunch', () => {
     expect(patch).not.toContain('id: lark-notify');
     expect(patch).not.toContain('id: lark-ask');
     expect(patch).not.toContain('id: lark-plan-approval');
+    expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).not.toContain('use lark_request_plan_approval');
   });
 

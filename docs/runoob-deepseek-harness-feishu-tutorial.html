@@ -95,6 +95,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot</code></pre>
 <p>扫码失败？确认本机时间准确、网络可访问飞书开放平台；已有 App ID/Secret 时可用 <code>--app-id</code> / <code>--app-secret</code> 跳过扫码。</p>
 <p>机器人静默 / 长连接失败？查看 stderr 上的 JSONL 日志（关注 <code>channel</code> 类别），SDK 会自动重连；也可先运行 <code>dsh-lark-bot doctor</code> 检查 profile 与本机 dsh 可用性。</p>
 <p>agent 无响应？发送 <code>/status</code> 查看 scope、cwd、模型、active run、真实 context/token 指标和待审批/提问/计划（未知值显示“暂无”，卡片可原位刷新）；<code>/stop</code> 终止当前任务；持续无响应超过 <code>DSH_LARK_RUN_TIMEOUT_MS</code> 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。</p>
+<p>高风险操作如何确认？默认 SDK 已内置逐操作门禁：执行命令、修改/删除文件等动作前会弹“允许执行一次 / 拒绝”卡，显示理由和参数。等待期间任务不会 idle timeout；拒绝后 agent 会收到结果并改用安全方案。群聊成员能看到卡片内容，敏感命令请在私聊处理。</p>
 <p>dsh 崩溃了怎么办？直接发 <code>/safemode</code>，守护会拉起仅核心安全模式，修复后 <code>/safemode exit</code> 恢复。</p>
 
 <p><strong>参考链接</strong></p>

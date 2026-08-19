@@ -26,6 +26,7 @@ async function startCompatServer() {
   const notifications = [];
   const questions = [];
   const plans = [];
+  const approvals = [];
   const server = createServer((request, response) => {
     let raw = '';
     request.on('data', (chunk) => { raw += String(chunk); });
@@ -48,6 +49,18 @@ async function startCompatServer() {
         response.end(JSON.stringify({ ok: true, decision: 'approved', feedback: 'compat-approved' }));
         return;
       }
+      if (request.url === '/approval') {
+        const approval = JSON.parse(raw);
+        approvals.push(approval);
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({
+          ok: true,
+          outcome: approval.toolInput?.command === 'printf must-not-run-approval'
+            ? 'rejected'
+            : 'allowed-once',
+        }));
+        return;
+      }
       if (request.url !== '/v1/chat/completions') {
         response.writeHead(404).end();
         return;
@@ -66,6 +79,13 @@ async function startCompatServer() {
       const hasPlanResult = serializedInput.includes('compat-plan-call') &&
         serializedInput.includes('compat-approved');
       const isPlanGate = serializedInput.includes('Verify the enforced plan gate.');
+      const isApprovalReject = serializedInput.includes('Verify rejected approval recovery.');
+      const hasRejectPlan = serializedInput.includes('compat-reject-plan') &&
+        serializedInput.includes('compat-approved');
+      const hasApprovalReject = serializedInput.includes('compat-reject-bash') &&
+        serializedInput.includes('user rejected this one-shot tool execution');
+      const hasRecoveryNotify = serializedInput.includes('compat-recovery-notify') &&
+        serializedInput.includes('Message sent to compat-chat');
       const hasGateDenial = serializedInput.includes('compat-gate-denied') &&
         serializedInput.includes('blocked until the current turn calls lark_request_plan_approval');
       const hasGateApproval = serializedInput.includes('compat-gate-plan') &&
@@ -75,6 +95,26 @@ async function startCompatServer() {
       const hasNotifyResult = serializedInput.includes('Message sent to compat-chat');
       const events = isResume
         ? textResponse(hasPersistedFirstTurn ? 'resume-ok' : 'resume-history-missing')
+        : isApprovalReject && hasRecoveryNotify
+          ? textResponse('approval-reject-recovered')
+          : isApprovalReject && hasApprovalReject
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-recovery-notify', type: 'function', function: { name: 'lark_notify', arguments: '{"text":"approval rejected; continuing safely"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
+          : isApprovalReject && hasRejectPlan
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-reject-bash', type: 'function', function: { name: 'bash', arguments: '{"command":"printf must-not-run-approval","description":"Verify rejection recovery"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
+          : isApprovalReject
+            ? [
+              JSON.stringify({ choices: [{ delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'compat-reject-plan', type: 'function', function: { name: 'lark_request_plan_approval', arguments: '{"plan":"1. request permission\n2. attempt the high-risk command\n3. continue safely if rejected"}' } }] }, index: 0, finish_reason: null }] }),
+              JSON.stringify({ choices: [{ delta: {}, index: 0, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 3, completion_tokens: 1 } }),
+              '[DONE]',
+            ]
         : isPlanGate && hasGateExecution
           ? textResponse('plan-gate-ok')
           : isPlanGate && hasGateApproval
@@ -131,6 +171,7 @@ async function startCompatServer() {
     notifications,
     questions,
     plans,
+    approvals,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };
 }
@@ -175,6 +216,7 @@ async function main() {
     DSH_LARK_NOTIFY_URL: `${compatServer.url}/notify`,
     DSH_LARK_ASK_URL: `${compatServer.url}/ask`,
     DSH_LARK_PLAN_URL: `${compatServer.url}/plan`,
+    DSH_LARK_APPROVAL_URL: `${compatServer.url}/approval`,
     DSH_LARK_NOTIFY_TOKEN: 'compat-token',
     COMPAT_API_KEY: 'compat-local-key',
   };
@@ -383,7 +425,32 @@ async function main() {
       if (compatServer.plans.length !== 1) {
         throw new Error(`plan tool execution count mismatch: ${compatServer.plans.length}`);
       }
-      console.log('[probe] sdk task/notify/ask/enforced-plan-gate/resume ok against local OpenAI-compatible fixture');
+      if (compatServer.approvals.length !== 1) {
+        throw new Error(`one-shot approval execution count mismatch: ${compatServer.approvals.length}`);
+      }
+      const approval = compatServer.approvals[0];
+      if (
+        approval.toolName !== 'bash' || !approval.reason ||
+        approval.toolInput?.command !== 'printf compat-gate-ok'
+      ) {
+        throw new Error(`incomplete one-shot approval payload: ${JSON.stringify(approval)}`);
+      }
+      const rejected = await harness.run(
+        'Verify rejected approval recovery.',
+        { sessionId: 'compat-approval-reject-session' },
+      );
+      if (rejected.finalResponse !== 'approval-reject-recovered') {
+        throw new Error(`approval rejection did not continue the turn: ${JSON.stringify(rejected.finalResponse)}`);
+      }
+      if (
+        compatServer.plans.length !== 2 || compatServer.approvals.length !== 2 ||
+        compatServer.notifications.length !== 2
+      ) {
+        throw new Error(
+          `approval rejection recovery counts mismatch: plans=${compatServer.plans.length}, approvals=${compatServer.approvals.length}, notifications=${compatServer.notifications.length}`,
+        );
+      }
+      console.log('[probe] sdk task/notify/ask/enforced-plan-gate/one-shot-approval/resume ok against local OpenAI-compatible fixture');
     } finally {
       await harness.close();
     }
