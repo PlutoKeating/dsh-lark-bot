@@ -39,6 +39,8 @@ describe('resolveAcpLaunch', () => {
     const patch = acpPatchYaml('deepseek-official', 'deepseek-v4-flash');
     expect(patch).toContain("id: acp");
     expect(patch).toContain("id: lark-notify");
+    expect(patch).toContain("id: lark-file");
+    expect(patch).toContain("name: 'dsh-lark-bot/file'");
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
     expect(patch).toContain("id: lark-plan-approval");

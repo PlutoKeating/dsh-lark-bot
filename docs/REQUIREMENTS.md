@@ -80,8 +80,10 @@
   运行与账本摘要、服务状态、当前 bridge 进程内有界最近结构化事件（不读取共享 dsh 宿主 stdout）；
   不含凭据、消息正文或 transcript，内存生成、
   上传前再次脱敏，失败明确回执。
-- **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
-  为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope + workspace 保留窗口，
+- **会话 / 任务归档**（0.6.0，issue #31 增强）：`/archive [note]` 把完整会话导出为 Markdown + JSONL
+  并直接上传当前聊天（归档目录为独立 Git 仓库，每次归档单独 commit）；上传失败保留本地文件，
+  `/archive send <id> [scope|chatId]` 可按当前 scope + workspace 重发，管理员可转发到已登记会话。
+  `/retention [N|default]` 调整每 scope + workspace 保留窗口，
   超窗消息自动归档；`/archive list` 查看、`/archive clean` 只按当前 workspace 的保留策略清理
   （`DSH_LARK_ARCHIVE_MAX` / `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`）。
 
@@ -154,7 +156,17 @@
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
 
-### 4.8.1 多机器人实例与交接（multi-bot handoff，issue #25）
+### 4.8.1 结果文件直接回传（outbound files，issue #31）
+
+- SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
+  固定为原 chat/thread，不允许模型指定其他会话。
+- bridge 只读取当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档和实例日志中的
+  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。拒绝 symlink 越界、目录、不安全
+  文件名与默认超过 20 MiB 的文件，失败作为结构化工具结果返回。
+- 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
+  channel 二进制上传能力发送。
+
+### 4.8.2 多机器人实例与交接（multi-bot handoff，issue #25）
 
 - `bot add|list|status|remove` 管理独立 bridge profile、dsh profile、PersonalAgent 身份和用户服务；
   每个实例的模型、provider、凭据、session、scope、worktree 与 archive 相互隔离。
@@ -168,7 +180,7 @@
 - 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
   消费同一个 Web agent 广播流而把 session 事件写入错误实例。
 
-### 4.8.2 scope 工具权限策略（issue #30）
+### 4.8.3 scope 工具权限策略（issue #30）
 
 - `/permission ask|allow|deny [scope]` 按隔离 scope 管理逐工具审批策略；查询开放，修改仅管理员；
   管理员可指定当前 chat 内的 member/topic scope，跨 chat 目标拒绝。
@@ -189,6 +201,8 @@
 - `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
 - `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
+- `./file`：`lark_send_file` 工具插件，作为标准工具行装配到 host / SDK / ACP profile；读取
+  `DSH_LARK_FILE_URL` / `DSH_LARK_NOTIFY_TOKEN`。
 - `./approval`：rc.8 `approval/request` 的 terminal answerer；host 与默认 SDK profile 自动装配，
   读取 `DSH_LARK_APPROVAL_URL` / `DSH_LARK_NOTIFY_TOKEN`，ACP 不重复装配。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。

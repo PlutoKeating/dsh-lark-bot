@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import type { AgentAdapter } from '../../adapters/types.js';
 import type { LarkChannel } from '@larksuite/channel';
 import type { RuntimeEnv } from '../../config/env.js';
@@ -29,6 +30,7 @@ import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
 import { buildPlanHandler } from '../../notify/plan-handler.js';
 import { buildApprovalHandler } from '../../notify/approval-handler.js';
+import { buildFileHandler } from '../../notify/file-handler.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -39,7 +41,7 @@ import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { prepareAttachments } from '../../media/attachments.js';
 import { SessionStore } from '../../session/store.js';
-import { SessionArchive } from '../../session/archive.js';
+import { archiveScopeSlug, SessionArchive } from '../../session/archive.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 import { startHeartbeat } from '../../guardian/heartbeat.js';
@@ -333,6 +335,25 @@ export async function startBridgeEngine(
         recallMessage: async (messageId) => {
           if (!streaming?.recallMessage) throw new Error('bridge channel does not support recall');
           await streaming.recallMessage(messageId);
+        },
+      },
+    }),
+    file: buildFileHandler({
+      sessions,
+      scopeDirectory,
+      allowedRoots: async (_sessionId, scope, workspace) => {
+        const executionRoot = (await worktreeManager.ensure(scope, workspace)).cwd;
+        return [
+          workspace,
+          executionRoot,
+          join(paths.archivesDir(profileName), archiveScopeSlug(scope)),
+          paths.logsDir(profileName),
+        ];
+      },
+      channel: {
+        sendFile: async (chatId, fileName, content, options) => {
+          if (!streaming?.sendFile) throw new Error('bridge channel does not support file uploads');
+          await streaming.sendFile(chatId, fileName, content, options);
         },
       },
     }),
@@ -648,6 +669,7 @@ export async function startBridgeEngine(
   process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
   process.env.DSH_LARK_PLAN_URL = notifyServer.planUrl ?? '';
   process.env.DSH_LARK_APPROVAL_URL = notifyServer.approvalUrl ?? '';
+  process.env.DSH_LARK_FILE_URL = notifyServer.fileUrl ?? '';
   const heartbeat = startHeartbeat(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,

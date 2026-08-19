@@ -106,7 +106,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
-| `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
+| `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
+| `/archive send <id> [scope\|chatId]` | 重发当前 scope + workspace 的归档；管理员可发到指定已登记会话 |
 | `/archive list [N]` | 查看当前 workspace 最近 N 条归档 |
 | `/archive clean` | 清理当前 workspace 的过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
@@ -214,6 +215,10 @@ dsh-lark-bot bot remove reviewer
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
+- agent 侧工具 `lark_send_file`：SDK / ACP runtime 与 Web 宿主自动装配；参数 `path` 与可选
+  `file_name`。文件总是发回当前 native session 对应的原聊天 / 话题，不能指定其他目标。bridge
+  仅允许当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档目录与实例日志目录；
+  校验 realpath、拒绝目录 / symlink 越界与不安全文件名，默认单文件上限 20 MiB。
 - agent 侧工具 `lark_ask_user`（问答卡）：agent 需要你拍板 / 确认 / 补充缺失信息时，通过
   `http://127.0.0.1:<随机端口>/ask` 回调 bridge，向当前会话弹单选 / 多选 / 自由文本问答卡并
   等待你回答；可提交卡片，也可直接回复该卡片输入任意文字（单选/多选也接受选项外补充）。系统按
@@ -314,7 +319,9 @@ dsh-lark-bot guardian uninstall
   并明确落 failed 或保留 queued；中断通知持久化并在投递失败后跨启动重试。
 - 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
   Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
-  可审计、可回放；`/archive [note]` 可随时手动导出完整会话，`list` / `clean` 只作用于当前 workspace。
+  可审计、可回放；`/archive [note]` 可随时手动导出完整会话并把两种格式直接上传到当前聊天，
+  上传失败不删除本地归档，可用 `/archive send <id>` 重试；管理员可追加 `[scope|chatId]` 转发到
+  `ScopeDirectory` 已登记会话。归档来源仍只从当前 scope + workspace 选择，避免跨会话读取。
 - 保留策略：每个 scope + workspace 最多保留 `DSH_LARK_ARCHIVE_MAX`（默认 50）条归档、超过
   `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`（默认 90 天）的归档会被自动清理，`/archive clean` 只清当前 workspace。
 - SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史注入下一次 prompt 作为近似上下文。

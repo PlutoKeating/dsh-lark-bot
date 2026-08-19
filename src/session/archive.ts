@@ -44,7 +44,7 @@ export interface ArchivePruneOptions {
   maxAgeMs?: number;
 }
 
-function slugify(scope: string): string {
+export function archiveScopeSlug(scope: string): string {
   const slug = scope
     .trim()
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
@@ -136,7 +136,7 @@ export class SessionArchive {
   ) {}
 
   async archive(input: ArchiveInput): Promise<ArchiveRecord> {
-    const scopeSlug = slugify(input.scope);
+    const scopeSlug = archiveScopeSlug(input.scope);
     const id = timestampId();
     const archivedAt = new Date().toISOString();
     const source = input.source ?? 'manual';
@@ -194,9 +194,9 @@ export class SessionArchive {
         scopeDirs.push({ name: entry.name, dir: join(this.archiveDir, entry.name) });
       }
     } else {
-      const dir = join(this.archiveDir, slugify(scope));
+      const dir = join(this.archiveDir, archiveScopeSlug(scope));
       if (!(await exists(dir))) return [];
-      scopeDirs.push({ name: slugify(scope), dir });
+      scopeDirs.push({ name: archiveScopeSlug(scope), dir });
     }
     for (const entry of scopeDirs) {
       const dir = entry.dir;
@@ -238,7 +238,7 @@ export class SessionArchive {
    */
   async rebindWorkspaceCwd(scope: string, fromCwd: string, toCwd: string): Promise<number> {
     if (fromCwd === toCwd) return 0;
-    const scopeDir = join(this.archiveDir, slugify(scope));
+    const scopeDir = join(this.archiveDir, archiveScopeSlug(scope));
     if (!(await exists(scopeDir))) return 0;
     const files = await readdir(scopeDir);
     const ids = new Set(files.flatMap((file) => {

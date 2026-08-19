@@ -122,7 +122,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/permission [ask\|allow\|deny] [scope]` | 查看或设置工具权限策略（管理员可指定当前聊天内 scope） |
 | `/isolation [group\|topic\|member]` | 查看或设置群聊会话隔离（设置仅管理员） |
 | `/role set <id>`、`/role list` | 绑定 / 查看多角色 Agent |
-| `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
+| `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list` | 归档并上传 / 重发或由管理员转发 / 查看记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |

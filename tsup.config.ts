@@ -10,6 +10,7 @@ export default defineConfig({
     ask: 'src/notify/ask-tool.ts',
     plan: 'src/notify/plan-tool.ts',
     approval: 'src/notify/approval-answerer.ts',
+    file: 'src/notify/file-tool.ts',
   },
   format: ['esm'],
   target: 'node22',

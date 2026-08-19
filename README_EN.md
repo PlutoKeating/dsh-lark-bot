@@ -121,7 +121,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/notify <scope\|chatId> <text>` | Push a cross-session notification (admin) |
 | `/notify list` | List scopes known to the bridge |
 | `/retention [N\|default]` | View or set the live message retention window (overflow is archived) |
-| `/archive [note]`、`/archive list [N]`、`/archive clean` | Archive / list / clean session transcripts |
+| `/archive [note]`, `/archive send <id> [scope\|chatId]`, `/archive list [N]`, `/archive clean` | Archive and upload / resend here or to another session (admin) / list / clean |
 | `/density [compact\|standard\|detailed]` | View or set card density |
 | `/model`, `/providers`, `/provider`, `/key` | Open the interactive hub (tap a model or restore the default; management writes use a multi-turn wizard) |
 | `/model use <provider/model>` | Hot-switch the current session model (a unique bare model ID also works; effective next message, no restart) |
@@ -196,6 +196,8 @@ Additional instances support isolated `sdk` / `acp` runtimes (and legacy `headle
 reject `web`, because a shared Web agent broadcast stream cannot isolate sessions between bot instances.
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
+
+**Direct result-file delivery**: SDK / ACP / Web agents can call `lark_send_file` to upload a file from the current session workspace, its actual execution worktree, its scope archive, or the instance logs to the originating Feishu chat/topic. `/archive [note]` uploads its Markdown and JSONL after the durable local write; `/archive send <id> [scope|chatId]` retries locally or lets an admin forward it to a registered session. Only regular files up to 20 MiB are accepted by default. The resolved path must remain inside roots computed by the bridge; a runtime-supplied cwd never expands access.
 
 **Per-action approval and scope policy**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.8's official `approval/request` seam into Feishu; ACP uses native `session/request_permission`. The default `ask` policy shows **Allow once** / **Reject**. An admin may use `/permission allow` to auto-allow tool approvals in the current isolated scope, `/permission deny` to reject them with an explicit chat notice, or `/permission ask` to restore prompts. In member isolation, copy the target from `/status` and use `/permission <policy> <scope>`; cross-chat targets are rejected. Success is confirmed only after the owner-only `permission-policies.json` write completes, so policies survive restarts and appear in `/status`. They never bypass the separate plan gate; legacy `headless` has no tool callback channel.
 
@@ -453,7 +455,7 @@ This tool runs **locally**; before installing, be aware that it accesses:
   protect the profile directory and sanitize it before sharing. Hidden reasoning and tool arguments are not stored.
 - **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
   the reply anchor that places later agent question cards back in the original topic.
-- **Local callback**: `lark_notify`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
+- **Local callback**: `lark_notify`, `lark_send_file`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
   random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
   current Feishu / Lark conversation. Approval reasons/arguments are visible to members of a shared group.
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.

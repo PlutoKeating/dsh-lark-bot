@@ -25,6 +25,8 @@ describe('resolveSdkLaunch', () => {
     const patch = patchYamlFor();
     expect(patch).toContain("id: sdk-jsonrpc-server");
     expect(patch).toContain("id: lark-notify");
+    expect(patch).toContain("id: lark-file");
+    expect(patch).toContain("name: 'dsh-lark-bot/file'");
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
     expect(patch).toContain("id: lark-plan-approval");
@@ -39,6 +41,7 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain("id: sdk-jsonrpc-server");
     expect(patch).toContain('id: user-questions');
     expect(patch).not.toContain('id: lark-notify');
+    expect(patch).not.toContain('id: lark-file');
     expect(patch).not.toContain('id: lark-ask');
     expect(patch).not.toContain('id: lark-plan-approval');
     expect(patch).not.toContain('id: lark-approval-answerer');

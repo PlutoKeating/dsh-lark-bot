@@ -60,6 +60,7 @@
 - [x] 多角色 Agent（`RoleStore` + `/role` 命令：persona / 模型 / 工具指引 / 角色规则）
 - [x] 多机器人实例与 @ 交接（独立 profile/service/凭据/上下文 + 可信 peer + 跨进程回合上限，issue #25）
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
+- [x] agent 结果文件与归档直接回传（`lark_send_file` + `/archive send <id> [scope|chatId]`，issue #31）
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
 - [x] 默认逐操作卡片审批（SDK / Web `approval/request` + ACP `session/request_permission`，issue #24）
@@ -95,6 +96,7 @@
 9. ✅ scope 内并行 run 与异步任务队列（0.6.0）
 10. ✅ 多角色 Agent（0.6.0）：`/role save|set|clear|list|show|remove`
 11. ✅ 出站 @ 提及与跨会话通知（0.6.0）：`/notify` + `lark_notify` 工具 + 回环回调服务
+11.1 ✅ 结果文件回传（issue #31）：当前 session 定向 `lark_send_file` + 归档自动上传 / 按 id 重发
 12. ✅ dsh profile bundle（0.6.0）：`dsh plugin --profile <name> add dsh-lark-bot` 实测通过
 13. ⏳ 定时任务 / workflow 编排（等待上游能力接入）
 14. ⏳ 稳定发布下一版本

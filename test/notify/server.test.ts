@@ -30,6 +30,25 @@ async function startServer(deps: {
 }
 
 describe('NotifyServer', () => {
+  it('serves authenticated file uploads and validates required fields', async () => {
+    const file = vi.fn().mockResolvedValue({ ok: true, fileName: 'report.md', size: 6 });
+    const server = new NotifyServer({ token: 'test-token', resolve: () => undefined, send: vi.fn(), file });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.fileUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 's1', path: 'report.md' }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, fileName: 'report.md', size: 6 });
+    expect(file).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's1', path: 'report.md' }));
+    const bad = await fetch(server.fileUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'wrong', sessionId: 's1', path: 'report.md' }),
+    });
+    expect(bad.status).toBe(401);
+  });
+
   it('sends messages with mentions to a resolved scope', async () => {
     const directory = new ScopeDirectory(':memory:');
     directory.register('chat-a', 'oc_group', undefined);

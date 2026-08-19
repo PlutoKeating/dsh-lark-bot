@@ -35,6 +35,10 @@
     "./approval": {
       "types": "./dist/approval.d.ts",
       "import": "./dist/approval.js"
+    },
+    "./file": {
+      "types": "./dist/file.d.ts",
+      "import": "./dist/file.js"
     }
   },
   "files": [

@@ -96,6 +96,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Local result-file upload tool.
+    '- insert:',
+    '    - id: lark-file',
+    `      name: '${own.name}/file'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
     // Question-card tool (same contract as the SDK runtime).
     '- insert:',
     '    - id: lark-ask',

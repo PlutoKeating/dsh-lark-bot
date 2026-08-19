@@ -16,6 +16,11 @@ import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { afterEach } from 'vitest';
+
+const archiveRoots: string[] = [];
+afterEach(async () => Promise.all(archiveRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }))));
 
 function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   const archiver = {
@@ -74,6 +79,77 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
 }
 
 describe('archive slash commands', () => {
+  it('uploads both newly-created archive files to the current thread', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'archive-command-'));
+    archiveRoots.push(root);
+    const markdownPath = join(root, 'archive-1.md');
+    const jsonlPath = join(root, 'archive-1.jsonl');
+    await writeFile(markdownPath, '# archive');
+    await writeFile(jsonlPath, '{}\n');
+    const sendFile = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({
+      threadId: 'thread-a',
+      channel: { sendMarkdown: vi.fn().mockResolvedValue(undefined), sendFile },
+      archiver: {
+        archive: vi.fn().mockResolvedValue({
+          archiveId: 'archive-1', scope: 'chat-a', cwd: '/tmp/default', source: 'manual',
+          note: undefined, messageCount: 0, archivedAt: new Date().toISOString(),
+          markdownPath, jsonlPath, gitCommit: undefined,
+        }),
+        prune: vi.fn().mockResolvedValue(0),
+      } as unknown as SessionArchive,
+    });
+    await tryHandleCommand('/archive', ctx);
+    expect(sendFile).toHaveBeenCalledTimes(2);
+    expect(sendFile).toHaveBeenCalledWith('chat-a', 'archive-1.md', Buffer.from('# archive'), { replyTo: 'msg-1', threadId: 'thread-a' });
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('已将 2 个归档文件发送'), { replyTo: 'msg-1' });
+  });
+
+  it('resends an existing archive by id', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'archive-command-'));
+    archiveRoots.push(root);
+    const markdownPath = join(root, 'archive-1.md');
+    const jsonlPath = join(root, 'archive-1.jsonl');
+    await writeFile(markdownPath, '# archive');
+    await writeFile(jsonlPath, '{}\n');
+    const sendFile = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({ channel: { sendMarkdown: vi.fn().mockResolvedValue(undefined), sendFile } });
+    vi.mocked(ctx.archiver.list).mockResolvedValue([{ archiveId: 'archive-1', scope: 'chat-a', cwd: '/tmp/default', source: 'manual', note: undefined, messageCount: 0, archivedAt: '', markdownPath, jsonlPath, gitCommit: undefined }]);
+    await tryHandleCommand('/archive send archive-1', ctx);
+    expect(sendFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets an admin send a current-workspace archive to a registered session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'archive-command-'));
+    archiveRoots.push(root);
+    const markdownPath = join(root, 'archive-1.md');
+    const jsonlPath = join(root, 'archive-1.jsonl');
+    await writeFile(markdownPath, '# archive');
+    await writeFile(jsonlPath, '{}\n');
+    const sendFile = vi.fn().mockResolvedValue(undefined);
+    const scopeDirectory = new ScopeDirectory(':memory:');
+    scopeDirectory.register('chat-b:thread-b', 'chat-b', 'thread-b', 'topic', 'message-b');
+    const ctx = makeContext({
+      senderId: 'admin',
+      accessManager: { isAdmin: () => true } as unknown as AccessManager,
+      scopeDirectory,
+      channel: { sendMarkdown: vi.fn().mockResolvedValue(undefined), sendFile },
+    });
+    vi.mocked(ctx.archiver.list).mockResolvedValue([{ archiveId: 'archive-1', scope: 'chat-a', cwd: '/tmp/default', source: 'manual', note: undefined, messageCount: 0, archivedAt: '', markdownPath, jsonlPath, gitCommit: undefined }]);
+
+    await tryHandleCommand('/archive send archive-1 chat-b:thread-b', ctx);
+
+    expect(sendFile).toHaveBeenCalledWith('chat-b', 'archive-1.md', Buffer.from('# archive'), { replyTo: 'message-b', threadId: 'thread-b' });
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('chat-b:thread-b'), { replyTo: 'msg-1' });
+  });
+
+  it('rejects cross-session archive delivery from a non-admin', async () => {
+    const ctx = makeContext();
+    await tryHandleCommand('/archive send archive-1 chat-b', ctx);
+    expect(ctx.archiver.list).not.toHaveBeenCalled();
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('仅管理员'), { replyTo: 'msg-1' });
+  });
+
   it('archives the full live session on /archive', async () => {
     const ctx = makeContext();
     ctx.sessions.recordExchange('chat-a', '/tmp/default', ['hello'], 'hi');
