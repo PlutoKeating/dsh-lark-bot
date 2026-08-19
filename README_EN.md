@@ -112,6 +112,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/stop` | Stop the current task |
 | `/timeout [N\|off\|default]` | View or set the current session run timeout |
 | `/concurrency [N\|default]` | View or set the concurrent-run limit for this scope (default 2) |
+| `/permission [ask\|allow\|deny] [scope]` | View or set tool permission policy (admin; optional same-chat scope) |
 | `/isolation [group\|topic\|member]` | View or set this group's session isolation (admin to change) |
 | `/role list`、`/role show <id>` | List roles / show a role |
 | `/role set <id>`、`/role clear` | Bind / unbind a role for this scope |
@@ -196,7 +197,7 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
 
-**Default per-action approval**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.8's official `approval/request` seam into Feishu. Before a high-risk tool executes, a card shows the tool, reason, call identity and any arguments the bridge has observed, with **Allow once** / **Reject**. Waiting has no fixed deadline and pauses only the owning run's idle watchdog. A grant applies to that call only; rejection returns as a tool result so the agent can continue with a safer approach. ACP keeps its native `session/request_permission` path; all paths share the same card and session-precise lifecycle.
+**Per-action approval and scope policy**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.8's official `approval/request` seam into Feishu; ACP uses native `session/request_permission`. The default `ask` policy shows **Allow once** / **Reject**. An admin may use `/permission allow` to auto-allow tool approvals in the current isolated scope, `/permission deny` to reject them with an explicit chat notice, or `/permission ask` to restore prompts. In member isolation, copy the target from `/status` and use `/permission <policy> <scope>`; cross-chat targets are rejected. Success is confirmed only after the owner-only `permission-policies.json` write completes, so policies survive restarts and appear in `/status`. They never bypass the separate plan gate; legacy `headless` has no tool callback channel.
 
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,

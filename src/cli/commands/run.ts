@@ -17,6 +17,7 @@ import { RoleStore } from '../../bot/role-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { IsolationStore } from '../../bot/isolation-store.js';
 import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
+import { PermissionPolicyStore } from '../../bot/permission-policy-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -203,6 +204,7 @@ export async function startBridgeEngine(
   const roleStore = new RoleStore(paths.profilePath(profileName, 'roles.json'));
   const scopeDirectory = new ScopeDirectory(paths.profilePath(profileName, 'scopes.json'));
   const isolationStore = new IsolationStore(paths.profilePath(profileName, 'isolation.json'));
+  const permissionPolicies = new PermissionPolicyStore(paths.permissionPoliciesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -213,6 +215,7 @@ export async function startBridgeEngine(
     roleStore.load(),
     scopeDirectory.load(),
     isolationStore.load(),
+    permissionPolicies.load(),
   ]);
   // Freeze the recovery set before the channel can deliver live events. A
   // message accepted after connect then belongs only to the live path and
@@ -316,6 +319,7 @@ export async function startBridgeEngine(
       sessions,
       scopeDirectory,
       approvals,
+      permissionPolicies,
       channel: {
         sendCard: async (chatId, card, options) => {
           if (!streaming) throw new Error('bridge channel is not ready');
@@ -436,6 +440,7 @@ export async function startBridgeEngine(
           archiver,
           ...(role === undefined ? {} : { role }),
           approvals,
+          permissionPolicies,
           questions,
           plans,
           densityStore,
@@ -516,6 +521,7 @@ export async function startBridgeEngine(
     archiveMax: env.archiveMax,
     archiveMaxAgeDays: env.archiveMaxAgeDays,
     approvals,
+    permissionPolicies,
     questions,
     plans,
     densityStore,
@@ -703,6 +709,7 @@ export async function startBridgeEngine(
         roleStore.flush(),
         scopeDirectory.flush(),
         isolationStore.flush(),
+        permissionPolicies.flush(),
         jobs.flush(),
       ]);
     },

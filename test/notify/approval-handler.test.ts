@@ -3,8 +3,31 @@ import { ApprovalRegistry } from '../../src/bot/approvals.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import { buildApprovalHandler } from '../../src/notify/approval-handler.js';
 import { SessionStore } from '../../src/session/store.js';
+import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
 
 describe('buildApprovalHandler', () => {
+  it('applies allow and deny policies before creating an SDK/Web approval card', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'chat-a', undefined);
+    const sendCard = vi.fn();
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const payload = { token: 't', sessionId: 'session-1', toolName: 'bash' };
+    const allow = buildApprovalHandler({
+      sessions, scopeDirectory: directory, approvals: new ApprovalRegistry(), channel: { sendCard },
+      permissionPolicies: { get: () => 'allow' } as unknown as PermissionPolicyStore,
+    });
+    await expect(allow(payload)).resolves.toEqual({ ok: true, outcome: 'allowed-once' });
+    const deny = buildApprovalHandler({
+      sessions, scopeDirectory: directory, approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown },
+      permissionPolicies: { get: () => 'deny' } as unknown as PermissionPolicyStore,
+    });
+    await expect(deny(payload)).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    expect(sendCard).not.toHaveBeenCalled();
+    expect(sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('deny'), undefined);
+  });
+
   it('routes a default-runtime request to a detailed one-shot card', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a:thread-a', 'session-1', '/tmp/project');

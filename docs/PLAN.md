@@ -63,6 +63,7 @@
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
 - [x] 默认逐操作卡片审批（SDK / Web `approval/request` + ACP `session/request_permission`，issue #24）
+- [x] 按隔离 scope 持久化工具权限 `ask/allow/deny`，管理员命令、明确拒绝反馈与 `/status` 可见（issue #30）
 - [x] 问答卡（单选 / 多选 / 自由文本；支持直接回复卡片并按 messageId 精确续接）
 - [x] bot UI 中英国际化（issue #27）：Card JSON 2.0 per-viewer `zh_cn` / `en_us`，Markdown/toast 双语降级，agent 内容不翻译
 - [x] 关键任务计划门禁（完整计划消息 → 批准 / 继续规划 + feedback → 原 agent turn 自动续跑）

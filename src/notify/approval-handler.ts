@@ -7,6 +7,7 @@ import { renderApprovalCard } from '../card/approval-card.js';
 import { bilingualMarkdown } from '../card/i18n.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
+import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 
 export interface ApprovalPayload {
   token: string;
@@ -27,6 +28,7 @@ export interface ApprovalHandlerDeps {
   sessions: SessionStore;
   scopeDirectory: ScopeDirectory;
   approvals: ApprovalRegistry;
+  permissionPolicies?: PermissionPolicyStore;
   channel: {
     sendCard(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
     sendMarkdown?(chatId: string, markdown: string, options?: SendOptions): Promise<void>;
@@ -42,6 +44,26 @@ export function buildApprovalHandler(
     if (!scope) return { ok: false, error: `unknown session: ${payload.sessionId}` };
     const destination = deps.scopeDirectory.resolve(scope);
     if (!destination) return { ok: false, error: `unknown scope: ${scope}` };
+    const policy = deps.permissionPolicies?.get(scope) ?? 'ask';
+    if (policy === 'allow') return { ok: true, outcome: 'allowed-once' };
+    if (policy === 'deny') {
+      const options = destination.threadId && destination.messageId
+        ? { threadId: destination.threadId, replyTo: destination.messageId }
+        : undefined;
+      try {
+        await deps.channel.sendMarkdown?.(
+          destination.chatId,
+          bilingualMarkdown(
+            `⛔ 工具 \`${payload.toolName}\` 已按 scope \`${scope}\` 的 **deny** 策略拒绝；管理员可用 \`/permission ask ${scope}\` 恢复逐次审批。`,
+            `⛔ Tool \`${payload.toolName}\` was rejected by scope \`${scope}\`'s **deny** policy. An admin can use \`/permission ask ${scope}\` to restore per-operation approval.`,
+          ),
+          options,
+        );
+      } catch (error) {
+        log.warn('approval-policy', 'deny-notice-failed', { scope, error });
+      }
+      return { ok: true, outcome: 'rejected' };
+    }
     const id = `approval-${randomUUID().replaceAll('-', '')}`;
     const request: ApprovalRequest = {
       id,

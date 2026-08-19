@@ -11,6 +11,7 @@ describe('renderStatusCard', () => {
       activeRunIds: ['run-1'],
       version: '0.15.9',
       isolation: 'member',
+      permissionPolicy: 'deny',
       role: 'coder (Coder)',
       metrics: {
         inputTokens: 10_000,
@@ -34,6 +35,7 @@ describe('renderStatusCard', () => {
     expect(json).toContain('gateway/deepseek-v4-flash');
     expect(json).toContain('run-1');
     expect(json).toContain('0.15.9');
+    expect(json).toContain('工具权限**：`deny`');
     expect(json).toContain(
       '"value":{"cmd":"status-refresh","scope":"chat-a:member:user-1","isolation":"member"}',
     );

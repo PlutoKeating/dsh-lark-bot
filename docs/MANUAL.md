@@ -95,6 +95,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 的并行任务数 |
+| `/permission [ask\|allow\|deny] [scope]` | 查看或设置工具权限策略（管理员可指定当前聊天内 scope） |
 | `/isolation [group\|topic\|member]` | 查看或设置本群会话隔离（设置仅管理员） |
 | `/role list` | 查看角色列表与当前 scope 绑定 |
 | `/role show <id>` | 查看角色详情 |
@@ -223,9 +224,11 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- 默认 SDK / Web 的逐操作审批：dsh rc.8 在高风险工具真正执行前经 `/approval` 弹出“允许执行一次 /
-  拒绝”卡，显示工具、理由与可取得的执行参数；等待期间所属 run 不会 idle timeout。允许仅作用于
-  当前调用；拒绝会作为工具结果交回 agent 继续换方案。ACP 使用原生 permission 请求呈现同款卡。
+- SDK / Web 的逐操作审批经 `/approval` 回调，ACP 使用原生 permission 请求。当前 scope 默认
+  `ask` 并弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
+  `/permission deny` 直接拒绝并得到明确反馈，`/permission ask` 恢复逐次询问。member 模式下
+  管理员可用 `/permission <策略> <scope>` 修改同一聊天内其他成员 scope。策略写入成功后才回执，
+  按隔离 scope 持久化（0600）并显示在 `/status`；它不影响独立计划门禁。legacy headless 无工具回调。
 
 ### 安全网守护 · Safety-net guardian
 

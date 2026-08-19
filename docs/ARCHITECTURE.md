@@ -169,6 +169,11 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
    ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
    继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。
+   `PermissionPolicyStore`（`<profile>/permission-policies.json`，0600）在两条审批入口创建卡片前
+   按 immutable scope 统一执行 `ask/allow/deny`；默认 ask，管理员通过 `/permission` 修改，member
+   隔离下可显式指定同一 chat 内目标 scope（跨 chat fail closed）；持久写成功后才回执，失败回滚。
+   deny 返回 rejected 并显式通知。策略不参与 `lark_request_plan_approval`，所以自动放行逐工具审批
+   也不能跳过关键任务计划门禁；legacy headless 因无工具回调不在保证范围。
 9. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /

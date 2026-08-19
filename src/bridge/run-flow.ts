@@ -30,6 +30,7 @@ import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
 import { archiveSessionDir, classifySessionError } from '../session/heal.js';
 import type { SendOptions } from './send-options.js';
+import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -52,6 +53,7 @@ export interface RunFlowInput {
   /** Max concurrent runs allowed in the scope (queue enforces; guard is a fallback). */
   maxConcurrency?: number;
   approvals?: ApprovalRegistry;
+  permissionPolicies?: PermissionPolicyStore;
   questions?: QuestionRegistry;
   plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
@@ -205,6 +207,7 @@ async function runAttempt(
             scope: input.scope,
             ownerSessionId: runId,
             sendOptions: replyOptions,
+            ...(input.permissionPolicies ? { permissionPolicies: input.permissionPolicies } : {}),
           }),
         }
       : {}),
@@ -645,14 +648,37 @@ export function approvalHandlerFor(
         card: object,
         options?: SendOptions,
       ) => Promise<string | undefined>;
+      sendMarkdown?: (
+        chatId: string,
+        markdown: string,
+        options?: SendOptions,
+      ) => Promise<void>;
     };
     chatId: string;
     scope: string;
     ownerSessionId?: string;
     sendOptions?: SendOptions;
+    permissionPolicies?: PermissionPolicyStore;
   },
 ): (request: ApprovalRequest) => Promise<ApprovalOutcome> {
   return async (request) => {
+    const policy = input.permissionPolicies?.get(input.scope) ?? 'ask';
+    if (policy === 'allow') return 'allowed-once';
+    if (policy === 'deny') {
+      try {
+        await input.channel.sendMarkdown?.(
+          input.chatId,
+          bilingualMarkdown(
+            `⛔ 工具 \`${request.toolName}\` 已按 scope \`${input.scope}\` 的 **deny** 策略拒绝；管理员可用 \`/permission ask ${input.scope}\` 恢复逐次审批。`,
+            `⛔ Tool \`${request.toolName}\` was rejected by scope \`${input.scope}\`'s **deny** policy. An admin can use \`/permission ask ${input.scope}\` to restore per-operation approval.`,
+          ),
+          input.sendOptions,
+        );
+      } catch (error) {
+        log.warn('approval-policy', 'deny-notice-failed', { scope: input.scope, error });
+      }
+      return 'rejected';
+    }
     if (!input.approvals || !input.channel.sendCard) return 'cancelled';
     const cardRequest: ApprovalRequest = {
       ...request,

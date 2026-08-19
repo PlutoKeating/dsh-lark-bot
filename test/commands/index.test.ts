@@ -26,6 +26,7 @@ import type { SessionArchive } from '../../src/session/archive.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
 import { latestVersion } from '../../src/upgrade/update-check.js';
 import { JobLedger } from '../../src/bot/job-ledger.js';
+import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
@@ -138,6 +139,46 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
 }
 
 describe('command router', () => {
+  it('shows permission policy and restricts policy changes to admins', async () => {
+    let policy = 'ask' as 'ask' | 'allow' | 'deny';
+    const permissionPolicies = {
+      get: () => policy,
+      set: vi.fn(async (_scope: string, next: typeof policy) => { policy = next; }),
+    } as unknown as PermissionPolicyStore;
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const regular = makeContext({ permissionPolicies, senderId: 'user', channel: { sendMarkdown }, accessManager: makeAccessManager() });
+    await tryHandleCommand('/permission allow', regular);
+    expect(permissionPolicies.set).not.toHaveBeenCalled();
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('仅管理员'), { replyTo: 'msg-1' });
+
+    const admin = makeContext({ permissionPolicies, senderId: 'admin', channel: { sendMarkdown }, accessManager: makeAccessManager({ admins: ['admin'] }) });
+    await tryHandleCommand('/permission deny', admin);
+    expect(permissionPolicies.set).toHaveBeenCalledWith('chat-a', 'deny');
+    await tryHandleCommand('/permission', admin);
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('deny'), { replyTo: 'msg-1' });
+
+    await tryHandleCommand('/permission allow chat-a:member:user', admin);
+    expect(permissionPolicies.set).toHaveBeenLastCalledWith('chat-a:member:user', 'allow');
+    await tryHandleCommand('/permission deny other-chat:member:user', admin);
+    expect(permissionPolicies.set).not.toHaveBeenCalledWith('other-chat:member:user', 'deny');
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('只能修改当前聊天'), { replyTo: 'msg-1' });
+  });
+
+  it('does not report a permission change as successful when persistence fails', async () => {
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({
+      senderId: 'admin',
+      accessManager: makeAccessManager({ admins: ['admin'] }),
+      permissionPolicies: {
+        get: () => 'ask',
+        set: vi.fn().mockRejectedValue(new Error('disk full')),
+      } as unknown as PermissionPolicyStore,
+      channel: { sendMarkdown },
+    });
+    await expect(tryHandleCommand('/permission deny', ctx)).rejects.toThrow('disk full');
+    expect(sendMarkdown).not.toHaveBeenCalledWith('chat-a', expect.stringContaining('已将 scope'), expect.anything());
+  });
+
   it('sends /status as a refreshable card with current scope metrics', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a', 'session-1', '/tmp/default');
