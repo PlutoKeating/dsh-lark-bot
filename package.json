@@ -31,6 +31,10 @@
     "./plan": {
       "types": "./dist/plan.d.ts",
       "import": "./dist/plan.js"
+    },
+    "./approval": {
+      "types": "./dist/approval.d.ts",
+      "import": "./dist/approval.js"
     }
   },
   "files": [

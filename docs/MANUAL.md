@@ -190,6 +190,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
+- 默认 SDK / Web 的逐操作审批：dsh rc.7 在高风险工具真正执行前经 `/approval` 弹出“允许执行一次 /
+  拒绝”卡，显示工具、理由与可取得的执行参数；等待期间所属 run 不会 idle timeout。允许仅作用于
+  当前调用；拒绝会作为工具结果交回 agent 继续换方案。ACP 使用原生 permission 请求呈现同款卡。
 
 ### 安全网守护 · Safety-net guardian
 
@@ -245,6 +248,8 @@ dsh-lark-bot guardian uninstall
   再等待“批准，开始执行 / 继续规划”卡片；可在卡内填写约束或修改意见。批准后原任务自动续跑，
   继续规划则由 agent 修订后再次请求确认；未批准时写入/删除/移动/命令执行/`run_code` 被拒绝，
   等待期间仅所属 session 不触发 idle timeout。legacy headless 不支持。
+- 计划获批不等于永久放行具体工具：默认 SDK / Web 随后仍按 dsh policy 对每个高风险调用逐次审批；
+  卡片里的命令、参数和理由在群聊中对群成员可见，敏感操作请改用私聊。
 
 - 私聊始终独立；群聊默认按话题隔离 scope。管理员可用 `/isolation group|topic|member` 改为
   整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /
@@ -316,7 +321,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
 | `DSH_LARK_DSH_ARGS` | 自动发现 | dsh 启动参数 |
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者） |
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认，逐操作审批）/ `acp`（协议原生审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者） |
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |

@@ -46,8 +46,9 @@
    （`isSafeHttpUrl`）。
 7. **交互工具默认禁用**：SDK / ACP runtime profile 禁用 `user-questions`；
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
-8. **审批**：ACP 模式下敏感操作通过 `session/request_permission` 以飞书审批卡一问一答；
-   run 结束 / dispose 时所有挂起审批卡结算为拒绝（`src/bot/approvals.ts`）。
+8. **审批**：默认 SDK / Web 宿主在 `tools/pre-execute` 强制阻断未确认的高风险调用，并通过 dsh rc.7 官方 `approval/request` waterfall，把高风险工具逐次
+   映射为“允许执行一次 / 拒绝”飞书卡；ACP 继续通过 `session/request_permission` 使用同一交互。
+   授权不持久化，拒绝作为工具结果返回 agent；run 结束 / callback 断连只结算所属 session 的挂起请求。
    SDK / ACP / Web agent 对较大或高风险动作还会通过 `lark_request_plan_approval` 暂停；同一 turn
    未批准时 pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。完整计划发到当前飞书
    会话，只有卡片批准后才继续；继续规划会把可选文字意见返回 agent。run/callback 结束时只取消
@@ -57,7 +58,8 @@
    与 `/invite remove …`），以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。
-10. **本地回调隔离**：`lark_notify`、`lark_ask_user` 与 `lark_request_plan_approval` 工具的回调
+10. **本地回调隔离**：`lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 与
+    `approval/request` answerer 的回调
     服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
 11. **安全网守护（默认随 `setup` 安装）**：
@@ -102,6 +104,8 @@
   `sessions.json`（`0600`）；最近 context 快照同时保存产生它的 native sessionId 与 canonical provider/model 身份，并可由
   `/status` 卡在身份匹配时展示。未知或身份不匹配字段不估算；member scope 的刷新动作
   校验 operator `open_id` 与 owner，但共享群里已发送的状态卡仍对群成员可见。
+- 审批卡会把工具名、理由、调用标识及可取得的执行参数发送到当前会话；member scope 只限制谁能
+  点击，并不隐藏卡片正文。涉及密钥、私有路径或敏感命令时应使用私聊。
 - 群消息在底层 channel 进入 bridge 后执行 mention gate：普通群消息仍需 @bot（或管理员明确开启
   no-at 模式）；仅当 `replyToMessageId` 命中当前进程内 pending 问答卡时可免 @。文字答案必须属于
   同 chat/topic，member scope 还要求 sender `open_id` 等于 owner；拒绝的回复不会结算问题或进入任务队列。

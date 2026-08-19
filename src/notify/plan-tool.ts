@@ -14,7 +14,7 @@ export interface Config {
   token?: string;
 }
 
-interface PlanPolicyExecution {
+export interface PlanPolicyExecution {
   name: string;
   arguments: unknown;
   agent?: object;
@@ -138,7 +138,7 @@ export function apply(ctx: Context, config: Config = {}) {
   });
 }
 
-function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExecution): boolean {
+export function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExecution): boolean {
   if (execution.name === 'lark_request_plan_approval') return false;
   if (execution.name === 'run_code') return true;
   try {

@@ -26,6 +26,7 @@ import { startWebSessionWatcher, type WebMuxProvider, type WebSessionWatcher } f
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
 import { buildPlanHandler } from '../../notify/plan-handler.js';
+import { buildApprovalHandler } from '../../notify/approval-handler.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -254,6 +255,26 @@ export async function startBridgeEngine(
         },
       },
     }),
+    approval: buildApprovalHandler({
+      sessions,
+      scopeDirectory,
+      approvals,
+      channel: {
+        sendCard: async (chatId, card, options) => {
+          if (!streaming) throw new Error('bridge channel is not ready');
+          if (!streaming.sendCard) throw new Error('bridge channel does not support cards');
+          return streaming.sendCard(chatId, card, options);
+        },
+        sendMarkdown: async (chatId, markdown, options) => {
+          if (!streaming) throw new Error('bridge channel is not ready');
+          await streaming.sendMarkdown(chatId, markdown, options);
+        },
+        recallMessage: async (messageId) => {
+          if (!streaming?.recallMessage) throw new Error('bridge channel does not support recall');
+          await streaming.recallMessage(messageId);
+        },
+      },
+    }),
   });
   process.env.DSH_LARK_NOTIFY_TOKEN = notifyToken;
 
@@ -433,6 +454,7 @@ export async function startBridgeEngine(
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
   process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
   process.env.DSH_LARK_PLAN_URL = notifyServer.planUrl ?? '';
+  process.env.DSH_LARK_APPROVAL_URL = notifyServer.approvalUrl ?? '';
   const heartbeat = startHeartbeat(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,

@@ -5,7 +5,7 @@
 | **P0 脚手架** Scaffolding | 仓库结构、文档、CI 骨架、README | ✅ 已完成 Done |
 | **P1 MVP** | 飞书 bot + dsh 单会话往返（发消息 → 收流式卡片） | ✅ 已完成 Done |
 | **P2 工作区** Workspace | git worktree 隔离、项目级规则注入、多项目导航、SDK 原生 session 续跑 | ✅ 已完成 Done（SDK 接入） |
-| **P3 审批/调度** Approval & Scheduling | 访问白名单、卡片审批（ACP）、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
+| **P3 审批/调度** Approval & Scheduling | 访问白名单、SDK/Web/ACP 逐操作卡片审批、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
 | **P5 后台托管** Background supervision | 同一 dsh profile 的 systemd user / launchd / Windows / portable 托管，登录自启、异常重启、状态/日志/生命周期，与 guardian/upgrade 闭环（#23） | ✅ 已完成 Done |
 | **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
@@ -25,6 +25,7 @@
 | **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
 | **P21 原生折叠过程** Native collapsible process | schema 2.0 原生折叠面板实时承载 reasoning / tools，最终回答单独发送并保留 reply/thread 路由（issue #19） | ✅ 已完成 Done |
 | **P22 会话状态指标** Session status metrics | `/status` 可刷新卡：工作区 / 模型 / session / runs / 版本、真实 context 占用、累计 input/output/cache token、待审批/提问/计划；不可得字段不估算（issue #20） | ✅ 已完成 Done |
+| **P25 默认逐操作审批** Default tool approval | rc.7 `approval/request` answerer + `/approval` 回调；默认 SDK/Web 与 ACP 统一一次性允许/拒绝卡、session 精确等待/清理（issue #24） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -32,7 +33,7 @@
   `dsh` 返回的流式卡片。
 - **P2 done**：`/ws save/use` 管理命名项目，每个会话绑定独立 git worktree，注入项目级 AGENTS.md；
   SDK 原生 session 续跑。
-- **P3 done（审批部分）**：ACP `session/request_permission` 审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
+- **P3 done（审批部分）**：默认 SDK/Web `approval/request` 与 ACP `session/request_permission` 统一审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
 - **P4 done**：已发布 `dsh-lark-bot@0.4.1` 与 `dsh-feishu-bot@0.4.1`，第三方可
   `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装；GitHub Release 自动创建。
 - **P5 done（#23）**：没有恢复 0.6.x 的独立 bridge engine；`service` 只托管唯一标准 dsh
@@ -122,7 +123,7 @@
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
-P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.4.1` /
+P3 — SDK/Web/ACP one-shot approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.4.1` /
 `dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — optional OS supervision of
 the same in-process dsh profile (the separate bridge runtime was removed in 0.7.0 and remains removed);
 P6 — model / provider / credential management in chat via the official dsh config protocol

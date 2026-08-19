@@ -29,6 +29,12 @@ const DIST_FILES = [
   'ask.js',
   'ask.d.ts',
   'ask.js.map',
+  'plan.js',
+  'plan.d.ts',
+  'plan.js.map',
+  'approval.js',
+  'approval.d.ts',
+  'approval.js.map',
 ] as const;
 
 const tempRoots: string[] = [];
@@ -49,6 +55,10 @@ const FAKE_PATCH = [
   "      name: 'dsh-lark-bot/notify'",
   '      config: {}',
   '',
+  '    - id: lark-approval-answerer',
+  "      name: 'dsh-lark-bot/approval'",
+  '      config: {}',
+  '',
 ].join('\n');
 
 function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
@@ -63,6 +73,8 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
       './invariant': { types: './dist/invariant.d.ts', import: './dist/invariant.js' },
       './notify': { types: './dist/notify.d.ts', import: './dist/notify.js' },
       './ask': { types: './dist/ask.d.ts', import: './dist/ask.js' },
+      './plan': { types: './dist/plan.d.ts', import: './dist/plan.js' },
+      './approval': { types: './dist/approval.d.ts', import: './dist/approval.js' },
     },
     files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
     dsh: { bundle: { patch: './cordis.patch.yml' } },
@@ -106,15 +118,19 @@ describe('publish bundle', () => {
     const patch = await readFile(join(dir, 'cordis.patch.yml'), 'utf8');
     expect(patch).toContain("name: 'dsh-lark-bot/plugin'");
     expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).toContain("name: 'dsh-lark-bot/approval'");
     // The primary package ships the repository file verbatim: the published
     // patch can never drift from the tracked cordis.patch.yml.
     expect(patch).toBe(FAKE_PATCH);
   });
 
-  it('requires the ask entry that was missing from the v0.9.0 publish', async () => {
+  it('requires every bridge callback entry in the publish bundle', async () => {
     const required = collectRequiredDistFiles(manifestFor());
     expect(required).toContain('ask.js');
     expect(required).toContain('ask.d.ts');
+    expect(required).toContain('plan.js');
+    expect(required).toContain('approval.js');
+    expect(required).toContain('approval.d.ts');
   });
 
   it('fails validation and assembly when an exported artifact is missing', async () => {

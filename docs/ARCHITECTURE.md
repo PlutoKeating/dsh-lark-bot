@@ -131,6 +131,11 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
    `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
+   默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
+   高风险工具，再以 structural listener 接入 rc.7
+   `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
+   ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
+   继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。
 7. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
@@ -181,7 +186,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |
-| `src/notify/` | 进程内 `/notify` `/ask` `/plan` 回调与 raw-schema dsh 工具插件 |
+| `src/notify/` | 进程内 `/notify` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |

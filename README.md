@@ -149,6 +149,8 @@ SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
+**默认逐操作审批**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.7 官方 `approval/request` seam；执行前会弹出“允许执行一次 / 拒绝”审批卡，展示工具、理由、调用标识以及 bridge 已取得的执行参数。等待没有固定截止并暂停所属 run 的 idle watchdog；每次允许只授权当前调用，拒绝作为工具结果返回 agent，由它改用安全方案继续。ACP 仍走原生 `session/request_permission`，三条路径共用同一张卡与精确的 session 生命周期。
+
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
 移动、命令执行与 `run_code`。bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
@@ -359,7 +361,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录|
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置|
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置|
-| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认）/ `acp`（审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者）|
+| `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认，approval answerer）/ `acp`（协议原生审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者）|
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider|
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型|
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限|
@@ -409,9 +411,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
   可刷新，但群内已经发送的状态卡仍遵循共享群消息可见性。
 - **scope 路由**：`scopes.json` 保存 chat/thread 与最近入站 messageId；messageId 仅用于把 agent
   后续问答卡作为 reply 正确发回原话题。
-- **本地回调**：运行 `lark_notify`、`lark_ask_user` 或 `lark_request_plan_approval` 工具时，dsh
+- **本地回调**：运行 `lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 或逐工具审批时，dsh
   runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
-  不监听公网）；计划内容与决策卡会发送到当前飞书 / Lark 会话。
+  不监听公网）；计划内容、待执行工具的理由/参数与决策卡会发送到当前飞书 / Lark 会话。群聊中的审批内容对群成员可见。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
@@ -543,7 +545,7 @@ pnpm publish:dual
 飞书 / Lark ──WebSocket 长连接──▶ bridge/ ──▶ session/ ──▶ workspace/ ──▶ adapters/ ──▶ dsh ──▶ DeepSeek V4
 ```
 
-核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接官方 DeepSeek Harness SDK（`DSH_LARK_ADAPTER=sdk`），可选 ACP 审批模式与 legacy headless。
+核心思路：**飞书通道与 agent 后端解耦**。桥接层复刻 `lark-channel-bridge` 的成熟做法（WebSocket 长连接 + 流式卡片 + 会话路由），agent 后端通过 adapter 抽象，默认挂接带逐工具审批的官方 DeepSeek Harness SDK（`DSH_LARK_ADAPTER=sdk`），ACP 保留协议原生审批，另有 legacy headless。
 
 默认安装的「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
 通道接收 `/safemode` 控制信号，以仅核心 profile（`dsh-base` + `dsh-headless`）拉起受限对话

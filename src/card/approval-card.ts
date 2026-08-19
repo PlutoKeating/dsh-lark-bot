@@ -1,9 +1,12 @@
 import type { ApprovalOption } from '../adapters/types.js';
+import { redactSecrets, truncateUtf8Safe } from '../config/security.js';
 
 export interface ApprovalCardInput {
   id: string;
+  callId?: string;
   toolName: string;
   reason: string | undefined;
+  toolInput?: unknown;
   options: readonly ApprovalOption[];
   actionScope?: string;
 }
@@ -21,8 +24,11 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
   const markdown = [
     '🔐 **审批请求**',
     '',
-    `**工具** \`${input.toolName}\``,
-    ...(input.reason ? ['', input.reason] : []),
+    `**工具** \`${safeText(input.toolName, 512)}\``,
+    ...(input.reason ? ['', `**理由** ${safeText(input.reason, 2048)}`] : []),
+    ...(input.toolInput === undefined
+      ? ['', `**调用标识** \`${safeText(input.callId ?? input.id, 512)}\``, '', '执行参数已显示在当前运行卡的对应工具调用中。']
+      : ['', '**执行内容**', '```json', printableInput(input.toolInput), '```']),
   ].join('\n');
 
   const actions = [
@@ -84,4 +90,22 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
       ],
     },
   };
+}
+
+function printableInput(value: unknown): string {
+  let text: string;
+  try {
+    text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  } catch {
+    text = String(value);
+  }
+  return safeText(text, 4000).replaceAll('```', '``\u200b`');
+}
+
+function safeText(text: string, maxBytes: number): string {
+  const redacted = redactSecrets(text);
+  const truncated = truncateUtf8Safe(redacted, maxBytes);
+  return Buffer.byteLength(redacted, 'utf8') > maxBytes
+    ? `${truncated}\n…（已截断）`
+    : truncated;
 }

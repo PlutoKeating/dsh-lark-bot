@@ -243,4 +243,43 @@ describe('NotifyServer', () => {
     await expect(request).rejects.toThrow();
     await vi.waitFor(() => expect(observedAbort).toBe(true));
   });
+
+  it('serves authenticated one-shot approval outcomes', async () => {
+    const approval = vi.fn().mockResolvedValue({ ok: true, outcome: 'rejected' });
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.approvalUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token', sessionId: 'session-1', toolName: 'bash',
+        callId: 'call-1', reason: 'run tests',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    expect(approval).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', toolName: 'bash' }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('rejects invalid approval callbacks before invoking the handler', async () => {
+    const approval = vi.fn();
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.approvalUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'wrong', sessionId: 's', toolName: 'bash' }),
+    });
+    expect(response.status).toBe(401);
+    expect(approval).not.toHaveBeenCalled();
+  });
 });

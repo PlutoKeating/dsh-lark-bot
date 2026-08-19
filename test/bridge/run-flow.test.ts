@@ -77,6 +77,70 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('pauses the idle watchdog for a native-session callback approval', async () => {
+    const approvals = new ApprovalRegistry();
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const adapter: AgentAdapter = {
+      id: 'dsh', displayName: 'dsh',
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(): AgentRun {
+        return {
+          runId: 'run-callback', stop, waitForExit: async () => true,
+          events: (async function* () {
+            yield { type: 'system', sessionId: 'native-session', cwd: '/tmp/project', model: 'm' } as AgentEvent;
+            const pending = approvals.register('chat-callback-timeout', {
+              id: 'approval-callback', sessionId: 'native-session', toolName: 'bash',
+              reason: 'test', options: [],
+            }, 'native-session');
+            setTimeout(() => approvals.resolve(
+              'chat-callback-timeout', 'approval-callback', 'allowed-once',
+            ), 60);
+            await pending;
+            yield { type: 'done', sessionId: 'native-session', terminationReason: 'normal' } as AgentEvent;
+          })(),
+        };
+      },
+    };
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-callback-timeout', chatId: 'chat-callback-timeout', messages: ['run'],
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), approvals, channel: fake.channel,
+      defaultWorkspace: '/tmp/project', runTimeoutMs: 20,
+    });
+    expect(stop).not.toHaveBeenCalled();
+    expect(approvals.pendingCount('chat-callback-timeout')).toBe(0);
+  });
+
+  it('does not cancel another concurrent run approval when this run completes', async () => {
+    const approvals = new ApprovalRegistry();
+    const approvalA = approvals.register('chat-concurrent-approval', {
+      id: 'approval-a', sessionId: 'session-a', toolName: 'bash', reason: 'A', options: [],
+    }, 'run-a');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-concurrent-approval',
+      chatId: 'chat-concurrent-approval',
+      messages: ['run B'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' },
+        { type: 'done', sessionId: 'session-b', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      approvals,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(approvals.pendingCount('chat-concurrent-approval', 'run-a')).toBe(1);
+    approvals.resolve('chat-concurrent-approval', 'approval-a', 'allowed-once');
+    await expect(approvalA).resolves.toBe('allowed-once');
+  });
+
   it('does not cancel another concurrent session question when this run completes', async () => {
     const questions = new QuestionRegistry();
     const questionA = questions.register(
@@ -1204,9 +1268,44 @@ describe('approvalHandlerFor', () => {
       reason: 'run tests',
       options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
     });
-    expect(sendCard).toHaveBeenCalledWith('chat-a', expect.objectContaining({ schema: '2.0' }));
-    expect(approvals.resolve('chat-a', 'call-1', 'allowed-once')).toBe(true);
+    expect(sendCard).toHaveBeenCalledWith(
+      'chat-a', expect.objectContaining({ schema: '2.0' }), undefined,
+    );
+    const id = /"cmd":"approve","id":"([^"]+)"/u.exec(
+      JSON.stringify(sendCard.mock.calls[0]?.[1]),
+    )?.[1];
+    expect(id).toBeTruthy();
+    expect(approvals.resolve('chat-a', id!, 'allowed-once')).toBe(true);
     await expect(outcome).resolves.toBe('allowed-once');
+  });
+
+  it('keeps identical upstream call ids distinct across concurrent sessions', async () => {
+    const approvals = new ApprovalRegistry();
+    const cards: object[] = [];
+    const sendCard = vi.fn(async (_chatId: string, card: object) => {
+      cards.push(card);
+      return undefined;
+    });
+    const first = approvalHandlerFor({
+      approvals, channel: { sendCard }, chatId: 'chat-a', scope: 'chat-a', ownerSessionId: 'run-a',
+    })({
+      id: 'same-call', sessionId: 's-a', toolName: 'bash', reason: 'A',
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }],
+    });
+    const second = approvalHandlerFor({
+      approvals, channel: { sendCard }, chatId: 'chat-a', scope: 'chat-a', ownerSessionId: 'run-b',
+    })({
+      id: 'same-call', sessionId: 's-b', toolName: 'bash', reason: 'B',
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }],
+    });
+    const ids = cards.map((card) => /"cmd":"approve","id":"([^"]+)"/u.exec(JSON.stringify(card))?.[1]);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBeTruthy();
+    expect(ids[0]).not.toBe(ids[1]);
+    approvals.resolve('chat-a', ids[0]!, 'allowed-once');
+    approvals.resolve('chat-a', ids[1]!, 'rejected');
+    await expect(first).resolves.toBe('allowed-once');
+    await expect(second).resolves.toBe('rejected');
   });
 
   it('fails closed when no registry or card channel exists', async () => {

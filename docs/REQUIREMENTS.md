@@ -86,7 +86,9 @@
 
 ### 4.4 审批与安全（approval & security）
 - 用户白名单 + 访问控制（`/invite user/admin/group`）。
-- 逐操作审批（卡片按钮回调 / 命令式确认兜底）。
+- 逐操作审批（issue #24）：默认 SDK / Web 以 `tools/pre-execute` 强制门禁 + dsh rc.7 `approval/request` answerer，ACP 通过
+  `session/request_permission`；统一提供“允许执行一次 / 拒绝”卡，展示执行内容和理由。等待暂停
+  所属 run 的 idle watchdog，无固定截止；拒绝作为工具结果返回 agent 而非终止整个任务。
 - 关键任务计划门禁（issue #18）：完整计划先作为普通消息发出，再用带可选文字意见的卡片批准执行
   或继续规划；决定回写原 agent turn，等待期间按 session 暂停 idle watchdog；当前 turn 未批准时
   runtime pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。
@@ -150,6 +152,8 @@
 - `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
 - `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
+- `./approval`：rc.7 `approval/request` 的 terminal answerer；host 与默认 SDK profile 自动装配，
+  读取 `DSH_LARK_APPROVAL_URL` / `DSH_LARK_NOTIFY_TOKEN`，ACP 不重复装配。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
 - 形态关系：**dsh profile bundle 即唯一运行时形态**——`dsh-lark-bot/plugin` 在 dsh
   进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
@@ -241,7 +245,7 @@
 | **协议** | AGPLv3.0（官方原文，见根目录 `LICENSE`） |
 | **语言** | 中英双语，先中文后英文 |
 | **运行时** | Node.js ≥ 22.19（`package.json` engines） |
-| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client（`@deepseek-ai/dsh-sdk-client`），ACP 审批可选，headless legacy |
+| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client + rc.7 approval answerer，ACP 协议原生审批可选，headless legacy |
 | **关键词** | README / 介绍 / tags 含 `dsh`、`deepseek`、`deepseek harness`、`feishu`、`lark`、`bridge`、`bot` |
 | **tags** | `typescript`、`chatbot`、`lark`、`feishu`、`deepseek`、`deepseek-harness`、`dsh-plugin`、`messaging`、`bot`、`bridge`、`dsh` |
 | **目录结构** | 参考克隆仓库统一放 `reference/`（不提交，仅跟踪 `reference/.gitignore` 与 `reference/README.md` 两个元文件） |
@@ -260,7 +264,7 @@
 3. **工作区管理是核心差异化**——会话绑定 git worktree + 项目规则注入 + 上下文持久化。
 4. **注意**：dsh 与 claude/codex 接口不同（官方提供 SDK client / ACP server / headless 三种接入形态，
    后者是常驻交互式 REPL），所以「换 dsh」不是 1:1 替换，需重写 agent adapter 层。当前实现：
-   **默认 SDK client**（原生 session + 流式 thinking/text）、**ACP 审批模式**、**headless legacy**，
+   **默认 SDK client**（原生 session + 流式 thinking/text + approval answerer）、**ACP 协议原生审批模式**、**headless legacy**，
    三者都收敛到同一 `AgentEvent` 契约，飞书层无需感知差异。
 
 ---

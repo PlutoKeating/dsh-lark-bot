@@ -181,6 +181,8 @@ async function runAttempt(
             channel: input.channel,
             chatId: input.chatId,
             scope: input.scope,
+            ownerSessionId: runId,
+            sendOptions: replyOptions,
           }),
         }
       : {}),
@@ -289,6 +291,9 @@ async function runAttempt(
               activeModel = modelRoute(input.provider, event.model ?? input.model);
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
             }
+            if (event.type === 'tool_use' && activeSessionId !== undefined) {
+              input.approvals?.recordToolCall(activeSessionId, event.id, event.input);
+            }
             if (event.type === 'usage') {
               input.sessions.recordUsage(input.scope, {
                 ...(event.inputTokens === undefined ? {} : { inputTokens: event.inputTokens }),
@@ -335,8 +340,11 @@ async function runAttempt(
                         input.questions?.pendingCount(input.scope, activeSessionId)) ||
                       (activeSessionId !== undefined &&
                         input.plans?.pendingCount(input.scope, activeSessionId))
+                      || input.approvals?.pendingCount(input.scope, runId)
+                      || (activeSessionId !== undefined &&
+                        input.approvals?.pendingCount(input.scope, activeSessionId))
                     ) {
-                      // A question or plan card is awaiting the user: keep the task
+                      // A question, plan, or tool approval is awaiting the user: keep the task
                       // alive; the onSettled handler re-arms once answered.
                       armTimeout?.();
                       return;
@@ -364,6 +372,11 @@ async function runAttempt(
         const unsubscribePlan = timeoutPromise
           ? input.plans?.onSettled(input.scope, (settledSessionId) => {
               if (settledSessionId === activeSessionId) rearmAfterHumanInput();
+            })
+          : undefined;
+        const unsubscribeApproval = timeoutPromise
+          ? input.approvals?.onSettled(input.scope, (settledSessionId) => {
+              if (settledSessionId === runId || settledSessionId === activeSessionId) rearmAfterHumanInput();
             })
           : undefined;
 
@@ -395,6 +408,7 @@ async function runAttempt(
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           unsubscribeQuestion?.();
           unsubscribePlan?.();
+          unsubscribeApproval?.();
         }
     };
     let producerStarted = false;
@@ -506,7 +520,11 @@ async function runAttempt(
   } finally {
     input.activeRuns.delete(input.scope, runId);
     if (input.approvals) {
-      input.approvals.settleAll(input.scope, 'cancelled');
+      input.approvals.settleSession(input.scope, runId, 'cancelled');
+      if (activeSessionId !== undefined) {
+        input.approvals.settleSession(input.scope, activeSessionId, 'cancelled');
+        input.approvals.clearToolCalls(activeSessionId);
+      }
     }
     if (input.questions && activeSessionId !== undefined) {
       input.questions.settleSession(input.scope, activeSessionId);
@@ -538,28 +556,44 @@ async function pruneArchives(input: RunFlowInput): Promise<void> {
 export function approvalHandlerFor(
   input: {
     approvals: ApprovalRegistry | undefined;
-    channel: { sendCard?: (chatId: string, card: object) => Promise<string | undefined> };
+    channel: {
+      sendCard?: (
+        chatId: string,
+        card: object,
+        options?: SendOptions,
+      ) => Promise<string | undefined>;
+    };
     chatId: string;
     scope: string;
+    ownerSessionId?: string;
+    sendOptions?: SendOptions;
   },
 ): (request: ApprovalRequest) => Promise<ApprovalOutcome> {
   return async (request) => {
     if (!input.approvals || !input.channel.sendCard) return 'cancelled';
-    const promise = input.approvals.register(input.scope, request);
+    const cardRequest: ApprovalRequest = {
+      ...request,
+      id: `approval-${randomUUID().replaceAll('-', '')}`,
+      callId: request.callId ?? request.id,
+    };
+    const promise = input.approvals.register(input.scope, cardRequest, input.ownerSessionId);
     try {
       await input.channel.sendCard(
         input.chatId,
         renderApprovalCard({
-          id: request.id,
-          toolName: request.toolName,
-          reason: request.reason,
-          options: request.options,
+          id: cardRequest.id,
+          ...(cardRequest.callId === undefined ? {} : { callId: cardRequest.callId }),
+          toolName: cardRequest.toolName,
+          reason: cardRequest.reason,
+          ...(cardRequest.toolInput === undefined ? {} : { toolInput: cardRequest.toolInput }),
+          options: cardRequest.options,
           actionScope: input.scope,
         }),
+        input.sendOptions,
       );
     } catch (error) {
       log.fail('approval-card', error, { scope: input.scope });
-      input.approvals.settleAll(input.scope, 'cancelled');
+      input.approvals.cancel(input.scope, cardRequest.id);
       return 'cancelled';
     }
     return promise;

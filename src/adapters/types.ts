@@ -27,13 +27,17 @@ export interface ApprovalOption {
 
 export interface ApprovalRequest {
   id: string;
+  /** Runtime tool-call identity shown for audit; card action uses the unique id above. */
+  callId?: string;
   sessionId: string | undefined;
   toolName: string;
   reason: string | undefined;
+  /** Exact arguments already presented for this tool call, when available. */
+  toolInput?: unknown;
   options: readonly ApprovalOption[];
 }
 
-export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled';
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
 
 export interface AgentRunOptions {
   runId: string;

@@ -10,6 +10,8 @@
 #     (mentions + cross-session messages).
 #   - `dsh-lark-bot/plan` mounts the host plan gate; managed SDK / ACP overlays
 #     mount the same tool for their nested agents.
+#   - `dsh-lark-bot/approval` answers official one-shot tool approvals through
+#     Feishu/Lark cards for host agents.
 # First boot without credentials prints a QR code for one-time binding.
 # Set DSH_LARK_DISABLED=1 to keep the engine stopped.
 
@@ -36,4 +38,10 @@
       name: 'dsh-lark-bot/plan'
       config:
         endpoint: !!js process.env.DSH_LARK_PLAN_URL
+        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
+
+    - id: lark-approval-answerer
+      name: 'dsh-lark-bot/approval'
+      config:
+        endpoint: !!js process.env.DSH_LARK_APPROVAL_URL
         token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
