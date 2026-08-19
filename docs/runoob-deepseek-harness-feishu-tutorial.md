@@ -65,7 +65,7 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 | `/new` `/reset` | 开始新会话 |
 | `/cd <path>` | 切换工作目录并重置会话 |
 | `/ws list` `/ws save <name>` `/ws use <name>` | 查看 / 保存 / 切换命名工作空间 |
-| `/status` | 查看当前状态与运行中的任务 |
+| `/status` | 查看可刷新状态卡、上下文/token 用量与待处理卡 |
 | `/stop` | 终止当前任务 |
 | `/concurrency [N]` | 查看或设置当前 scope 并行任务数（默认 2） |
 | `/role list` `/role set <id>` | 查看角色 / 为当前 scope 绑定角色 |
@@ -139,7 +139,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 **机器人静默 / 长连接失败？** 查看 stderr 上的 JSONL 日志（关注 `channel` 类别），
 SDK 会自动重连；也可先运行 `dsh-lark-bot doctor` 检查 profile 与本机 dsh 可用性。
 
-**agent 无响应？** 发送 `/status` 查看 scope、cwd 和 active run；`/stop` 终止当前任务；
+**agent 无响应？** 发送 `/status` 查看 scope、cwd、模型、active run、真实 context/token 指标和
+待审批/提问/计划（未知值显示“暂无”，卡片可原位刷新）；`/stop` 终止当前任务；
 持续无响应超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。
 
 **dsh 崩溃了怎么办？** 直接发 `/safemode`，守护会拉起仅核心安全模式，修复后 `/safemode exit` 恢复。

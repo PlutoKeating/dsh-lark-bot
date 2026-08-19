@@ -13,6 +13,36 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface SessionTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+export interface SessionMetrics extends SessionTokenUsage {
+  contextUsedTokens?: number;
+  contextWindow?: number;
+}
+
+export interface SessionContextIdentity {
+  sessionId: string | undefined;
+  model: string;
+}
+
+interface StoredSessionMetrics extends SessionTokenUsage {
+  contexts?: StoredContextSnapshot[];
+}
+
+interface StoredContextSnapshot {
+  sessionId: string;
+  model: string;
+  usedTokens: number;
+  contextWindow: number;
+}
+
+const MAX_CONTEXT_SNAPSHOTS_PER_SCOPE = 32;
+
 export interface RecordExchangeOptions {
   /** Max live messages kept for the scope (overflow is archived, then trimmed). */
   retention?: number;
@@ -22,10 +52,11 @@ export interface RecordExchangeOptions {
 
 interface SessionData {
   chats: Record<string, SessionRecord>;
+  metrics: Record<string, StoredSessionMetrics>;
 }
 
 export class SessionStore {
-  private data: SessionData = { chats: {} };
+  private data: SessionData = { chats: {}, metrics: {} };
   /** Live session-id → scope index (used by the agent question-card router). */
   private sessionScopes = new Map<string, string>();
   private saving: Promise<void> = Promise.resolve();
@@ -49,6 +80,12 @@ export class SessionStore {
               cwd: record.cwd,
               messages: record.messages ?? [],
             },
+          ]),
+        ),
+        metrics: Object.fromEntries(
+          Object.entries(parsed.metrics ?? {}).map(([scope, metrics]) => [
+            scope,
+            normalizeMetrics(metrics),
           ]),
         ),
       };
@@ -138,9 +175,66 @@ export class SessionStore {
     return record && record.cwd === cwd ? [...record.messages] : [];
   }
 
+  /** Add one model-call usage sample to the current scope session totals. */
+  recordUsage(scopeId: string, usage: SessionTokenUsage): void {
+    const current = this.data.metrics[scopeId] ?? {};
+    const next: SessionMetrics = { ...current };
+    addMetric(next, 'inputTokens', usage.inputTokens);
+    addMetric(next, 'outputTokens', usage.outputTokens);
+    addMetric(next, 'cacheReadTokens', usage.cacheReadTokens);
+    addMetric(next, 'cacheWriteTokens', usage.cacheWriteTokens);
+    this.data.metrics[scopeId] = next;
+    this.schedulePersist();
+  }
+
+  /** Replace the latest protocol-reported context snapshot for the scope. */
+  recordContextUsage(
+    scopeId: string,
+    context: { usedTokens: number; contextWindow: number; sessionId: string; model: string },
+  ): void {
+    if (!validMetric(context.usedTokens) || !validContextWindow(context.contextWindow)) return;
+    const current = this.data.metrics[scopeId] ?? {};
+    const nextContext: StoredContextSnapshot = {
+      sessionId: context.sessionId,
+      model: context.model,
+      usedTokens: context.usedTokens,
+      contextWindow: context.contextWindow,
+    };
+    this.data.metrics[scopeId] = {
+      ...current,
+      contexts: [
+        ...(current.contexts ?? []).filter(
+          (candidate) =>
+            candidate.sessionId !== context.sessionId || candidate.model !== context.model,
+        ),
+        nextContext,
+      ].slice(-MAX_CONTEXT_SNAPSHOTS_PER_SCOPE),
+    };
+    this.schedulePersist();
+  }
+
+  metricsFor(scopeId: string, current?: SessionContextIdentity): SessionMetrics | undefined {
+    const stored = this.data.metrics[scopeId];
+    if (!stored) return undefined;
+    const { contexts, ...tokens } = stored;
+    const metrics: SessionMetrics = { ...tokens };
+    const context = current?.sessionId === undefined
+      ? undefined
+      : [...(contexts ?? [])].reverse().find(
+          (candidate) =>
+            candidate.sessionId === current.sessionId && candidate.model === current.model,
+        );
+    if (context) {
+      metrics.contextUsedTokens = context.usedTokens;
+      metrics.contextWindow = context.contextWindow;
+    }
+    return metrics;
+  }
+
   clear(scopeId: string): boolean {
-    if (!(scopeId in this.data.chats)) return false;
+    if (!(scopeId in this.data.chats) && !(scopeId in this.data.metrics)) return false;
     delete this.data.chats[scopeId];
+    delete this.data.metrics[scopeId];
     this.schedulePersist();
     return true;
   }
@@ -202,6 +296,66 @@ export class SessionStore {
           },
         ]),
       ),
+      metrics: Object.fromEntries(
+        Object.entries(this.data.metrics).map(([scope, metrics]) => [scope, { ...metrics }]),
+      ),
     };
   }
+}
+
+function validMetric(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function validContextWindow(value: unknown): value is number {
+  return validMetric(value) && value > 0;
+}
+
+function addMetric(
+  metrics: SessionTokenUsage,
+  key: keyof SessionTokenUsage,
+  value: number | undefined,
+): void {
+  if (!validMetric(value)) return;
+  metrics[key] = (metrics[key] ?? 0) + value;
+}
+
+function normalizeMetrics(value: unknown): StoredSessionMetrics {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const metrics: StoredSessionMetrics = {};
+  for (const key of [
+    'inputTokens',
+    'outputTokens',
+    'cacheReadTokens',
+    'cacheWriteTokens',
+  ] as const) {
+    if (validMetric(raw[key])) {
+      metrics[key] = raw[key] as number;
+    }
+  }
+  if (Array.isArray(raw.contexts)) {
+    metrics.contexts = raw.contexts
+      .map(normalizeContextSnapshot)
+      .filter((context): context is StoredContextSnapshot => context !== undefined)
+      .slice(-MAX_CONTEXT_SNAPSHOTS_PER_SCOPE);
+  }
+  return metrics;
+}
+
+function normalizeContextSnapshot(value: unknown): StoredContextSnapshot | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.sessionId !== 'string' || candidate.sessionId.length === 0 ||
+    typeof candidate.model !== 'string' || candidate.model.length === 0 ||
+    !validMetric(candidate.usedTokens) ||
+    !validContextWindow(candidate.contextWindow)
+  ) return undefined;
+  return {
+    sessionId: candidate.sessionId,
+    model: candidate.model,
+    usedTokens: candidate.usedTokens,
+    contextWindow: candidate.contextWindow,
+  };
 }

@@ -91,6 +91,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
    block；出站图片在 channel 增加二进制能力前输出明确降级提示。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
+   `SessionStore` 在同一 `sessions.json` 中分别保存 transcript/session binding 与 per-scope
+   session metrics；run-flow 只接收 adapter 翻译出的真实 `usage` / `context_usage` 事件并累计，
+   不从文本长度推算。累计 token 归属 scope，最近 context 快照则按产生它的 native session 与 canonical
+   provider/model 分别保存；`/status` 只展示和当前身份匹配的快照，并发 run 不互相覆盖，切换后的旧值按不可得处理。
+   `/status` 的纯 renderer 从 stores/registries 组装可刷新卡；refresh action
+   固化 scope，并复用 member owner 授权后通过消息 `messageId` 原位更新。
 4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写
    dsh 官方配置存储（`~/.dsh/settings.yaml` + `~/.dsh/.credentials.yaml`），与 dsh Web
    Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），

@@ -24,6 +24,7 @@
 | **P19 群聊会话隔离** Group session isolation | `/isolation group|topic|member` 持久化选择；消息与卡片动作共用 scope 路由；成员轮次在群卡中明确标记，既有各级会话数据保持可恢复（issue #17） | ✅ 已完成 Done |
 | **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
 | **P21 原生折叠过程** Native collapsible process | schema 2.0 原生折叠面板实时承载 reasoning / tools，最终回答单独发送并保留 reply/thread 路由（issue #19） | ✅ 已完成 Done |
+| **P22 会话状态指标** Session status metrics | `/status` 可刷新卡：工作区 / 模型 / session / runs / 版本、真实 context 占用、累计 input/output/cache token、待审批/提问/计划；不可得字段不估算（issue #20） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -51,6 +52,10 @@
 - **P9 done**（0.6.0）：同一 scope 并行 run（默认 2，`/concurrency` / `DSH_LARK_SCOPE_CONCURRENCY`
   调整）；`ActiveRuns` 支持多 run 与定向终止，`PendingQueue` 按 scope 并发上限 flush，并行 run
   使用独立 dsh session；`/status` 展示全部 active runs。
+- **P22 done**：`/status` 改为可原位刷新卡片；`SessionStore` 随 scope session 持久累计
+  input/output/cache token，并按 native session/canonical provider-model 身份分别保存最近真实 context
+  快照；并行 run 不互相覆盖，状态卡不复用与当前身份不匹配的旧值。SDK/ACP adapter 只翻译协议明确提供的数据，
+  模型目录可补充已知 contextWindow；未知 used/limit/percentage 显示“暂无”。
 - **P10 done**（0.6.0）：`RoleStore` 持久化角色（`<profile>/roles.json`），`/role save|set|
   clear|list|show|remove` 管理；角色 persona / 工具指引 / 规则随 prompt 注入，角色模型参与
   模型优先级，可与并行 run 共存。

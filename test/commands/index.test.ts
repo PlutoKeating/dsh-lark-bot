@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
+import { ApprovalRegistry } from '../../src/bot/approvals.js';
+import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
+import { QuestionRegistry } from '../../src/bot/questions.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { WizardStore } from '../../src/bot/wizard-store.js';
@@ -133,6 +136,161 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
 }
 
 describe('command router', () => {
+  it('sends /status as a refreshable card with current scope metrics', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/default');
+    sessions.recordUsage('chat-a', { inputTokens: 10, outputTokens: 4 });
+    sessions.recordContextUsage('chat-a', {
+      usedTokens: 32,
+      contextWindow: 128,
+      sessionId: 'session-1',
+      model: 'deepseek-official/deepseek-v4-flash',
+    });
+    const activeRuns = new ActiveRuns();
+    activeRuns.set('chat-a', { runId: 'run-1', stop: vi.fn() });
+    const approvals = new ApprovalRegistry();
+    void approvals.register('chat-a', {
+      id: 'approval-1',
+      sessionId: 'session-1',
+      toolName: 'bash',
+      reason: undefined,
+      options: [],
+    });
+    const questions = new QuestionRegistry();
+    void questions.register('chat-a', { question: 'Continue?', kind: 'text' });
+    const plans = new PlanApprovalRegistry();
+    void plans.register('chat-a', 'session-1');
+    const sendCard = vi.fn().mockResolvedValue('status-message');
+    const ctx = makeContext({
+      sessions,
+      activeRuns,
+      approvals,
+      questions,
+      plans,
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendCard,
+      },
+    });
+
+    await tryHandleCommand('/status', ctx);
+
+    expect(sendCard).toHaveBeenCalledWith(
+      'chat-a',
+      expect.objectContaining({ schema: '2.0' }),
+      { replyTo: 'msg-1' },
+    );
+    const json = JSON.stringify(sendCard.mock.calls[0]?.[1]);
+    expect(json).toContain('32 / 128（25.0%）');
+    expect(json).toContain('审批 `1` · 提问 `1` · 计划 `1`');
+    expect(json).toContain('run-1');
+  });
+
+  it('falls back to the same status content when card delivery is rejected', async () => {
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({
+      channel: {
+        sendMarkdown,
+        sendCard: vi.fn().mockRejectedValue(new Error('card unsupported')),
+      },
+    });
+
+    await tryHandleCommand('/status', ctx);
+
+    expect(sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('会话状态'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('shows a configured model context limit without guessing used tokens', async () => {
+    const sendCard = vi.fn().mockResolvedValue('status-message');
+    const ctx = makeContext({
+      dshConfig: {
+        resolveModelRoute: vi.fn().mockResolvedValue({ provider: 'gateway', model: 'm' }),
+        listProviders: vi.fn().mockResolvedValue([{
+          id: 'gateway',
+          displayName: 'Gateway',
+          namespace: 'pi-ai',
+          configured: true,
+          credentialRef: 'KEY',
+          credentialReady: true,
+          managed: true,
+          models: [{ id: 'm', name: 'M', contextWindow: 65_536, maxTokens: 4_096 }],
+        }]),
+      } as unknown as DshProviderManager,
+      defaultModel: 'gateway/m',
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendCard,
+      },
+    });
+
+    await tryHandleCommand('/status', ctx);
+
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain(
+      '暂无 / 65,536（暂无）',
+    );
+  });
+
+  it('does not reuse a context snapshot after the effective model changes', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/default');
+    sessions.recordContextUsage('chat-a', {
+      usedTokens: 32,
+      contextWindow: 128,
+      sessionId: 'session-1',
+      model: 'gateway/old-model',
+    });
+    const sendCard = vi.fn().mockResolvedValue('status-message');
+    const ctx = makeContext({
+      sessions,
+      defaultModel: 'gateway/new-model',
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendCard,
+      },
+    });
+
+    await tryHandleCommand('/status', ctx);
+
+    const json = JSON.stringify(sendCard.mock.calls[0]?.[1]);
+    expect(json).toContain('**model**：`gateway/new-model`');
+    expect(json).toContain('**上下文**：暂无 / 暂无（暂无）');
+    expect(json).not.toContain('32 / 128');
+  });
+
+  it('matches a bare effective model to its canonical provider route', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/default');
+    sessions.recordContextUsage('chat-a', {
+      usedTokens: 48,
+      contextWindow: 256,
+      sessionId: 'session-1',
+      model: 'gateway/model-a',
+    });
+    const sendCard = vi.fn().mockResolvedValue('status-message');
+    const ctx = makeContext({
+      sessions,
+      defaultModel: 'model-a',
+      dshConfig: {
+        resolveModelRoute: vi.fn().mockResolvedValue({ provider: 'gateway', model: 'model-a' }),
+        listProviders: vi.fn(),
+      } as unknown as DshProviderManager,
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendCard,
+      },
+    });
+
+    await tryHandleCommand('/status', ctx);
+
+    const json = JSON.stringify(sendCard.mock.calls[0]?.[1]);
+    expect(json).toContain('**model**：`model-a`');
+    expect(json).toContain('48 / 256（18.8%）');
+  });
+
   it('routes /cd and updates the workspace', async () => {
     const ctx = makeContext();
     const handled = await tryHandleCommand('/cd /tmp/project', ctx);

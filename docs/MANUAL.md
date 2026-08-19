@@ -72,7 +72,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
-| `/status` | 查看当前 scope、cwd、session、active run |
+| `/status` | 查看并原位刷新 scope / cwd / 模型 / session / run / context / 累计 token / 待处理卡 |
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
@@ -238,6 +238,11 @@ dsh-lark-bot guardian uninstall
 - 同一 scope 默认允许 2 个任务并行（`/concurrency` 或 `DSH_LARK_SCOPE_CONCURRENCY` 调整，
   1 为严格串行）；并行 run 各持独立 dsh session 与 runId，共享 scope 的会话转写与工作区，
   `/status` 显示全部 active runs，`/stop` 终止全部。
+- `/status` 状态卡还显示有效模型、版本、待审批 / 提问 / 计划数，以及当前 session 的累计
+  input / output / cache token。ACP `usage_update` 提供真实 context used/size；SDK 当前只保证
+  模型调用 token/cache usage。模型目录声明的 contextWindow 可作为上限；没有真实 used 时仍显示
+  “暂无”，不估算百分比。最近 context 快照按 native session 与 canonical provider/model 分别保存，
+  并行 run 不互相覆盖；只有当前身份匹配的快照才展示。点击“刷新”原位更新；指标写入 `sessions.json`，新建/重置/切换目录时清零。
 - 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
   Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
   可审计、可回放；`/archive [note]` 可随时手动导出完整会话。

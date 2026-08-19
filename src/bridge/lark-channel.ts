@@ -31,6 +31,9 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
     async sendMarkdown(chatId, markdown, options) {
       await channel.send(chatId, { markdown }, toLarkSendOptions(options));
     },
+    async updateCard(messageId, card) {
+      await channel.updateCard(messageId, card);
+    },
   };
 
   return {

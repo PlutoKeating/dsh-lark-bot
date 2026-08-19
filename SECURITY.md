@@ -92,6 +92,10 @@
   上下文与会话数据，**不是群消息可见性**：任务输入、进度卡和回复仍发送到共享群，群内其他成员
   仍可看到；其他成员不能操作该 member scope 的停止、审批或问答卡，缺失 operator identity 时也
   拒绝操作。涉及私密内容时请改用私聊。
+- adapter 实际上报的 input/output/cache token 与 context used/limit 保存在同一 profile 的
+  `sessions.json`（`0600`）；最近 context 快照同时保存产生它的 native sessionId 与 canonical provider/model 身份，并可由
+  `/status` 卡在身份匹配时展示。未知或身份不匹配字段不估算；member scope 的刷新动作
+  校验 operator `open_id` 与 owner，但共享群里已发送的状态卡仍对群成员可见。
 
 ## 报告渠道 · Reporting
 

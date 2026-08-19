@@ -284,6 +284,13 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 （默认 40），`recordExchange` 支持传入 `{ retention, onArchive }`：超出保留窗口的消息先交给
 `onArchive` 归档，再裁剪；支持 `fork(scopeId, newScopeId, cwd)` 复制历史。SDK 模式以原生
 `session(id)` 续跑，headless 模式把历史拼入下一次 prompt 作为近似上下文。
+同一 `sessions.json` 还以独立 `metrics[scope]` 保存当前 scope session 的累计
+`inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens`，以及最近 32 个按 `sessionId` / canonical
+`provider/model` 区分的协议 `contexts` 快照。`recordUsage` 只累加实际出现的非负字段；`recordContextUsage`
+仅在 run 已知 native session 与有效模型时更新对应身份的快照；`metricsFor(scope, currentIdentity)` 只在身份完全一致时返回
+`contextUsedTokens/contextWindow`，否则仅返回累计 token，避免模型切换、会话自愈或并行 run 交错后
+误报旧占用。`clear`（由 `/new`、`/reset`、`/cd` 使用）同时
+清除会话与指标，`clearSession` 的原生绑定自愈则保留指标和 transcript。旧版无 `metrics` 文件兼容加载。
 
 `src/session/heal.ts` 提供会话自愈分类与归档：`classifySessionError(message)` 以锚定正则将
 会话错误分为 `broken`（持久化日志与 live session 不一致 → 重置 scope 绑定、保留历史）与
@@ -359,7 +366,9 @@ export type AgentEvent =
   | { type: 'thinking'; delta: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; output: string; isError: boolean }
-  | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
+  | { type: 'usage'; inputTokens?: number; outputTokens?: number;
+      cacheReadTokens?: number; cacheWriteTokens?: number; costUsd?: number }
+  | { type: 'context_usage'; usedTokens: number; contextWindow: number }
   | { type: 'done'; sessionId: string | undefined; terminationReason: 'normal' | 'interrupted' | 'timeout' }
   | { type: 'error'; message: string; terminationReason: 'failed' | 'interrupted' | 'timeout' };
 
@@ -436,6 +445,11 @@ export async function buildAgentAdapter(
 `AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
 `event-channel.ts`（有序事件队列）。
 
+usage 可用性：SDK `assistant/message.usage` 是每次模型调用的 disjoint input/output/cache 计数；
+ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，`session/update` 的
+`usage_update` 提供 context `used/size`。ACP bridge runtime 当前每次 run 创建新 ACP session，
+因此该累计值作为一次真实 usage 样本归入 scope session。headless/web 未提供的字段不产生事件。
+
 ## 4. 卡片与展示 · Cards & rendering
 
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
@@ -445,6 +459,11 @@ export async function buildAgentAdapter(
   `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
+- `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
+  workspace/cwd、有效模型、session、runs、版本、context used/limit/percentage、累计四类 token
+  与待审批/提问/计划数。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
+  owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新。Card JSON 2.0 发送被拒绝时
+  `/status` 回退等价 Markdown；未知值显示“暂无”。
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
 - `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
   `extractQuestionAnswer(kind, value, options)`。
@@ -549,7 +568,7 @@ export interface Logger {
 - `dsh-lark-bot guardian run|install|uninstall|status`：安全网守护常驻 / 系统服务安装 /
   卸载 / 状态查询（见 §10）。
 
-飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`、`/resume`、
+飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、

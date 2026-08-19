@@ -101,7 +101,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/ws save <name>` | Save the current workspace |
 | `/ws use <name>` | Switch to a named workspace |
 | `/ws remove <name>` | Remove a named workspace |
-| `/status` | Show current status |
+| `/status` | Show a refreshable status card (workspace / model / session / runs / context / cumulative tokens / pending cards) |
 | `/resume` | Show the session's recent context |
 | `/stop` | Stop the current task |
 | `/timeout [N\|off\|default]` | View or set the current session run timeout |
@@ -131,6 +131,14 @@ Images in Feishu messages are downloaded to the local media directory and passed
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
 Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts them all.
+
+**Session status card**: `/status` shows the workspace, effective model, session, active runs, version,
+context occupancy, cumulative input/output/cache tokens, and pending approvals/questions/plans. **Refresh**
+updates the same card in place. Values are shown only when the adapter or model catalog reports them: ACP can
+report real context `used / size` and cumulative usage, while SDK reports per-model-call token/cache usage.
+Unavailable fields say “暂无” rather than being estimated. Metrics persist with the current scope session and are
+cleared by `/new`, `/reset`, or `/cd`. Recent context snapshots are retained separately by native session and
+canonical provider/model, so concurrent runs do not overwrite each other and stale identities remain hidden. Only the owner may refresh a member-isolated status card.
 
 **Group session isolation**: admins can switch `/isolation group|topic|member` between one shared
 group scope, per-topic scopes, and per-member scopes. `topic` remains the default. Switching only changes
@@ -352,6 +360,9 @@ This tool runs **locally**; before installing, be aware that it accesses:
   session/scope-directory/worktree/archive indexes or paths derived from `isolation.json`, and shows it on the
   shared group run card. It isolates agent context, not group-message visibility: prompts, progress cards and
   replies remain visible to the group; other members cannot operate that member's run cards.
+- **Local session usage**: adapter-reported input/output/cache tokens and context used/limit are stored per scope
+  in `~/.dsh-lark/profiles/<profile>/sessions.json` (mode 0600) and displayed by `/status`. Only the member-scope
+  owner can refresh its card, but a status card already sent to a shared group follows normal group visibility.
 - **Local callback**: `lark_notify`, `lark_ask_user` and `lark_request_plan_approval` call the bridge over a
   random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
   current Feishu / Lark conversation.

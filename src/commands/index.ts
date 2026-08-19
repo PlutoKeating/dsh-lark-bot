@@ -16,6 +16,11 @@ import type { ScopeDirectory } from '../bridge/scope-directory.js';
 import type { SendOptions } from '../bridge/send-options.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import { renderWorkspaceCard } from '../card/workspace-card.js';
+import {
+  renderStatusCard,
+  statusCardMarkdown,
+  type StatusCardInput,
+} from '../card/status-card.js';
 import { parseCardDensity, type CardDensity } from '../card/density.js';
 import { questionHandlerFor } from '../bridge/run-flow.js';
 import type { ModelStore } from '../bot/model-store.js';
@@ -47,7 +52,8 @@ export interface CommandChannel {
     markdown: string,
     options?: SendOptions,
   ): Promise<void>;
-  sendCard?(chatId: string, card: object): Promise<unknown>;
+  sendCard?(chatId: string, card: object, options?: SendOptions): Promise<unknown>;
+  updateCard?(messageId: string, card: object): Promise<void>;
   /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
   createChat?(opts: {
     name: string;
@@ -108,7 +114,7 @@ const HELP = [
   '- `/newg <群名>` — 自动新建群聊（拉你入群）并开新会话，当前会话保留',
   '- `/cd <path>` — 切换工作目录并重置会话',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
-  '- `/status` — 查看当前状态',
+  '- `/status` — 查看可刷新状态卡、上下文/token 用量与待处理卡',
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
@@ -289,33 +295,109 @@ async function handleWs(args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, '未知 `/ws` 子命令，请使用 list / save / use / remove。');
 }
 
-async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
+export type StatusContext = Pick<
+  CommandContext,
+  | 'scope'
+  | 'chatMode'
+  | 'sessions'
+  | 'workspaces'
+  | 'activeRuns'
+  | 'roleStore'
+  | 'isolationMode'
+  | 'approvals'
+  | 'questions'
+  | 'plans'
+  | 'models'
+  | 'dshConfig'
+  | 'resolveDefaultModel'
+  | 'defaultModel'
+  | 'defaultWorkspace'
+>;
+
+export async function statusCardInputFor(
+  ctx: StatusContext,
+): Promise<StatusCardInput> {
   const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
-  const session = ctx.sessions.getRaw(ctx.scope)?.sessionId ?? '(无)';
+  const sessionId = ctx.sessions.getRaw(ctx.scope)?.sessionId;
   const active = ctx.activeRuns.list(ctx.scope);
   const role = ctx.roleStore.roleForScope(ctx.scope);
-  const scopeLabel =
-    ctx.chatMode === 'topic' ? `${ctx.scope}（话题独立 session）` : ctx.scope;
-  const runLines = active.map((run) => `  - \`${run.runId}\``);
-  const roleLine = role ? `🎭 **role**: \`${role.id}\` (${role.name})` : undefined;
-  const isolationLine = ctx.chatMode === 'p2p'
-    ? '🔒 **isolation**: `p2p`（私聊天然隔离）'
-    : `🔒 **isolation**: \`${ctx.isolationMode ?? 'topic'}\`${
-      ctx.isolationMode === 'member' && ctx.senderId ? `（本轮成员：\`${ctx.senderId}\`）` : ''
-    }`;
+  const model =
+    ctx.models.get(ctx.scope) ??
+    await ctx.resolveDefaultModel?.() ??
+    ctx.defaultModel;
+  const modelIdentity = await canonicalModelIdentity(ctx.dshConfig, model);
+  const storedMetrics = ctx.sessions.metricsFor(ctx.scope, { sessionId, model: modelIdentity });
+  const configuredWindow =
+    storedMetrics?.contextWindow ??
+    await configuredContextWindow(ctx.dshConfig, model);
+  const metrics =
+    storedMetrics || configuredWindow !== undefined
+      ? {
+          ...(storedMetrics ?? {}),
+          ...(configuredWindow === undefined ? {} : { contextWindow: configuredWindow }),
+        }
+      : undefined;
+  return {
+    scope: ctx.scope,
+    cwd,
+    model,
+    sessionId,
+    activeRunIds: active.map((run) => run.runId),
+    version: currentVersion(),
+    isolation: ctx.chatMode === 'p2p' ? 'p2p' : (ctx.isolationMode ?? 'topic'),
+    role: role ? `\`${role.id}\` (${role.name})` : undefined,
+    metrics,
+    pending: {
+      approvals: ctx.approvals?.pendingCount(ctx.scope) ?? 0,
+      questions: ctx.questions?.pendingCount(ctx.scope) ?? 0,
+      plans: ctx.plans?.pendingCount(ctx.scope) ?? 0,
+    },
+  };
+}
 
-  await reply(
-    ctx,
-    [
-      `🧭 **scope**: \`${scopeLabel}\``,
-      `📁 **cwd**: \`${cwd}\``,
-      `🔗 **session**: \`${session}\``,
-      isolationLine,
-      ...(roleLine ? [roleLine] : []),
-      `🏃 **active runs**: ${String(active.length)}`,
-      ...runLines,
-    ].join('\n'),
-  );
+async function canonicalModelIdentity(
+  dshConfig: DshProviderManager,
+  model: string,
+): Promise<string> {
+  try {
+    const route = await dshConfig.resolveModelRoute(model);
+    return route ? `${route.provider}/${route.model}` : model;
+  } catch {
+    return model;
+  }
+}
+
+async function configuredContextWindow(
+  dshConfig: DshProviderManager,
+  model: string,
+): Promise<number | undefined> {
+  try {
+    const route = await dshConfig.resolveModelRoute(model);
+    if (!route) return undefined;
+    const provider = (await dshConfig.listProviders()).find(
+      (candidate) => candidate.id === route.provider,
+    );
+    return provider?.models.find((candidate) => candidate.id === route.model)?.contextWindow;
+  } catch {
+    return undefined;
+  }
+}
+
+async function handleStatus(_args: string, ctx: CommandContext): Promise<void> {
+  const input = await statusCardInputFor(ctx);
+
+  if (ctx.channel.sendCard) {
+    try {
+      await ctx.channel.sendCard(ctx.chatId, renderStatusCard(input), {
+        replyTo: ctx.messageId,
+      });
+      return;
+    } catch {
+      // Older clients / tenants may reject Card JSON 2.0; preserve the same
+      // truthful snapshot as Markdown instead of failing the command.
+    }
+  }
+  await reply(ctx, statusCardMarkdown(input));
 }
 
 async function handleIsolation(args: string, ctx: CommandContext): Promise<void> {

@@ -30,7 +30,9 @@
 - [x] 会话记忆最近 40 条
 - [x] 会话保留窗口可配置 + 超窗自动归档（`SessionArchive`，Markdown + JSONL + Git commit）
 - [x] 图片 / 文本文件附件处理
-- [x] `/new` `/cd` `/ws` `/status` `/resume` `/stop` `/timeout` `/help`
+- [x] `/new` `/cd` `/ws` `/resume` `/stop` `/timeout` `/help`
+- [x] `/status` 可刷新状态卡：工作区 / 模型 / session / runs / context / 累计 token / 待处理卡；
+  不可得指标明确显示“暂无”
 - [x] 真实飞书账号连续两轮 E2E 验收
 
 ## 3. P2 验收标准

@@ -216,6 +216,127 @@ describe('runAgentBatch', () => {
     expect(fake.updates.length).toBeGreaterThan(2);
   });
 
+  it('records real usage and context events for the current scope session', async () => {
+    const sessions = new SessionStore(':memory:');
+    await runAgentBatch({
+      scope: 'chat-metrics',
+      chatId: 'chat-metrics',
+      messages: ['measure this'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-metrics', cwd: '/tmp/project', model: 'm' },
+        {
+          type: 'usage',
+          inputTokens: 10,
+          outputTokens: 4,
+          cacheReadTokens: 20,
+          cacheWriteTokens: 2,
+        },
+        { type: 'context_usage', usedTokens: 36, contextWindow: 128 },
+        { type: 'done', sessionId: 'session-metrics', terminationReason: 'normal' },
+      ]),
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(sessions.metricsFor('chat-metrics', {
+      sessionId: 'session-metrics',
+      model: 'm',
+    })).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      cacheReadTokens: 20,
+      cacheWriteTokens: 2,
+      contextUsedTokens: 36,
+      contextWindow: 128,
+    });
+  });
+
+  it('does not attribute an interleaved run context snapshot to the current session', async () => {
+    let releaseAContext!: () => void;
+    let releaseAFinish!: () => void;
+    let releaseBFinish!: () => void;
+    let markASystemReady!: () => void;
+    let markAContextReady!: () => void;
+    let markBContextReady!: () => void;
+    const aContextGate = new Promise<void>((resolve) => { releaseAContext = resolve; });
+    const aFinishGate = new Promise<void>((resolve) => { releaseAFinish = resolve; });
+    const bFinishGate = new Promise<void>((resolve) => { releaseBFinish = resolve; });
+    const aSystemReady = new Promise<void>((resolve) => { markASystemReady = resolve; });
+    const aContextReady = new Promise<void>((resolve) => { markAContextReady = resolve; });
+    const bContextReady = new Promise<void>((resolve) => { markBContextReady = resolve; });
+    let runNumber = 0;
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(options): AgentRun {
+        runNumber += 1;
+        const current = runNumber;
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            if (current === 1) {
+              yield { type: 'system', sessionId: 'session-a', cwd: '/tmp/project', model: 'm' };
+              markASystemReady();
+              await aContextGate;
+              yield { type: 'context_usage', usedTokens: 80, contextWindow: 100 };
+              markAContextReady();
+              await aFinishGate;
+              yield { type: 'done', sessionId: 'session-a', terminationReason: 'normal' };
+              return;
+            }
+            yield { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' };
+            yield { type: 'context_usage', usedTokens: 20, contextWindow: 100 };
+            markBContextReady();
+            await bFinishGate;
+            yield { type: 'done', sessionId: 'session-b', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const shared = {
+      scope: 'chat-concurrent',
+      chatId: 'chat-concurrent',
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns,
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+      provider: 'gateway',
+      model: 'm',
+    };
+
+    const runA = runAgentBatch({ ...shared, messages: ['run a'] });
+    await aSystemReady;
+    const runB = runAgentBatch({ ...shared, messages: ['run b'] });
+    await bContextReady;
+    releaseAContext();
+    await aContextReady;
+
+    expect(sessions.resumeFor('chat-concurrent', '/tmp/project')).toBe('session-b');
+    expect(sessions.metricsFor('chat-concurrent', {
+      sessionId: 'session-b',
+      model: 'gateway/m',
+    })).toEqual({ contextUsedTokens: 20, contextWindow: 100 });
+    expect(sessions.metricsFor('chat-concurrent', {
+      sessionId: 'session-a',
+      model: 'gateway/m',
+    })).toEqual({ contextUsedTokens: 80, contextWindow: 100 });
+
+    releaseAFinish();
+    releaseBFinish();
+    await Promise.all([runA, runB]);
+  });
+
   it('marks the card idle-timeout and stops the run after the wall-clock deadline', async () => {
     let release: (() => void) | undefined;
     const stopped = new Promise<void>((resolve) => {
@@ -720,6 +841,7 @@ describe('runAgentBatch', () => {
 
     const sessions = new SessionStore(':memory:');
     sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.recordUsage('chat-a', { inputTokens: 12, outputTokens: 4 });
     sessions.set('chat-a', 'session-1', '/tmp/project');
     const fake = makeChannel();
     const adapter = fakeAdapter([
@@ -750,6 +872,13 @@ describe('runAgentBatch', () => {
     expect(archives.length).toBeGreaterThan(0);
     // The scope mapping was reset and the user was told where it went.
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
+    expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
+      { role: 'user', content: 'my name is Bob' },
+      { role: 'assistant', content: 'Nice to meet you.' },
+      { role: 'user', content: 'new message' },
+      { role: 'assistant', content: 'working…' },
+    ]);
+    expect(sessions.metricsFor('chat-a')).toEqual({ inputTokens: 12, outputTokens: 4 });
     const text = fake.messages.join('\n');
     expect(text).toContain('已归档并重置');
     expect(text).toContain('_archived-sessions');

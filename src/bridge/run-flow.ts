@@ -200,6 +200,7 @@ async function runAttempt(
   let assistantOutput = '';
   let sawActivity = false;
   let activeSessionId = sessionId;
+  let activeModel = modelRoute(input.provider, input.model);
   const density = input.densityStore?.get(input.scope) ?? 'standard';
 
   try {
@@ -265,7 +266,7 @@ async function runAttempt(
                     });
                   }
                 }
-                input.sessions.clear(input.scope);
+                input.sessions.clearSession(input.scope);
                 await input.channel.sendMarkdown(
                   input.chatId,
                   healKind === 'corrupt'
@@ -284,7 +285,29 @@ async function runAttempt(
             }
             if (event.type === 'system' && event.sessionId) {
               activeSessionId = event.sessionId;
+              activeModel = modelRoute(input.provider, event.model ?? input.model);
               input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
+            }
+            if (event.type === 'usage') {
+              input.sessions.recordUsage(input.scope, {
+                ...(event.inputTokens === undefined ? {} : { inputTokens: event.inputTokens }),
+                ...(event.outputTokens === undefined ? {} : { outputTokens: event.outputTokens }),
+                ...(event.cacheReadTokens === undefined
+                  ? {}
+                  : { cacheReadTokens: event.cacheReadTokens }),
+                ...(event.cacheWriteTokens === undefined
+                  ? {}
+                  : { cacheWriteTokens: event.cacheWriteTokens }),
+              });
+            } else if (event.type === 'context_usage') {
+              if (activeSessionId !== undefined && activeModel !== undefined) {
+                input.sessions.recordContextUsage(input.scope, {
+                  usedTokens: event.usedTokens,
+                  contextWindow: event.contextWindow,
+                  sessionId: activeSessionId,
+                  model: activeModel,
+                });
+              }
             }
             if (event.type !== 'system' && event.type !== 'error') {
               sawActivity = true;
@@ -458,7 +481,7 @@ async function runAttempt(
             });
           }
         }
-        input.sessions.clear(input.scope);
+        input.sessions.clearSession(input.scope);
         await input.channel.sendMarkdown(
           input.chatId,
           healKind === 'corrupt'
@@ -488,6 +511,11 @@ async function runAttempt(
       input.plans.settleSession(input.scope, activeSessionId);
     }
   }
+}
+
+function modelRoute(provider: string | undefined, model: string | undefined): string | undefined {
+  if (model === undefined) return undefined;
+  return provider === undefined ? model : `${provider}/${model}`;
 }
 
 async function pruneArchives(input: RunFlowInput): Promise<void> {
