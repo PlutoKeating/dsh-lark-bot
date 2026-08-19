@@ -142,8 +142,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
    （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
    安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
-   `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致的实时流式卡片（思考 / 工具 /
-   web search / 打字机文字），SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
+   `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致的原生折叠过程卡（思考 / 工具 /
+   web search）和独立最终回答，SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
    （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务空闲超时（默认 10 分钟，
    持续无活动事件才终止，活跃的流式任务不会被误杀）、
    `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。
@@ -161,7 +161,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/session/` | 会话路由、上下文记忆、持久化 |
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
-| `src/card/` | 流式卡片、审批 / 问答 / 计划决策卡状态与渲染 |
+| `src/card/` | 流式过程卡（schema 2.0 原生折叠面板 + 顶层兼容快照 + legacy renderer）、审批 / 问答 / 计划决策卡状态与渲染；最终回答由正常 run-flow / guardian 分别单独发送 |
 | `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略持久化 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |

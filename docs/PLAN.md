@@ -26,7 +26,7 @@
 - [x] 首次扫码创建 PersonalAgent 应用
 - [x] 私聊消息进入 dsh（SDK runtime / headless）
 - [x] 返回流式卡片
-- [x] `final_text` 正确渲染
+- [x] `final_text` 作为独立 Markdown 最终消息发送，过程卡保留原生折叠 thinking / tool 轨迹
 - [x] 会话记忆最近 40 条
 - [x] 会话保留窗口可配置 + 超窗自动归档（`SessionArchive`，Markdown + JSONL + Git commit）
 - [x] 图片 / 文本文件附件处理
@@ -175,6 +175,7 @@
 | P1-5 | `src/card/density.ts`：`compact / standard / detailed` 三档 | 测试 |
 | P1-6 | `run-renderer.ts` 升级三档渲染；`run-state.ts` 增加 `usage` | 渲染测试 |
 | P1-7 | thinking 流式展示（reasoning-delta → 思考中 → 折叠内容），SDK 路径天然 typewriter | 渲染测试 |
+| P1-8 | issue #19：Card JSON 2.0 `collapsible_panel` 承载过程；正常结束后最终回答独立发送，失败显式回写过程卡 | renderer + run-flow 测试 |
 | P1-8 | `/density <compact\|standard\|detailed>` 命令 + profile 偏好 | 命令测试 |
 
 ### 8.6 P2：测试密度提升（借鉴 Roy-oss1）

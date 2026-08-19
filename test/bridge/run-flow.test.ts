@@ -75,6 +75,119 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('sends the final answer as a separate markdown message with reply routing', async () => {
+    const sent: Array<{ markdown: string; options: unknown }> = [];
+    const fake = makeChannel();
+    fake.channel.sendMarkdown = async (_chatId, markdown, options) => {
+      sent.push({ markdown, options });
+    };
+    await runAgentBatch({
+      scope: 'chat-final',
+      chatId: 'chat-final',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'thinking', delta: 'reasoning detail' },
+        { type: 'final_text', content: '**Final answer**' },
+        { type: 'done', sessionId: 's-final', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      replyTo: 'om_source',
+    });
+    expect(sent).toEqual([{ markdown: '**Final answer**', options: { replyTo: 'om_source' } }]);
+    expect(JSON.stringify(fake.updates.at(-1))).not.toContain('**Final answer**');
+  });
+
+  it('marks final delivery failure on the process card while preserving the exchange', async () => {
+    const sessions = new SessionStore(':memory:');
+    const fake = makeChannel();
+    fake.channel.sendMarkdown = async () => {
+      throw new Error('message rejected');
+    };
+    await runAgentBatch({
+      scope: 'chat-final-fail',
+      chatId: 'chat-final-fail',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'durable answer' },
+        { type: 'done', sessionId: 's-final', terminationReason: 'normal' },
+      ]),
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(JSON.stringify(fake.updates.at(-1))).toContain('最终回答发送失败');
+    expect(JSON.stringify(fake.updates.at(-1))).toContain('durable answer');
+    expect(sessions.historyFor('chat-final-fail', '/tmp/project')).toContainEqual({
+      role: 'assistant',
+      content: 'durable answer',
+    });
+  });
+
+  it('delivers the final answer even when process-card updates fail', async () => {
+    const messages: string[] = [];
+    const channel: StreamingChannel = {
+      sendMarkdown: async (_chatId, markdown) => { messages.push(markdown); },
+      streamCard: async (_chatId, _initial, producer) => {
+        await producer({ update: async () => { throw new Error('card update rejected'); } });
+      },
+    };
+    await runAgentBatch({
+      scope: 'chat-card-update-fail',
+      chatId: 'chat-card-update-fail',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'answer survives' },
+        { type: 'done', sessionId: 's1', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(messages).toEqual(['answer survives']);
+  });
+
+  it('retries with the legacy process card when collapsible delivery is rejected', async () => {
+    const messages: string[] = [];
+    const initialCards: object[] = [];
+    let attempts = 0;
+    const channel: StreamingChannel = {
+      sendMarkdown: async (_chatId, markdown) => { messages.push(markdown); },
+      streamCard: async (_chatId, initial, producer) => {
+        attempts += 1;
+        initialCards.push(initial);
+        if (attempts === 1) throw new Error('collapsible_panel unsupported');
+        await producer({ update: async () => {} });
+      },
+    };
+    await runAgentBatch({
+      scope: 'chat-legacy-card',
+      chatId: 'chat-legacy-card',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'thinking', delta: 'latest thought' },
+        { type: 'final_text', content: 'legacy answer' },
+        { type: 'done', sessionId: 's1', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(attempts).toBe(2);
+    expect(JSON.stringify(initialCards[0])).toContain('collapsible_panel');
+    expect(JSON.stringify(initialCards[1])).not.toContain('collapsible_panel');
+    expect(messages).toEqual(['legacy answer']);
+  });
+
   it('streams agent events into a card and clears the active run', async () => {
     const events: AgentEvent[] = [
       { type: 'system', sessionId: 'session-1', cwd: '/tmp/project', model: undefined },
@@ -439,8 +552,8 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.sessionId).toBeUndefined();
     // The fresh-session attempt replays the transcript.
     expect(calls[1]?.prompt).toContain('my name is Bob');
-    // No failure message was surfaced to the user.
-    expect(fake.messages).toHaveLength(0);
+    // Only the recovered final answer is sent; no failure message is surfaced.
+    expect(fake.messages).toEqual(['recovered']);
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },
@@ -520,8 +633,8 @@ describe('runAgentBatch', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]?.sessionId).toBe('session-1');
     expect(calls[1]?.sessionId).toBeUndefined();
-    // No hard failure message was surfaced to the user.
-    expect(fake.messages).toHaveLength(0);
+    // Only the recovered final answer is sent; no hard failure is surfaced.
+    expect(fake.messages).toEqual(['recovered via error event']);
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },

@@ -24,6 +24,10 @@ export interface RunState {
   footer: FooterStatus;
   terminal: Terminal;
   errorMsg: string | undefined;
+  /** Delivery failure for the separate final-answer message. */
+  finalDeliveryError: string | undefined;
+  /** Final answer rendered back into the card when separate delivery fails. */
+  finalDeliveryFallback: string | undefined;
   idleTimeoutMinutes: number | undefined;
   /** Visible owner marker for member-isolated group runs. */
   scopeOwner: string | undefined;
@@ -42,6 +46,8 @@ export const initialState: RunState = {
   footer: 'thinking',
   terminal: 'running',
   errorMsg: undefined,
+  finalDeliveryError: undefined,
+  finalDeliveryFallback: undefined,
   idleTimeoutMinutes: undefined,
   scopeOwner: undefined,
   actionScope: undefined,
@@ -53,6 +59,14 @@ function closeStreamingText(blocks: Block[]): Block[] {
   return blocks.map((block) =>
     block.kind === 'text' && block.streaming ? { ...block, streaming: false } : block,
   );
+}
+
+export function markFinalDeliveryFailed(
+  state: RunState,
+  message: string,
+  answer: string,
+): RunState {
+  return { ...state, finalDeliveryError: message, finalDeliveryFallback: answer };
 }
 
 export function reduce(state: RunState, event: AgentEvent): RunState {

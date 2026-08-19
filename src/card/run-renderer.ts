@@ -1,4 +1,4 @@
-import type { Block, FooterStatus, RunState, ToolEntry } from './run-state.js';
+import type { FooterStatus, RunState, ToolEntry } from './run-state.js';
 import type { CardDensity } from './density.js';
 
 function markdown(content: string): object {
@@ -41,6 +41,25 @@ function summaryText(state: RunState): string {
   return '思考中';
 }
 
+function fallbackSummaryText(state: RunState): string {
+  const parts = [summaryText(state)];
+  if (state.reasoning.content) parts.push(`思考：${state.reasoning.content.slice(-240)}`);
+  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-4);
+  if (tools.length > 0) {
+    parts.push(
+      `工具：${tools
+        .map((block) => {
+          const output = block.tool.output?.trim();
+          return `${block.tool.name}(${block.tool.status})${output ? `=${output.slice(0, 80)}` : ''}`;
+        })
+        .join('、')}`,
+    );
+  }
+  if (state.errorMsg) parts.push(`错误：${state.errorMsg}`);
+  if (state.finalDeliveryError) parts.push(`最终回答发送失败：${state.finalDeliveryError}`);
+  return parts.join(' · ').slice(0, 500);
+}
+
 function stopButton(scope: string | undefined): object {
   return {
     tag: 'button',
@@ -50,13 +69,90 @@ function stopButton(scope: string | undefined): object {
   };
 }
 
-function textBlock(block: Extract<Block, { kind: 'text' }>): object {
-  return markdown(block.content);
-}
-
 function toolBlock(tool: ToolEntry): object {
   const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
   return markdown(`${icon} **${tool.name}**`);
+}
+
+function reasoningPreview(content: string, limit: number): string {
+  if (content.length <= limit) return content;
+  const headLength = Math.floor(limit / 2);
+  const tailLength = limit - headLength;
+  return `${content.slice(0, headLength)}\n\n…\n\n_最新进展_\n${content.slice(-tailLength)}`;
+}
+
+function hasAnswer(state: RunState): boolean {
+  return state.blocks.some((block) => block.kind === 'text' && block.content.trim() !== '');
+}
+
+function processElements(state: RunState, detailed: boolean, compact: boolean): object[] {
+  const elements: object[] = [];
+  if (state.reasoning.content) {
+    elements.push(
+      markdown(
+        `🧠 **推理**\n${reasoningPreview(state.reasoning.content, detailed ? 2000 : compact ? 240 : 500)}`,
+      ),
+    );
+  }
+  for (const block of state.blocks) {
+    if (block.kind !== 'tool') continue;
+    const tool = block.tool;
+    if (compact) {
+      elements.push(toolBlock(tool));
+      continue;
+    }
+    const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
+    const lines = [`${icon} **${tool.name}**`];
+    if (detailed && tool.input !== undefined && tool.input !== '') {
+      lines.push(`输入：\`\`\`\n${safeJsonPreview(tool.input)}\n\`\`\``);
+    }
+    if (tool.output) lines.push(`输出：${tool.output.slice(0, detailed ? 500 : 200)}`);
+    elements.push(markdown(lines.join('\n')));
+  }
+  if (elements.length === 0) {
+    elements.push(
+      noteMd(state.terminal === 'running' ? '_等待推理或工具事件…_' : '_没有可展示的推理或工具事件_'),
+    );
+  }
+  return elements;
+}
+
+function thinkingPanel(state: RunState, detailed: boolean, compact = false): object {
+  return {
+    tag: 'collapsible_panel',
+    expanded: state.terminal === 'running',
+    header: {
+      title: { tag: 'plain_text', content: `🧠 思考过程 · ${summaryText(state)}` },
+      icon: { tag: 'standard_icon', token: 'down-small-ccm_outlined' },
+      icon_position: 'right',
+      icon_expanded_angle: -180,
+    },
+    border: { color: 'grey', corner_radius: '6px' },
+    elements: processElements(state, detailed, compact),
+  };
+}
+
+function compatibilityProcessSnapshot(state: RunState): object {
+  const lines = ['_过程快照（兼容显示）_'];
+  if (state.reasoning.content) {
+    lines.push(`🧠 ${state.reasoning.content.slice(-300)}`);
+  }
+  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-3);
+  for (const block of tools) {
+    const output = block.tool.output?.trim();
+    lines.push(
+      `🧰 ${block.tool.name} · ${block.tool.status}${output ? `：${output.slice(-160)}` : ''}`,
+    );
+  }
+  if (lines.length === 1) lines.push(state.terminal === 'running' ? '正在等待过程事件…' : '无过程事件');
+  return noteMd(lines.join('\n'));
+}
+
+function finalDeliveryFallback(state: RunState): object | undefined {
+  if (!state.finalDeliveryError || !state.finalDeliveryFallback) return undefined;
+  return markdown(
+    `⚠️ **最终回答独立发送失败，已降级显示在此卡片**\n\n${state.finalDeliveryFallback}`,
+  );
 }
 
 function usageLine(state: RunState): string {
@@ -76,23 +172,8 @@ function renderStandard(state: RunState, now: number): object {
   const owner = ownerLine(state);
   if (owner) elements.push(owner);
 
-  if (state.reasoning.content) {
-    elements.push(
-      noteMd(
-        state.reasoning.active
-          ? '🧠 正在思考…'
-          : `🧠 思考完成：${state.reasoning.content.slice(0, 300)}`,
-      ),
-    );
-  }
-
-  for (const block of state.blocks) {
-    if (block.kind === 'text') {
-      elements.push(textBlock(block));
-    } else if (block.tool.status !== 'done') {
-      elements.push(toolBlock(block.tool));
-    }
-  }
+  elements.push(thinkingPanel(state, false));
+  elements.push(compatibilityProcessSnapshot(state));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd('_⏹ 已被中断_'));
@@ -100,12 +181,20 @@ function renderStandard(state: RunState, now: number): object {
     elements.push(noteMd(`_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_`));
   } else if (state.terminal === 'error' && state.errorMsg) {
     elements.push(noteMd(`⚠️ agent 失败：${state.errorMsg}`));
-  } else if (state.terminal === 'done' && elements.length === 0) {
+  } else if (
+    state.terminal === 'done' &&
+    !hasAnswer(state)
+  ) {
     elements.push(noteMd('_（未返回内容）_'));
   } else if (state.terminal === 'done') {
     const usage = usageLine(state);
     if (usage) elements.push(noteMd(usage));
   }
+  if (state.finalDeliveryError) {
+    elements.push(noteMd(`⚠️ 最终回答发送失败：${state.finalDeliveryError}`));
+  }
+  const fallback = finalDeliveryFallback(state);
+  if (fallback) elements.push(fallback);
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now));
@@ -116,7 +205,7 @@ function renderStandard(state: RunState, now: number): object {
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: summaryText(state) },
+      summary: { content: fallbackSummaryText(state) },
     },
     body: { elements },
   };
@@ -127,6 +216,14 @@ function renderCompact(state: RunState, now: number): object {
   const owner = ownerLine(state);
   if (owner) elements.push(owner);
   elements.push(noteMd(summaryText(state)));
+  elements.push(thinkingPanel(state, false, true));
+  elements.push(compatibilityProcessSnapshot(state));
+  if (state.finalDeliveryError) {
+    elements.push(noteMd(`⚠️ 最终回答发送失败：${state.finalDeliveryError}`));
+  }
+  const fallback = finalDeliveryFallback(state);
+  if (fallback) elements.push(fallback);
+  if (state.terminal === 'done' && !hasAnswer(state)) elements.push(noteMd('_（未返回内容）_'));
   if (state.terminal === 'running' && state.footer) {
     elements.push(footerStatus(state.footer, state, now));
   }
@@ -137,7 +234,7 @@ function renderCompact(state: RunState, now: number): object {
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: summaryText(state) },
+      summary: { content: fallbackSummaryText(state) },
     },
     body: { elements },
   };
@@ -148,32 +245,8 @@ function renderDetailed(state: RunState, now: number): object {
   const owner = ownerLine(state);
   if (owner) elements.push(owner);
 
-  if (state.reasoning.content) {
-    elements.push(
-      noteMd(
-        state.reasoning.active
-          ? '🧠 正在思考…'
-          : `🧠 **思考过程**\n${state.reasoning.content.slice(0, 2000)}`,
-      ),
-    );
-  }
-
-  for (const block of state.blocks) {
-    if (block.kind === 'text') {
-      elements.push(textBlock(block));
-      continue;
-    }
-    const tool = block.tool;
-    const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
-    const lines = [`${icon} **${tool.name}**`];
-    if (tool.input !== undefined && tool.input !== '') {
-      lines.push(`输入：\`\`\`\n${safeJsonPreview(tool.input)}\n\`\`\``);
-    }
-    if (tool.output) {
-      lines.push(`输出：${tool.output.slice(0, 500)}`);
-    }
-    elements.push(markdown(lines.join('\n')));
-  }
+  elements.push(thinkingPanel(state, true));
+  elements.push(compatibilityProcessSnapshot(state));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd('_⏹ 已被中断_'));
@@ -184,7 +257,13 @@ function renderDetailed(state: RunState, now: number): object {
   } else if (state.terminal === 'done') {
     const usage = usageLine(state);
     if (usage) elements.push(noteMd(usage));
+    if (!hasAnswer(state)) elements.push(noteMd('_（未返回内容）_'));
   }
+  if (state.finalDeliveryError) {
+    elements.push(noteMd(`⚠️ 最终回答发送失败：${state.finalDeliveryError}`));
+  }
+  const fallback = finalDeliveryFallback(state);
+  if (fallback) elements.push(fallback);
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now));
@@ -195,7 +274,7 @@ function renderDetailed(state: RunState, now: number): object {
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: summaryText(state) },
+      summary: { content: fallbackSummaryText(state) },
     },
     body: { elements },
   };
@@ -219,4 +298,45 @@ export function renderCard(
   if (density === 'compact') return renderCompact(state, now);
   if (density === 'detailed') return renderDetailed(state, now);
   return renderStandard(state, now);
+}
+
+/** Plain schema-2.0 card used when the native collapsible component is rejected. */
+export function renderLegacyCard(
+  state: RunState,
+  _density: CardDensity = 'standard',
+  now: number = Date.now(),
+): object {
+  const elements: object[] = [];
+  const owner = ownerLine(state);
+  if (owner) elements.push(owner);
+  elements.push(compatibilityProcessSnapshot(state));
+  if (state.terminal === 'running') {
+    const liveText = state.blocks
+      .filter((block) => block.kind === 'text')
+      .map((block) => block.content)
+      .join('')
+      .slice(-1000);
+    if (liveText) elements.push(markdown(liveText));
+    if (state.footer) elements.push(footerStatus(state.footer, state, now));
+    elements.push(stopButton(state.actionScope));
+  } else if (state.terminal === 'interrupted') {
+    elements.push(noteMd('_⏹ 已被中断_'));
+  } else if (state.terminal === 'idle_timeout') {
+    elements.push(noteMd(`_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_`));
+  } else if (state.terminal === 'error' && state.errorMsg) {
+    elements.push(noteMd(`⚠️ agent 失败：${state.errorMsg}`));
+  }
+  if (state.finalDeliveryError) {
+    elements.push(noteMd(`⚠️ 最终回答发送失败：${state.finalDeliveryError}`));
+  }
+  const fallback = finalDeliveryFallback(state);
+  if (fallback) elements.push(fallback);
+  return {
+    schema: '2.0',
+    config: {
+      streaming_mode: state.terminal === 'running',
+      summary: { content: fallbackSummaryText(state) },
+    },
+    body: { elements },
+  };
 }
