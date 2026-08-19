@@ -124,7 +124,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员）|
 | `/notify list` | 查看 bridge 已注册的 scope|
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
-| `/archive [note]`、`/archive list [N]`、`/archive clean` | 手动归档 / 查看 / 清理会话记录|
+| `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list [N]`、`/archive clean` | 归档并发送 / 重发到当前或指定会话（跨会话仅管理员）/ 查看 / 清理|
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度|
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；管理写操作走多轮向导）|
 | `/model use <provider/model>` | 热切换当前会话模型（也兼容唯一模型 ID；下一轮生效，无需重启）|
@@ -195,6 +195,8 @@ guardian 仍只救援其配置的主实例。
 拒绝 `web`，因为共享 Web agent 的广播事件流无法提供实例级 session 隔离。
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
+
+**结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
 **逐操作审批与 scope 权限策略**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.8 官方 `approval/request` seam；ACP 走原生 `session/request_permission`。默认 `ask` 会弹出“允许执行一次 / 拒绝”卡。管理员可用 `/permission allow` 对当前隔离 scope 自动放行逐工具审批，或用 `/permission deny` 直接拒绝并向聊天给出明确反馈；`/permission ask` 恢复逐次询问。member 隔离下可从目标 `/status` 复制 scope，执行 `/permission <策略> <scope>`；只允许修改当前聊天内 scope。策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢，且显示在 `/status`。该策略不绕过较大/高风险任务的计划门禁；legacy `headless` 不具备工具回调能力。
 
@@ -477,7 +479,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
   prompt 中主动提供的敏感文本，应保护 profile 目录并在分享前清理。账本不保存隐藏推理或工具参数。
 - **scope 路由**：`scopes.json` 保存 chat/thread 与最近入站 messageId；messageId 仅用于把 agent
   后续问答卡作为 reply 正确发回原话题。
-- **本地回调**：运行 `lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 或逐工具审批时，dsh
+- **本地回调**：运行 `lark_notify`、`lark_send_file`、`lark_ask_user`、`lark_request_plan_approval` 或逐工具审批时，dsh
   runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
   不监听公网）；计划内容、待执行工具的理由/参数与决策卡会发送到当前飞书 / Lark 会话。群聊中的审批内容对群成员可见。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。

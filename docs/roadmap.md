@@ -30,6 +30,7 @@
 | **P27 消息与任务可靠性** Durable job reliability | messageId 持久 receipt、queued 重启重放、running checkpoint/interrupted 对账、`/jobs` 显式重试与 `/status` 统计（issue #28） | ✅ 已完成 Done |
 | **P28 会话内诊断包** In-chat diagnostics | 管理员 `/doctor` 生成可下载的内存 Markdown 诊断文件；版本/运行/服务状态/当前进程有限事件快照，凭据与主目录二次脱敏（issue #29） | ✅ 已完成 Done |
 | **P29 scope 工具权限** Scoped tool permissions | `/permission ask\|allow\|deny` 按隔离 scope 持久化；SDK/Web/ACP 审批统一执行，拒绝明确反馈且 `/status` 可见（issue #30） | ✅ 已完成 Done |
+| **P30 结果文件回传** Outbound result files | `lark_send_file` 按 native session 上传受限本地文件；`/archive` 自动发送 Markdown + JSONL，支持按 id 重发或管理员转发到指定会话（issue #31） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 

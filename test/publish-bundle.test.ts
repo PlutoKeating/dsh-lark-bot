@@ -35,6 +35,9 @@ const DIST_FILES = [
   'approval.js',
   'approval.d.ts',
   'approval.js.map',
+  'file.js',
+  'file.d.ts',
+  'file.js.map',
 ] as const;
 
 const tempRoots: string[] = [];
@@ -53,6 +56,10 @@ const FAKE_PATCH = [
   '',
   '    - id: lark-notify',
   "      name: 'dsh-lark-bot/notify'",
+  '      config: {}',
+  '',
+  '    - id: lark-file',
+  "      name: 'dsh-lark-bot/file'",
   '      config: {}',
   '',
   '    - id: lark-approval-answerer',
@@ -75,6 +82,7 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
       './ask': { types: './dist/ask.d.ts', import: './dist/ask.js' },
       './plan': { types: './dist/plan.d.ts', import: './dist/plan.js' },
       './approval': { types: './dist/approval.d.ts', import: './dist/approval.js' },
+      './file': { types: './dist/file.d.ts', import: './dist/file.js' },
     },
     files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
     dsh: { bundle: { patch: './cordis.patch.yml' } },
@@ -130,6 +138,7 @@ describe('publish bundle', () => {
     expect(required).toContain('ask.d.ts');
     expect(required).toContain('plan.js');
     expect(required).toContain('approval.js');
+    expect(required).toContain('file.js');
     expect(required).toContain('approval.d.ts');
   });
 

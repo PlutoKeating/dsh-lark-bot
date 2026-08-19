@@ -594,6 +594,8 @@ export interface Logger {
   时保持停止。插件卸载时返回的 disposer 会停止引擎。
 - `dsh-lark-bot/notify`：`lark_notify` 工具（见 §9），配置缺省时在执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN` 环境变量。
+- `dsh-lark-bot/file`：`lark_send_file` 工具（见 §9），配置缺省时读取
+  `DSH_LARK_FILE_URL` / `DSH_LARK_NOTIFY_TOKEN`；目标由 native session 固定到原会话。
 - `dsh-lark-bot/ask`：`lark_ask_user` 工具（见 §9），agent 需要用户拍板 / 补充信息时
   通过问答卡向飞书会话提问并等待答案，配置缺省时读取 `DSH_LARK_ASK_URL` /
   `DSH_LARK_NOTIFY_TOKEN` 环境变量。
@@ -650,7 +652,7 @@ export interface Logger {
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
-`/archive [note|list [N]|clean]`、`/density`、
+`/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。安全网守护接管期间额外支持
@@ -667,13 +669,14 @@ export interface Logger {
 - `./invariant`（`src/invariant.ts`）：`dsh-lark-bot-invariant` 伴生模块，向宿主
   `invariants` 注册表登记包归属（与官方 dsh-lark-channel/invariant 同契约）。
 - `./notify`（`src/notify/tool.ts`）：`lark-notify` 工具插件（见 §9）。
+- `./file`（`src/notify/file-tool.ts`）：`lark-file` 结果文件工具插件（见 §9）。
 - `./ask`（`src/notify/ask-tool.ts`）：`lark-ask` 问答卡工具插件（见 §9）。
 - `./plan`（`src/notify/plan-tool.ts`）：`lark-plan-approval` 计划门禁工具插件（见 §9）。
 - `./approval`（`src/notify/approval-answerer.ts`）：`lark-approval-answerer` 一次性审批应答器（见 §9）。
 
 `dsh plugin --profile <name> add dsh-lark-bot`（或一行 `dsh-lark-bot setup`）后，profile 的
 `dsh.profile.bundles` 会追加 `dsh-lark-bot`，启动时应用 `cordis.patch.yml` 层（
-`dsh-lark-bot/plugin` + `lark-notify` + `lark-plan-approval` + `lark-approval-answerer`）。
+`dsh-lark-bot/plugin` + `lark-notify` + `lark-file` + `lark-plan-approval` + `lark-approval-answerer`）。
 
 ## 9. 桥接层 · Bridge
 
@@ -691,6 +694,10 @@ export interface Logger {
 `CommandChannel.sendFile(chatId,fileName,Buffer,options)` 只接受调用方已经构造的内存内容；Lark adapter
 以 `{ file: { source: Buffer, fileName } }` 上传，因此 `/doctor` 不需要开放 channel 的
 `allowedFileDirs`，也不会让消息参数变成本地文件读取路径。
+`src/media/outbound-files.ts` 的 `prepareOutboundFile` 负责 agent 结果文件的 realpath、普通文件、
+basename 与默认 20 MiB 上限校验。`src/notify/file-handler.ts` 以 native session 反查 immutable
+scope/workspace 与 chat/thread，允许根由 bridge 计算为当前 workspace、该 scope 的实际执行
+worktree、该 scope 归档目录和实例日志；runtime 提交的 cwd 只用于解析相对路径，不能扩大允许根。
 
 `src/diagnostics/bundle.ts` 的 `createDiagnosticBundle(input)` 生成下载文件：环境/版本、非敏感配置
 计数、当前 scope+workspace 的 model/session/run/pending/job 摘要、managed service 状态，以及
@@ -735,6 +742,11 @@ topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 （`text` / `scope` / `chat_id` / `mention_user_ids`），把请求 POST 回 bridge 的
 `DSH_LARK_NOTIFY_URL`（token 取 `DSH_LARK_NOTIFY_TOKEN`）。
 
+同一服务器还提供 `POST /file`（`server.fileUrl` / `DSH_LARK_FILE_URL`）：请求携带
+`sessionId`、`path`、可选 `runtimeCwd` / `fileName`；`buildFileHandler` 完成 session 归属、路径与
+大小校验后，通过 `sendFile` 上传到原 chat/thread。`src/notify/file-tool.ts` 注册 raw-schema
+`lark_send_file`，从 `exec.agent.session.id` 获取当前 session，不能由模型指定目标会话。
+
 同一服务器还提供 `POST /ask`（`server.askUrl`，桥接进程写 `DSH_LARK_ASK_URL`）：
 `src/notify/ask-handler.ts` 的 `buildAskHandler` 按 `sessionId` 反查 scope（
 `SessionStore.scopeForSession`）并解析到 chat/thread，用现有
@@ -763,7 +775,7 @@ agent 可把它作为工具结果继续。可取得的 `tool_use` input 按 sess
 
 SDK / ACP runtime profile（`src/adapters/dsh/sdk-runtime.ts` / `acp-runtime.ts`）会在
 `cordis.patch.yml` 插入 `lark-notify` 行，并把当前 bridge 包以 `link:` 依赖加入 profile，
-同时插入 `lark-ask` 与 `lark-plan-approval` 行，因此三个 bridge 工具在 `sdk` 与 `acp` 两种
+同时插入 `lark-file`、`lark-ask` 与 `lark-plan-approval` 行，因此四个 bridge 工具在 `sdk` 与 `acp` 两种
 adapter 下都自动可用；SDK 另插入 approval answerer，宿主 bundle 也插入 plan + approval 供 Web agent
 使用。ACP 继续由原生 permission bridge 应答，避免重复 answerer（`headless` 无工具回调）。
 

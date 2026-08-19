@@ -10,6 +10,7 @@
 │  dsh profile · cordis 组合                │
 │  · dsh-lark-bot/plugin（桥接引擎，进程内） │
 │  · dsh-lark-bot/notify（lark_notify 工具）│
+│  · dsh-lark-bot/file（lark_send_file 工具）│
 └──────────────────────────────────────────┘
         │  以标准插件方式加载 | loaded as a standard plugin
         ▼
@@ -20,6 +21,7 @@
 │  bridge/   飞书通道接入                    │
 │  · 消息事件、流式卡片、卡片交互、媒体下载    │
 │  · 出站 @ 提及 + 跨会话通知（lark_notify 工具）│
+│  · 当前会话结果文件上传（lark_send_file）     │
 └──────────────────────────────────────────┘
         │
         ▼
@@ -67,6 +69,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 │  dsh profile（cordis 组合）                │
 │  · dsh-lark-bot/plugin  桥接引擎（进程内） │
 │  · dsh-lark-bot/notify  lark_notify 工具  │
+│  · dsh-lark-bot/file  lark_send_file 工具 │
 │  · @deepseek-ai/dsh-base …               │
 └──────────────────────────────────────────┘
 ```
@@ -157,7 +160,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    持久化 scope → chat/thread/最近入站 messageId 映射（messageId 用于 topic reply anchor）；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
-   `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
+   `lark_send_file` 经同一回环服务按 native session 固定回原 chat/thread；bridge 只读取当前
+   workspace、该 scope 的实际 worktree/归档和实例日志中的 realpath 普通文件；no-follow 打开后
+   在同一文件句柄复核身份并以 20 MiB 上限有界读取，因此 runtime 自报 cwd、symlink 或并发替换
+   不能越权。`/archive` 落盘后复用该二进制上传能力，失败可按 id
+   重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
+   `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
@@ -231,8 +239,8 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
-| `src/media/` | 附件下载与文本注入 |
-| `src/notify/` | 进程内 `/notify` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/media/` | 附件下载、文本注入与出站文件边界校验 |
+| `src/notify/` | 进程内 `/notify` `/file` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |

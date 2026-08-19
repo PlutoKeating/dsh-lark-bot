@@ -28,12 +28,13 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   `dsh.bundle.patch` → `./cordis.patch.yml`，支持 `dsh plugin --profile <name> add
   dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
   bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
-  与 `lark-notify`、`lark-plan-approval`、`lark-approval-answerer`（标准插件行）。
-- `./plugin`、`./invariant`、`./notify`、`./ask`、`./plan`、`./approval` 六个子路径导出随包发布：`plugin` 为 bundle
+  与 `lark-notify`、`lark-file`、`lark-plan-approval`、`lark-approval-answerer`（标准插件行）。
+- `./plugin`、`./invariant`、`./notify`、`./file`、`./ask`、`./plan`、`./approval` 七个子路径导出随包发布：`plugin` 为 bundle
   行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
-  dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`ask` 为
+  dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`file` 为当前 session 定向的
+  `lark_send_file` 结果文件插件，`ask` 为
   `lark_ask_user` 问答卡工具插件，`plan` 为 `lark_request_plan_approval` 计划门禁，`approval`
-  为 rc.8 `approval/request` terminal answerer；SDK / ACP runtime profile 自动装配前三个工具，
+  为 rc.8 `approval/request` terminal answerer；SDK / ACP runtime profile 自动装配四个工具，
   SDK 与宿主 bundle 装配 approval（ACP 使用原生 permission 回调）；plan 插件还通过宿主
   `tools/pre-execute` 在当前 turn 批准前阻断 mutating/execute/`run_code` 调用。
 - `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.8 依赖链一致）；

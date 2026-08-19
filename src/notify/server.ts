@@ -6,6 +6,7 @@ import type { MentionTarget } from '../bridge/types.js';
 import type { AskPayload, AskResult } from './ask-handler.js';
 import type { PlanPayload, PlanResult } from './plan-handler.js';
 import type { ApprovalPayload, ApprovalResult } from './approval-handler.js';
+import type { FilePayload, FileResult } from './file-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -39,6 +40,8 @@ export interface NotifyServerDeps {
   plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
   /** Optional handler for dsh rc.8 one-shot tool approval requests. */
   approval?: (payload: ApprovalPayload, signal?: AbortSignal) => Promise<ApprovalResult>;
+  /** Optional handler for the `lark_send_file` channel. */
+  file?: (payload: FilePayload) => Promise<FileResult>;
 }
 
 /**
@@ -56,6 +59,7 @@ export class NotifyServer {
   askUrl: string | undefined;
   planUrl: string | undefined;
   approvalUrl: string | undefined;
+  fileUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -76,6 +80,7 @@ export class NotifyServer {
         this.askUrl = `http://127.0.0.1:${String(address.port)}/ask`;
         this.planUrl = `http://127.0.0.1:${String(address.port)}/plan`;
         this.approvalUrl = `http://127.0.0.1:${String(address.port)}/approval`;
+        this.fileUrl = `http://127.0.0.1:${String(address.port)}/file`;
         resolve();
       });
     });
@@ -197,6 +202,32 @@ export class NotifyServer {
           return;
         }
         respond(200, { ok: true, outcome: result.outcome });
+        return;
+      }
+      if (req.url === '/file') {
+        if (!this.deps.file) {
+          respond(404, { ok: false, error: 'file channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as FilePayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.path?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and path are required' });
+          return;
+        }
+        const result = await this.deps.file(payload);
+        if (!result.ok) {
+          respond(400, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, {
+          ok: true,
+          ...(result.fileName ? { fileName: result.fileName } : {}),
+          ...(result.size === undefined ? {} : { size: result.size }),
+        });
         return;
       }
       if (req.url !== '/notify') {

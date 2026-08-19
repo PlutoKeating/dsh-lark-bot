@@ -61,10 +61,14 @@
    与 `/invite remove …`）、`/permission ask|allow|deny`，以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。`/doctor` 因包含本机运行状态与最近日志，仅管理员可执行。
-10. **本地回调隔离**：`lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 与
+10. **本地回调隔离**：`lark_notify`、`lark_send_file`、`lark_ask_user`、`lark_request_plan_approval` 与
     `approval/request` answerer 的回调
     服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
+    文件回传不信任 runtime 自报 cwd：bridge 以 native session 反查 scope/workspace，只允许该
+    workspace、该 scope 实际 worktree/归档与实例日志内的 realpath 普通文件；以 no-follow 打开后
+    在同一文件句柄复核文件身份并有界读取，拒绝竞态 / symlink 越界、非法文件名和默认超过
+    20 MiB 的文件；agent 工具目标固定为该 session 的原 chat/thread。归档跨会话转发仅管理员可用。
 11. **多机器人 peer 鉴权与防循环**：只有 `fleet.json` 中已启用且 identity 唯一的 bot open_id，
     在群内真实 @ 当前 bot 时才可交接；未知 bot、未 @、system/anonymous 消息拒绝。bot 文本不进入
     slash-command 管理管线。连续交接由跨进程 `handoffs.json` 原子计数、按 messageId 去重，超过
