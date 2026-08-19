@@ -101,6 +101,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 5. 飞书内常用命令
 
+bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一群里的飞书/Lark 用户会按各自
+客户端语言看到中文或英文。普通 Markdown/toast 降级并列显示中英文；agent 与用户原文不翻译。
+
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 开始新会话 |

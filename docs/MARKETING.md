@@ -92,6 +92,7 @@
 2. `package.json`：npm 描述改中英双语，keywords 增加「飞书 / 飞书机器人 / 扫码 / deepseek harness 飞书」等中文词。
 3. `README.md`：徽章行增加 dshbase；「社区收录情况」增加 awesome-dsh-plugin（PR 待合并）与 dshbase 两行。
 4. 新增落地页 `docs/index.html`：中英双语、OG/Twitter 卡片、SoftwareApplication + FAQPage 结构化数据、FAQ 覆盖长尾问题。
+5. 产品内 bot 固定 UI 也完成双语：共享 Card JSON 2.0 按读者客户端语言显示中文 / English，Markdown/toast 降级中英并列；不翻译 agent 生成内容。
 5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（AEO/GEO：给 AI 引擎可直接读取的项目摘要）。
 6. 新增本文档 `docs/MARKETING.md`。
 7. 已向 awesome-dsh-plugin 提交收录 PR（见 §6.2 状态）。

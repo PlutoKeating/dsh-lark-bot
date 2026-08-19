@@ -5,6 +5,7 @@ import {
   SUPPORTED_PI_AI_PROTOCOLS,
 } from '../config/dsh-config.js';
 import type { CommandContext } from './index.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 
 interface ParsedArgs {
   positionals: string[];
@@ -40,15 +41,15 @@ function parseArgs(input: string): ParsedArgs {
   return { positionals, flags, repeated };
 }
 
-async function reply(ctx: CommandContext, markdown: string): Promise<void> {
-  await ctx.channel.sendMarkdown(ctx.chatId, markdown, {
+async function reply(ctx: CommandContext, zhCn: string, enUs: string): Promise<void> {
+  await ctx.channel.sendMarkdown(ctx.chatId, bilingualMarkdown(zhCn, enUs), {
     replyTo: ctx.messageId,
   });
 }
 
 function requireAdmin(ctx: CommandContext): boolean {
   if (!ctx.accessManager.isAdmin(ctx.senderId)) {
-    void reply(ctx, '仅管理员可执行该操作。');
+    void reply(ctx, '仅管理员可执行该操作。', 'Only admins can perform this operation.');
     return false;
   }
   return true;
@@ -116,6 +117,16 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
         '',
         '用法：`/model use <provider/model>`（也兼容唯一模型 ID）、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>]`',
       ].join('\n'),
+      [
+        `**Current session model**: \`${active}\``,
+        `**dsh default model** (agent-default-model): ${dshDefault ? `\`${dshDefault.model}\` (provider \`${dshDefault.provider}\`)` : '(not set)'}`,
+        `**Bot fallback default** (profile / DSH_LARK_MODEL): \`${ctx.defaultModel}\``,
+        '',
+        '**Available models** (configured in dsh):',
+        ...(modelLines.length > 0 ? modelLines : ['(none)']),
+        '',
+        'Usage: `/model use <provider/model>` (a unique bare model ID also works), `/model default <id>`, `/model reset`, or `/model add|remove <provider> <modelId> [--name <name>]`',
+      ].join('\n'),
     );
     return;
   }
@@ -123,35 +134,35 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
   if (sub === 'use') {
     const id = rest.join(' ').trim();
     if (!id) {
-      await reply(ctx, '用法：`/model use <provider/model>`（也兼容唯一模型 ID）');
+      await reply(ctx, '用法：`/model use <provider/model>`（也兼容唯一模型 ID）', 'Usage: `/model use <provider/model>` (a unique bare model ID also works)');
       return;
     }
     const route = await resolveModelSelection(ctx, id);
     if (!route) {
-      await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`);
+      await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`, `Model \`${id}\` was not found. Use /model to list models.`);
       return;
     }
     const selection = id.includes('/') ? `${route.provider}/${route.model}` : route.model;
     ctx.models.set(ctx.scope, selection);
-    await reply(ctx, `已热切换当前会话模型：\`${selection}\`（下一轮消息生效，无需重启 bot）。`);
+    await reply(ctx, `已热切换当前会话模型：\`${selection}\`（下一轮消息生效，无需重启 bot）。`, `Switched this session to \`${selection}\`. It takes effect on the next message; no bot restart is needed.`);
     return;
   }
 
   if (sub === 'reset') {
     const cleared = ctx.models.clear(ctx.scope);
-    await reply(ctx, cleared ? '已清除当前会话模型覆盖，恢复 bot 默认模型。' : '当前会话没有模型覆盖。');
+    await reply(ctx, cleared ? '已清除当前会话模型覆盖，恢复 bot 默认模型。' : '当前会话没有模型覆盖。', cleared ? 'Cleared this session’s model override and restored the bot default.' : 'This session has no model override.');
     return;
   }
 
   if (sub === 'default') {
     const id = rest.join(' ').trim();
     if (!id) {
-      await reply(ctx, '用法：`/model default <modelId>`');
+      await reply(ctx, '用法：`/model default <modelId>`', 'Usage: `/model default <modelId>`');
       return;
     }
     const route = await resolveModelSelection(ctx, id);
     if (!route) {
-      await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`);
+      await reply(ctx, `未找到模型 \`${id}\`，可用 /model 查看列表。`, `Model \`${id}\` was not found. Use /model to list models.`);
       return;
     }
     if (!requireAdmin(ctx)) return;
@@ -160,6 +171,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     await reply(
       ctx,
       `已写入 dsh 默认模型（agent-default-model）：\`${id}\`（同时更新 profile 默认模型），新会话生效。`,
+      `Set the dsh default model (agent-default-model) to \`${id}\` and updated the profile default. New sessions will use it.`,
     );
     return;
   }
@@ -169,28 +181,28 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     const providerId = rest[0];
     const id = rest[1];
     if (!providerId || !id) {
-      await reply(ctx, `用法：\`/model ${sub} <provider> <modelId> [--name <name>]\``);
+      await reply(ctx, `用法：\`/model ${sub} <provider> <modelId> [--name <name>]\``, `Usage: \`/model ${sub} <provider> <modelId> [--name <name>]\``);
       return;
     }
     if (sub === 'add') {
       if (providerId === DEEPSEEK_PROVIDER) {
         await ctx.dshConfig.addDeepseekModel(deepseekModelInput({ id, flags }));
-        await reply(ctx, `已添加模型：\`${providerId}\` → \`${id}\`（settings.yaml 已更新，下一请求生效）。`);
+        await reply(ctx, `已添加模型：\`${providerId}\` → \`${id}\`（settings.yaml 已更新，下一请求生效）。`, `Added model \`${providerId}\` → \`${id}\`. settings.yaml was updated; the next request will use it.`);
       } else {
         await ctx.dshConfig.addPiAiModel(providerId, deepseekModelInput({ id, flags }));
-        await reply(ctx, `已添加模型：\`${providerId}\` → \`${id}\`（settings.yaml 已更新，下一请求生效）。`);
+        await reply(ctx, `已添加模型：\`${providerId}\` → \`${id}\`（settings.yaml 已更新，下一请求生效）。`, `Added model \`${providerId}\` → \`${id}\`. settings.yaml was updated; the next request will use it.`);
       }
     } else if (providerId === DEEPSEEK_PROVIDER) {
       const removed = await ctx.dshConfig.removeDeepseekModel(id);
-      await reply(ctx, removed ? `已删除模型：\`${providerId}\` → \`${id}\`。` : `未找到模型：\`${id}\`。`);
+      await reply(ctx, removed ? `已删除模型：\`${providerId}\` → \`${id}\`。` : `未找到模型：\`${id}\`。`, removed ? `Removed model \`${providerId}\` → \`${id}\`.` : `Model not found: \`${id}\`.`);
     } else {
       const removed = await ctx.dshConfig.removePiAiModel(providerId, id);
-      await reply(ctx, removed ? `已删除模型：\`${providerId}\` → \`${id}\`。` : `未找到模型：\`${id}\`。`);
+      await reply(ctx, removed ? `已删除模型：\`${providerId}\` → \`${id}\`。` : `未找到模型：\`${id}\`。`, removed ? `Removed model \`${providerId}\` → \`${id}\`.` : `Model not found: \`${id}\`.`);
     }
     return;
   }
 
-  await reply(ctx, '未知 `/model` 子命令，请使用 use / default / reset / add / remove。');
+  await reply(ctx, '未知 `/model` 子命令，请使用 use / default / reset / add / remove。', 'Unknown `/model` subcommand. Use use / default / reset / add / remove.');
 }
 
 export async function handleProviders(_args: string, ctx: CommandContext): Promise<void> {
@@ -206,6 +218,18 @@ export async function handleProviders(_args: string, ctx: CommandContext): Promi
       `dsh 默认模型：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
       '',
       '管理：`/provider add|update|remove`、`/model add|remove`、`/key set|remove`（需管理员）',
+    ].join('\n'),
+    [
+      '**Configured dsh providers**',
+      '',
+      ...providers.flatMap((provider) => [
+        `- **${provider.id}** (${provider.displayName}) — ${provider.configured ? 'configured' : 'not configured'} · ${provider.credentialReady ? 'credential ready' : provider.credentialRef === undefined ? 'credential not configured' : 'credential missing'}`,
+        `  models: ${provider.models.length > 0 ? provider.models.map((model) => model.id).join(', ') : '(none)'}`,
+      ]),
+      '',
+      `dsh default model: ${dshDefault ? `\`${dshDefault.model}\` (provider \`${dshDefault.provider}\`)` : '(not set)'}`,
+      '',
+      'Manage: `/provider add|update|remove`, `/model add|remove`, `/key set|remove` (admin required)',
     ].join('\n'),
   );
 }
@@ -229,11 +253,11 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
     if (id === DEEPSEEK_PROVIDER) {
       const unsupported = [...provided].filter((name) => !deepseekFlags.includes(name));
       if (unsupported.length > 0) {
-        await reply(ctx, `\`deepseek-official\` 仅支持 ${deepseekFlags.map((name) => `--${name}`).join(' / ')}，不支持的参数：${unsupported.map((name) => `--${name}`).join('、')}`);
+        await reply(ctx, `\`deepseek-official\` 仅支持 ${deepseekFlags.map((name) => `--${name}`).join(' / ')}，不支持的参数：${unsupported.map((name) => `--${name}`).join('、')}`, `\`deepseek-official\` only supports ${deepseekFlags.map((name) => `--${name}`).join(' / ')}. Unsupported: ${unsupported.map((name) => `--${name}`).join(', ')}`);
         return;
       }
       if (provided.size === 0) {
-        await reply(ctx, '用法：`/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>] [--api-key <key>]`');
+        await reply(ctx, '用法：`/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>] [--api-key <key>]`', 'Usage: `/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>] [--api-key <key>]`');
         return;
       }
       await ctx.dshConfig.upsertDeepseekProvider({
@@ -244,17 +268,18 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       await reply(
         ctx,
         `已${sub === 'add' ? '添加/更新' : '更新'} provider：\`${id}\`。凭据${flags['api-key'] ? '已写入 .credentials.yaml（值已隐藏）' : '不变'}；其他字段按参数更新。`,
+        `${sub === 'add' ? 'Added/updated' : 'Updated'} provider \`${id}\`. The credential ${flags['api-key'] ? 'was written to .credentials.yaml (value hidden)' : 'is unchanged'}; other fields follow the supplied flags.`,
       );
       return;
     }
 
     const unsupported = [...provided].filter((name) => !piAiFlags.includes(name));
     if (unsupported.length > 0) {
-      await reply(ctx, `不支持的参数：${unsupported.map((name) => `--${name}`).join('、')}。可用：${piAiFlags.map((name) => `--${name}`).join(' / ')}`);
+      await reply(ctx, `不支持的参数：${unsupported.map((name) => `--${name}`).join('、')}。可用：${piAiFlags.map((name) => `--${name}`).join(' / ')}`, `Unsupported flags: ${unsupported.map((name) => `--${name}`).join(', ')}. Available: ${piAiFlags.map((name) => `--${name}`).join(' / ')}`);
       return;
     }
     if (provided.size === 0) {
-      await reply(ctx, '用法：`/provider add|update <id> --api <protocol> --base-url <url> --model <modelId> [--display-name <name>] [--api-key-env <ref>]`');
+      await reply(ctx, '用法：`/provider add|update <id> --api <protocol> --base-url <url> --model <modelId> [--display-name <name>] [--api-key-env <ref>]`', 'Usage: `/provider add|update <id> --api <protocol> --base-url <url> --model <modelId> [--display-name <name>] [--api-key-env <ref>]`');
       return;
     }
     const models = (repeated.model ?? []).map((modelId) => ({
@@ -287,9 +312,20 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
           '密钥不会显示在聊天中。',
           `协议可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}`,
         ].join('\n'),
+        [
+          `${sub === 'add' ? 'Added' : 'Updated'} provider \`${id}\`${models.length > 0 ? ` with ${models.length} model(s)` : ''}.`,
+          '',
+          flags['api-key-env']
+            ? `Credential reference set to \`${flags['api-key-env']}\`; use \`/key set ${flags['api-key-env']} <value>\` to store the value.`
+            : '`/key set` references are not linked automatically. Set `--api-key-env` on the provider before storing that reference.',
+          '',
+          'Secrets are never shown in chat.',
+          `Protocols: ${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}`,
+        ].join('\n'),
       );
     } catch (error) {
-      await reply(ctx, `操作失败：${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      await reply(ctx, `操作失败：${message}`, `Operation failed: ${message}`);
     }
     return;
   }
@@ -301,11 +337,12 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       await reply(
         ctx,
         `已删除 provider：\`${id}\`（含 settings 中 llm-deepseek 段及对应凭据）。此操作会移除 dsh 官方 DeepSeek 配置，请谨慎。`,
+        `Removed provider \`${id}\`, including the llm-deepseek settings and matching credential. This removes the official dsh DeepSeek configuration.`,
       );
       return;
     }
     const removed = await ctx.dshConfig.removePiAiProvider(id);
-    await reply(ctx, removed ? `已删除 provider：\`${id}\`（settings.yaml 已更新）。` : `未找到 provider：\`${id}\`。`);
+    await reply(ctx, removed ? `已删除 provider：\`${id}\`（settings.yaml 已更新）。` : `未找到 provider：\`${id}\`。`, removed ? `Removed provider \`${id}\`; settings.yaml was updated.` : `Provider not found: \`${id}\`.`);
     return;
   }
 
@@ -318,6 +355,14 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       '- `/provider remove <id>`',
       '',
       `\`deepseek-official\` 仅支持 --base-url / --api-key-env / --api-key；其他 id 走 llm-pi-ai 自定义 provider（协议可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}）。`,
+    ].join('\n'),
+    [
+      'Usage:',
+      '- `/provider add <id> --api <protocol> --base-url <url> --model <modelId> [--model <modelId> ...] [--display-name <name>] [--api-key-env <ref>]`',
+      '- `/provider update <id> [--api <protocol>] [--base-url <url>] [--model <modelId> ...] [--display-name <name>] [--api-key-env <ref>]`',
+      '- `/provider remove <id>`',
+      '',
+      `\`deepseek-official\` only supports --base-url / --api-key-env / --api-key. Other IDs use llm-pi-ai (protocols: ${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}).`,
     ].join('\n'),
   );
 }
@@ -336,6 +381,12 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
         '',
         '提示：环境变量中的凭据不会显示在这里；provider 的 apiKeyEnv 可引用任意环境变量。',
       ].join('\n'),
+      [
+        '**dsh credentials** (reference names only; values are hidden):',
+        ...(refs.length > 0 ? refs.map((ref) => `- \`${ref}\``) : ['(.credentials.yaml has no entries)']),
+        '',
+        'Credentials supplied through environment variables are not listed here; a provider apiKeyEnv may reference any environment variable.',
+      ].join('\n'),
     );
     return;
   }
@@ -346,13 +397,14 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
     const ref = rest[0];
     const value = rest.slice(1).join(' ').trim();
     if (!ref || !value) {
-      await reply(ctx, '用法：`/key set <引用名> <值>`');
+      await reply(ctx, '用法：`/key set <引用名> <值>`', 'Usage: `/key set <reference> <value>`');
       return;
     }
     try {
       await ctx.dshConfig.setCredential(ref, value);
     } catch (error) {
-      await reply(ctx, `写入失败：${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      await reply(ctx, `写入失败：${message}`, `Write failed: ${message}`);
       return;
     }
     // The user's intuitive flow is `/key set <providerId> <value>`; if the
@@ -381,6 +433,10 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
             ]
           : []),
       ].join('\n'),
+      [
+        `Stored credential \`${ref}\` in \`~/.dsh/.credentials.yaml\` (0600; value hidden). Prefer a direct chat because secrets pasted into a group are visible to group members.`,
+        ...(autoLinked ? ['', `🔗 Linked provider \`${ref}\` apiKeyEnv to \`${ref}\`; it takes effect on the next request.`] : []),
+      ].join('\n'),
     );
     return;
   }
@@ -388,13 +444,13 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
   if (sub === 'remove') {
     const ref = rest[0];
     if (!ref) {
-      await reply(ctx, '用法：`/key remove <引用名>`');
+      await reply(ctx, '用法：`/key remove <引用名>`', 'Usage: `/key remove <reference>`');
       return;
     }
     const removed = await ctx.dshConfig.removeCredential(ref);
-    await reply(ctx, removed ? `已删除凭据 \`${ref}\`。` : `未找到凭据 \`${ref}\`。`);
+    await reply(ctx, removed ? `已删除凭据 \`${ref}\`。` : `未找到凭据 \`${ref}\`。`, removed ? `Removed credential \`${ref}\`.` : `Credential not found: \`${ref}\`.`);
     return;
   }
 
-  await reply(ctx, '用法：`/key set <引用名> <值>`、`/key remove <引用名>`、`/key list`');
+  await reply(ctx, '用法：`/key set <引用名> <值>`、`/key remove <引用名>`、`/key list`', 'Usage: `/key set <reference> <value>`, `/key remove <reference>`, or `/key list`');
 }

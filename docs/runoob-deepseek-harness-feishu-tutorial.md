@@ -60,6 +60,9 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 
 在飞书里给机器人发普通消息即可开始工作，常用命令：
 
+命令帮助、状态/错误提示和交互卡片内置中文 / English：同一张 Card JSON 2.0 群卡会按每位读者的
+客户端语言显示，普通 Markdown/toast 降级则中英并列。agent 回答和用户原文不会被自动翻译。
+
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 开始新会话 |

@@ -103,6 +103,9 @@
 - **P23 done**：问答卡绑定发送后的 messageId；用户可直接回复卡片输入自由文本，单选/多选也接受
   选项外补充。并发问题按卡定向并按 native session 独立清理/暂停看门狗；topic 卡使用最近入站
   messageId 锚定原 thread，member 授权与隔离切换连续性保持不变（issue #22）。
+- **P27 done（issue #27）**：bot 固定命令/状态/错误文案与所有交互卡提供中英双语；Card JSON 2.0
+  通过文本组件的 `i18n_content` 在同一共享卡内按读者客户端语言显示，无法取得 locale 的
+  Markdown/toast/legacy 路径中英并列；agent、用户与工具动态内容保持原文。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
   子路径与 CLI 入口，杜绝 v0.9.0 的 `ask` 入口漏拷类问题；GitHub Release 显式标记 Latest。
 - **0.9.2 released**：`setup` 固定安装当前包的精确版本（`dsh plugin add

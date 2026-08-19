@@ -29,6 +29,7 @@ import type { AccessManager } from '../config/access-manager.js';
 import type { DshProviderManager } from '../config/dsh-config.js';
 import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionArchive } from '../session/archive.js';
 import type { WorkspaceStore } from '../workspace/store.js';
@@ -188,7 +189,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         if (decision.firstTrip) {
           await commandChannel.sendMarkdown(
             msg.chatId,
-            `🛑 机器人连续协作已达到 ${deps.botHandoffMax ?? 6} 轮上限。请由任一成员发言后再继续。`,
+            bilingualMarkdown(
+              `🛑 机器人连续协作已达到 ${deps.botHandoffMax ?? 6} 轮上限。请由任一成员发言后再继续。`,
+              `🛑 Bot-to-bot collaboration reached the ${deps.botHandoffMax ?? 6}-turn limit. A member must speak before it can continue.`,
+            ),
           );
         }
         return;
@@ -228,7 +232,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       )) {
         await commandChannel.sendMarkdown(
           msg.chatId,
-          '⛔ 不能回答其他成员或其他话题的问答卡。',
+          bilingualMarkdown('⛔ 不能回答其他成员或其他话题的问答卡。', '⛔ You cannot answer another member’s or another topic’s question card.'),
           { replyTo: msg.messageId },
         );
         return;
@@ -236,7 +240,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       if (answer === undefined) {
         await commandChannel.sendMarkdown(
           msg.chatId,
-          '请直接回复一条非空文字作为答案。',
+          bilingualMarkdown('请直接回复一条非空文字作为答案。', 'Reply with non-empty text as your answer.'),
           { replyTo: msg.messageId },
         );
         return;
@@ -247,7 +251,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           msg.chatId,
           msg.replyToMessageId!,
           msg.threadId,
-          '✅ **已提交** — 文字回答已记录，任务将继续执行',
+          bilingualMarkdown('✅ **已提交** — 文字回答已记录，任务将继续执行', '✅ **Submitted** — the text answer was recorded and the task will continue'),
           repliedQuestion.scope,
           'question',
         );
@@ -311,7 +315,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       try {
         await commandChannel.sendMarkdown(
           msg.chatId,
-          `⚠️ 命令执行失败：${error instanceof Error ? error.message : String(error)}`,
+          bilingualMarkdown(
+            `⚠️ 命令执行失败：${error instanceof Error ? error.message : String(error)}`,
+            `⚠️ Command failed: ${error instanceof Error ? error.message : String(error)}`,
+          ),
           { replyTo: msg.messageId },
         );
       } catch {
@@ -331,7 +338,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       if (busy) {
         await commandChannel.sendMarkdown(
           msg.chatId,
-          `⏳ 已收到，当前排队中（队列 ${queued + 1} 条）。任务开始后会在这里实时显示进度。`,
+          bilingualMarkdown(
+            `⏳ 已收到，当前排队中（队列 ${queued + 1} 条）。任务开始后会在这里实时显示进度。`,
+            `⏳ Received and queued (position ${queued + 1}). Live progress will appear here when the task starts.`,
+          ),
           { replyTo: msg.messageId },
         );
       }
@@ -377,13 +387,13 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         !canOperateCardScope(requestedScope, event.chatId, event.operator?.openId)
       ) {
         return {
-          toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+          toast: { type: 'error', content: '不能操作其他成员的隔离会话 / You cannot operate another member’s isolated session' },
         };
       }
       const scope = requestedScope ?? currentScope;
       if (value?.cmd === 'status-refresh') {
         if (!event.messageId || !commandChannel.updateCard) {
-          return { toast: { type: 'error', content: '当前渠道不支持原位刷新' } };
+          return { toast: { type: 'error', content: '当前渠道不支持原位刷新 / In-place refresh is unavailable' } };
         }
         try {
           const actionIsolation =
@@ -421,10 +431,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             defaultWorkspace: deps.defaultWorkspace,
           });
           await commandChannel.updateCard(event.messageId, renderStatusCard(input));
-          return { toast: { type: 'success', content: '状态已刷新' } };
+          return { toast: { type: 'success', content: '状态已刷新 / Status refreshed' } };
         } catch (error) {
           log.fail('channel-status', error, { scope });
-          return { toast: { type: 'error', content: '状态刷新失败' } };
+          return { toast: { type: 'error', content: '状态刷新失败 / Status refresh failed' } };
         }
       }
       if (value?.cmd === 'stop') {
@@ -442,15 +452,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           event.messageId,
           threadId,
           allowed
-            ? '✅ **已允许** — 该操作已获授权执行'
-            : '⛔ **已拒绝** — 该操作未获授权',
+            ? bilingualMarkdown('✅ **已允许** — 该操作已获授权执行', '✅ **Allowed** — this operation is authorized')
+            : bilingualMarkdown('⛔ **已拒绝** — 该操作未获授权', '⛔ **Rejected** — this operation is not authorized'),
           scope,
           'approval',
         );
         return {
           toast: {
             type: allowed ? 'success' : 'info',
-            content: allowed ? '已允许' : '已拒绝',
+            content: allowed ? '已允许 / Allowed' : '已拒绝 / Rejected',
           },
         };
       }
@@ -470,12 +480,12 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             event.chatId,
             event.messageId,
             threadId,
-            '✅ **已提交** — 回答已记录，任务将继续执行',
+            bilingualMarkdown('✅ **已提交** — 回答已记录，任务将继续执行', '✅ **Submitted** — the answer was recorded and the task will continue'),
             scope,
             'question',
           );
           return {
-            toast: { type: 'success', content: '回答已提交' },
+            toast: { type: 'success', content: '回答已提交 / Answer submitted' },
           };
         }
         return;
@@ -498,15 +508,18 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           event.messageId,
           threadId,
           approved
-            ? '✅ **计划已批准** — 任务将自动继续执行'
-            : `📝 **继续规划**${feedback ? ` — 已记录意见：${feedback}` : ''}`,
+            ? bilingualMarkdown('✅ **计划已批准** — 任务将自动继续执行', '✅ **Plan approved** — the task will continue automatically')
+            : bilingualMarkdown(
+                `📝 **继续规划**${feedback ? ` — 已记录意见：${feedback}` : ''}`,
+                `📝 **Continue planning**${feedback ? ` — feedback recorded: ${feedback}` : ''}`,
+              ),
           scope,
           'plan',
         );
         return {
           toast: {
             type: approved ? 'success' : 'info',
-            content: approved ? '计划已批准' : '已要求继续规划',
+            content: approved ? '计划已批准 / Plan approved' : '已要求继续规划 / Continue planning requested',
           },
         };
       }

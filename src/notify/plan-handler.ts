@@ -4,6 +4,7 @@ import type { SendOptions } from '../bridge/send-options.js';
 import { renderPlanApprovalCard } from '../card/plan-approval-card.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 
 export interface PlanPayload {
   token: string;
@@ -89,7 +90,14 @@ async function settleCancelledCard(
   options: SendOptions | undefined,
 ): Promise<void> {
   try {
-    await deps.channel.sendMarkdown(chatId, '⏹ **计划确认已取消** — 原任务已结束或被停止', options);
+    await deps.channel.sendMarkdown(
+      chatId,
+      bilingualMarkdown(
+        '⏹ **计划确认已取消** — 原任务已结束或被停止',
+        '⏹ **Plan approval cancelled** — the original task finished or was stopped',
+      ),
+      options,
+    );
   } catch (error) {
     log.warn('plan-card', 'cancel-confirm-failed', { error });
   }
