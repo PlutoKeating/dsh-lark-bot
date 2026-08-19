@@ -261,7 +261,7 @@
 | 类别 | 约束 |
 | :--- | :--- |
 | **协议** | AGPLv3.0（官方原文，见根目录 `LICENSE`） |
-| **语言** | 中英双语，先中文后英文 |
+| **语言** | bot 固定 UI 中英双语：Card JSON 2.0 按每位读者客户端语言显示，Markdown/toast 降级先中文后英文；agent/用户/工具内容保持原文 |
 | **运行时** | Node.js ≥ 22.19（`package.json` engines） |
 | **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client + rc.7 approval answerer，ACP 协议原生审批可选，headless legacy |
 | **关键词** | README / 介绍 / tags 含 `dsh`、`deepseek`、`deepseek harness`、`feishu`、`lark`、`bridge`、`bot` |

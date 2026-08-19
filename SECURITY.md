@@ -85,6 +85,8 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
+- 卡片语言由飞书/Lark 客户端根据 Card JSON 2.0 的 `zh_cn` / `en_us` variant 本地选择；bridge
+  不读取、不推断也不持久化成员 locale。无法 per-viewer 选择的 Markdown/toast 直接并列中英文。
 - 多机器人 registry `~/.dsh-lark/fleet.json` 只保存实例/profile 名与 bot open_id/name；共享
   `handoffs.json` 保存 chat id、最近 message id 和轮数（均 0600）。这些标识会让本机用户看到
   哪些机器人/群参与过交接；peer name/open_id 会进入每轮 agent prompt 并随任务上下文发送给

@@ -238,7 +238,7 @@ describe('startChannel', () => {
       raw: {},
     });
 
-    expect(response).toEqual({ toast: { type: 'success', content: '状态已刷新' } });
+    expect(response).toEqual({ toast: { type: 'success', content: '状态已刷新 / Status refreshed' } });
     expect(fake.updatedCards).toHaveLength(1);
     expect(fake.updatedCards[0]?.messageId).toBe('status-message');
     expect(JSON.stringify(fake.updatedCards[0]?.card)).toContain('40 / 100（40.0%）');
@@ -313,7 +313,7 @@ describe('startChannel', () => {
 
     await expect(outcome).resolves.toBe('allowed-once');
     expect(response).toEqual({
-      toast: { type: 'success', content: '已允许' },
+      toast: { type: 'success', content: '已允许 / Allowed' },
     });
     await vi.waitFor(() => {
       expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已允许');
@@ -432,7 +432,7 @@ describe('startChannel', () => {
 
     await expect(pendingQuestion.promise).resolves.toBe('Yes');
     expect(response).toEqual({
-      toast: { type: 'success', content: '回答已提交' },
+      toast: { type: 'success', content: '回答已提交 / Answer submitted' },
     });
     await vi.waitFor(() => {
       expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已提交');
@@ -460,7 +460,7 @@ describe('startChannel', () => {
       feedback: '先不要修改文件',
     });
     expect(planResponse).toEqual({
-      toast: { type: 'info', content: '已要求继续规划' },
+      toast: { type: 'info', content: '已要求继续规划 / Continue planning requested' },
     });
   });
 
@@ -844,7 +844,7 @@ describe('startChannel', () => {
         operator: { openId: 'user-2' },
       });
       expect(rejected).toEqual({
-        toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+        toast: { type: 'error', content: '不能操作其他成员的隔离会话 / You cannot operate another member’s isolated session' },
       });
     }
     expect(interrupt).not.toHaveBeenCalled();
@@ -858,7 +858,7 @@ describe('startChannel', () => {
       raw: { message: { thread_id: 'thread-9' } },
     });
     expect(missingOperator).toEqual({
-      toast: { type: 'error', content: '不能操作其他成员的隔离会话' },
+      toast: { type: 'error', content: '不能操作其他成员的隔离会话 / You cannot operate another member’s isolated session' },
     });
     expect(interrupt).not.toHaveBeenCalled();
   });

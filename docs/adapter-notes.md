@@ -61,6 +61,9 @@ export interface AgentRun {
 
 **`AgentEvent` 是飞书层的渲染契约**（流式卡片靠它），关键类型：
 
+渲染完成后由 `src/card/i18n.ts` 在卡片 seam 组合 `zh_cn` / `en_us` 两套固定 UI chrome；同一份
+`AgentEvent` 动态正文原样进入两套 variant，因此 adapter 不负责翻译，也不接触用户 locale。
+
 ```ts
 type AgentEvent =
   | { type: 'system'; sessionId?; threadId?; cwd?; model? }

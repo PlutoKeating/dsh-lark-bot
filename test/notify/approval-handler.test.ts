@@ -24,6 +24,8 @@ describe('buildApprovalHandler', () => {
       { threadId: 'thread-a', replyTo: 'root-message' },
     );
     expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain('pnpm test');
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain('Allow once');
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain('Reject');
     const id = /"cmd":"approve","id":"([^"]+)"/u.exec(
       JSON.stringify(sendCard.mock.calls[0]?.[1]),
     )?.[1];

@@ -11,14 +11,13 @@ export function renderPlanApprovalCard(input: PlanApprovalCardInput): object {
     decision,
     scope: input.actionScope,
   });
-  return {
-    schema: '2.0',
-    config: { summary: { content: '计划等待确认' } },
-    body: {
+  const body = (locale: CardLocale) => ({
       elements: [
         {
           tag: 'markdown',
-          content: '🧭 **计划已发送，请拍板**\n\n可直接批准，或填写修改意见后继续规划。',
+          content: locale === 'zh_cn'
+            ? '🧭 **计划已发送，请拍板**\n\n可直接批准，或填写修改意见后继续规划。'
+            : '🧭 **The plan is ready for your decision**\n\nApprove it now, or add feedback and continue planning.',
         },
         {
           tag: 'form',
@@ -27,7 +26,7 @@ export function renderPlanApprovalCard(input: PlanApprovalCardInput): object {
             {
               tag: 'input',
               name: 'feedback',
-              placeholder: { tag: 'plain_text', content: '可选：补充约束或修改意见…' },
+              placeholder: { tag: 'plain_text', content: locale === 'zh_cn' ? '可选：补充约束或修改意见…' : 'Optional: add constraints or requested changes…' },
             },
             {
               tag: 'column_set',
@@ -39,7 +38,7 @@ export function renderPlanApprovalCard(input: PlanApprovalCardInput): object {
                   width: 'auto',
                   elements: [{
                     tag: 'button',
-                    text: { tag: 'plain_text', content: '✅ 批准，开始执行' },
+                    text: { tag: 'plain_text', content: locale === 'zh_cn' ? '✅ 批准，开始执行' : '✅ Approve and execute' },
                     type: 'primary',
                     value: actionValue('approved'),
                     form_action_type: 'submit',
@@ -51,7 +50,7 @@ export function renderPlanApprovalCard(input: PlanApprovalCardInput): object {
                   width: 'auto',
                   elements: [{
                     tag: 'button',
-                    text: { tag: 'plain_text', content: '📝 继续规划' },
+                    text: { tag: 'plain_text', content: locale === 'zh_cn' ? '📝 继续规划' : '📝 Keep planning' },
                     value: actionValue('revise'),
                     form_action_type: 'submit',
                     name: `revise-${input.id}`,
@@ -62,6 +61,10 @@ export function renderPlanApprovalCard(input: PlanApprovalCardInput): object {
           ],
         },
       ],
-    },
-  };
+    });
+  return localizedCard({
+    zhCn: { summary: '计划等待确认', body: body('zh_cn') },
+    enUs: { summary: 'Plan awaiting approval', body: body('en_us') },
+  });
 }
+import { localizedCard, type CardLocale } from './i18n.js';

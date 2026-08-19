@@ -1,5 +1,6 @@
 import type { ApprovalOption } from '../adapters/types.js';
 import { redactSecrets, truncateUtf8Safe } from '../config/security.js';
+import { localizedCard, type CardLocale } from './i18n.js';
 
 export interface ApprovalCardInput {
   id: string;
@@ -8,6 +9,8 @@ export interface ApprovalCardInput {
   reason: string | undefined;
   toolInput?: unknown;
   options: readonly ApprovalOption[];
+  /** Bot-owned translations keyed by optionId; adapter labels stay untouched. */
+  englishOptionNames?: Readonly<Record<string, string>>;
   actionScope?: string;
 }
 
@@ -21,22 +24,29 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
   const reject = input.options.find((option) => option.kind === 'reject_once') ??
     input.options.find((option) => option.kind === 'reject_always');
 
-  const markdown = [
-    '🔐 **审批请求**',
-    '',
-    `**工具** \`${safeText(input.toolName, 512)}\``,
-    ...(input.reason ? ['', `**理由** ${safeText(input.reason, 2048)}`] : []),
-    ...(input.toolInput === undefined
-      ? ['', `**调用标识** \`${safeText(input.callId ?? input.id, 512)}\``, '', '执行参数已显示在当前运行卡的对应工具调用中。']
-      : ['', '**执行内容**', '```json', printableInput(input.toolInput), '```']),
-  ].join('\n');
+  const body = (locale: CardLocale) => {
+    const zh = locale === 'zh_cn';
+    const markdown = [
+      zh ? '🔐 **审批请求**' : '🔐 **Approval request**',
+      '',
+      zh ? `**工具** \`${safeText(input.toolName, 512, locale)}\`` : `**Tool** \`${safeText(input.toolName, 512, locale)}\``,
+      ...(input.reason ? ['', zh ? `**理由** ${safeText(input.reason, 2048, locale)}` : `**Reason** ${safeText(input.reason, 2048, locale)}`] : []),
+      ...(input.toolInput === undefined
+        ? ['', zh ? `**调用标识** \`${safeText(input.callId ?? input.id, 512, locale)}\`` : `**Call ID** \`${safeText(input.callId ?? input.id, 512, locale)}\``, '', zh ? '执行参数已显示在当前运行卡的对应工具调用中。' : 'Execution parameters are shown in the matching tool call on the current run card.']
+        : ['', zh ? '**执行内容**' : '**Execution details**', '```json', printableInput(input.toolInput, locale), '```']),
+    ].join('\n');
 
-  const actions = [
+    const actions = [
     ...(allow
       ? [
           {
             tag: 'button',
-            text: { tag: 'plain_text', content: `✅ ${allow.name}` },
+            text: {
+              tag: 'plain_text',
+              content: `✅ ${locale === 'en_us'
+                ? (input.englishOptionNames?.[allow.optionId] ?? allow.name)
+                : allow.name}`,
+            },
             type: 'primary',
             value: {
               cmd: 'approve',
@@ -51,7 +61,12 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
       ? [
           {
             tag: 'button',
-            text: { tag: 'plain_text', content: `⛔ ${reject.name}` },
+            text: {
+              tag: 'plain_text',
+              content: `⛔ ${locale === 'en_us'
+                ? (input.englishOptionNames?.[reject.optionId] ?? reject.name)
+                : reject.name}`,
+            },
             type: 'danger',
             value: {
               cmd: 'approve',
@@ -62,14 +77,8 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
           },
         ]
       : []),
-  ];
-
-  return {
-    schema: '2.0',
-    config: {
-      summary: { content: '审批请求' },
-    },
-    body: {
+    ];
+    return {
       elements: [
         { tag: 'markdown', content: markdown },
         ...(actions.length > 0
@@ -88,24 +97,28 @@ export function renderApprovalCard(input: ApprovalCardInput): object {
             ]
           : []),
       ],
-    },
+    };
   };
+  return localizedCard({
+    zhCn: { summary: '审批请求', body: body('zh_cn') },
+    enUs: { summary: 'Approval request', body: body('en_us') },
+  });
 }
 
-function printableInput(value: unknown): string {
+function printableInput(value: unknown, locale: CardLocale): string {
   let text: string;
   try {
     text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   } catch {
     text = String(value);
   }
-  return safeText(text, 4000).replaceAll('```', '``\u200b`');
+  return safeText(text, 4000, locale).replaceAll('```', '``\u200b`');
 }
 
-function safeText(text: string, maxBytes: number): string {
+function safeText(text: string, maxBytes: number, locale: CardLocale): string {
   const redacted = redactSecrets(text);
   const truncated = truncateUtf8Safe(redacted, maxBytes);
   return Buffer.byteLength(redacted, 'utf8') > maxBytes
-    ? `${truncated}\n…（已截断）`
+    ? `${truncated}\n${locale === 'zh_cn' ? '…（已截断）' : '… (truncated)'}`
     : truncated;
 }

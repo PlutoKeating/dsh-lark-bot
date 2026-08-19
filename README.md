@@ -93,6 +93,11 @@ dsh --profile dsh-lark
 
 在飞书里向 bot 发送普通消息即可开始工作，常用命令：
 
+bot 自带的命令帮助、状态、错误提示与交互卡片均提供中文 / English。Card JSON 2.0 在各文本组件使用飞书原生
+`i18n_content`，同一张群卡会按每位读者的客户端语言显示；无法取得读者语言的普通
+Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成的回答、推理、工具输入输出和用户原文
+保持原样，不自动翻译。
+
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 开始新会话|
@@ -597,7 +602,7 @@ pnpm publish:dual
 | `src/session/` | 会话路由、排队、访问控制|
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入|
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者）|
-| `src/card/` | 流式卡片与审批 / 问答 / 计划决策卡渲染|
+| `src/card/` | 流式卡片、Card JSON 2.0 per-viewer 中英国际化与审批 / 问答 / 计划决策卡渲染|
 | `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略、多机器人 fleet / 交接限制|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
 | `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏运行入口|

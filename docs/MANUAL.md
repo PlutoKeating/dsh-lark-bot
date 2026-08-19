@@ -76,6 +76,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 4. 飞书内命令 · In-chat commands
 
+命令帮助、状态/错误提示和 bot 自有卡片文案均提供中文 / English。支持 Card JSON 2.0 国际化的客户端
+会按每位读者的语言显示同一张共享卡；普通 Markdown、toast 和旧客户端降级因服务端拿不到读者 locale，
+会并列显示中英文。agent 生成的正文、推理、工具内容与用户输入保持原文，不做自动翻译。
+
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 清空当前会话 |

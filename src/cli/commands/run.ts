@@ -42,6 +42,7 @@ import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
 import { startHeartbeat } from '../../guardian/heartbeat.js';
 import { currentVersion } from '../../upgrade/update-check.js';
+import { bilingualMarkdown } from '../../card/i18n.js';
 import { UpdateNotifier } from '../../upgrade/update-notifier.js';
 import { BotFleetStore } from '../../bot/fleet-store.js';
 import { BotHandoffGuard } from '../../bot/handoff-guard.js';
@@ -359,7 +360,10 @@ export async function startBridgeEngine(
             // missing model; report it instead of a misleading "not found".
             await streaming.sendMarkdown(
               first.chatId,
-              `⚠️ 读取 dsh 配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
+              bilingualMarkdown(
+                `⚠️ 读取 dsh 配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
+                `⚠️ Failed to read dsh configuration, so the provider route for model \`${resolvedModel}\` could not be resolved: ${error instanceof Error ? error.message : String(error)}`,
+              ),
               { replyTo: first.messageId },
             );
             return;
@@ -370,7 +374,10 @@ export async function startBridgeEngine(
           // runtime fail with an opaque provider/model mismatch.
           await streaming.sendMarkdown(
             first.chatId,
-            `⚠️ 模型 \`${resolvedModel}\` 未在任何已配置 provider 中找到。可用 \`/model\` 查看列表，或用 \`/model add|remove\` 管理。`,
+            bilingualMarkdown(
+              `⚠️ 模型 \`${resolvedModel}\` 未在任何已配置 provider 中找到。可用 \`/model\` 查看列表，或用 \`/model add|remove\` 管理。`,
+              `⚠️ Model \`${resolvedModel}\` was not found in any configured provider. Use \`/model\` to list models or \`/model add|remove\` to manage them.`,
+            ),
             { replyTo: first.messageId },
           );
           return;

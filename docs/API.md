@@ -476,6 +476,12 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 
 ## 4. 卡片与展示 · Cards & rendering
 
+- `src/card/i18n.ts`：`localizedCard({ zhCn, enUs, config? })` 生成 schema 2.0 默认中文 body/header，
+  设置 `config.locales/use_custom_translation`，并把 `zh_cn`、`en_us` 写入各文本组件的 `i18n_content`；`config.summary.i18n_content` 同步双语
+  消息预览。模块递归提取 button callback value 并要求两种语言严格相同，否则 fail closed。
+  `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级。
+  variant 只翻译 bot 固定文案，agent 回答、推理、工具参数/结果、用户问题与 option 原文不改写。
+
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
   reasoning、工具调用与结果位于 schema 2.0 `collapsible_panel`，运行时展开、结束后默认收起；
   detailed 含工具输入输出与 token usage。面板外的 notation 过程快照持续保留最新推理尾部、最近

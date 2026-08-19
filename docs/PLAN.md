@@ -61,6 +61,7 @@
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
 - [x] 默认逐操作卡片审批（SDK / Web `approval/request` + ACP `session/request_permission`，issue #24）
 - [x] 问答卡（单选 / 多选 / 自由文本；支持直接回复卡片并按 messageId 精确续接）
+- [x] bot UI 中英国际化（issue #27）：Card JSON 2.0 per-viewer `zh_cn` / `en_us`，Markdown/toast 双语降级，agent 内容不翻译
 - [x] 关键任务计划门禁（完整计划消息 → 批准 / 继续规划 + feedback → 原 agent turn 自动续跑）
 - [x] 异步任务队列（scope 内并行 run + 消息批量合并；workflow 编排仍待上游能力）
 - [ ] 沙箱调度与 workflow 编排

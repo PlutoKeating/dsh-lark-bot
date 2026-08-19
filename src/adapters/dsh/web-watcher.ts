@@ -5,6 +5,7 @@ import { zstdDecompressSync } from 'node:zlib';
 import type { ScopeDirectory } from '../../bridge/scope-directory.js';
 import type { StreamingChannel } from '../../bridge/types.js';
 import { log } from '../../core/logger.js';
+import { bilingualMarkdown } from '../../card/i18n.js';
 import type { SessionStore } from '../../session/store.js';
 import type { WorkspaceStore } from '../../workspace/store.js';
 
@@ -150,13 +151,10 @@ export function startWebSessionWatcher(input: WebSessionWatcherInput): WebSessio
         const title = meta.title || sid.slice(0, 24);
         await channel.sendMarkdown(
           dest.chatId,
-          [
-            `📣 网页端会话「${title}」完成了一轮：`,
-            '',
-            head,
-            '',
-            '—— 飞书已自动进入该会话，继续发消息就在这个会话里干活。',
-          ].join('\n'),
+          bilingualMarkdown(
+            [`📣 网页端会话「${title}」完成了一轮：`, '', head, '', '—— 飞书已自动进入该会话，继续发消息就在这个会话里干活。'].join('\n'),
+            [`📣 Web session “${title}” completed a turn:`, '', head, '', '— Feishu/Lark is now attached to this session; keep messaging here to continue.'].join('\n'),
+          ),
           dest.threadId ? { threadId: dest.threadId } : undefined,
         );
       } catch (error) {

@@ -4,6 +4,7 @@ import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { ScopeDirectory } from '../bridge/scope-directory.js';
 import type { SendOptions } from '../bridge/send-options.js';
 import { renderApprovalCard } from '../card/approval-card.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 
@@ -69,7 +70,14 @@ export function buildApprovalHandler(
         : undefined;
       cardMessageId = await deps.channel.sendCard(
         destination.chatId,
-        renderApprovalCard({ ...request, actionScope: scope }),
+        renderApprovalCard({
+          ...request,
+          actionScope: scope,
+          englishOptionNames: {
+            'allow-once': 'Allow once',
+            'reject-once': 'Reject',
+          },
+        }),
         options,
       );
       const outcome = await promise;
@@ -95,7 +103,14 @@ async function settleCancelledCard(
   options: SendOptions | undefined,
 ): Promise<void> {
   try {
-    await deps.channel.sendMarkdown?.(chatId, '⏹ **操作审批已取消** — 原任务已结束或断开', options);
+    await deps.channel.sendMarkdown?.(
+      chatId,
+      bilingualMarkdown(
+        '⏹ **操作审批已取消** — 原任务已结束或断开',
+        '⏹ **Operation approval cancelled** — the original task finished or disconnected',
+      ),
+      options,
+    );
   } catch (error) {
     log.warn('approval-card', 'cancel-confirm-failed', { error });
   }

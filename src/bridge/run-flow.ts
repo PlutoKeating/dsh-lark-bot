@@ -16,6 +16,7 @@ import {
   type RunState,
 } from '../card/run-state.js';
 import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 import { renderApprovalCard } from '../card/approval-card.js';
 import { renderQuestionCard } from '../card/question-card.js';
 import { log } from '../core/logger.js';
@@ -74,7 +75,10 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
 
   const activeBefore = input.activeRuns.count(input.scope);
   if (input.maxConcurrency !== undefined && activeBefore >= input.maxConcurrency) {
-    await input.channel.sendMarkdown(input.chatId, '当前会话的并行任务数已达上限，请稍后再试或 `/stop` 部分任务。', {
+    await input.channel.sendMarkdown(input.chatId, bilingualMarkdown(
+      '当前会话的并行任务数已达上限，请稍后再试或 `/stop` 部分任务。',
+      'This session has reached its parallel-task limit. Try again later or use `/stop` to stop some tasks.',
+    ), {
       ...replyOptions,
     });
     return;
@@ -150,7 +154,7 @@ async function reportRunFailure(
   try {
     await input.channel.sendMarkdown(
       input.chatId,
-      `⚠️ agent 运行失败：${errorMessage(error)}`,
+      bilingualMarkdown(`⚠️ agent 运行失败：${errorMessage(error)}`, `⚠️ Agent run failed: ${errorMessage(error)}`),
       replyOptions,
     );
   } catch {
@@ -281,8 +285,14 @@ async function runAttempt(
                 await input.channel.sendMarkdown(
                   input.chatId,
                   healKind === 'corrupt'
-                    ? `⚠️ 会话记录损坏，已归档并重置（归档：\`${archivePath ?? '归档失败'}\`）。请重新发送你的消息。`
-                    : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+                    ? bilingualMarkdown(
+                        `⚠️ 会话记录损坏，已归档并重置（归档：\`${archivePath ?? '归档失败'}\`）。请重新发送你的消息。`,
+                        `⚠️ The session record was corrupt, so it was archived and reset (archive: \`${archivePath ?? 'archive failed'}\`). Please send your message again.`,
+                      )
+                    : bilingualMarkdown(
+                        '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+                        '⚠️ The session state was invalid, so its binding was reset. History was preserved. Please send your message again.',
+                      ),
                   { ...replyOptions },
                 );
                 void run.stop();
@@ -511,15 +521,21 @@ async function runAttempt(
         await input.channel.sendMarkdown(
           input.chatId,
           healKind === 'corrupt'
-            ? `⚠️ 会话记录损坏，已归档并重置（归档：\`${archivePath ?? '归档失败'}\`）。请重新发送你的消息。`
-            : '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+            ? bilingualMarkdown(
+                `⚠️ 会话记录损坏，已归档并重置（归档：\`${archivePath ?? '归档失败'}\`）。请重新发送你的消息。`,
+                `⚠️ The session record was corrupt, so it was archived and reset (archive: \`${archivePath ?? 'archive failed'}\`). Please send your message again.`,
+              )
+            : bilingualMarkdown(
+                '⚠️ 会话状态异常，已重置会话映射（历史日志保留，未删除）。请重新发送你的消息。',
+                '⚠️ The session state was invalid, so its binding was reset. History was preserved. Please send your message again.',
+              ),
           { ...replyOptions },
         );
         return;
       }
     }
     try {
-      await input.channel.sendMarkdown(input.chatId, `⚠️ agent 运行失败：${runErrorText}`, {
+      await input.channel.sendMarkdown(input.chatId, bilingualMarkdown(`⚠️ agent 运行失败：${runErrorText}`, `⚠️ Agent run failed: ${runErrorText}`), {
         ...replyOptions,
       });
     } catch {
