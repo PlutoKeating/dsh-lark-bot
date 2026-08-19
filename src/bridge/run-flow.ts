@@ -9,12 +9,13 @@ import type { PlanApprovalRegistry } from '../bot/plan-approvals.js';
 import {
   finalizeIfRunning,
   initialState,
+  markFinalDeliveryFailed,
   markIdleTimeout,
   markInterrupted,
   reduce,
   type RunState,
 } from '../card/run-state.js';
-import { renderCard } from '../card/run-renderer.js';
+import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
 import { renderApprovalCard } from '../card/approval-card.js';
 import { renderQuestionCard } from '../card/question-card.js';
 import { log } from '../core/logger.js';
@@ -23,7 +24,7 @@ import type { SessionArchive } from '../session/archive.js';
 import type { RoleDefinition } from '../bot/role-store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import type { GitWorktreeManager } from '../workspace/git-worktree.js';
-import type { StreamingChannel } from './types.js';
+import type { CardStreamController, StreamingChannel } from './types.js';
 import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
 import { archiveSessionDir, classifySessionError } from '../session/heal.js';
@@ -202,14 +203,21 @@ async function runAttempt(
   const density = input.densityStore?.get(input.scope) ?? 'standard';
 
   try {
-    await input.channel.streamCard(
-      input.chatId,
-      renderCard(state, density),
-      async (controller) => {
+    const produceCard = async (
+      controller: CardStreamController,
+      renderer: typeof renderCard,
+    ): Promise<void> => {
+        const safeUpdate = async (): Promise<void> => {
+          try {
+            await controller.update(renderer(state, density, Date.now()));
+          } catch (error) {
+            log.warn('run-flow', 'card-update-failed', { scope: input.scope, error });
+          }
+        };
         let timeoutTimer: NodeJS.Timeout | undefined;
         let armTimeout: (() => void) | undefined;
         const ticker = setInterval(() => {
-          void controller.update(renderCard(state, density, Date.now())).catch(() => {
+          void controller.update(renderer(state, density, Date.now())).catch(() => {
             // The card may already be closed; the event loop still owns the
             // final state transition below.
           });
@@ -284,7 +292,7 @@ async function runAttempt(
             // Every agent event counts as activity: restart the idle window so
             // a long but responsive run is never killed by the wall clock.
             armTimeout?.();
-            await controller.update(renderCard(state, density));
+            await safeUpdate();
           }
         };
 
@@ -342,16 +350,61 @@ async function runAttempt(
           state = timedOut
             ? markIdleTimeout(state, timeoutMs / 60_000)
             : finalizeIfRunning(state);
-          await controller.update(renderCard(state, density, Date.now()));
+          await safeUpdate();
+          if (state.terminal === 'done' && assistantOutput.trim() !== '') {
+            try {
+              await input.channel.sendMarkdown(input.chatId, assistantOutput, {
+                ...replyOptions,
+              });
+            } catch (error) {
+              const message = errorMessage(error);
+              log.fail('run-flow', error, { scope: input.scope, step: 'final-answer' });
+              state = markFinalDeliveryFailed(state, message, assistantOutput);
+              await safeUpdate();
+            }
+          }
         } finally {
           clearInterval(ticker);
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           unsubscribeQuestion?.();
           unsubscribePlan?.();
         }
-      },
-      replyOptions,
-    );
+    };
+    let producerStarted = false;
+    let producerCompleted = false;
+    const streamWith = async (renderer: typeof renderCard): Promise<void> => {
+      await input.channel.streamCard(
+        input.chatId,
+        renderer(state, density),
+        async (controller) => {
+          producerStarted = true;
+          await produceCard(controller, renderer);
+          producerCompleted = true;
+        },
+        replyOptions,
+      );
+    };
+    try {
+      await streamWith(renderCard);
+    } catch (error) {
+      if (producerStarted && !producerCompleted) throw error;
+      if (producerCompleted) {
+        log.warn('run-flow', 'card-stream-finalize-failed', { scope: input.scope, error });
+      } else {
+        log.warn('run-flow', 'native-card-fallback', { scope: input.scope, error });
+      }
+      if (!producerStarted) {
+        try {
+          await streamWith(renderLegacyCard);
+        } catch (fallbackError) {
+          log.warn('run-flow', 'legacy-card-failed', { scope: input.scope, error: fallbackError });
+          if (producerStarted && !producerCompleted) throw fallbackError;
+          if (!producerStarted) {
+            await produceCard({ update: async () => {} }, renderLegacyCard);
+          }
+        }
+      }
+    }
     // SDK adapters surface session-level failures (e.g. a resume rejected by
     // dsh's persistence layer with "id collision") as an error EVENT rather
     // than a thrown error. When we were resuming a native session and the run

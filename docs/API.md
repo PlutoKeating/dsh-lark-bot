@@ -439,8 +439,12 @@ export async function buildAgentAdapter(
 ## 4. 卡片与展示 · Cards & rendering
 
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
-  detailed 含完整 reasoning、工具输入输出与 token usage。
-- `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新。
+  reasoning、工具调用与结果位于 schema 2.0 `collapsible_panel`，运行时展开、结束后默认收起；
+  detailed 含工具输入输出与 token usage。面板外的 notation 过程快照持续保留最新推理尾部、最近
+  工具与结果；若平台拒绝 `collapsible_panel`，run-flow / guardian 会重试无该组件的 legacy 流式卡。
+  `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。
+- `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
+  `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
 - `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
   `extractQuestionAnswer(kind, value, options)`。
@@ -464,6 +468,12 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
+
+`src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；单次卡片 update 失败不会中断事件消费或最终
+回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
+`sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
+路由。发送失败不会丢失已记录的 exchange，过程卡会写明失败原因并回填完整回答正文；中断、超时和
+agent 错误不会发送不完整的最终回答。
 
 ## 5. 安全模块 · Security
 
@@ -713,10 +723,10 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    凭据 / 白名单创建 `@larksuite/channel`）；只有 admin（无 admin 时回退 allowedUsers）
    可触发控制命令。
 3. **safe**：`/safemode` 通过安全 profile 探测后，以 `DshAdapter`（`dsh --profile <safe>
-   "<prompt>"`，headless 回退）或 `SdkDshAdapter`（`dsh-lark-safe-sdk`，默认优先，实时流式
-   思考 / 工具 / 文字）逐条执行对话；SDK 模式以原生 `session(id)` 续跑，headless 模式把历史
-   上下文拼接进 prompt（每 scope 上限 30 条）。任务期间守护通过 `streamCard` 渲染实时卡片
-   （`renderCard` / `RunState`，含已运行秒数、无响应提示、⏹ 终止按钮），并受
+   "<prompt>"`，headless 回退）或 `SdkDshAdapter`（`dsh-lark-safe-sdk`，默认优先）逐条执行对话；
+   SDK 模式以原生 `session(id)` 续跑，headless 模式把历史上下文拼接进 prompt（每 scope 上限
+   30 条）。任务期间守护通过 `streamCard` + `renderCard` / `RunState` 在原生折叠面板实时展示
+   思考 / 工具，正常完成后另发最终 Markdown（含已运行秒数、无响应提示、⏹ 终止按钮），并受
    `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` 空闲看门狗约束（任务持续无活动事件才调用
    `run.stop()` 并渲染超时卡，活跃任务不会被误杀）；
    同一 scope 同时只允许一个安全任务，忙碌时新消息立即回执；“/safemode stop”与卡片按钮均可

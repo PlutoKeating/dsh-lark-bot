@@ -23,6 +23,7 @@
 | **P18 更新体验与热管理** Update experience & hot management | 更新链路架构审查（docs/UPGRADE.md）；doctor 更新提醒（`DSH_LARK_UPGRADE_CHECK`）；guardian 单元稳定路径（避免 npx 缓存）；运行中实例排队重启 / 热重载 / 版本 pin 漂移自愈（issue #15） | 🚧 进行中 In progress |
 | **P19 群聊会话隔离** Group session isolation | `/isolation group|topic|member` 持久化选择；消息与卡片动作共用 scope 路由；成员轮次在群卡中明确标记，既有各级会话数据保持可恢复（issue #17） | ✅ 已完成 Done |
 | **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
+| **P21 原生折叠过程** Native collapsible process | schema 2.0 原生折叠面板实时承载 reasoning / tools，最终回答单独发送并保留 reply/thread 路由（issue #19） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -74,7 +75,7 @@
   / `guardian install|uninstall|status|run`。
 - **P15 done（安全模式实时可见性，0.10.0）**：安全模式优先预置官方 SDK 流式 runtime
   （`dsh-lark-safe-sdk`，无第三方插件、不挂载 bridge 回调工具），复用正常模式的
-  `RunState` / `renderCard` / `streamCard` 实时展示思考 / 工具 / web search / 打字机文字；
+  `RunState` / `renderCard` / `streamCard` 以折叠面板实时展示思考 / 工具 / web search，最终回答单独发送；
   SDK 预置失败自动回退 headless 活动卡；新增单任务空闲超时看门狗（真正 stop 子进程）、
   `/safemode stop`、卡片 ⏹ 按钮、同 scope 忙碌回执与 `guardian-safe` 结构化日志；正常模式
   补充排队回执与“已运行 Ns / 无响应 Ns”卡片提示。
@@ -85,6 +86,10 @@
   Markdown 消息发送，再用 schema 2.0 form card 收集批准 / 继续规划与可选反馈；工具阻塞等待并在
   决策后续接同一 agent turn；pre-execute 强制阻断未批准的 mutating/execute 调用，run/callback
   结束按 session 精确取消并撤回卡片，等待期间只暂停所属 run 的 idle watchdog。
+- **P21 done（issue #19）**：运行卡使用飞书 Card JSON 2.0 `collapsible_panel` 实时展示推理、工具
+  调用与结果，运行中展开、完成后默认收起；最终回答作为独立 Markdown 消息发送并继承原 reply/thread
+  路由。面板外的兼容快照保留最新推理与最近工具结果，平台拒绝折叠组件时自动重试 legacy 流式卡；
+  最终消息发送失败会把完整回答回填过程卡，同时 exchange 仍持久化。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`

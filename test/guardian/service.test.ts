@@ -437,10 +437,17 @@ describe('GuardianService', () => {
       message({ messageId: 'm2', content: 'which plugin looks broken?' }) as never,
     );
     expect(harness.prompts[0]).toContain('which plugin looks broken?');
-    // The answer streams into the run card instead of a one-shot markdown.
+    // The process stays in the card while the answer is a separate reply.
     expect(harness.streamCalls.at(-1)?.options).toEqual({ replyTo: 'm2' });
-    expect(JSON.stringify(harness.streamed.at(-1))).toContain('fake answer');
+    expect(JSON.stringify(harness.streamed.at(-1))).not.toContain('fake answer');
     expect(JSON.stringify(harness.streamed.at(-1))).toContain('已完成');
+    expect(harness.sent).toContainEqual(
+      expect.objectContaining({
+        chatId: 'chat-1',
+        input: { markdown: 'fake answer' },
+        options: { replyTo: 'm2' },
+      }),
+    );
 
     await harness.handlers.message?.(
       message({ messageId: 'm3', content: 'disable it' }) as never,
@@ -448,6 +455,41 @@ describe('GuardianService', () => {
     expect(harness.prompts[1]).toContain('which plugin looks broken?');
     expect(harness.prompts[1]).toContain('fake answer');
     expect(harness.prompts[1]).toContain('disable it');
+  });
+
+  it('marks a failed safe-mode final reply on the process card', async () => {
+    const harness = await makeHarness({ state: { profileSeenUp: true } });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    const send = harness.channel.send as ReturnType<typeof vi.fn>;
+    send.mockRejectedValueOnce(new Error('final reply rejected'));
+
+    await harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'diagnose it' }) as never,
+    );
+
+    expect(JSON.stringify(harness.streamed.at(-1))).toContain('最终回答发送失败');
+    expect(JSON.stringify(harness.streamed.at(-1))).toContain('final reply rejected');
+    expect(JSON.stringify(harness.streamed.at(-1))).toContain('fake answer');
+  });
+
+  it('falls back to a legacy safe-mode process card and still sends the answer', async () => {
+    const harness = await makeHarness({ state: { profileSeenUp: true } });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+    await harness.handlers.message?.(message({ content: '/safemode' }) as never);
+    const stream = harness.channel.stream as ReturnType<typeof vi.fn>;
+    stream.mockRejectedValueOnce(new Error('collapsible_panel unsupported'));
+
+    await harness.handlers.message?.(
+      message({ messageId: 'm2', content: 'diagnose it' }) as never,
+    );
+
+    expect(JSON.stringify(harness.streamCalls.at(-1)?.input)).not.toContain('collapsible_panel');
+    expect(harness.sent).toContainEqual(
+      expect.objectContaining({ input: { markdown: 'fake answer' }, options: { replyTo: 'm2' } }),
+    );
   });
 
   it('rejects unauthorized senders silently', async () => {

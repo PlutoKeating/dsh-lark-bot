@@ -37,4 +37,58 @@ describe('renderCard', () => {
     expect(serialized).toContain('成员隔离会话：ou_member');
     expect(serialized).toContain('"scope":"chat:member:ou_member"');
   });
+
+  it('renders reasoning and tools in a native collapsible panel', () => {
+    let state = reduce(initialState, { type: 'thinking', delta: 'inspect the code' });
+    state = reduce(state, { type: 'tool_use', id: 't1', name: 'read', input: 'src' });
+    const running = renderCard(state, 'detailed') as {
+      body: { elements: Array<Record<string, unknown>> };
+    };
+    const panel = running.body.elements.find((element) => element.tag === 'collapsible_panel');
+    expect(panel).toMatchObject({ tag: 'collapsible_panel', expanded: true });
+    expect(JSON.stringify(panel)).toContain('inspect the code');
+    expect(JSON.stringify(panel)).toContain('read');
+    expect((running as unknown as { config: { summary: { content: string } } }).config.summary.content)
+      .toContain('inspect the code');
+
+    state = reduce(state, { type: 'tool_result', id: 't1', output: 'file contents', isError: false });
+    const standard = renderCard(state, 'standard') as {
+      config: { summary: { content: string } };
+      body: { elements: Array<Record<string, unknown>> };
+    };
+    expect(JSON.stringify(standard.body.elements)).toContain('file contents');
+    expect(standard.config.summary.content).toContain('file contents');
+    const topLevelFallback = standard.body.elements.find(
+      (element) => element.tag === 'markdown' && JSON.stringify(element).includes('过程快照'),
+    );
+    expect(JSON.stringify(topLevelFallback)).toContain('file contents');
+
+    state = reduce(state, { type: 'done', sessionId: 's1', terminationReason: 'normal' });
+    const finished = renderCard(state, 'detailed') as {
+      body: { elements: Array<Record<string, unknown>> };
+    };
+    expect(finished.body.elements.find((element) => element.tag === 'collapsible_panel')).toMatchObject({
+      expanded: false,
+    });
+  });
+
+  it('keeps final answer text out of the process card', () => {
+    let state = reduce(initialState, { type: 'text', delta: 'final answer' });
+    state = reduce(state, { type: 'done', sessionId: 's1', terminationReason: 'normal' });
+    expect(JSON.stringify(renderCard(state, 'detailed'))).not.toContain('final answer');
+  });
+
+  it('keeps both the beginning and latest part of long reasoning visible', () => {
+    const reasoning = `BEGIN-${'x'.repeat(2_400)}-LATEST`;
+    const state = reduce(initialState, { type: 'thinking', delta: reasoning });
+    const card = renderCard(state, 'detailed') as {
+      body: { elements: Array<Record<string, unknown>> };
+    };
+    const panel = card.body.elements.find((element) => element.tag === 'collapsible_panel');
+    expect(JSON.stringify(panel)).toContain('BEGIN-');
+    expect(JSON.stringify(panel)).toContain('-LATEST');
+    expect(JSON.stringify(panel)).toContain('最新进展');
+    const snapshot = card.body.elements.find((element) => JSON.stringify(element).includes('过程快照'));
+    expect(JSON.stringify(snapshot)).toContain('-LATEST');
+  });
 });

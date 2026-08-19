@@ -200,7 +200,8 @@ dsh-lark-bot guardian uninstall
   飞书通道；只有管理员（无管理员时回退白名单用户）能触发控制命令。
 - `/safemode` 进入仅核心安全模式：优先预置 `~/.dsh/profiles/<dsh-profile>-safe-sdk`
   （官方 `dsh-base` + `dsh-sdk-jsonrpc-server`，不加载第三方插件、不挂载 bridge 回调工具），
-  以 SDK 流式引擎实时展示思考 / 工具调用 / web search / 打字机式文字，并支持原生会话续跑；
+  以 SDK 流式引擎在原生折叠面板实时展示思考 / 工具调用 / web search、单独发送最终回答，
+  并支持原生会话续跑；
   SDK 预置失败（如缺 pnpm）时回退 `~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` +
   `dsh-headless`），历史上下文自动拼接（每 scope 上限 30 条）。任一引擎下任务卡片都实时显示
   “正在思考 / 已运行 Ns / 无响应 Ns”，任务结束 / 出错 / 超时都有明确终态；单任务空闲超时默认
@@ -217,6 +218,12 @@ dsh-lark-bot guardian uninstall
 `dsh-lark-bot guardian uninstall`。
 
 ## 5. 会话与工作区 · Sessions & workspaces
+
+- 正常任务与安全模式任务都使用飞书 Card JSON 2.0 原生折叠面板实时展示推理、工具调用与结果；
+  运行中默认展开，结束后默认收起。最终回答另发一条 Markdown 消息并保持原回复/话题位置，便于
+  直接引用和转发。面板外始终有最新推理尾部与最近工具结果的兼容快照；若平台拒绝折叠组件，bot 会
+  自动重试不含该组件的 legacy 流式卡。若最终消息发送失败，过程卡会明确提示并回填回答正文，已写入
+  的会话记录不会丢失。
 
 - SDK / ACP / Web agent 对修改文件、运行脚本等较大或高风险动作使用计划门禁：先发送完整计划，
   再等待“批准，开始执行 / 继续规划”卡片；可在卡内填写约束或修改意见。批准后原任务自动续跑，

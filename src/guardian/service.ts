@@ -25,12 +25,13 @@ import { parseCardDensity } from '../card/density.js';
 import {
   finalizeIfRunning,
   initialState,
+  markFinalDeliveryFailed,
   markIdleTimeout,
   markInterrupted,
   reduce,
   type RunState,
 } from '../card/run-state.js';
-import { renderCard } from '../card/run-renderer.js';
+import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
 import { resolveAppPaths, type AppPaths } from '../config/app-paths.js';
 import { discoverDshBin, resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
@@ -937,12 +938,17 @@ export class GuardianService {
     });
 
     try {
-      await this.streamCard(
-        msg.chatId,
-        renderCard(state, density, Date.now()),
-        async (controller) => {
+      let cardRenderer: typeof renderCard = renderCard;
+      const produceCard = async (controller: CardStreamController): Promise<void> => {
+          const safeUpdate = async (): Promise<void> => {
+            try {
+              await controller.update(cardRenderer(state, density, Date.now()));
+            } catch (error) {
+              this.log().warn('guardian-safe', 'card-update-failed', { runId, scope, error });
+            }
+          };
           const ticker = setInterval(() => {
-            void controller.update(renderCard(state, density, Date.now())).catch(() => {
+            void controller.update(cardRenderer(state, density, Date.now())).catch(() => {
               // Best-effort heartbeat; the event loop below owns the final
               // state transition.
             });
@@ -972,7 +978,7 @@ export class GuardianService {
                 // Every agent event counts as activity: restart the idle
                 // window so a long but responsive task is never cut short.
                 armTimeout?.();
-                await controller.update(renderCard(state, density, Date.now()));
+                await safeUpdate();
               }
             };
             // Idle watchdog: only a task that goes silent for the configured
@@ -1004,14 +1010,76 @@ export class GuardianService {
             if (!timedOut && state.terminal === 'running') {
               state = finalizeIfRunning(state);
             }
-            await controller.update(renderCard(state, density, Date.now()));
+            await safeUpdate();
+            const answer = finalText ?? assistantOutput.trim();
+            if (state.terminal === 'done' && answer) {
+              try {
+                if (!this.channel) throw new Error('guardian channel is not ready');
+                await this.channel.send(msg.chatId, { markdown: answer }, { replyTo: msg.messageId });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.log().fail('guardian-safe', error, {
+                  runId,
+                  scope,
+                  step: 'final-answer',
+                });
+                state = markFinalDeliveryFailed(state, message, answer);
+                await safeUpdate();
+              }
+            }
           } finally {
             clearInterval(ticker);
             if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           }
-        },
-        { replyTo: msg.messageId },
-      );
+      };
+      let producerStarted = false;
+      let producerCompleted = false;
+      const streamWith = async (): Promise<void> => {
+        await this.streamCard(
+          msg.chatId,
+          cardRenderer(state, density, Date.now()),
+          async (controller) => {
+            producerStarted = true;
+            await produceCard(controller);
+            producerCompleted = true;
+          },
+          { replyTo: msg.messageId },
+        );
+      };
+      try {
+        await streamWith();
+      } catch (error) {
+        if (producerStarted && !producerCompleted) throw error;
+        if (producerCompleted) {
+          this.log().warn('guardian-safe', 'card-stream-finalize-failed', {
+            runId,
+            scope,
+            error,
+          });
+        } else {
+          this.log().warn('guardian-safe', 'native-card-fallback', { runId, scope, error });
+        }
+        if (!producerStarted) {
+          cardRenderer = renderLegacyCard;
+          try {
+            await streamWith();
+          } catch (fallbackError) {
+            this.log().warn('guardian-safe', 'legacy-card-failed', {
+              runId,
+              scope,
+              error: fallbackError,
+            });
+            if (producerStarted && !producerCompleted) throw fallbackError;
+            if (!producerStarted) {
+              await produceCard({
+                update: async () => {},
+                messageId: '',
+                current: cardRenderer(state, density, Date.now()),
+              });
+            }
+          }
+        }
+      }
     } catch (error) {
       this.log().fail('guardian-safe', error, { runId, scope });
       state = markInterrupted(state);

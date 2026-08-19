@@ -52,8 +52,10 @@
 ### 4.1 桥接（bridge）
 - 通过飞书/Lark **WebSocket 长连接**（`@larksuite/channel` + PersonalAgent 应用）收发消息，免公网服务器、免域名、免内网穿透。
 - 私聊直接发消息、群聊 `@bot`、话题 / thread、文档评论均可触发。
-- **流式卡片**：文本与工具调用实时更新在同一张卡片上。
-- **COT 过程消息**：可选先发过程消息再发最终答案。
+- **流式过程卡**：thinking、工具调用与结果实时更新在 Card JSON 2.0 原生折叠面板中；面板内同时
+  保留开头与最新推理，面板外持续更新兼容快照。平台拒绝折叠组件时自动回退 legacy 流式卡。
+- **最终回答**：正常完成后作为独立 Markdown 消息发送，继承 reply/thread 路由；过程卡失败不能
+  阻断最终投递，最终消息发送失败时把回答正文回填卡片且不丢失会话记录。
 - 图片 / 文件：下载到本地后交给 agent 处理。
 
 > 状态说明：私聊、群聊 `@bot`、话题（topic）已实现；**文档评论**与**富文本回复**为规划中能力，
@@ -177,8 +179,8 @@
   `dsh-base` + `dsh-sdk-jsonrpc-server`，无第三方插件、不挂载 bridge 回调工具），失败回退
   headless profile。
 - **受限对话自愈（实时可见）**：安全模式下普通消息优先经 SDK 流式引擎执行——复用正常模式的
-  `RunState` / `renderCard` / `streamCard`，实时展示思考、工具调用（含 web search）、打字机式
-  文字与 token 用量，并支持原生 `session(id)` 续跑；SDK 不可用时回退
+  `RunState` / `renderCard` / `streamCard`，以原生折叠面板实时展示思考、工具调用（含 web search）
+  与 token 用量并单独发送最终回答；支持原生 `session(id)` 续跑；SDK 不可用时回退
   `dsh --profile <safe> "<prompt>"` 逐条对话（每 scope 最近 30 条上下文自动拼接，近似记忆），
   任务期间卡片仍实时显示“正在思考 / 已运行 Ns / 无响应 Ns”。任一模式都有空闲超时
   （`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟：任务持续无活动事件才调用 `run.stop()`
