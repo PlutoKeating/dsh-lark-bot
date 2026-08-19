@@ -20,6 +20,7 @@ import {
   type DetachedSpawn,
 } from '../guardian/process.js';
 import { discoverDshBin } from '../config/dsh-runtime.js';
+import { restartInstalledProfileService } from '../service/integration.js';
 
 export interface RunResult {
   code: number;
@@ -106,6 +107,7 @@ export interface RestartProfileOptions {
   findProcess?: typeof findProfileProcess;
   /** Extra args appended to the relaunch (e.g. environment passthrough). */
   extraArgs?: readonly string[];
+  restartManagedService?: typeof restartInstalledProfileService;
 }
 
 export interface RestartProfileResult {
@@ -117,6 +119,18 @@ export async function restartProfileProcess(
   profile: string,
   options: RestartProfileOptions = {},
 ): Promise<RestartProfileResult> {
+  const managed = await (
+    options.restartManagedService ?? restartInstalledProfileService
+  )(profile, {
+    ...(options.env ? { env: options.env } : {}),
+    ...(options.home ? { home: options.home } : {}),
+    respectIntent: false,
+  });
+  if (managed.installed) {
+    return managed.restarted
+      ? { ok: true, message: `已通过后台服务重启 dsh --profile ${profile}。` }
+      : { ok: false, message: `后台服务重启失败：${managed.detail}` };
+  }
   const findProcess = options.findProcess ?? findProfileProcess;
   const proc = await findProcess(profile);
   if (!proc) {

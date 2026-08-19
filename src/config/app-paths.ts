@@ -5,6 +5,12 @@ export interface AppPaths {
   root: string;
   configFile: string;
   activeProfileFile: string;
+  serviceDir: string;
+  serviceEnvFile: (profile: string) => string;
+  serviceMetadataFile: (profile: string) => string;
+  serviceIntentFile: (profile: string) => string;
+  serviceLockDir: (profile: string) => string;
+  serviceLogFile: (profile: string) => string;
   profileDir: (profile: string) => string;
   profilePath: (profile: string, ...parts: string[]) => string;
   sessionsFile: (profile: string) => string;
@@ -29,6 +35,12 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     root,
     configFile: join(root, 'config.json'),
     activeProfileFile: join(root, 'active-profile'),
+    serviceDir: join(root, 'service'),
+    serviceEnvFile: (profile) => join(root, 'service', `${profile}.env`),
+    serviceMetadataFile: (profile) => join(root, 'service', `${profile}.json`),
+    serviceIntentFile: (profile) => join(root, 'service', `${profile}.intent.json`),
+    serviceLockDir: (profile) => join(root, 'service', `${profile}.lock`),
+    serviceLogFile: (profile) => profilePath(profile, 'logs', 'service.log'),
     profileDir,
     profilePath,
     sessionsFile: (profile) => profilePath(profile, 'sessions.json'),

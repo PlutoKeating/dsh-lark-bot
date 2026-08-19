@@ -547,8 +547,9 @@ export interface Logger {
 - `dsh-lark-bot/plan`：`lark_request_plan_approval` 工具（见 §9），完整计划消息 + 决策卡，
   配置缺省时读取 `DSH_LARK_PLAN_URL` / `DSH_LARK_NOTIFY_TOKEN`。
 
-常驻 / 守护 / 重启由 dsh 宿主负责；本项目不再包含独立后台服务层。唯一进程级例外是默认安装的
-「安全网守护」（见 §10）：它独立于 dsh / Cordis 常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
+桥接引擎始终由 dsh 宿主进程内的插件运行，不存在第二套 bridge runtime。可选 `service` 命令只把
+标准 dsh profile 交给 OS 用户服务托管；默认安装的「安全网守护」（见 §10）则独立于 dsh / Cordis
+常驻，仅在 dsh 下线后接管飞书通道。桥接引擎
 启动后开始向 `profiles/<bridge-profile>/guardian/heartbeat.json` 写心跳，引擎停止时停止心跳。
 
 ## 8. CLI · Command line
@@ -573,6 +574,16 @@ export interface Logger {
 - `dsh-lark-bot setup`：安装 bundle 的同时**默认安装安全网守护**（`--no-guardian` 可跳过；见 §10）。
 - `dsh-lark-bot guardian run|install|uninstall|status`：安全网守护常驻 / 系统服务安装 /
   卸载 / 状态查询（见 §10）。
+- `dsh-lark-bot service install|start|status|restart|stop|uninstall [--profile <name>]`：管理正常
+  dsh profile 的用户级后台服务。Linux 为 systemd user unit（不可用时 XDG supervisor），macOS
+  为 LaunchAgent，Windows 为登录计划任务；异常退出自动重启，stop 不删除开机入口，uninstall
+  删除入口与私有 env 快照，但保留 profile 数据和日志。
+- `service/<profile>.intent.json`（0600）保存 `running|stopped` 运维意图；guardian 尊重 stopped，
+  uninstall 后也不会 detached 回拉。mutation 使用 profile 级原子目录锁；install/start 在 OS
+  service 未运行但发现同 profile 前台进程时 fail closed，要求先停止前台实例。
+- `dsh-lark-bot service logs [--profile <name>] [-n <count>] [-f]`：读取 / 跟随
+  `profiles/<profile>/logs/service.log`。服务元数据与环境分别为 `service/<profile>.json`、`.env`
+  （POSIX 0600；Windows 以 owner-only ACL 收紧）；环境仅快照 `DSH_LARK_*`、PATH/HOME/DSH_HOME、DeepSeek key 与 provider 实际引用键。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
@@ -745,8 +756,10 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    `DSH_LARK_GUARDIAN_ENGINE_DEAD_MS` 判定引擎已死）→ 不连接飞书；记录 `profileSeenUp`。
 2. **takeover**：`profileSeenUp` 且 dsh 持续下线（`DSH_LARK_GUARDIAN_STALE_MS` 心跳过期 +
    无进程，连续 `takeoverGracePolls` 次）→ 守护先**自动重启完整 profile**
-   （`node <dsh-bin> --profile <name>`；`relaunchCooldownMs` 冷却默认 60s，spawn 前二次
-   进程探测防双实例），并在 `relaunchReadyTimeoutMs` 就绪窗口（默认 15s）内等待桥接心跳 /
+   （已安装正常引擎 service 时通过对应 controller restart；显式 stop/uninstall intent 会抑制
+   自动拉起；从未安装 service 时才 `node <dsh-bin> --profile <name>` detached，spawn 前二次
+   进程探测防双实例；`relaunchCooldownMs` 冷却默认 60s），并在
+   `relaunchReadyTimeoutMs` 就绪窗口（默认 15s）内等待桥接心跳 /
    进程恢复：就绪则回到 standby，超时则记录失败并**接管**飞书长连接（用桥接 profile 的
    凭据 / 白名单创建 `@larksuite/channel`）；只有 admin（无 admin 时回退 allowedUsers）
    可触发控制命令。
@@ -759,8 +772,8 @@ export async function buildGuardianService(env: RuntimeEnv, overrides?): Promise
    `run.stop()` 并渲染超时卡，活跃任务不会被误杀）；
    同一 scope 同时只允许一个安全任务，忙碌时新消息立即回执；“/safemode stop”与卡片按钮均可
    终止当前任务。`/safemode plugins` 执行 `dsh plugin --profile <name> list`；
-   `/safemode exit` 以 detached 方式重启完整 profile（同样纳入就绪窗口与冷却），短暂延迟后
-   断开飞书连接并回到 standby。
+   `/safemode exit` 复用同一“受管 service 优先、否则 detached”恢复入口（同样纳入就绪窗口与冷却）；
+   若 stopped intent 抑制或重启失败则明确提示并保持 safe，成功时才短暂延迟、断开飞书连接并回到 standby。
 
 dsh 重新在线时（用户手动启动或退出安全模式后），守护立即断开飞书连接并清空安全模式上下文。
 守护进程可随时用 `DSH_LARK_GUARDIAN_DISABLED=1` 停止；`guardian status` 只读输出当前状态。

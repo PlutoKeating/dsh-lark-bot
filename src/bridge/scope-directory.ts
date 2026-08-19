@@ -99,6 +99,23 @@ export class ScopeDirectory {
     return Object.keys(this.data.entries);
   }
 
+  /** Most recently active destination, used for narrowly scoped service notices. */
+  recentDestination(): {
+    chatId: string;
+    threadId: string | undefined;
+    messageId?: string;
+  } | undefined {
+    const entry = Object.values(this.data.entries).sort(
+      (left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt),
+    )[0];
+    if (!entry) return undefined;
+    return {
+      chatId: entry.chatId,
+      threadId: entry.threadId,
+      ...(entry.messageId ? { messageId: entry.messageId } : {}),
+    };
+  }
+
   /** Unique chats observed by the bridge, including their persisted mode. */
   knownChats(): Array<{
     chatId: string;

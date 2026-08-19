@@ -11,6 +11,9 @@ import {
   statusGuardianCommand,
   uninstallGuardianCommand,
 } from './cli/commands/guardian.js';
+import { runServiceCommand } from './cli/commands/service.js';
+import { runSupervise } from './cli/commands/supervise.js';
+import { runServiceRuntime } from './cli/commands/service-run.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -151,6 +154,51 @@ export function buildProgram(): Command {
     .option('--bridge-profile <name>', 'bridge state profile to inspect')
     .action(async (opts: { dshProfile?: string; bridgeProfile?: string }) => {
       await statusGuardianCommand(opts);
+    });
+
+  const service = program
+    .command('service')
+    .description('Install and manage the canonical dsh profile as a user background service');
+  for (const action of ['install', 'start', 'status', 'restart', 'stop', 'uninstall'] as const) {
+    service
+      .command(action)
+      .description(`${action} the managed dsh profile service`)
+      .option('--profile <name>', 'dsh profile (default: dsh-lark)')
+      .action(async (opts: { profile?: string }) => {
+        await runServiceCommand(action, opts, { version: packageVersion() });
+      });
+  }
+  service
+    .command('logs')
+    .description('Show managed profile logs')
+    .option('--profile <name>', 'dsh profile (default: dsh-lark)')
+    .option('-n, --lines <count>', 'number of trailing lines', '100')
+    .option('-f, --follow', 'follow new log output')
+    .action(async (opts: { profile?: string; lines?: string; follow?: boolean }) => {
+      const lines = Number.parseInt(opts.lines ?? '100', 10);
+      await runServiceCommand('logs', {
+        ...(opts.profile ? { profile: opts.profile } : {}),
+        lines: Number.isFinite(lines) ? lines : 100,
+        follow: opts.follow === true,
+      }, { version: packageVersion() });
+    });
+
+  program
+    .command('service-run', { hidden: true })
+    .description('Run a managed dsh profile with its private environment snapshot')
+    .option('--profile <name>', 'dsh profile (default: dsh-lark)')
+    .requiredOption('--env-file <path>', 'private service environment snapshot')
+    .action(async (opts: { profile?: string; envFile: string }) => {
+      await runServiceRuntime(opts);
+    });
+
+  program
+    .command('service-supervise', { hidden: true })
+    .description('Portable service supervisor')
+    .option('--profile <name>', 'dsh profile (default: dsh-lark)')
+    .requiredOption('--env-file <path>', 'private service environment snapshot')
+    .action(async (opts: { profile?: string; envFile: string }) => {
+      await runSupervise(opts);
     });
 
   return program;

@@ -82,6 +82,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 - 发版前执行 `pnpm release:check`（`ci:local` + 上游一致性检查）与本机
   `dsh --profile <name>`（重启完整 profile）+ `dsh-lark-bot doctor` 实机回归；
   安装安全网守护时另跑 `dsh-lark-bot guardian status` 确认守护待机。
+  安装正常后台托管时再跑 `dsh-lark-bot service status --profile <name>`，并核对
+  `service/<profile>.env` / metadata 为 0600、日志可由 `service logs` 读取。
 
 ## 5. 风险披露 · Risk Disclosure
 

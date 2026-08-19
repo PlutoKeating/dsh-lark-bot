@@ -197,6 +197,7 @@ async function makeHarness(
     engineDeadMs?: number;
     relaunchReadyTimeoutMs?: number;
     findProcess?: (dshProfile: string) => Promise<{ pid: number; cmdline: string } | undefined>;
+    restartManagedServiceFn?: GuardianServiceOptions['restartManagedServiceFn'];
   } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-guardian-'));
@@ -254,6 +255,11 @@ async function makeHarness(
     ...(adapter === undefined ? {} : { adapter }),
     findProcess: overrides.findProcess ?? (async () => undefined),
     spawnDetachedFn,
+    restartManagedServiceFn: overrides.restartManagedServiceFn ?? (async () => ({
+      installed: false,
+      restarted: false,
+      detail: 'not installed',
+    })),
     probeSafeProfileFn,
     saveState,
     ...(overrides.safeAdapterMode === undefined
@@ -359,6 +365,42 @@ describe('GuardianService', () => {
     await until(() => harness.service.snapshot().mode === 'takeover');
     expect(harness.service.snapshot().relaunchedPid).toBeUndefined();
     expect(harness.spawnDetachedFn.mock.calls.length).toBe(1);
+  });
+
+  it('restarts an installed normal-engine service without detached double-launch', async () => {
+    const restartManagedServiceFn = vi.fn().mockResolvedValue({
+      installed: true,
+      restarted: true,
+      detail: 'active',
+    });
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      relaunchReadyTimeoutMs: 10_000,
+      restartManagedServiceFn,
+    });
+    await harness.service.start();
+    await until(() => restartManagedServiceFn.mock.calls.length > 0);
+    expect(harness.spawnDetachedFn).not.toHaveBeenCalled();
+    expect(harness.service.snapshot().relaunchedPid).toBeUndefined();
+    expect((harness.channel.connect as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+  });
+
+  it('honors an intentional service stop without detached relaunch', async () => {
+    const restartManagedServiceFn = vi.fn().mockResolvedValue({
+      installed: false,
+      restarted: false,
+      suppressed: true,
+      detail: 'intentionally stopped',
+    });
+    const harness = await makeHarness({
+      state: { profileSeenUp: true },
+      restartManagedServiceFn,
+      relaunchReadyTimeoutMs: 20,
+    });
+    await harness.service.start();
+    await until(() => restartManagedServiceFn.mock.calls.length > 0);
+    expect(harness.spawnDetachedFn).not.toHaveBeenCalled();
+    await until(() => harness.service.snapshot().mode === 'takeover');
   });
 
   it('marks the auto-relaunch ready and converges when the profile comes back', async () => {
@@ -518,6 +560,52 @@ describe('GuardianService', () => {
     await until(() => (harness.channel.disconnect as ReturnType<typeof vi.fn>).mock.calls.length > 0);
     expect(harness.service.snapshot().mode).toBe('standby');
     expect(harness.service.snapshot().relaunchedPid).toBe(777);
+  });
+
+  it('stays in safe mode when an intentional service stop suppresses exit relaunch', async () => {
+    const restartManagedServiceFn = vi.fn().mockResolvedValue({
+      installed: false,
+      restarted: false,
+      suppressed: true,
+      detail: 'intentionally stopped',
+    });
+    const harness = await makeHarness({
+      state: { profileSeenUp: true, mode: 'safe' },
+      restartManagedServiceFn,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+
+    await harness.handlers.message?.(message({ content: '/safemode exit' }) as never);
+
+    expect(harness.service.snapshot().mode).toBe('safe');
+    expect(harness.channel.disconnect).not.toHaveBeenCalled();
+    expect(harness.spawnDetachedFn).not.toHaveBeenCalled();
+    expect(harness.sent.at(-1)?.input).toEqual(expect.objectContaining({
+      markdown: expect.stringContaining('service install'),
+    }));
+  });
+
+  it('directs an installed but stopped service to start before safe-mode exit', async () => {
+    const restartManagedServiceFn = vi.fn().mockResolvedValue({
+      installed: true,
+      restarted: false,
+      suppressed: true,
+      detail: 'intentionally stopped',
+    });
+    const harness = await makeHarness({
+      state: { profileSeenUp: true, mode: 'safe' },
+      restartManagedServiceFn,
+    });
+    await harness.service.start();
+    await until(() => harness.handlers.message !== undefined);
+
+    await harness.handlers.message?.(message({ content: '/safemode exit' }) as never);
+
+    expect(harness.service.snapshot().mode).toBe('safe');
+    expect(harness.sent.at(-1)?.input).toEqual(expect.objectContaining({
+      markdown: expect.stringContaining('service start'),
+    }));
   });
 
   it('reports status through the control channel', async () => {

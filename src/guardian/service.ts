@@ -35,6 +35,7 @@ import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
 import { resolveAppPaths, type AppPaths } from '../config/app-paths.js';
 import { discoverDshBin, resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
+import { restartInstalledProfileService } from '../service/integration.js';
 import { ConfigStore, type ProfileConfig } from '../config/profile-store.js';
 import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
@@ -111,6 +112,7 @@ export interface GuardianServiceOptions {
   adapter?: AgentAdapter;
   findProcess?: (dshProfile: string) => Promise<ProfileProcess | undefined>;
   spawnDetachedFn?: typeof spawnDetached;
+  restartManagedServiceFn?: typeof restartInstalledProfileService;
   probeSafeProfileFn?: (
     input: {
       bin: string;
@@ -206,6 +208,7 @@ export class GuardianService {
       | 'adapter'
       | 'findProcess'
       | 'spawnDetachedFn'
+      | 'restartManagedServiceFn'
       | 'probeSafeProfileFn'
       | 'ensureSdkProfile'
       | 'runPluginList'
@@ -259,6 +262,7 @@ export class GuardianService {
         adapter: options.adapter,
         findProcess: options.findProcess,
         spawnDetachedFn: options.spawnDetachedFn,
+        restartManagedServiceFn: options.restartManagedServiceFn,
         probeSafeProfileFn: options.probeSafeProfileFn,
         ensureSdkProfile: options.ensureSdkProfile,
         runPluginList: options.runPluginList,
@@ -470,21 +474,17 @@ export class GuardianService {
               this.state.dshProfile,
             );
             if (stillDown === undefined) {
-              const spawn = this.options.spawnDetachedFn ?? spawnDetached;
-              const spawned: DetachedSpawn = spawn('node', [
-                bin,
-                '--profile',
-                this.state.dshProfile,
-              ]);
-              if (spawned.pid !== undefined) {
-                this.state.relaunchedPid = spawned.pid;
+              const relaunched = await this.relaunchFullProfile(bin);
+              if (relaunched.started) {
+                this.state.relaunchedPid = relaunched.pid;
                 this.lastRelaunchAt = now;
                 this.relaunchPending = true;
                 this.relaunchStartedAt = now;
                 relaunchedNow = true;
                 await this.save();
                 this.log().info('guardian', 'bridge-relaunched', {
-                  pid: spawned.pid,
+                  ...(relaunched.pid ? { pid: relaunched.pid } : {}),
+                  managedService: relaunched.managedService,
                   dshProfile: this.state.dshProfile,
                 });
               }
@@ -574,6 +574,39 @@ export class GuardianService {
     } catch (error) {
       this.log().fail('guardian-channel', error);
     }
+  }
+
+  private async relaunchFullProfile(bin: string): Promise<{
+    started: boolean;
+    pid: number | undefined;
+    managedService: boolean;
+    suppressed: boolean;
+    serviceInstalled: boolean;
+  }> {
+    const managed = await (
+      this.options.restartManagedServiceFn ?? restartInstalledProfileService
+    )(this.state.dshProfile, {
+      ...(this.options.env ? { env: this.options.env } : {}),
+      home: this.options.home,
+    });
+    if (managed.installed || managed.suppressed) {
+      return {
+        started: managed.restarted,
+        pid: undefined,
+        managedService: true,
+        suppressed: managed.suppressed === true,
+        serviceInstalled: managed.installed,
+      };
+    }
+    const spawn = this.options.spawnDetachedFn ?? spawnDetached;
+    const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
+    return {
+      started: spawned.pid !== undefined,
+      pid: spawned.pid,
+      managedService: false,
+      suppressed: false,
+      serviceInstalled: false,
+    };
   }
 
   private async reloadConfig(): Promise<ProfileConfig | undefined> {
@@ -853,10 +886,21 @@ export class GuardianService {
       );
       return;
     }
-    const spawn = this.options.spawnDetachedFn ?? spawnDetached;
-    const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
-    if (spawned.pid !== undefined) {
-      this.state.relaunchedPid = spawned.pid;
+    const relaunched = await this.relaunchFullProfile(bin);
+    if (!relaunched.started) {
+      await this.sendMarkdown(
+        msg.chatId,
+        relaunched.suppressed
+          ? relaunched.serviceInstalled
+            ? '完整 profile 已被 `service stop` 标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service start`，再重试 `/safemode exit`。'
+            : '完整 profile 的后台服务已卸载并标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service install`，再重试 `/safemode exit`。'
+          : '完整 profile 重启失败；仍保持安全模式，请检查 `service status` / `service logs` 后重试。',
+        msg.messageId,
+      );
+      return;
+    }
+    if (relaunched.started) {
+      this.state.relaunchedPid = relaunched.pid;
       // Give the relaunched profile the same readiness grace and cooldown as
       // an automatic relaunch: no immediate double spawn, no channel takeover
       // while it boots.

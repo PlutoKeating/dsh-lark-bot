@@ -175,6 +175,26 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
 
 Skip it with `setup --no-guardian`; remove it later with `dsh-lark-bot guardian uninstall`.
 
+**Normal-engine background service (issue #23)**: `setup` remains the only installation path. To keep the
+same standard dsh profile running after the terminal closes and start it at login, opt into OS supervision:
+
+```bash
+dsh-lark-bot service install --profile dsh-lark
+dsh-lark-bot service status --profile dsh-lark
+dsh-lark-bot service logs --profile dsh-lark -n 200 -f
+dsh-lark-bot service restart --profile dsh-lark
+dsh-lark-bot service stop --profile dsh-lark
+dsh-lark-bot service start --profile dsh-lark
+dsh-lark-bot service uninstall --profile dsh-lark
+```
+
+Linux uses a systemd user unit when available and an XDG supervisor otherwise; macOS uses LaunchAgent and
+Windows an at-logon scheduled task. Crashes restart automatically. Guardian and `upgrade --restart` prefer the
+installed service, preventing duplicate launches. Sleep/offline periods cannot receive messages; after wake or
+network recovery the SDK reconnects and posts a recovery notice to the most recently active conversation.
+`stop`/`uninstall` persist an intentional-stop marker that guardian respects; install/start reject an existing
+unmanaged foreground instance, and a lifecycle lock prevents concurrent double starts.
+
 ### Models / Providers / Credentials
 
 Configuration is persisted the official dsh way (the same storage protocol as the dsh Web **Settings → Models** page); changes take effect on the next request without restarting the bot:
@@ -265,7 +285,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: How is dsh-lark-bot different from other DeepSeek Harness Feishu plugins (e.g. harness-lark)?**
 
-**A:** The most complete feature set: safety-net guardian, multi-role agents, parallel tasks, session archival, cross-session proactive notifications, and in-chat model/key management — all in one. It ships as a standard dsh profile bundle installed with a single `npx dsh-lark-bot@latest setup` command — no separate Docker / background service.
+**A:** The most complete feature set: safety-net guardian, multi-role agents, parallel tasks, session archival, cross-session proactive notifications, and in-chat model/key management. `setup` is the single install path; optional `service install` only asks the OS to supervise that same profile, not a second runtime.
 
 **Q: Where do I download the project? Are there impostors?**
 
@@ -371,6 +391,10 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).
 - **Safety-net guardian (installed by default with `setup`)**: a system-level resident process reads the Feishu credentials from `~/.dsh-lark/config.json`; it takes over the same bot's Feishu long connection only after dsh goes down and scans local processes (command lines via `ps` only, no memory access). On `/safemode` it provisions a core-only dsh profile (headless or SDK JSON-RPC runtime, both without third-party plugins) and runs one task per message; the SDK engine provides real-time streaming events via the official `dsh-sdk-jsonrpc-server` subprocess.
+- **Optional normal-engine service**: `service install` registers the same standard dsh profile with the current
+  user's OS service manager. A strict environment allowlist is snapshotted to
+  `~/.dsh-lark/service/<profile>.env` (POSIX 0600; owner-only ACL on Windows); plist/task definitions contain no credentials. Logs go to
+  `profiles/<profile>/logs/service.log`; uninstall removes the service entry and env snapshot while retaining configuration, sessions and logs.
 
 All data flows only between this machine, Feishu and DeepSeek; nothing is collected or uploaded as telemetry. Keys are never committed to the repository (see `.gitignore`).
 
@@ -380,7 +404,7 @@ Run `dsh-lark-bot doctor` first; it checks the profile and working directory and
 
 Common issues:
 
-- **Silent bot / long-connection failure**: check the JSONL logs on stderr, focusing on the `channel` and `channel-command` categories; the SDK reconnects automatically.
+- **Silent bot / long-connection failure**: run `service status` and `service logs -f` (or inspect stderr for a foreground profile), focusing on `channel` and `channel-command`. The SDK reconnects and posts a recovery notice to the latest active conversation. Messages cannot be received while the machine sleeps.
 - **Unresponsive agent**: send `/status` to view the scope, cwd and active run; send `/stop` to terminate the current task; the idle watchdog terminates it automatically after it has been silent for `DSH_LARK_RUN_TIMEOUT_MS` (active streaming work is never cut short).
 - **First QR binding fails**: make sure the local clock is accurate and the Feishu open platform is reachable; with an existing App ID/Secret you can skip scanning via `--app-id` / `--app-secret`.
 
@@ -492,7 +516,8 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/card/` | Streaming, approval, question and plan-decision cards |
 | `src/bot/` | Run/queue plus approval, question, plan and isolation registries |
 | `src/commands/` | Slash commands |
-| `src/cli/` | CLI entry: setup / doctor / upgrade / hidden run |
+| `src/cli/` | CLI entry: setup / service / doctor / upgrade / hidden runtime entries |
+| `src/service/` | Cross-platform normal-profile supervision, private environment snapshot, status and logs |
 | `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |
 | `src/guardian/` | Safety-net guardian: heartbeat, process watch, core-only safe profile, takeover state machine, service install |
 | `src/config/` | Profile, config, access & dsh config management |

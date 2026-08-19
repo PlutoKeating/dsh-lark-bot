@@ -173,6 +173,26 @@ dsh-lark-bot guardian install --dsh-profile dsh-lark
 ```
 不需要时 `setup --no-guardian` 跳过；单独卸载用 `dsh-lark-bot guardian uninstall`。
 
+**正常引擎后台服务（issue #23）**：安装仍只有 `setup` 这一条路径；如需登录后自动运行、退出终端
+仍在线，可再用一条命令把同一个标准 dsh profile 交给系统用户服务托管（不会启动第二套桥接引擎）：
+
+```bash
+dsh-lark-bot service install --profile dsh-lark
+dsh-lark-bot service status --profile dsh-lark
+dsh-lark-bot service logs --profile dsh-lark -n 200 -f
+dsh-lark-bot service restart --profile dsh-lark
+dsh-lark-bot service stop --profile dsh-lark
+dsh-lark-bot service start --profile dsh-lark
+dsh-lark-bot service uninstall --profile dsh-lark
+```
+
+Linux 优先使用 systemd user unit，无 user systemd 时回退 XDG supervisor；macOS 使用 LaunchAgent，
+Windows 使用登录计划任务。服务异常退出会自动重启，`doctor` 会报告已安装服务的状态。guardian
+发现正常引擎掉线时会优先重启该受管服务，避免重复拉起；`upgrade --restart` 也走同一路径。
+`stop` / `uninstall` 会持久记录“期望停止”，guardian 不会擅自拉起；install/start 若检测到同
+profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发双启动。
+机器睡眠或断网期间 WebSocket 无法收消息；恢复后 SDK 自动重连，并向最近活跃会话发送恢复提示。
+
 ### 模型 / Provider / 凭据管理
 
 配置以 dsh 官方方式持久化（与 dsh Web **Settings → Models** 同一存储协议），改动下一请求生效、无需重启：
@@ -273,7 +293,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合一；标准 dsh profile bundle，`npx dsh-lark-bot@latest setup` 一条命令安装，无需独立 Docker / 后台服务。
+**A:** 功能组合最全：安全网守护、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -400,6 +420,10 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
   凭据；dsh 下线时接管同一 bot 的飞书长连接并扫描本机进程（仅 `ps` 命令行，不读内存）；
   `/safemode` 时创建仅官方核心的 dsh profile（headless 或 SDK JSON-RPC runtime，均无第三方插件）
   并逐条执行任务；SDK 引擎会以官方 `dsh-sdk-jsonrpc-server` 子进程提供实时流式事件。
+- **正常引擎后台服务（可选）**：`service install` 将标准 `dsh --profile <name>` 交给当前用户的
+  systemd / launchd / Windows 计划任务托管。服务环境只按白名单快照到
+  `~/.dsh-lark/service/<profile>.env`（POSIX 0600；Windows owner-only ACL）；plist / 计划任务不嵌入密钥。日志写入
+  `profiles/<profile>/logs/service.log`。`service uninstall` 删除系统入口与 env 快照，但保留配置、会话与日志。
 
 所有数据仅在本机与飞书、DeepSeek 之间流转，不收集、不上传任何遥测。密钥不会提交进仓库（见 `.gitignore`）。
 
@@ -410,7 +434,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 
 常见问题：
 
-- **bot 静默 / 长连接失败**：查看 stderr 上的 JSONL 日志，关注 `channel` 与 `channel-command` 类别；SDK 会自动重连。
+- **bot 静默 / 长连接失败**：运行 `service status` 并查看 `service logs -f`（前台运行则看 stderr），关注 `channel` 与 `channel-command` 类别；SDK 会自动重连并在恢复后向最近活跃会话提示。系统睡眠期间不能接收消息。
 - **agent 无响应**：发送 `/status` 查看当前 scope、cwd 和 active run；发送 `/stop` 终止当前任务；持续无响应超过 `DSH_LARK_RUN_TIMEOUT_MS` 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。
 - **首次扫码失败**：确认本机时间准确、网络可访问飞书开放平台；已拿到 App ID/Secret 时可用 `--app-id` / `--app-secret` 跳过扫码。
 
@@ -537,7 +561,8 @@ pnpm publish:dual
 | `src/card/` | 流式卡片与审批 / 问答 / 计划决策卡渲染|
 | `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
-| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run`|
+| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `service`（可选 OS 托管）/ `doctor` / `upgrade` / 隐藏运行入口|
+| `src/service/` | 正常 dsh profile 的跨平台用户服务、0600 环境快照、状态与日志管理|
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|
 | `src/guardian/` | 安全网守护：心跳、进程观察、仅核心安全 profile、接管状态机、系统服务安装|
 | `src/config/` | profile / 配置 / 访问白名单 / dsh 配置管理|

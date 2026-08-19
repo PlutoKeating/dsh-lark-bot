@@ -7,7 +7,7 @@
 | **P2 工作区** Workspace | git worktree 隔离、项目级规则注入、多项目导航、SDK 原生 session 续跑 | ✅ 已完成 Done（SDK 接入） |
 | **P3 审批/调度** Approval & Scheduling | 访问白名单、卡片审批（ACP）、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
-| **P5 后台服务** Background service | ~~systemd / launchd / 计划任务后台服务~~ → 0.7.0 移除：唯一路径收敛为 dsh profile bundle 内嵌运行 | ⛔ 已移除 Removed (0.7.0) |
+| **P5 后台托管** Background supervision | 同一 dsh profile 的 systemd user / launchd / Windows / portable 托管，登录自启、异常重启、状态/日志/生命周期，与 guardian/upgrade 闭环（#23） | ✅ 已完成 Done |
 | **P6 模型管理** Model & credentials | `/model` `/providers` `/provider` `/key`：会话热切换、dsh 默认模型、provider / 模型 / 凭据管理 | ✅ 已完成 Done（0.5.0） |
 | **P7 兼容自动化** Compatibility automation | 兼容矩阵单一事实来源、上游雷达、CI 真实可用性探测、升级手册 | ✅ 已完成 Done（0.5.1） |
 | **P8 会话归档** Session archival | 可配置保留窗口、超窗自动归档、`/archive` 手动导出（Markdown + JSONL + Git commit）、保留策略清理 | ✅ 已完成 Done（0.6.0） |
@@ -15,7 +15,7 @@
 | **P10 多角色 Agent** Multi-role agents | 持久化角色定义（persona / 模型 / 工具指引 / 规则）+ 按 scope 绑定 + prompt 注入 | ✅ 已完成 Done（0.6.0） |
 | **P11 出站通知** Outbound notify | `SendOptions.mentions`、跨会话 `/notify`、`lark_notify` dsh 工具（127.0.0.1 回环回调 + token 鉴权） | ✅ 已完成 Done（0.6.0） |
 | **P12 dsh bundle** DSH plugin bundle | `dsh.bundle.patch` + `cordis.patch.yml`、`./plugin` / `./invariant` / `./notify` 导出、`dsh plugin add` 实测 | ✅ 已完成 Done（0.6.0） |
-| **P13 唯一路径** Single install path | `dsh-lark-bot setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；移除独立后台服务层 | ✅ 已完成 Done（0.7.0） |
+| **P13 唯一路径** Single install path | `setup`（唯一安装命令）→ dsh profile bundle 内嵌运行桥接引擎 → 首次扫码；不允许第二套 bridge runtime（P5 可选托管同一 profile） | ✅ 已完成 Done（0.7.0） |
 | **P14 安全网守护** Safety-net guardian | 独立于 dsh 进程的系统级最小守护：dsh 下线后接管飞书通道、`/safemode` 仅核心（dsh-base + headless）重启与受限对话自愈、`/safemode exit` 恢复完整 profile | ✅ 已完成 Done（0.8.0） |
 | **P15 安全模式实时可见性** Safe-mode live visibility | 安全模式优先预置官方 SDK 流式 runtime（`dsh-lark-safe-sdk`）、headless 活动卡回退、单任务空闲超时看门狗、`/safemode stop` 与卡片 ⏹、忙碌回执、正常模式排队回执与卡住提示 | ✅ 已完成 Done（0.10.0） |
 | **P16 Web 单写者适配器** Web single-writer adapter | `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`），网页端成为**唯一写者**，从根上消除多写者会话损坏；配套 web watcher（issue #8 补丁包 / PR #9） | ✅ 已完成 Done（0.11.0） |
@@ -35,9 +35,10 @@
 - **P3 done（审批部分）**：ACP `session/request_permission` 审批卡 + 问答卡；异步任务队列 / 沙箱调度待办。
 - **P4 done**：已发布 `dsh-lark-bot@0.4.1` 与 `dsh-feishu-bot@0.4.1`，第三方可
   `npm i -g dsh-lark-bot` / `dsh-feishu-bot` 一键安装；GitHub Release 自动创建。
-- **P5 removed**（0.7.0）：独立后台服务层（`start/status/restart/stop`、systemd /
-  launchd / 计划任务 / supervisor）已移除；桥接引擎作为 dsh profile bundle 插件在 dsh
-  进程内运行，守护由 dsh 宿主负责。
+- **P5 done（#23）**：没有恢复 0.6.x 的独立 bridge engine；`service` 只托管唯一标准 dsh
+  profile，提供 systemd user / LaunchAgent / Windows 计划任务 / XDG supervisor 的登录自启、
+  异常重启、状态、日志与生命周期；按 profile 加锁、拒绝与现有前台实例并存，且持久化 stop /
+  uninstall 意图供 guardian 遵守。guardian / upgrade 优先复用该入口防止双实例。
 - **P6 done**（0.5.0）：`/model use|default|reset|add|remove`、`/providers`、`/provider
   add|update|remove`、`/key set|remove|list`；按 dsh 官方存储协议读写 `settings.yaml` +
   `.credentials.yaml`，热切换与默认模型改动下一请求生效。**P6 强化（issue #47）**：每轮运行前
@@ -122,8 +123,8 @@
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
 P3 — ACP approval cards and Q&A cards (scheduling pending); P4 — `dsh-lark-bot@0.4.1` /
-`dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — background service (removed
-in 0.7.0, superseded by in-process bundle loading);
+`dsh-feishu-bot@0.4.1` on npm with automated GitHub Release; P5 — optional OS supervision of
+the same in-process dsh profile (the separate bridge runtime was removed in 0.7.0 and remains removed);
 P6 — model / provider / credential management in chat via the official dsh config protocol
 (0.5.0); P7 — compatibility matrix, upstream radar and real CI probe (0.5.1);
 P19 — persistent group/topic/member session isolation with visible run ownership (issue #17).

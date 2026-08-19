@@ -47,7 +47,19 @@ dsh --profile dsh-lark
 
 首次启动（无凭据时）在终端显示二维码，用飞书 / Lark App 扫码，选择或创建 PersonalAgent
 应用。绑定后 `dsh-lark-bot/plugin` 在 dsh 进程内运行桥接引擎（飞书通道 / 会话工作区 / 卡片 /
-通知回调），常驻与守护由 dsh 宿主负责。
+通知回调）。桥接仍只在 dsh 宿主内运行；如需后台常驻，使用可选 OS 托管：
+
+```bash
+dsh-lark-bot service install --profile dsh-lark
+dsh-lark-bot service status --profile dsh-lark
+dsh-lark-bot service logs --profile dsh-lark -f
+```
+
+另有 `start|stop|restart|uninstall`。stop 保留登录自启入口，uninstall 删除入口与私有 env 快照，
+但不删配置、会话、日志。异常退出由系统自动重启；guardian 与 `upgrade --restart` 会优先操作受管服务防双实例。
+停止意图持久写入 `service/<profile>.intent.json`，因此 guardian 不会撤销显式 stop/uninstall；
+install/start 会拒绝同 profile 的既有前台进程，并以生命周期锁避免并发双启动。
+机器睡眠 / 断网期间不能接收新消息，恢复后会自动重连并向最近活跃会话提示。
 
 已拥有应用时，可跳过扫码：
 
@@ -213,8 +225,9 @@ dsh-lark-bot guardian uninstall
 - `/safemode plugins` 执行 `dsh plugin --profile <name> list` 展示插件清单。
 - `/safemode stop`（或卡片 ⏹ 按钮）终止当前安全模式任务；同一会话同时只允许一个任务，
   忙碌时新消息会立即收到“仍在处理中”回执。
-- `/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书连接并交还通道；
-  用户已有会话 / 工作区数据不受影响。
+- `/safemode exit` 优先通过已安装的正常引擎 service 重启完整 profile，仅未安装 service 时才
+  detached 启动；若 `service stop/uninstall` 的期望停止状态阻止重启，则留在安全模式并明确提示。
+  成功启动后短暂延迟、断开飞书连接并交还通道；用户已有会话 / 工作区数据不受影响。
 - dsh 重新在线（手动启动或退出安全模式）时，守护自动回归静默。
 
 停止守护：在服务单元环境或启动命令中设 `DSH_LARK_GUARDIAN_DISABLED=1`，或
@@ -279,7 +292,8 @@ dsh-lark-bot doctor
 - 工作目录是否存在
 - adapter 模式与 dsh 是否真实可用（`sdk` / `acp` / `headless` / `web` 对应 runtime 探测）
 
-桥接引擎日志：以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log` 是
+桥接引擎日志：前台以 JSON Lines 输出到 stderr；后台服务写入
+`profiles/<profile>/logs/service.log`，用 `service logs -f` 查看（`logs/bot.log` 是
 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）。
 守护状态可用 `dsh-lark-bot guardian status` 查看；服务未运行时先检查该日志再运行 `doctor`。
 
