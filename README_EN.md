@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
   <a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
   <a href="https://dshbase.com/zh/plugins/dsh-lark-bot"><img src="https://dshbase.com/badges/dsh-lark-bot.svg" alt="dshbase verified"></a>
+  <a href="https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot"><img src="https://dsh-plugin.org/badges/listed.svg" alt="Listed on dsh-plugin.org"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/commits/main"><img src="https://img.shields.io/github/commits-since/PlutoKeating/dsh-lark-bot/v0.7.0?label=commits%20since%20v0.7.0" alt="Commits since v0.7.0"></a>
 </p>
@@ -479,7 +480,7 @@ See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Community Listings
 
-> Community listing & recommendation status, kept current as update requests land. As of v0.15.1 (re-verified 2026-08-17):
+> Community listing & recommendation status, kept current as update requests land. As of v0.15.9 (re-verified 2026-08-20):
 
 | Platform | Status | Notes |
 | :--- | :--- | :--- |
@@ -487,13 +488,15 @@ See [`docs/roadmap.md`](docs/roadmap.md).
 | [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 Submission PR open · awaiting merge | The 7.2k+ star curated plugin list (the ecosystem traffic hub); submission [PR #1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) open, status backfilled after merge |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ Listed · detail page live | Entry name fixed ([issue #2](https://github.com/hikariming/dshfind/issues/2) closed); **v0.15.1 refresh requested via [#6 follow-up comment](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509), awaiting maintainer**; the header badge / card comes from dshfind |
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ Listed · CI-verified | Chinese plugin directory (1771+ plugins) with automated CI install verification, marked `✅ verified`; the header badge comes from dshbase |
+| [dsh-plugin.org](https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot) | ✅ Listed · official source verified | The platform delisted the parasitic repository entry misusing this project's name and listed the official `PlutoKeating/dsh-lark-bot` source; maintainers confirmed and closed both [listing request #1](https://github.com/yacuo/dsh-plugin/issues/1) and [security report #2](https://github.com/yacuo/dsh-plugin/issues/2); the platform also published a dedicated [installation and usage guide](https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot/using-dsh-lark-bot); the header badge comes from dsh-plugin.org |
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ Accepted · discussion active | `[Plugin]` submission (Discussion #11) accepted and active, latest notes v0.10.2; **v0.15.1 update note prepared, paste manually (org-level discussions have no API)** |
 
-**Update request status (as of 2026-08-17)**:
+**Update request status (as of 2026-08-20)**:
 
 - awesome-dsh-plugins v0.8.0 entry: [#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ merged; leaderboard sync: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ closed
 - awesome-dsh-plugin listing: [#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) — 📨 submitted (2026-08-17, v0.15.0 data; [v0.15.1 follow-up comment](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408#issuecomment-5317081726) submitted)
 - dshfind name fix + v0.8.0 refresh: [#2](https://github.com/hikariming/dshfind/issues/2) — ✅ closed; v0.10.1 refresh: [#6](https://github.com/hikariming/dshfind/issues/6) — 📨 pending ([v0.15.1 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) submitted)
+- dsh-plugin.org official-source listing and parasitic-entry delisting: [listing request #1](https://github.com/yacuo/dsh-plugin/issues/1) / [security report #2](https://github.com/yacuo/dsh-plugin/issues/2) — ✅ handled and closed by the maintainer; the [official detail page](https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot) and [dedicated guide](https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot/using-dsh-lark-bot) are live
 - omdsh-dev/community listing: [Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ accepted, discussion active (latest notes v0.10.2); v0.15.1 update note — 📨 prepared, paste manually
 - Platform refresh (v0.14.0 → v0.15.1) — ✅ resumed (2026-08-17): awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh note prepared
 

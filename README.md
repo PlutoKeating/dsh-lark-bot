@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/status-released-blue" alt="Status">
   <a href="https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot?ref=badge"><img src="https://dshfind.com/api/badge/PlutoKeating/dsh-lark-bot?lang=zh" alt="dshfind"></a>
   <a href="https://dshbase.com/zh/plugins/dsh-lark-bot"><img src="https://dshbase.com/badges/dsh-lark-bot.svg" alt="dshbase 实测可装"></a>
+  <a href="https://dsh-plugin.org/plugins/plutokeating/dsh-lark-bot"><img src="https://dsh-plugin.org/badges/listed.svg" alt="Listed on dsh-plugin.org"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/commits/main"><img src="https://img.shields.io/github/commits-since/PlutoKeating/dsh-lark-bot/v0.7.0?label=commits%20since%20v0.7.0" alt="Commits since v0.7.0"></a>
 </p>
@@ -535,7 +536,7 @@ pnpm publish:dual
 
 </div>
 
-> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.15.1（2026-08-17 复核）：
+> 本项目的社区收录 / 推荐状态，随提交的更新请求持续维护。截至 v0.15.9（2026-08-20 复核）：
 
 | 平台 | 状态 | 说明 |
 | :--- | :--- | :--- |
@@ -543,13 +544,15 @@ pnpm publish:dual
 | [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 收录 PR 已提交 · 待合并| 7.2k+ star 的社区插件精选大榜（`dsh-plugin` 生态流量入口）；收录 PR [#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) 已提交，合并后回填状态|
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 · 详情页在线| 条目名称修正 [issue #2](https://github.com/hikariming/dshfind/issues/2) 已关闭；**v0.15.1 数据刷新请求 [#6 跟进评论](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) 已提交 · 待维护方处理**；顶部徽章 / 展示卡来自 dshfind|
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ 已收录 · 实测可装| 中文插件目录（收录 1771+ 插件），自动化 CI 实测 `dsh plugin add` 可装可启动，标注 `✅ 已验证 · 实测可装`；顶部徽章来自 dshbase|
+| [dsh-plugin.org](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot) | ✅ 已收录 · 官方源已核验| 平台已下架冒用本项目名称的寄生仓库条目，并收录 `PlutoKeating/dsh-lark-bot` 官方源；[收录申请 #1](https://github.com/yacuo/dsh-plugin/issues/1) 与[安全举报 #2](https://github.com/yacuo/dsh-plugin/issues/2) 均经维护者确认处理并关闭；平台另发布了[一文读懂安装与使用教程](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot/using-dsh-lark-bot)；顶部徽章来自 dsh-plugin.org|
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 收录申请通过 · 讨论活跃| `[Plugin]` 收录申请（Discussion #11）已通过并持续维护，最新更新说明 v0.10.2；**v0.15.1 更新说明已备妥，待人工粘贴（org 级 discussion 不支持 API）**|
 
-**更新请求进度（截至 2026-08-17 复核）**：
+**更新请求进度（截至 2026-08-20 复核）**：
 
 - awesome-dsh-plugins 收录条目 v0.8.0：[#127](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/127) — ✅ 已合并；榜单行同步：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — ✅ 已关闭
 - awesome-dsh-plugin 大榜收录：[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408) — 📨 已提交（2026-08-17，v0.15.0 数据；v0.15.1 [跟进评论](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408#issuecomment-5317081726) 已提交）
 - dshfind 条目名称修正 + v0.8.0 刷新：[#2](https://github.com/hikariming/dshfind/issues/2) — ✅ 已关闭；v0.10.1 刷新：[#6](https://github.com/hikariming/dshfind/issues/6) — 📨 待处理（v0.15.1 [跟进评论](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) 已提交）
+- dsh-plugin.org 官方源收录与寄生条目下架：[收录申请 #1](https://github.com/yacuo/dsh-plugin/issues/1) / [安全举报 #2](https://github.com/yacuo/dsh-plugin/issues/2) — ✅ 维护者已处理并关闭；[官方详情页](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot)与[专题教程](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot/using-dsh-lark-bot)已上线
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）；v0.15.1 更新说明 — 📨 已备妥，待人工粘贴
 - 平台数据刷新（v0.14.0 → v0.15.1）— ✅ 已恢复提交（2026-08-17）：awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 跟进](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh 说明备妥
 
