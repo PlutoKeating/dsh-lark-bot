@@ -222,7 +222,7 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- 默认 SDK / Web 的逐操作审批：dsh rc.7 在高风险工具真正执行前经 `/approval` 弹出“允许执行一次 /
+- 默认 SDK / Web 的逐操作审批：dsh rc.8 在高风险工具真正执行前经 `/approval` 弹出“允许执行一次 /
   拒绝”卡，显示工具、理由与可取得的执行参数；等待期间所属 run 不会 idle timeout。允许仅作用于
   当前调用；拒绝会作为工具结果交回 agent 继续换方案。ACP 使用原生 permission 请求呈现同款卡。
 

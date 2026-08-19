@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client';
 import {
   createSdkRun,
@@ -102,7 +102,7 @@ describe('translateSessionEvent', () => {
     expect(turnError).toEqual([{ type: 'error', message: 'boom', terminationReason: 'failed' }]);
   });
 
-  it('does not misclassify rc.7 max-token turn boundaries as fatal session errors', () => {
+  it('does not misclassify rc.8 max-token turn boundaries as fatal session errors', () => {
     const events = translateSessionEvent(
       { type: 'turn/end', data: { turn: 1, reason: { kind: 'max-tokens' } } },
       { emitted: new Set<string>() },
@@ -142,6 +142,24 @@ function fakeHarness(): DeepSeekHarness {
 }
 
 describe('createSdkRun', () => {
+  it('makes the SDK local-file image fallback explicit instead of claiming native upload', async () => {
+    const harness = fakeHarness();
+    const run = vi.spyOn(harness, 'run');
+    const handle = createSdkRun(harness, 'inspect this', {
+      sessionId: 's-image',
+      cwd: '/tmp',
+      model: 'm',
+      images: ['/tmp/image.png'],
+      stopRequested: { value: false },
+    });
+    for await (const _event of handle.events) void _event;
+
+    expect(run).toHaveBeenCalledWith(
+      expect.stringMatching(/local files[\s\S]*\/tmp\/image\.png[\s\S]*does not expose raw image upload/),
+      expect.objectContaining({ sessionId: 's-image' }),
+    );
+  });
+
   it('streams events and settles with done', async () => {
     const harness = fakeHarness();
     const handle = createSdkRun(harness, 'hi', {

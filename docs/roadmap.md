@@ -25,7 +25,7 @@
 | **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
 | **P21 原生折叠过程** Native collapsible process | schema 2.0 原生折叠面板实时承载 reasoning / tools，最终回答单独发送并保留 reply/thread 路由（issue #19） | ✅ 已完成 Done |
 | **P22 会话状态指标** Session status metrics | `/status` 可刷新卡：工作区 / 模型 / session / runs / 版本、真实 context 占用、累计 input/output/cache token、待审批/提问/计划；不可得字段不估算（issue #20） | ✅ 已完成 Done |
-| **P25 默认逐操作审批** Default tool approval | rc.7 `approval/request` answerer + `/approval` 回调；默认 SDK/Web 与 ACP 统一一次性允许/拒绝卡、session 精确等待/清理（issue #24） | ✅ 已完成 Done |
+| **P25 默认逐操作审批** Default tool approval | rc.8 `approval/request` answerer + `/approval` 回调；默认 SDK/Web 与 ACP 统一一次性允许/拒绝卡、session 精确等待/清理（issue #24） | ✅ 已完成 Done |
 | **P26 多机器人交接** Multi-bot handoff | 独立 bridge/dsh profile、PersonalAgent 身份、用户服务与上下文；可信 peer 真实 @ 交接；跨进程 per-chat 回合上限与真人重置；附加实例拒绝共享 Web mux（issue #25） | ✅ 已完成 Done |
 | **P27 消息与任务可靠性** Durable job reliability | messageId 持久 receipt、queued 重启重放、running checkpoint/interrupted 对账、`/jobs` 显式重试与 `/status` 统计（issue #28） | ✅ 已完成 Done |
 

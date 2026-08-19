@@ -88,7 +88,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `DSH_LARK_ADAPTER=web` 走本地 dsh web agent（`session.prompt` + `/api/events.mux`，单写者，根治双写）。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约；dsh 协议漂移集中在
    `src/adapters/dsh/`，宿主工具 registry 漂移集中在 `src/notify/` 的 raw-schema 注册边界。
-   当前兼容基线为 rc.7；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
+   当前兼容基线为 rc.8；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
    核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
    block；出站图片在 channel 增加二进制能力前输出明确降级提示。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
@@ -165,7 +165,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
-   高风险工具，再以 structural listener 接入 rc.7
+   高风险工具，再以 structural listener 接入 rc.8
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
    ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
    继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。

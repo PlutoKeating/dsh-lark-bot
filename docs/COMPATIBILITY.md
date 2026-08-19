@@ -7,21 +7,23 @@
 
 ## 1. 兼容矩阵
 
-> 最后验证：2026-08-19（临时 DSH_HOME 安装 + SDK / ACP initialize；SDK 本地任务、notify/ask/plan/one-shot approval 回调与 session 续接实测）。
+> 最后验证：2026-08-20（临时 DSH_HOME 安装 + SDK / ACP initialize；ACP task/permission；SDK notify/ask/plan/approval、live session 续接与 restart collision；rc.7 SQLite fail-closed 实测）。
 
 | 组件 | 锁定版本 | 说明 |
 | :--- | :--- | :--- |
-| DeepSeek Harness CLI（`dsh`） | `0.1.0-rc.7` | SDK / ACP runtime initialize 握手实测通过 |
-| `@deepseek-ai/dsh-sdk-client` | `0.1.0-rc.7` | `package.json` 精确锁定（`dependencies`） |
-| `@deepseek-ai/dsh-sdk-jsonrpc-server` | `0.1.0-rc.7` | SDK runtime profile 安装版本（`dsh-compat.ts`） |
-| `@deepseek-ai/dsh-acp` | `0.1.0-rc.7` | ACP runtime profile 安装版本（`dsh-compat.ts`） |
+| DeepSeek Harness CLI（`dsh`） | `0.1.0-rc.8` | SDK / ACP runtime initialize 握手实测通过 |
+| `@deepseek-ai/dsh-sdk-client` | `0.1.0-rc.8` | `package.json` 精确锁定（`dependencies`） |
+| `@deepseek-ai/dsh-sdk-jsonrpc-server` | `0.1.0-rc.8` | SDK runtime profile 安装版本（`dsh-compat.ts`） |
+| `@deepseek-ai/dsh-acp` | `0.1.0-rc.8` | ACP runtime profile 安装版本（`dsh-compat.ts`） |
 | Node.js | `>=22.19.0` | `engines` 与 `dsh-compat.ts` 一致 |
 
 版本约束规则：
 
-- `@deepseek-ai/*` 运行时依赖一律**精确版本锁定**（不带 `^`），保证发布可复现。
+- SDK client 与托管 SDK server / ACP 顶层包精确 pin；本仓库 lockfile 的 SDK peer graph 通过
+  `pnpm.overrides` 统一到矩阵版本。override 不会传递给下游，因此每次发现新上游版本都必须重跑
+  全新 consumer 安装与真实 probe，不能把当前注册表快照当成永久保证。
 - 本包不直接依赖 `@deepseek-ai/dsh-tools`；工具以 raw JSON Schema 注册到宿主 registry，
-  防止两份模块级 scheduler Symbol。lockfile 不允许混入 rc.6 core 包。
+  防止两份模块级 scheduler Symbol。lockfile 不允许混入任何非当前矩阵版本的 dsh core 包。
 - `dsh-compat.ts` 是唯一事实来源；`scripts/check-dsh-upstream.mjs` 会校验它和
   `package.json` 的 `dsh-sdk-client` 版本一致，不一致即报错（防漂移）。
 - 模型 / provider / 凭据管理走 dsh 官方 `settings.yaml` + `.credentials.yaml` 存储协议，
@@ -39,7 +41,7 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 
 ## 3. 升级操作手册（Upgrade Runbook）
 
-以从当前 `0.1.0-rc.7` 升级到 `X.Y.Z` 为例：
+以从当前 `0.1.0-rc.8` 升级到 `X.Y.Z` 为例：
 
 1. **确认上游**：`node scripts/check-dsh-upstream.mjs`（或每周 CI `dsh-upstream` 任务）
    分别检查 `latest`、`next` 与 highest published，阅读对应 release notes 中 SDK/ACP 的破坏性变更。
@@ -51,9 +53,10 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
    上游一致性检查）。
 5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走 SDK / ACP runtime 初始化握手，并用本地
-   OpenAI-compatible fixture 验证 SDK 任务、`lark_notify` / `lark_ask_user` /
-   `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → rc.7 one-shot approval → 实际执行的顺序、
-   one-shot 拒绝后 agent 继续替代工具路径，以及同一 session 的持久历史续接。
+   OpenAI-compatible fixture 验证 ACP 文本任务 + plan + one-shot permission 拒绝，以及 SDK 任务、`lark_notify` / `lark_ask_user` /
+   `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → rc.8 one-shot approval → 实际执行的顺序、
+   one-shot 拒绝后 agent 继续替代工具路径、同一 runtime 的 session 续接，以及关闭重开后
+   persisted-log collision 明确可识别（bridge 随后清 binding 并用 transcript 新建 session）。
 6. **实机回归**：重启 profile（`dsh --profile <name>`，或守护模式下
    `dsh-lark-bot guardian status` 观察接管/交还）后运行 `dsh-lark-bot doctor`，
    确认 dsh profile 中插件装载正常（`dsh --profile <name>` 内引擎启动）；飞书会话内跑一轮真实任务。
@@ -66,11 +69,13 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 | 机制 | 位置 | 作用 |
 | :--- | :--- | :--- |
 | 上游雷达 | `scripts/check-dsh-upstream.mjs` + `.github/workflows/dsh-upstream.yml`（每周一 03:17 UTC + 手动触发） | 分列 `latest` / `next` / highest，校验矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
-| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，跑 SDK / ACP initialize，并验证 SDK 本地任务、notify/ask/plan/one-shot approval 允许与拒绝后继续、持久历史续接 |
+| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision |
 | 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性） | 本地全量门禁 |
 
 ## 5. 风险披露
 
 - dsh 仍是 pre-release：即使锁定版本，接口仍可能随 patch 行为变化；以 CI 实测为准。
 - 探测任务需要网络与 `pnpm`；失败时优先看 workflow 日志中的 dsh 安装 / 握手错误。
-- rc.7 的已知 session 边界与本次验证限制见 [`DSH_RC7_AUDIT.md`](DSH_RC7_AUDIT.md)。
+- rc.8 的已知 session 边界与本次验证限制见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
+- rc.8 不兼容 schema 只属于 opt-in SQLite provider；托管 SDK/ACP 使用 JSONL。自定义 SQLite profile
+  不自动迁移，必须保留旧 runtime 或自行导出后新建 schema 17 数据库。

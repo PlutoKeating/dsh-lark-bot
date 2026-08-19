@@ -43,9 +43,9 @@ function assertNoDrift() {
     );
     mismatch = true;
   }
-  if (compat.legacyRc6LockEntries.length > 0) {
+  if (compat.staleCoreLockEntries.length > 0) {
     console.error(
-      `drift: lockfile still mixes rc.6 core packages into the rc.7 graph: ${compat.legacyRc6LockEntries.join(', ')}`,
+      `drift: lockfile mixes stale core packages into the ${compat.harness} graph: ${compat.staleCoreLockEntries.join(', ')}`,
     );
     mismatch = true;
   }

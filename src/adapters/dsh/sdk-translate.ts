@@ -182,7 +182,8 @@ export interface SdkRunHandle {
 
 function buildPromptText(prompt: string, images: readonly string[] | undefined): string {
   return images?.length
-    ? `${prompt}\n\nImage files attached to this message:\n${images.join('\n')}`
+    ? `${prompt}\n\nImage attachments are available as local files:\n${images.join('\n')}\n` +
+      'The dsh SDK wire does not expose raw image upload yet; inspect these files with the available filesystem/image tools instead of assuming their pixels were sent to the model.'
     : prompt;
 }
 

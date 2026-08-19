@@ -8,13 +8,13 @@
 ## 1. 核心结论 · TL;DR
 
 - 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
-- **两条官方接入路线均已实测**（2026-08-19 最后验证）：
+- **两条官方接入路线均已实测**（2026-08-20 最后验证）：
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
     runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
     **reasoning-delta / text-delta token 级事件**；thinking / tools 实时进入折叠过程卡，聚合后的
     final text 作为独立 Markdown 回答发送；`assistant/message.usage` 提供 input/output/cache usage。
   - **ACP 服务器**（`@deepseek-ai/dsh-acp`）：`session/request_permission` → 飞书审批卡；
-    ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话；rc.7
+    ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话；rc.8
     `PromptResponse.usage` 与 `usage_update` 分别提供累计 token 和 context used/size。
 - 旧的 **headless 子进程 fallback** 保留为 `DSH_LARK_ADAPTER=headless`，不再默认。
 
@@ -124,7 +124,7 @@ type AgentEvent =
   `AgentEvent`。
 
 **SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）。SDK JSON-RPC
-本身没有 server→client approval RPC，但 managed profile 在 runtime 内装配 rc.7 `approval/request`
+本身没有 server→client approval RPC，但 managed profile 在 runtime 内装配 rc.8 `approval/request`
 answerer + `tools/pre-execute` 强制门禁，经 bridge `/approval` 提供逐工具卡片确认，因此默认安装不再要求切换 ACP。
 
 ### 路线 B：ACP 服务器（审批）
@@ -137,7 +137,7 @@ answerer + `tools/pre-execute` 强制门禁，经 bridge `/approval` 提供逐�
 
 **ACP 已知限制（来自其 README）**：
 - **仅全新会话**——load / list / resume / delete / fork 均不支持。
-- **仅 committed 答案**——回答文本没有 token 级 delta；但 rc.7 的 PromptResponse 可返回
+- **仅 committed 答案**——回答文本没有 token 级 delta；但 rc.8 的 PromptResponse 可返回
   累计 token usage，`usage_update` 可返回 context used/size，bridge 会如实转为指标事件。
 - **单一工作区**——images / audio / 多目录 / MCP 会被拒绝。
 
@@ -184,8 +184,10 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
 
 1. **流式差异**：SDK 有 token 级流式（`assistant/chunk` 的 `reasoning-delta` / `text-delta`）；
    ACP 按 committed 文本块发 `agent_message_chunk`。两种都走 `AgentEvent` 事件流渲染卡片。
-2. **会话续跑**：SDK 用 `session(id?)` + JSONL 持久化实现原生 resume；ACP 仅全新会话。
-3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.7 `approval/request` answerer
+2. **会话续跑**：SDK 用 `session(id?)` 在同一 runtime 内原生 resume；关闭重开后 rc.8 JSON-RPC
+   server 会对同名 JSONL 日志返回 `id collision`，bridge 清除失效 binding 并用自身 transcript
+   新建 session。ACP 仅全新会话。
+3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.8 `approval/request` answerer
    都映射一次性 allow/reject 飞书卡；registry 按 scope + owner session + request id 精确结算，
    并发 run、单卡失败与 callback abort 不会取消其他任务。
 4. **dsh 是 developer preview**：接口会破坏性变更；协议 adapter 隔离在
@@ -193,14 +195,16 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
    锁定版本、升级政策与自动化探测见 [`COMPATIBILITY.md`](COMPATIBILITY.md)；
    版本常量统一取自 `src/config/dsh-compat.ts`。
 5. **Node 版本**：dsh 要求 `node ^22.19 || >=24`；桥接层 `package.json` engines 为 `>=22.19`。统一用 ≥22.19。
-6. **rc.7 精确锁定**：SDK client/server、ACP 与完整 peer 图均解析到 rc.7；npm 包族的
-   `latest` / `next` 不同步，不能用裸 dist-tag 代替矩阵。托管 profile 会核对实际 manifest
-   version 并自动修复旧 rc.6 安装。
+6. **rc.8 精确锁定**：SDK client/server 与 ACP 顶层包精确 pin，本仓库 lockfile peer 图由
+   pnpm override 固定为 rc.8；npm 包族的 `latest` / `next` 不同步，不能用裸 dist-tag 代替矩阵。
+   托管 profile 核对顶层实际 manifest 并自动修复旧 rc.7 安装；override 不向下游传播，因此新上游
+   出现后仍需重跑全新 consumer 与真实 probe。
 7. **宿主注册单实例边界**：`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 使用宿主接受的 raw JSON Schema，approval answerer 使用 structural event listener；
    definition，本包不直接 import `dsh-tools`，避免 scheduler Symbol 双实例。
-8. **ACP rc.7 图片**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP，并在 runtime 宣告
-   image capability 后发送原生 base64 block；不支持时显式失败。当前 channel 尚无图片出站
-   契约，ACP assistant 图片会显示降级文本。详见 `DSH_RC7_AUDIT.md`。
+8. **rc.8 图片边界**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP；ACP 只有在 runtime 宣告
+   image capability 后才发送原生 base64 block，否则显式失败。真实 rc.8 ACP 当前未宣告该能力；
+   SDK wire 也没有本地原始图片 upload API，因此 SDK 明确走本地文件工具 fallback。当前 channel 尚无
+   图片出站契约，ACP assistant 图片显示降级文本。详见 `DSH_RC8_AUDIT.md`。
 9. **多机器人交接**：adapter 契约不增加 bot 专用事件；bridge 先验证飞书 bot sender、真实 @ 与
    fleet peer 身份，再把带来源标记的文本交给普通 run。运行 prompt 只注入登记 peer 的 name/open_id，
    agent 通过既有 `lark_notify` + `mention_user_ids` 交接；跨进程回合限制位于 bridge/bot seam，

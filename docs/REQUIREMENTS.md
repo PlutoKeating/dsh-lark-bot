@@ -94,7 +94,7 @@
 
 ### 4.4 审批与安全（approval & security）
 - 用户白名单 + 访问控制（`/invite user/admin/group`）。
-- 逐操作审批（issue #24）：默认 SDK / Web 以 `tools/pre-execute` 强制门禁 + dsh rc.7 `approval/request` answerer，ACP 通过
+- 逐操作审批（issue #24）：默认 SDK / Web 以 `tools/pre-execute` 强制门禁 + dsh rc.8 `approval/request` answerer，ACP 通过
   `session/request_permission`；统一提供“允许执行一次 / 拒绝”卡，展示执行内容和理由。等待暂停
   所属 run 的 idle watchdog，无固定截止；拒绝作为工具结果返回 agent 而非终止整个任务。
 - 关键任务计划门禁（issue #18）：完整计划先作为普通消息发出，再用带可选文字意见的卡片批准执行
@@ -176,7 +176,7 @@
 - `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
 - `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
-- `./approval`：rc.7 `approval/request` 的 terminal answerer；host 与默认 SDK profile 自动装配，
+- `./approval`：rc.8 `approval/request` 的 terminal answerer；host 与默认 SDK profile 自动装配，
   读取 `DSH_LARK_APPROVAL_URL` / `DSH_LARK_NOTIFY_TOKEN`，ACP 不重复装配。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
 - 形态关系：**dsh profile bundle 即唯一运行时形态**——`dsh-lark-bot/plugin` 在 dsh
@@ -269,7 +269,7 @@
 | **协议** | AGPLv3.0（官方原文，见根目录 `LICENSE`） |
 | **语言** | bot 固定 UI 中英双语：Card JSON 2.0 按每位读者客户端语言显示，Markdown/toast 降级先中文后英文；agent/用户/工具内容保持原文 |
 | **运行时** | Node.js ≥ 22.19（`package.json` engines） |
-| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client + rc.7 approval answerer，ACP 协议原生审批可选，headless legacy |
+| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client + rc.8 approval answerer，ACP 协议原生审批可选，headless legacy |
 | **关键词** | README / 介绍 / tags 含 `dsh`、`deepseek`、`deepseek harness`、`feishu`、`lark`、`bridge`、`bot` |
 | **tags** | `typescript`、`chatbot`、`lark`、`feishu`、`deepseek`、`deepseek-harness`、`dsh-plugin`、`messaging`、`bot`、`bridge`、`dsh` |
 | **目录结构** | 参考克隆仓库统一放 `reference/`（不提交，仅跟踪 `reference/.gitignore` 与 `reference/README.md` 两个元文件） |
