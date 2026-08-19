@@ -71,6 +71,20 @@ dsh-lark-bot service logs --profile dsh-lark -f
 
 `start|stop|restart|uninstall` 管理完整生命周期；这只是 OS 托管同一 profile，不是第二套引擎。
 机器睡眠/断网时不能收消息，恢复连接后会向最近活跃会话提示。默认安全网守护见第 6 节。
+
+要在同一群加入多个独立机器人，可为每个 PersonalAgent 创建一个实例：
+
+```bash
+dsh-lark-bot bot add reviewer --model gateway/review-model
+dsh-lark-bot bot list
+dsh-lark-bot bot status reviewer
+```
+
+`bot add` 会自动使用 `dsh-lark-<name>` 与 `~/.dsh-lark/bots/<name>/dsh` 创建独立 profile、
+provider/凭据目录和用户服务；未显式提供 App ID/Secret 时一定扫码绑定，不继承主 bot App 凭据。
+把这些 bot 加入同一群后，可信实例可通过真实 @ 交接；连续 bot 回合默认最多 6 次，任意真人消息
+会重置。`bot remove reviewer` 删除服务、实例登记、配置凭据与服务环境快照，但保留该 profile 的
+session/worktree/archive 数据。额外实例不受默认 guardian 救援。
 已经有一个 PersonalAgent 应用时，
 可在启动命令的环境变量中提供凭据跳过扫码：
 
@@ -209,6 +223,10 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
   环境快照用当前 access token SID 的 owner-only ACL 收紧）
 - 后台服务运维意图：`~/.dsh-lark/service/<profile>.intent.json`（0600；stop/uninstall 后阻止 guardian 回拉）
 - 后台服务日志：`~/.dsh-lark/profiles/<profile>/logs/service.log`
+- 多机器人实例登记：`~/.dsh-lark/fleet.json`（0600；身份/profile 元数据，不含密钥）
+- 多机器人交接计数：`~/.dsh-lark/handoffs.json`（0600；chat 计数与近期 messageId）
+- 多机器人独立 dsh 配置：`~/.dsh-lark/bots/<name>/dsh/`（provider settings、credentials、runtime profiles）
+- 附加实例 adapter：`sdk` / `acp` / legacy `headless`；拒绝无法隔离广播 session 的共享 `web`
 - 守护心跳：`~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（桥接引擎周期写入）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：

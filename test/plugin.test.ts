@@ -56,6 +56,7 @@ function fakeChannel() {
     on: vi.fn(),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
+    getBotIdentity: vi.fn().mockReturnValue({ openId: 'ou_default_bot', name: 'Default Bot' }),
     send: vi.fn().mockResolvedValue({ messageId: 'm1' }),
   };
 }

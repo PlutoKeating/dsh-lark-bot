@@ -18,6 +18,7 @@ describe('loadRuntimeEnv', () => {
     expect(env.stopGraceMs).toBe(5_000);
     expect(env.groupNoAt).toBe(false);
     expect(env.groupPollMs).toBe(3_000);
+    expect(env.botHandoffMax).toBe(6);
     expect(env.heartbeatMs).toBe(5_000);
     expect(env.guardianDisabled).toBe(false);
     expect(env.guardianProfile).toBe('dsh-lark');
@@ -84,6 +85,13 @@ describe('loadRuntimeEnv', () => {
     expect(env.groupPollMs).toBe(5_000);
     expect(() => loadRuntimeEnv({ DSH_LARK_GROUP_POLL_MS: '999' })).toThrow(
       /DSH_LARK_GROUP_POLL_MS/,
+    );
+  });
+
+  it('parses the trusted bot handoff limit and rejects an unsafe value', () => {
+    expect(loadRuntimeEnv({ DSH_LARK_BOT_HANDOFF_MAX: '8' }).botHandoffMax).toBe(8);
+    expect(() => loadRuntimeEnv({ DSH_LARK_BOT_HANDOFF_MAX: '1' })).toThrow(
+      /DSH_LARK_BOT_HANDOFF_MAX/,
     );
   });
 });

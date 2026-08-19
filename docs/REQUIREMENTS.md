@@ -140,6 +140,20 @@
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
 
+### 4.8.1 多机器人实例与交接（multi-bot handoff，issue #25）
+
+- `bot add|list|status|remove` 管理独立 bridge profile、dsh profile、PersonalAgent 身份和用户服务；
+  每个实例的模型、provider、凭据、session、scope、worktree 与 archive 相互隔离。
+- 只有已登记启用 peer 的 bot 事件且真实 @ 当前 bot 时才接受交接；peer 身份由飞书 `open_id`
+  精确匹配，不信任消息正文伪造。运行 prompt 只暴露登记 peer 的准确 mention 身份。
+- 同 chat 连续 bot 回合由跨进程共享计数器限制（默认 6），按 messageId 去重；任何新鲜真人消息
+  重置计数，超过上限只提示一次并停止继续调度。
+- `fleet.json` / `handoffs.json` 使用 owner-only 持久化与可回收 lease 锁，不存密钥；每个实例
+  使用独立 DSH_HOME 隔离 provider/model catalog/credentials/runtime profiles；删除实例保留其
+  session/worktree/archive 数据以便恢复。额外实例不扩大 guardian 的单主实例救援边界。
+- 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
+  消费同一个 Web agent 广播流而把 session 事件写入错误实例。
+
 ### 4.9 dsh profile bundle（唯一安装-部署-使用路径）
 
 - `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，可用

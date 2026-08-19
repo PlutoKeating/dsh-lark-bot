@@ -51,10 +51,11 @@
 - 流式过程卡以飞书原生折叠面板实时展示思考、工具调用与结果，完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-**七项全网独有组合**：
+**八项全网独有组合**：
 
 - 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。
 - 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
+- 🤝 **多机器人交接——“一个群，多个独立 Agent”**：`bot add` 增加独立身份/服务/凭据/上下文的实例，可信机器人可在同群通过真实 @ 交接，连续协作有硬上限。
 - ⚡ **并行多任务——“不用排队”**：同一群聊同时跑多个任务、会话隔离；其他方案只能串行排队。
 - 🗂 **会话归档与清理——“会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留策略。
 - 📣 **跨会话主动通知 + @人——“活干完了它会来找你”**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
@@ -146,6 +147,30 @@ SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段
 当成当前对话。策略持久化在 `~/.dsh-lark/profiles/<profile>/isolation.json`。
 
 **多角色 Agent**：管理员用 `/role save <id> <name> --persona <文案> [--model <id>] [--tools <csv>] [--rules <文案>]` 定义 PM / 开发 / 文档等角色，`/role set <id>` 绑定到当前 scope；每个 run 携带角色 persona 与规则，角色模型低于每会话 `/model use`。角色定义持久化在 `~/.dsh-lark/profiles/<profile>/roles.json`。
+
+**多机器人实例与 @ 交接**：
+
+```bash
+dsh-lark-bot bot add reviewer --model gateway/review-model # 无凭据参数时扫码创建独立 PersonalAgent
+dsh-lark-bot bot list
+dsh-lark-bot bot status reviewer
+dsh-lark-bot bot remove reviewer                       # 保留会话/工作树数据
+```
+
+每个实例使用独立的 bridge profile、`dsh-lark-<name>` profile、
+`~/.dsh-lark/bots/<name>/dsh` DSH_HOME、OS 用户服务、飞书与 provider 凭据、模型目录、
+session/scope/worktree/archive；添加/移除不会重启其他实例。可在执行 `bot add` 时为当前进程设置
+该实例专用的 `DEEPSEEK_API_KEY`；自定义 provider 凭据可在实例启动后通过 `/key set` 写入独立凭据库。
+连接后，本机共享的
+`fleet.json` 只把已登记 bot open_id 视为可信 peer。agent 获得 peer 的精确 open_id，可用
+`lark_notify` 在当前群真实 @ 对方并附交接摘要；未知 bot、未 @、system/anonymous 消息不进入 agent，
+bot 发来的 `/...` 也只作为任务文本。共享 `handoffs.json` 对 messageId 去重并在全 fleet 统计连续
+交接，默认 6 轮；任一新鲜真人消息（即使未 @）立即重置。成员隔离群中的 bot 交接使用该实例的
+group/topic scope，避免生成无人可操作的 bot-owned 审批卡。额外实例由自己的 service 常驻；默认
+guardian 仍只救援其配置的主实例。
+`default` 主机器人不能通过 `bot remove` 删除，避免附加实例管理误伤既有机器人。
+附加实例仅支持各自隔离 runtime 的 `sdk` / `acp`（以及 legacy `headless`）；`bot add` 与运行时都会
+拒绝 `web`，因为共享 Web agent 的广播事件流无法提供实例级 session 隔离。
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
@@ -295,7 +320,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护、多角色 Agent、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理六项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
+**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理与关键任务计划门禁八项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -371,6 +396,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）|
 | `DSH_LARK_GROUP_NO_AT` | `false` | 处理白名单实时无 @ 消息并轮询已登记群聊历史；要求 `im:message.group_msg` 权限和非空 `allowed_users` |
 | `DSH_LARK_GROUP_POLL_MS` | `3000` | 无 @ 群消息轮询间隔（毫秒，最小 1000）|
+| `DSH_LARK_BOT_HANDOFF_MAX` | `6` | 本机可信机器人连续 @ 交接上限（最小 2；真人消息重置）|
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）|
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期|
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行）|
@@ -400,6 +426,13 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 本工具在**本机**运行，安装前请知悉它会访问：
 
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
+- **多机器人身份与消息**：`fleet.json`（0600）保存实例名、dsh/bridge profile、独立 DSH_HOME、bot open_id/名称，不保存密钥；
+  `handoffs.json`（0600）保存 chat id、最近交接 message id 与轮数。只有已登记 peer 的真实 @ 消息会进入
+  agent；已登记 peer 的 name/open_id 会注入每轮 agent prompt 并随任务上下文发送给模型 provider，
+  以便生成精确 @ 交接。交接提示、卡片和回复仍发送到共享群，对群成员可见。移除实例会删除其
+  飞书配置凭据、独立 `.credentials.yaml` 与 service env；DSH_HOME 中的 provider 设置/runtime
+  session 默认保留以便恢复，
+  默认保留 `profiles/<name>/` 会话/工作树；需要删除这些数据时由用户另行处理。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
 - **群消息与可选历史**：为识别“直接回复问答卡”，群实时事件先进入 bridge，再由 bridge 忽略未 @ 且未命中 pending 卡的消息。仅当 `DSH_LARK_GROUP_NO_AT=true` 时，实时无 @ 消息会进入任务管线，并轮询曾经通过事件登记的群聊 / 话题；两条路径都只处理白名单真人消息（及可选群白名单），历史消息还须为启动后的未删除消息，并与实时事件按 message ID 去重。该模式需管理员授予 `im:message.group_msg` 权限并确认符合团队隐私政策。
@@ -561,9 +594,9 @@ pnpm publish:dual
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入|
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者）|
 | `src/card/` | 流式卡片与审批 / 问答 / 计划决策卡渲染|
-| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略|
+| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略、多机器人 fleet / 交接限制|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
-| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `service`（可选 OS 托管）/ `doctor` / `upgrade` / 隐藏运行入口|
+| `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏运行入口|
 | `src/service/` | 正常 dsh profile 的跨平台用户服务、0600 环境快照、状态与日志管理|
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|
 | `src/guardian/` | 安全网守护：心跳、进程观察、仅核心安全 profile、接管状态机、系统服务安装|
@@ -612,11 +645,11 @@ pnpm publish:dual
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）；v0.15.1 更新说明 — 📨 已备妥，待人工粘贴
 - 平台数据刷新（v0.14.0 → v0.15.1）— ✅ 已恢复提交（2026-08-17）：awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 跟进](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh 说明备妥
 
-**亮点跟进**（六项独家能力与 issue #6 设计实现）：
+**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方八项清单）：
 
 - awesome-dsh-plugins 榜单行同步（仓库描述 → 最新）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交（维护方已确认，等待渲染周期同步）
 - dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交
-- omdsh 六项独家亮点补充（含 Guardian 设计实现）：[Discussion #11 亮点评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 已提交
+- omdsh 当时六项独家亮点补充（含 Guardian 设计实现）：[Discussion #11 亮点评论](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 已提交
 
 ## 假冒仓库警告
 

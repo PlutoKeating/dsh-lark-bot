@@ -170,6 +170,33 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 - 模型优先级：每会话 `/model use` > 角色 `--model` > profile 偏好 > dsh 默认模型 > 环境默认。
 - 角色 save / remove 仅管理员可执行；set / clear 任意被邀请用户可执行。
 
+### 多机器人实例与 @ 交接
+
+```bash
+dsh-lark-bot bot add reviewer --model gateway/review-model
+dsh-lark-bot bot list
+dsh-lark-bot bot status reviewer
+dsh-lark-bot bot remove reviewer
+```
+
+- `bot add` 为实例创建独立 bridge/dsh profile、`~/.dsh-lark/bots/<name>/dsh` DSH_HOME、
+  PersonalAgent 凭据与 OS 用户服务；可扫码，或同时传 `--app-id` / `--app-secret`。执行 add 时设置的
+  `DEEPSEEK_API_KEY` 只进入该实例 service；自定义 provider secret 可在启动后用 `/key set` 写入
+  独立 `.credentials.yaml`，模型目录和 provider 设置也位于该 DSH_HOME。
+- 附加实例使用 `sdk` / `acp`（或 legacy `headless`）；不支持 `web`，因为共享 Web agent 的事件
+  广播不能保证多实例 session 隔离，命令与启动都会明确拒绝。
+- 同群 peer 只有在 bot 类型事件、真实 @ 当前 bot、sender `open_id` 已登记且启用时才能交接；
+  `DSH_LARK_BOT_HANDOFF_MAX` 控制连续 bot 回合上限（默认 6、最小 2），任意新鲜真人消息重置。
+- `fleet.json` 与 `handoffs.json` 只保存身份/profile/计数元数据，不保存 App Secret；交接内容、卡片
+  与回复仍对共享群成员可见。member 隔离下的 bot 交接使用 group/topic scope。
+- `bot remove` 删除实例飞书配置凭据、独立 `.credentials.yaml`、服务 env 与系统入口，但保留
+  profile 下会话、工作树、归档，以及 DSH_HOME 中不含字面密钥的 provider 设置/runtime session；
+  彻底删除须由用户备份后手工清理。
+  `default` 主机器人不能由 `bot remove` 删除，需使用标准 service/plugin 生命周期命令。
+  默认 guardian 只救援其配置的主实例；额外实例由各自 service 保活。
+- 升级按 dsh profile 执行；有多个实例时逐个运行
+  `dsh-lark-bot upgrade --profile <实例的-dsh-profile> --yes [--restart]`。
+
 ### 出站 @ 提及与跨会话通知
 
 - 出站契约支持 `mentions`（`userId` + 可选 `name`），桥接层自动把 `<at>` 提及标记拼入消息体。
@@ -317,6 +344,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `DSH_LARK_HOME` | `~/.dsh-lark` | 本地状态根目录 |
+| `DSH_LARK_PROFILE` | `default` | bridge 状态 profile；多实例 service 自动写入 |
+| `DSH_LARK_DSH_PROFILE` | `dsh-lark` | 当前实例关联的 dsh profile；多实例 service 自动写入 |
 | `DSH_LARK_TENANT` | `feishu` | `feishu` 或 `lark` |
 | `DSH_LARK_WORKSPACE` | 未设置 | 新会话默认工作目录 |
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
@@ -332,6 +361,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时（持续无活动事件才终止） |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行） |
+| `DSH_LARK_BOT_HANDOFF_MAX` | `6` | 同 chat 连续可信 bot @ 交接上限（最小 2；真人消息重置） |
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留） |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |

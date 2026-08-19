@@ -63,6 +63,8 @@ export interface RunFlowInput {
   replyTo?: string;
   /** Visible member identity when the group uses member-isolated scopes. */
   scopeOwner?: string;
+  /** Trusted peer identities available for an explicit lark_notify handoff. */
+  collaborationPeers?: Array<{ name: string; openId: string; displayName?: string }>;
 }
 
 export async function runAgentBatch(input: RunFlowInput): Promise<void> {
@@ -162,7 +164,7 @@ async function runAttempt(
   // the dsh session; replaying the transcript would duplicate it and can drift
   // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
   const history = resuming ? [] : input.sessions.historyFor(input.scope, cwd);
-  const prompt = buildPrompt(history, input.messages, input.role);
+  const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers);
   const runId = randomUUID();
 
   const run = input.adapter.run({
@@ -644,10 +646,12 @@ function buildPrompt(
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   messages: string[],
   role: RoleDefinition | undefined,
+  collaborationPeers: RunFlowInput['collaborationPeers'],
 ): string {
   const rolePreamble = role ? renderRolePreamble(role) : undefined;
+  const collaborationPreamble = renderCollaborationPreamble(collaborationPeers);
   const userText = messages.join('\n\n');
-  if (history.length === 0 && !rolePreamble) return userText;
+  if (history.length === 0 && !rolePreamble && !collaborationPreamble) return userText;
 
   const transcript = history
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
@@ -655,11 +659,25 @@ function buildPrompt(
 
   const parts: string[] = [];
   if (rolePreamble) parts.push(rolePreamble, '');
+  if (collaborationPreamble) parts.push(collaborationPreamble, '');
   if (history.length > 0) {
     parts.push('Continue the conversation using the history below.', '', transcript, '');
   }
   parts.push(`Current user message:\n${userText}`);
   return parts.join('\n');
+}
+
+function renderCollaborationPreamble(
+  peers: RunFlowInput['collaborationPeers'],
+): string | undefined {
+  if (!peers || peers.length === 0) return undefined;
+  return [
+    '[Trusted bot collaboration peers]',
+    ...peers.map((peer) =>
+      `- ${peer.name}${peer.displayName ? ` (${peer.displayName})` : ''}: open_id=${peer.openId}`
+    ),
+    'When the user or your assigned workflow requests a handoff, call lark_notify for the current chat/scope, include a concise result/next-step summary, and pass exactly one listed open_id in mention_user_ids. Never guess an identity or start an unrequested bot loop.',
+  ].join('\n');
 }
 
 function renderRolePreamble(role: RoleDefinition): string {

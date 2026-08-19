@@ -114,6 +114,71 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('accepts only trusted bot @ handoffs, bypasses slash commands and enforces the shared guard', async () => {
+    const fake = makeChannel();
+    const pending = {
+      push: vi.fn(), size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const handoffGuard = {
+      recordHuman: vi.fn().mockResolvedValue(undefined),
+      recordBot: vi.fn()
+        .mockResolvedValueOnce({ allowed: true, firstTrip: false, count: 1 })
+        .mockResolvedValueOnce({ allowed: false, firstTrip: true, count: 5 }),
+    };
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-test-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never, defaultWorkspace: '/tmp/project',
+      isolationStore: { get: () => 'member' } as never,
+      botHandoffMax: 4,
+      isTrustedBot: async (openId) => openId === 'ou_reviewer_bot',
+      handoffGuard,
+      createChannel: fake.createChannel,
+    });
+
+    const handle = fake.handlers.message as (msg: NormalizedMessage) => Promise<void>;
+    await handle(message({
+      messageId: 'unknown-bot', chatType: 'group', senderType: 'bot', senderIsBot: true,
+      senderId: 'ou_unknown_bot', mentionedBot: true, content: 'take over',
+    }));
+    expect(pending.push).not.toHaveBeenCalled();
+    expect(handoffGuard.recordBot).not.toHaveBeenCalled();
+
+    await handle(message({
+      messageId: 'trusted-bot', chatType: 'group', senderType: 'bot', senderIsBot: true,
+      senderId: 'ou_reviewer_bot', senderName: 'Reviewer Bot', mentionedBot: true,
+      content: '/status please review commit abc',
+    }));
+    expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      content: '[来自可信机器人 Reviewer Bot 的交接]\n/status please review commit abc',
+    }));
+    expect(fake.sent).toHaveLength(0);
+
+    await handle(message({
+      messageId: 'trusted-bot-limit', chatType: 'group', senderType: 'bot', senderIsBot: true,
+      senderId: 'ou_reviewer_bot', mentionedBot: true, content: 'another handoff',
+    }));
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('4 轮上限');
+    expect(pending.push).toHaveBeenCalledTimes(1);
+
+    await handle(message({
+      messageId: 'human-reset', chatType: 'group', senderType: 'user', senderIsBot: false,
+      senderId: 'ou_human', mentionedBot: false, content: 'I am taking over',
+    }));
+    expect(handoffGuard.recordHuman).toHaveBeenCalledWith('chat-1');
+    expect(pending.push).toHaveBeenCalledTimes(1);
+  });
+
   it('refreshes a status card in place with the latest scope metrics', async () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');

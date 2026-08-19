@@ -64,7 +64,7 @@ describe('dsh-lark-bot setup', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         'node',
         ['/fake/dsh/bin.js', 'plugin', '--profile', 'demo', 'add', `dsh-lark-bot@${pkg.version}`],
-        { stdio: 'inherit' },
+        { stdio: 'inherit', env: expect.objectContaining({ DSH_HOME: home }) },
       );
       expect(stdout.join('')).toContain('dsh --profile demo');
       expect(stdout.join('')).toContain('安全网守护已默认安装');
@@ -102,7 +102,7 @@ describe('dsh-lark-bot setup', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         'node',
         ['/fake/dsh/bin.js', 'plugin', '--profile', 'demo', 'add', '/tmp/dsh-lark-bot-0.9.1.tgz'],
-        { stdio: 'inherit' },
+        { stdio: 'inherit', env: expect.objectContaining({ DSH_HOME: home }) },
       );
     } finally {
       process.stdout.write = originalWrite;

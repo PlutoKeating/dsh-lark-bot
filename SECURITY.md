@@ -62,7 +62,14 @@
     `approval/request` answerer 的回调
     服务只绑定 `127.0.0.1`，每次启动生成随机
     token 鉴权（不落盘、不进日志），请求体限 1MB；`/notify` 与角色 / 配置写命令同为管理员操作。
-11. **安全网守护（默认随 `setup` 安装）**：
+11. **多机器人 peer 鉴权与防循环**：只有 `fleet.json` 中已启用且 identity 唯一的 bot open_id，
+    在群内真实 @ 当前 bot 时才可交接；未知 bot、未 @、system/anonymous 消息拒绝。bot 文本不进入
+    slash-command 管理管线。连续交接由跨进程 `handoffs.json` 原子计数、按 messageId 去重，超过
+    `DSH_LARK_BOT_HANDOFF_MAX` fail closed；只有通过 freshness 检查的真人消息能重置计数。fleet、
+    handoff 与共享 `config.json` 写入均使用原子 owner 目录 + 唯一 token 子文件的 lease 锁并心跳续租；
+    回收/释放只删除精确 token，再对空目录 `rmdir`，不会误删替代 owner。dead-owner / 遗弃 lease
+    仍可回收。附加实例拒绝无法隔离广播 session 的共享 `web` adapter。
+12. **安全网守护（默认随 `setup` 安装）**：
     - 守护是独立于 dsh / Cordis 的最小进程，只读取本地状态与进程命令行（`ps`，不读内存），
       不导入任何 dsh 代码、不监听公网端口；
     - dsh 在线时守护**不连接飞书**（同 app 长连接仅允许单连接，避免抢占正常通道）；仅在
@@ -78,6 +85,14 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
+- 多机器人 registry `~/.dsh-lark/fleet.json` 只保存实例/profile 名与 bot open_id/name；共享
+  `handoffs.json` 保存 chat id、最近 message id 和轮数（均 0600）。这些标识会让本机用户看到
+  哪些机器人/群参与过交接；peer name/open_id 会进入每轮 agent prompt 并随任务上下文发送给
+  当前模型 provider，以支持精确 @ 交接。交接内容仍发送到共享群，不构成消息隐私隔离。
+- 每个额外实例的 dsh provider 设置与凭据位于独立
+  `~/.dsh-lark/bots/<name>/dsh/{settings.yaml,.credentials.yaml}`；service env 快照标准 DeepSeek key
+  与该实例配置中已引用的 credential 环境键。`bot remove` 删除 `.credentials.yaml` 与 service env，
+  保留不含字面密钥的 settings/runtime session 以便恢复；其余 DSH_HOME 数据需由用户备份后手工清除。
 - 桥接引擎始终在 dsh 宿主进程内运行。可选 `service install` 会将启动所需的
   `DSH_LARK_*`、运行路径及实际 provider `credentialRef` 环境键白名单快照到
   `~/.dsh-lark/service/<profile>.env`（POSIX 0600；Windows 用 `icacls` 移除继承并只授予当前用户）；macOS plist / Windows 计划任务不嵌入密钥，

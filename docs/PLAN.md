@@ -54,6 +54,7 @@
 - [x] scope 内运行跟踪与 `/stop`（全部 / 定向终止）
 - [x] scope 内并行 run（`ActiveRuns` 多 run / `PendingQueue` 并发上限 / `/concurrency`）
 - [x] 多角色 Agent（`RoleStore` + `/role` 命令：persona / 模型 / 工具指引 / 角色规则）
+- [x] 多机器人实例与 @ 交接（独立 profile/service/凭据/上下文 + 可信 peer + 跨进程回合上限，issue #25）
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
@@ -96,6 +97,9 @@
     （`--no-guardian` 可跳过）
 16. ✅ 群聊会话隔离（issue #17）：管理员以 `/isolation group|topic|member` 切换后续消息 scope，
     消息与卡片动作共用路由，成员模式在群卡显示 owner；既有各级 session / worktree / archive 保留。
+17. ✅ 多机器人协作（issue #25）：`bot add|list|status|remove` 管理独立实例；可信 bot 通过真实 @
+    交接，跨进程共享的 per-chat 计数限制自动对话，真人消息重置；附加实例拒绝无法隔离广播
+    session 的 Web adapter，只使用独立 SDK/ACP/headless runtime。
 
 ## 9. P14 安全网守护 · 验收标准（issue #6）
 

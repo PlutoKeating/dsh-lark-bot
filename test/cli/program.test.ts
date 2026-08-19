@@ -11,7 +11,7 @@ describe('buildProgram', () => {
 
     expect(program.name()).toBe('dsh-lark-bot');
     const names = program.commands.map((command) => command.name());
-    expect(names).toEqual(expect.arrayContaining(['setup', 'upgrade', 'doctor', 'guardian']));
+    expect(names).toEqual(expect.arrayContaining(['setup', 'upgrade', 'doctor', 'guardian', 'bot']));
   });
 
   it('keeps the internal run command hidden from help', () => {
@@ -27,6 +27,13 @@ describe('buildProgram', () => {
     expect(subcommands).toEqual(
       expect.arrayContaining(['run', 'install', 'uninstall', 'status']),
     );
+  });
+
+  it('registers multi-bot lifecycle subcommands', () => {
+    const program = buildProgram();
+    const bot = program.commands.find((command) => command.name() === 'bot');
+    const subcommands = bot?.commands.map((command) => command.name()) ?? [];
+    expect(subcommands).toEqual(expect.arrayContaining(['add', 'list', 'status', 'remove']));
   });
 });
 

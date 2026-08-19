@@ -77,6 +77,30 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('includes exact trusted peer identities and handoff instructions in the agent prompt', async () => {
+    let prompt = '';
+    const adapter = fakeAdapter([
+      { type: 'done', sessionId: 'session-peer', terminationReason: 'normal' },
+    ]);
+    const originalRun = adapter.run.bind(adapter);
+    adapter.run = (options) => {
+      prompt = options.prompt;
+      return originalRun(options);
+    };
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-peers', chatId: 'chat-peers', messages: ['handoff after completion'],
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: fake.channel, defaultWorkspace: '/tmp/project',
+      collaborationPeers: [
+        { name: 'reviewer', openId: 'ou_reviewer_bot', displayName: 'Reviewer Bot' },
+      ],
+    });
+    expect(prompt).toContain('reviewer (Reviewer Bot): open_id=ou_reviewer_bot');
+    expect(prompt).toContain('mention_user_ids');
+    expect(prompt).toContain('Never guess an identity');
+  });
+
   it('pauses the idle watchdog for a native-session callback approval', async () => {
     const approvals = new ApprovalRegistry();
     const stop = vi.fn().mockResolvedValue(undefined);

@@ -62,7 +62,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   process.stdout.write(
     `正在把 ${packageSpec} 安装到 dsh profile \`${profile}\`（$DSH_HOME=${dshHome}）...\n`,
   );
-  await runDshPlugin(bin, profile, packageSpec);
+  await runDshPlugin(bin, profile, packageSpec, { ...process.env, DSH_HOME: dshHome });
 
   if (installGuardianService) {
     const install = options.installGuardianFn ?? installGuardian;
@@ -85,7 +85,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       '',
       '✅ 安装完成。启动方式（唯一的部署路径）：',
       '',
-      `  dsh --profile ${profile}`,
+      `  ${options.dshHome ? `DSH_HOME=${JSON.stringify(dshHome)} ` : ''}dsh --profile ${profile}`,
       '',
       '首次启动会在终端打印二维码，用飞书 / Lark 扫码完成一次性绑定；',
       '绑定后 dsh 即以标准插件方式加载 dsh-lark-bot 的桥接引擎。',
@@ -105,12 +105,17 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   );
 }
 
-export function runDshPlugin(bin: string, profile: string, packageSpec: string): Promise<void> {
+export function runDshPlugin(
+  bin: string,
+  profile: string,
+  packageSpec: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'node',
       [bin, 'plugin', '--profile', profile, 'add', packageSpec],
-      { stdio: 'inherit' },
+      { stdio: 'inherit', env },
     );
     child.once('error', reject);
     child.once('exit', (code) => {

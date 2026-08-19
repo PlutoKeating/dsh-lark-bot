@@ -29,6 +29,8 @@ export interface RuntimeEnv {
   groupNoAt: boolean;
   /** Poll interval for group no-at history reads (minimum 1000ms). */
   groupPollMs: number;
+  /** Maximum consecutive bot @ handoffs observed by one instance before it stops. */
+  botHandoffMax: number;
   /** Max agent runs allowed concurrently per scope (default 2). */
   scopeConcurrency: number;
   /** Live messages kept per scope before overflow is archived (default 40). */
@@ -71,6 +73,7 @@ const DEFAULTS = {
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
   groupPollMs: 3_000,
+  botHandoffMax: 6,
   scopeConcurrency: 2,
   retentionMsgs: 40,
   archiveMax: 50,
@@ -248,6 +251,12 @@ export function loadRuntimeEnv(
       DEFAULTS.groupPollMs,
       1_000,
       'DSH_LARK_GROUP_POLL_MS',
+    ),
+    botHandoffMax: parseIntAtLeast(
+      source.DSH_LARK_BOT_HANDOFF_MAX,
+      DEFAULTS.botHandoffMax,
+      2,
+      'DSH_LARK_BOT_HANDOFF_MAX',
     ),
     scopeConcurrency: parseMinOneInt(
       source.DSH_LARK_SCOPE_CONCURRENCY,
