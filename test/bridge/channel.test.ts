@@ -32,6 +32,7 @@ function makeChannel(): {
   channel: LarkChannel;
   handlers: Handlers;
   sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }>;
+  updatedCards: Array<{ messageId: string; card: object }>;
   recalled: string[];
   createChannel: (options?: LarkChannelOptions) => LarkChannel;
   createOptions: Record<string, unknown> | undefined;
@@ -39,6 +40,7 @@ function makeChannel(): {
   const handlers: Handlers = {};
   const sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }> = [];
   const recalled: string[] = [];
+  const updatedCards: Array<{ messageId: string; card: object }> = [];
 
   const channel = {
     on(next: Handlers) {
@@ -53,6 +55,9 @@ function makeChannel(): {
       },
     ),
     stream: vi.fn().mockResolvedValue(undefined),
+    updateCard: vi.fn().mockImplementation(async (messageId: string, card: object) => {
+      updatedCards.push({ messageId, card });
+    }),
     recallMessage: vi.fn().mockImplementation(async (messageId: string) => {
       recalled.push(messageId);
     }),
@@ -63,6 +68,7 @@ function makeChannel(): {
     channel,
     handlers,
     sent,
+    updatedCards,
     recalled,
     get createOptions() {
       return createOptions;
@@ -108,6 +114,72 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('refreshes a status card in place with the latest scope metrics', async () => {
+    const fake = makeChannel();
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-1', 'session-1', '/tmp/project');
+    sessions.recordUsage('chat-1', { inputTokens: 25, outputTokens: 5 });
+    sessions.recordContextUsage('chat-1', {
+      usedTokens: 40,
+      contextWindow: 100,
+      sessionId: 'session-1',
+      model: 'deepseek-official/deepseek-v4-flash',
+    });
+
+    await startChannel({
+      appId: 'cli_test',
+      appSecret: 'secret',
+      tenant: 'feishu',
+      adapter: fakeAdapter(),
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(),
+      defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(),
+      roleStore: new RoleStore(':memory:'),
+      archiver: {
+        archive: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+        prune: vi.fn().mockResolvedValue(0),
+      } as never,
+      defaultRetention: 40,
+      archiveMax: 50,
+      archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000,
+      models: new ModelStore(),
+      wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({
+        home: join(tmpdir(), 'dsh-lark-bot-test-home'),
+      }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: {
+        push: vi.fn(),
+        size: vi.fn().mockReturnValue(0),
+        isFlushing: vi.fn().mockReturnValue(false),
+        isBlocked: vi.fn().mockReturnValue(false),
+      } as never,
+      defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    const response = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'status-message',
+      operator: { openId: 'user-1' },
+      action: { value: { cmd: 'status-refresh', scope: 'chat-1' } },
+      raw: {},
+    });
+
+    expect(response).toEqual({ toast: { type: 'success', content: '状态已刷新' } });
+    expect(fake.updatedCards).toHaveLength(1);
+    expect(fake.updatedCards[0]?.messageId).toBe('status-message');
+    expect(JSON.stringify(fake.updatedCards[0]?.card)).toContain('40 / 100（40.0%）');
+    expect(fake.sent).toHaveLength(0);
+  });
+
   it('confirms and recalls an approval card after resolving the permission request', async () => {
     const fake = makeChannel();
     const approvals = new ApprovalRegistry();
@@ -490,6 +562,11 @@ describe('startChannel', () => {
     interrupt.mockClear();
     for (const value of [
       { cmd: 'stop', scope: 'chat-1:member:user-1' },
+      {
+        cmd: 'status-refresh',
+        scope: 'chat-1:member:user-1',
+        isolation: 'member',
+      },
       {
         cmd: 'approve',
         id: 'member-approval',

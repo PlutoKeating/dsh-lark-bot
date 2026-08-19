@@ -89,12 +89,23 @@ function translateAssistantMessage(data: unknown): AgentEvent[] {
     typeof usage.inputTokens === 'number' ? usage.inputTokens : undefined;
   const outputTokens =
     typeof usage.outputTokens === 'number' ? usage.outputTokens : undefined;
-  if (inputTokens === undefined && outputTokens === undefined) return [];
+  const cacheReadTokens =
+    typeof usage.cacheReadTokens === 'number' ? usage.cacheReadTokens : undefined;
+  const cacheWriteTokens =
+    typeof usage.cacheWriteTokens === 'number' ? usage.cacheWriteTokens : undefined;
+  if (
+    inputTokens === undefined &&
+    outputTokens === undefined &&
+    cacheReadTokens === undefined &&
+    cacheWriteTokens === undefined
+  ) return [];
   return [
     {
       type: 'usage',
       ...(inputTokens === undefined ? {} : { inputTokens }),
       ...(outputTokens === undefined ? {} : { outputTokens }),
+      ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
+      ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
     },
   ];
 }

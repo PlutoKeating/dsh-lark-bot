@@ -67,6 +67,14 @@ export function translateAcpUpdate(notification: SessionNotification): AgentEven
       return textOfContent(update.content)
         ? [{ type: 'thinking', delta: textOfContent(update.content) }]
         : [];
+    case 'usage_update':
+      return typeof update.used === 'number' && typeof update.size === 'number'
+        ? [{
+            type: 'context_usage',
+            usedTokens: update.used,
+            contextWindow: update.size,
+          }]
+        : [];
     case 'tool_call': {
       if (typeof update.toolCallId !== 'string') return [];
       return [
@@ -299,6 +307,12 @@ export class AcpDshAdapter implements AgentAdapter {
             : {}),
           ...(typeof response.usage.outputTokens === 'number'
             ? { outputTokens: response.usage.outputTokens }
+            : {}),
+          ...(typeof response.usage.cachedReadTokens === 'number'
+            ? { cacheReadTokens: response.usage.cachedReadTokens }
+            : {}),
+          ...(typeof response.usage.cachedWriteTokens === 'number'
+            ? { cacheWriteTokens: response.usage.cachedWriteTokens }
             : {}),
         };
         channel.push(usage);

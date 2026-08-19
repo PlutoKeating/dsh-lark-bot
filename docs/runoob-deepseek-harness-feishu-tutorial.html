@@ -42,7 +42,7 @@
 <tr><td><code>/new</code> <code>/reset</code></td><td>开始新会话</td></tr>
 <tr><td><code>/cd &lt;path&gt;</code></td><td>切换工作目录并重置会话</td></tr>
 <tr><td><code>/ws list</code> <code>/ws save &lt;name&gt;</code> <code>/ws use &lt;name&gt;</code></td><td>查看 / 保存 / 切换命名工作空间</td></tr>
-<tr><td><code>/status</code></td><td>查看当前状态与运行中的任务</td></tr>
+<tr><td><code>/status</code></td><td>查看可刷新状态卡、上下文/token 用量与待处理卡</td></tr>
 <tr><td><code>/stop</code></td><td>终止当前任务</td></tr>
 <tr><td><code>/concurrency [N]</code></td><td>查看或设置当前 scope 并行任务数（默认 2）</td></tr>
 <tr><td><code>/role list</code> <code>/role set &lt;id&gt;</code></td><td>查看角色 / 为当前 scope 绑定角色</td></tr>
@@ -92,7 +92,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot</code></pre>
 <p><strong>常见问题</strong></p>
 <p>扫码失败？确认本机时间准确、网络可访问飞书开放平台；已有 App ID/Secret 时可用 <code>--app-id</code> / <code>--app-secret</code> 跳过扫码。</p>
 <p>机器人静默 / 长连接失败？查看 stderr 上的 JSONL 日志（关注 <code>channel</code> 类别），SDK 会自动重连；也可先运行 <code>dsh-lark-bot doctor</code> 检查 profile 与本机 dsh 可用性。</p>
-<p>agent 无响应？发送 <code>/status</code> 查看 scope、cwd 和 active run；<code>/stop</code> 终止当前任务；持续无响应超过 <code>DSH_LARK_RUN_TIMEOUT_MS</code> 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。</p>
+<p>agent 无响应？发送 <code>/status</code> 查看 scope、cwd、模型、active run、真实 context/token 指标和待审批/提问/计划（未知值显示“暂无”，卡片可原位刷新）；<code>/stop</code> 终止当前任务；持续无响应超过 <code>DSH_LARK_RUN_TIMEOUT_MS</code> 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。</p>
 <p>dsh 崩溃了怎么办？直接发 <code>/safemode</code>，守护会拉起仅核心安全模式，修复后 <code>/safemode exit</code> 恢复。</p>
 
 <p><strong>参考链接</strong></p>

@@ -68,7 +68,9 @@
   成员任务卡按入队 scope 显示发送者 open_id，不受排队期间的策略切换影响。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
 - 中断命令：`/new`、`/cd`、`/ws use`、`/stop` 可打断当前任务。
-- 会话续跑 `/resume`、状态查询 `/status`。
+- 会话续跑 `/resume`；`/status` 以可原位刷新的卡片展示工作区、有效模型、session、active runs、
+  版本、真实 context used/limit/percentage、累计 input/output/cache token 与待审批/提问/计划数。
+  上游不可得字段必须显示“暂无”，不得估算；成员 scope 状态卡只允许 owner 刷新。
 - **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
   为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope 保留窗口，
   超窗消息自动归档；`/archive list` 查看、`/archive clean` 按保留策略清理

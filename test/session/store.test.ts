@@ -86,6 +86,79 @@ describe('SessionStore', () => {
     }
   });
 
+  it('persists cumulative token metrics and clears them with the session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
+    const path = join(root, 'sessions.json');
+
+    try {
+      const store = new SessionStore(path);
+      store.set('chat-a', 'session-1', '/tmp/project-a');
+      store.recordUsage('chat-a', {
+        inputTokens: 10,
+        outputTokens: 4,
+        cacheReadTokens: 20,
+      });
+      store.recordUsage('chat-a', {
+        inputTokens: 3,
+        outputTokens: 2,
+        cacheWriteTokens: 5,
+      });
+      store.recordContextUsage('chat-a', {
+        usedTokens: 32,
+        contextWindow: 128,
+        sessionId: 'session-1',
+        model: 'gateway/model-a',
+      });
+      store.recordContextUsage('chat-a', {
+        usedTokens: 64,
+        contextWindow: 256,
+        sessionId: 'session-2',
+        model: 'gateway/model-b',
+      });
+      await store.flush();
+
+      const reloaded = new SessionStore(path);
+      await reloaded.load();
+      expect(reloaded.metricsFor('chat-a', {
+        sessionId: 'session-1',
+        model: 'gateway/model-a',
+      })).toEqual({
+        inputTokens: 13,
+        outputTokens: 6,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 5,
+        contextUsedTokens: 32,
+        contextWindow: 128,
+      });
+      expect(reloaded.metricsFor('chat-a', {
+        sessionId: 'session-2',
+        model: 'gateway/model-b',
+      })).toEqual({
+        inputTokens: 13,
+        outputTokens: 6,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 5,
+        contextUsedTokens: 64,
+        contextWindow: 256,
+      });
+      expect(reloaded.metricsFor('chat-a', {
+        sessionId: 'session-3',
+        model: 'gateway/model-c',
+      })).toEqual({
+        inputTokens: 13,
+        outputTokens: 6,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 5,
+      });
+
+      expect(reloaded.clear('chat-a')).toBe(true);
+      expect(reloaded.metricsFor('chat-a')).toBeUndefined();
+      await reloaded.flush();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('archives overflow beyond the retention window', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-session-'));
     const path = join(root, 'sessions.json');

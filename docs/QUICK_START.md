@@ -85,7 +85,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
-| `/status` | 查看当前状态 |
+| `/status` | 查看可刷新状态卡（模型 / session / run / context / token / 待处理卡） |
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
@@ -180,7 +180,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 
 - 配置文件：`~/.dsh-lark/config.json`
 - 守护状态：`~/.dsh-lark/guardian.json`
-- 会话状态：`~/.dsh-lark/profiles/<profile>/sessions.json`
+- 会话状态与每 scope session 累计 token/context 快照：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
 - scope 目录：`~/.dsh-lark/profiles/<profile>/scopes.json`

@@ -75,10 +75,26 @@ describe('translateSessionEvent', () => {
   it('surfaces usage and turn errors', () => {
     const tracker = { emitted: new Set<string>() };
     const usage = translateSessionEvent(
-      { type: 'assistant/message', data: { usage: { inputTokens: 1, outputTokens: 2 } } },
+      {
+        type: 'assistant/message',
+        data: {
+          usage: {
+            inputTokens: 1,
+            outputTokens: 2,
+            cacheReadTokens: 3,
+            cacheWriteTokens: 4,
+          },
+        },
+      },
       tracker,
     );
-    expect(usage).toEqual([{ type: 'usage', inputTokens: 1, outputTokens: 2 }]);
+    expect(usage).toEqual([{
+      type: 'usage',
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: 3,
+      cacheWriteTokens: 4,
+    }]);
     const turnError = translateSessionEvent(
       { type: 'turn/end', data: { turn: 1, reason: { kind: 'error', error: { message: 'boom' } } } },
       tracker,

@@ -101,7 +101,7 @@ dsh --profile dsh-lark
 | `/ws save <name>` | 保存当前工作空间|
 | `/ws use <name>` | 切换到命名工作空间|
 | `/ws remove <name>` | 删除命名工作空间|
-| `/status` | 查看当前状态|
+| `/status` | 查看可刷新状态卡（工作区 / 模型 / session / run / context / 累计 token / 待处理卡）|
 | `/resume` | 查看当前会话最近上下文|
 | `/stop` | 终止当前任务|
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时|
@@ -131,6 +131,13 @@ dsh --profile dsh-lark
 **`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
 同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；`/status` 查看全部运行中的 run，`/stop` 一次性终止。
+
+**会话状态卡**：`/status` 展示工作区、有效模型、session、active runs、版本、上下文占用、
+累计 input / output / cache token，以及待审批 / 待提问 / 待批准计划；点击“刷新”会原位更新同一张卡。
+只展示 adapter 或模型目录明确提供的数据：ACP 可提供真实 context `used / size` 与累计 token，
+SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段显示“暂无”，不按文本长度估算。
+累计用量随 scope 持久化；最近的 context 快照按 canonical provider/model 与 native session 分别保留，
+并行 run 不会互相覆盖，当前身份不匹配时也不会复用旧占用值。`/new`、`/reset`、`/cd` 清零；成员 scope 的刷新只允许 owner 操作。
 
 **群聊会话隔离**：管理员可用 `/isolation group|topic|member` 在“整群共享 / 话题独立 /
 成员独立”之间切换；默认 `topic` 保持既有行为。切换只改变后续消息的 scope 路由，不迁移或
@@ -377,6 +384,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **成员隔离标识与群可见性**：`member` 模式把发送者 `open_id` 写入本机 `isolation.json` 派生的
   session / scope directory / worktree / archive 索引或路径，并显示在共享群任务卡。它只隔离 agent
   上下文，不隐藏群消息：输入、进度卡与回复仍对群成员可见；其他成员不能操作该成员的任务卡。
+- **本地会话用量**：adapter 上报的 input/output/cache token 与 context used/limit 随 scope 写入
+  `~/.dsh-lark/profiles/<profile>/sessions.json`（0600），并显示在 `/status` 卡；成员 scope 仅 owner
+  可刷新，但群内已经发送的状态卡仍遵循共享群消息可见性。
 - **本地回调**：运行 `lark_notify`、`lark_ask_user` 或 `lark_request_plan_approval` 工具时，dsh
   runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
   不监听公网）；计划内容与决策卡会发送到当前飞书 / Lark 会话。

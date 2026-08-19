@@ -12,9 +12,10 @@
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
     runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
     **reasoning-delta / text-delta token 级事件**；thinking / tools 实时进入折叠过程卡，聚合后的
-    final text 作为独立 Markdown 回答发送。
+    final text 作为独立 Markdown 回答发送；`assistant/message.usage` 提供 input/output/cache usage。
   - **ACP 服务器**（`@deepseek-ai/dsh-acp`）：`session/request_permission` → 飞书审批卡；
-    ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话。
+    ACP 仅吐 committed 文本块（逐 assistant/message 一次一块），会话为全新会话；rc.7
+    `PromptResponse.usage` 与 `usage_update` 分别提供累计 token 和 context used/size。
 - 旧的 **headless 子进程 fallback** 保留为 `DSH_LARK_ADAPTER=headless`，不再默认。
 
 ---
@@ -68,7 +69,8 @@ type AgentEvent =
   | { type: 'thinking'; delta: string }
   | { type: 'tool_use'; id; name; input }           // 工具调用开始
   | { type: 'tool_result'; id; output; isError }
-  | { type: 'usage'; inputTokens?; outputTokens?; ... }
+  | { type: 'usage'; inputTokens?; outputTokens?; cacheReadTokens?; cacheWriteTokens?; ... }
+  | { type: 'context_usage'; usedTokens; contextWindow }
   | { type: 'done'; sessionId?; threadId?; terminationReason }
   | { type: 'error'; message; terminationReason };
 ```
@@ -131,7 +133,8 @@ approval 流未实现（需 ACP 模式）。
 
 **ACP 已知限制（来自其 README）**：
 - **仅全新会话**——load / list / resume / delete / fork 均不支持。
-- **仅 committed 答案**——实时进度、reasoning、工具活动、usage 不上线。
+- **仅 committed 答案**——回答文本没有 token 级 delta；但 rc.7 的 PromptResponse 可返回
+  累计 token usage，`usage_update` 可返回 context used/size，bridge 会如实转为指标事件。
 - **单一工作区**——images / audio / 多目录 / MCP 会被拒绝。
 
 ### 路线 C：headless（legacy）

@@ -13,7 +13,12 @@ import type { RunPolicyStore } from '../bot/run-policy.js';
 import type { WizardStore } from '../bot/wizard-store.js';
 import type { IsolationStore } from '../bot/isolation-store.js';
 import type { PlanApprovalRegistry } from '../bot/plan-approvals.js';
-import { tryHandleCommand, type CommandChannel } from '../commands/index.js';
+import {
+  statusCardInputFor,
+  tryHandleCommand,
+  type CommandChannel,
+} from '../commands/index.js';
+import { renderStatusCard } from '../card/status-card.js';
 import {
   handleConfigHubAction,
   handleWizardCardAction,
@@ -270,6 +275,52 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         };
       }
       const scope = requestedScope ?? currentScope;
+      if (value?.cmd === 'status-refresh') {
+        if (!event.messageId || !commandChannel.updateCard) {
+          return { toast: { type: 'error', content: '当前渠道不支持原位刷新' } };
+        }
+        try {
+          const actionIsolation =
+            value.isolation === 'p2p' ||
+            value.isolation === 'group' ||
+            value.isolation === 'topic' ||
+            value.isolation === 'member'
+              ? value.isolation
+              : undefined;
+          const chatMode = actionIsolation === 'p2p'
+            ? 'p2p'
+            : threadId
+              ? 'topic'
+              : 'group';
+          const effectiveIsolation = actionIsolation === 'p2p'
+            ? undefined
+            : (actionIsolation ?? isolationStore.get(event.chatId));
+          const input = await statusCardInputFor({
+            scope,
+            chatMode,
+            sessions: deps.sessions,
+            workspaces: deps.workspaces,
+            activeRuns: deps.activeRuns,
+            roleStore: deps.roleStore,
+            ...(effectiveIsolation ? { isolationMode: effectiveIsolation } : {}),
+            approvals: deps.approvals,
+            questions: deps.questions,
+            ...(deps.plans ? { plans: deps.plans } : {}),
+            models: deps.models,
+            dshConfig: deps.dshConfig,
+            ...(deps.resolveDefaultModel
+              ? { resolveDefaultModel: () => deps.resolveDefaultModel!(scope) }
+              : {}),
+            defaultModel: deps.defaultModel,
+            defaultWorkspace: deps.defaultWorkspace,
+          });
+          await commandChannel.updateCard(event.messageId, renderStatusCard(input));
+          return { toast: { type: 'success', content: '状态已刷新' } };
+        } catch (error) {
+          log.fail('channel-status', error, { scope });
+          return { toast: { type: 'error', content: '状态刷新失败' } };
+        }
+      }
       if (value?.cmd === 'stop') {
         await deps.activeRuns.interrupt(scope);
         return;

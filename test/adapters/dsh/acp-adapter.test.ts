@@ -23,7 +23,7 @@ rl.on('line', (line) => {
     const hasImage = msg.params.prompt.some((block) => block.type === 'image' && block.mimeType === 'image/png');
     setTimeout(() => {
       process.stdout.write(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 'server-s1', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'done! image=' + hasImage } } } }) + '\\n');
-      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }) + '\\n');
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn', usage: { totalTokens: 16, inputTokens: 5, outputTokens: 7, cachedReadTokens: 3, cachedWriteTokens: 1 } } }) + '\\n');
     }, 20);
   }
 });
@@ -44,6 +44,15 @@ describe('translateAcpUpdate', () => {
     expect(events).toEqual([
       { type: 'text', delta: 'hi' },
       { type: 'thinking', delta: 'hmm' },
+    ]);
+  });
+
+  it('maps ACP context usage updates without estimating missing values', () => {
+    expect(translateAcpUpdate({
+      sessionId: 's1',
+      update: { sessionUpdate: 'usage_update', used: 12_000, size: 64_000 },
+    })).toEqual([
+      { type: 'context_usage', usedTokens: 12_000, contextWindow: 64_000 },
     ]);
   });
 
@@ -87,8 +96,15 @@ describe('AcpDshAdapter.run', () => {
     await run.waitForExit(2_000);
 
     expect(events[0]).toMatchObject({ type: 'system' });
-    expect(events.map((event) => event.type)).toEqual(['system', 'text', 'done']);
+    expect(events.map((event) => event.type)).toEqual(['system', 'text', 'usage', 'done']);
     expect(events).toContainEqual({ type: 'text', delta: 'done! image=false' });
+    expect(events).toContainEqual({
+      type: 'usage',
+      inputTokens: 5,
+      outputTokens: 7,
+      cacheReadTokens: 3,
+      cacheWriteTokens: 1,
+    });
     expect(events.at(-1)).toMatchObject({ terminationReason: 'normal' });
     expect(onApprovalRequest).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'call-1', toolName: 'bash' }),
