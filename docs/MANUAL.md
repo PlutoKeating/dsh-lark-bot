@@ -162,14 +162,17 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 - 出站契约支持 `mentions`（`userId` + 可选 `name`），桥接层自动把 `<at>` 提及标记拼入消息体。
 - `/notify <scope|chatId> <text>`：管理员向其他已注册会话推送消息；`/notify list` 查看
-  bridge 已知的 scope（`<profile>/scopes.json` 持久化，重启不丢）。
+  bridge 已知的 scope（`<profile>/scopes.json` 持久化 chat/thread 与最近入站 messageId；后者也作为
+  topic 问答卡的 reply anchor，重启不丢）。
 - agent 侧工具 `lark_notify`：SDK / ACP runtime 均自动装配；参数 `text`、`scope`（目标会话，
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
 - agent 侧工具 `lark_ask_user`（问答卡）：agent 需要你拍板 / 确认 / 补充缺失信息时，通过
   `http://127.0.0.1:<随机端口>/ask` 回调 bridge，向当前会话弹单选 / 多选 / 自由文本问答卡并
-  等待你回答；你提交后任务自动继续。等待期间任务运行超时看门狗暂停（答完重新计时）。
+  等待你回答；可提交卡片，也可直接回复该卡片输入任意文字（单选/多选也接受选项外补充）。系统按
+  被回复卡的 messageId 精确结算对应问题；并发 run 的问题按 native session 独立清理与暂停看门狗，
+  回答后只有所属任务继续（答完重新计时）。
   与 `/ask`（你主动发结构化问题）方向相反。
 - agent 侧工具 `lark_request_plan_approval`（计划门禁）：较大或高风险动作前先经 `/plan` 回调
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。

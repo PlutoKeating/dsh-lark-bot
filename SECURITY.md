@@ -32,7 +32,8 @@
 ## 安全姿态 · Security posture
 
 1. **默认拒绝**：
-   - 群聊 / 话题必须 `@bot` 才响应（传输层强制，`requireMention: true`）。
+   - 群聊 / 话题普通消息必须 `@bot` 才响应；channel 以 `requireMention: false` 把事件交给
+     bridge，由 bridge 在匹配 pending 问答卡回复后执行 mention gate。只有精确回复问答卡可免 @。
    - 配置了白名单后，私聊切换为 allowlist 模式（`dmMode: 'allowlist'`）。
    - 可通过 `DSH_LARK_ACCESS_DEFAULT_DENY=1` 在无白名单时也拒绝私聊（默认关闭以兼容首次扫码绑定）。
 2. **密钥脱敏**：结构化日志按字段名（`secret/token/password/api_key`）脱敏；
@@ -96,6 +97,11 @@
   `sessions.json`（`0600`）；最近 context 快照同时保存产生它的 native sessionId 与 canonical provider/model 身份，并可由
   `/status` 卡在身份匹配时展示。未知或身份不匹配字段不估算；member scope 的刷新动作
   校验 operator `open_id` 与 owner，但共享群里已发送的状态卡仍对群成员可见。
+- 群消息在底层 channel 进入 bridge 后执行 mention gate：普通群消息仍需 @bot（或管理员明确开启
+  no-at 模式）；仅当 `replyToMessageId` 命中当前进程内 pending 问答卡时可免 @。文字答案必须属于
+  同 chat/topic，member scope 还要求 sender `open_id` 等于 owner；拒绝的回复不会结算问题或进入任务队列。
+  no-at 的实时事件与历史轮询都再次校验当前 `allowedUsers` / `allowedChats`。`scopes.json` 会保存
+  每个 scope 最近一次入站 messageId，作为 topic 问答卡的 reply anchor。
 
 ## 报告渠道 · Reporting
 

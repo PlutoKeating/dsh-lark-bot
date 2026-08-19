@@ -54,7 +54,8 @@ dsh 以标准插件方式加载桥接引擎；首次启动（无凭据时）终�
 DSH_LARK_GROUP_NO_AT=true DSH_LARK_GROUP_POLL_MS=3000 dsh --profile dsh-lark
 ```
 
-这是显式 opt-in：bridge 只轮询已登记群聊，只处理启动后的白名单真人消息，不回放历史积压；
+这是显式 opt-in：bridge 会处理白名单成员的实时无 @ 消息，并只轮询已登记群聊；历史路径仅处理
+启动后的白名单真人消息，不回放历史积压；实时与轮询都再次校验当前用户/群白名单，
 请在开启前确认群成员知情并符合组织的数据与隐私政策。开启后可运行 `dsh-lark-bot doctor`
 验证历史消息权限。
 
@@ -129,7 +130,8 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过 `lark_ask_user`
-工具主动向当前会话弹一张问答卡（单选 / 多选 / 自由文本），你回答后任务自动继续；等待期间
+工具主动向当前会话弹一张问答卡（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入
+任意文字；单选/多选没有合适项时可直接补充说明。回答后任务自动继续；等待期间
 任务运行超时看门狗暂停，不会被超时打断。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在较大或高风险动作前调用
@@ -183,7 +185,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 会话状态与每 scope session 累计 token/context 快照：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
-- scope 目录：`~/.dsh-lark/profiles/<profile>/scopes.json`
+- scope 目录（chat/thread 与 topic reply anchor messageId）：`~/.dsh-lark/profiles/<profile>/scopes.json`
 - 群聊隔离策略：`~/.dsh-lark/profiles/<profile>/isolation.json`
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`

@@ -58,7 +58,7 @@
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）
 - [x] 卡片审批（ACP `session/request_permission` + 审批卡）
-- [x] 问答卡（单选 / 多选 / 自由文本）
+- [x] 问答卡（单选 / 多选 / 自由文本；支持直接回复卡片并按 messageId 精确续接）
 - [x] 关键任务计划门禁（完整计划消息 → 批准 / 继续规划 + feedback → 原 agent turn 自动续跑）
 - [x] 异步任务队列（scope 内并行 run + 消息批量合并；workflow 编排仍待上游能力）
 - [ ] 沙箱调度与 workflow 编排

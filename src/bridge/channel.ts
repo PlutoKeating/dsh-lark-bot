@@ -109,7 +109,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         : deps.accessDefaultDeny === true
           ? 'disabled'
           : 'open',
-      requireMention: true,
+      // Reply-to-question messages in groups intentionally do not require an
+      // @mention. The bridge applies the normal mention gate after it has had
+      // a chance to match the replied card message id.
+      requireMention: false,
       respondToMentionAll: false,
       ...(deps.allowedUsers ? { dmAllowlist: deps.allowedUsers } : {}),
       ...(deps.allowedChats ? { groupAllowlist: deps.allowedChats } : {}),
@@ -145,12 +148,6 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       ...(msg.threadId ? { threadId: msg.threadId } : {}),
       ...(msg.senderId ? { senderId: msg.senderId } : {}),
     }, isolationMode);
-    deps.scopeDirectory?.register(
-      scope,
-      msg.chatId,
-      msg.threadId,
-      chatMode,
-    );
     if (
       deps.eventFreshnessMs !== undefined &&
       deps.eventFreshnessMs > 0 &&
@@ -162,6 +159,73 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       });
       return;
     }
+    const repliedQuestion = msg.replyToMessageId
+      ? deps.questions?.pendingForMessage(msg.replyToMessageId)
+      : undefined;
+    if (
+      chatMode !== 'p2p' &&
+      !msg.mentionedBot &&
+      deps.groupNoAt !== true &&
+      repliedQuestion === undefined
+    ) {
+      return;
+    }
+    if (
+      chatMode !== 'p2p' &&
+      !msg.mentionedBot &&
+      deps.groupNoAt === true &&
+      repliedQuestion === undefined
+    ) {
+      const access = deps.accessManager.snapshot();
+      if (
+        !msg.senderId ||
+        !access.allowedUsers.includes(msg.senderId) ||
+        (access.allowedChats.length > 0 && !access.allowedChats.includes(msg.chatId))
+      ) return;
+    }
+    if (repliedQuestion) {
+      const answer = textualReplyAnswer(msg.rawContentType, msg.content);
+      if (!canAnswerQuestionScope(
+        repliedQuestion.scope,
+        msg.chatId,
+        msg.threadId,
+        msg.senderId,
+      )) {
+        await commandChannel.sendMarkdown(
+          msg.chatId,
+          '⛔ 不能回答其他成员或其他话题的问答卡。',
+          { replyTo: msg.messageId },
+        );
+        return;
+      }
+      if (answer === undefined) {
+        await commandChannel.sendMarkdown(
+          msg.chatId,
+          '请直接回复一条非空文字作为答案。',
+          { replyTo: msg.messageId },
+        );
+        return;
+      }
+      if (deps.questions?.resolve(repliedQuestion.scope, repliedQuestion.id, answer)) {
+        void settleActionCard(
+          channel,
+          msg.chatId,
+          msg.replyToMessageId!,
+          msg.threadId,
+          '✅ **已提交** — 文字回答已记录，任务将继续执行',
+          repliedQuestion.scope,
+          'question',
+        );
+      }
+      return;
+    }
+    deps.scopeDirectory?.register(
+      scope,
+      msg.chatId,
+      msg.threadId,
+      chatMode,
+      msg.messageId,
+    );
     const context = {
       scope,
       chatId: msg.chatId,
@@ -467,6 +531,24 @@ function canOperateCardScope(
   if (scope !== chatId && !scope.startsWith(`${chatId}:`)) return false;
   const memberOwner = memberOwnerForScope(scope, chatId);
   return memberOwner === undefined || memberOwner === operatorId;
+}
+
+function canAnswerQuestionScope(
+  scope: string,
+  chatId: string,
+  threadId: string | undefined,
+  operatorId: string | undefined,
+): boolean {
+  if (!operatorId) return false;
+  if (!canOperateCardScope(scope, chatId, operatorId)) return false;
+  if (memberOwnerForScope(scope, chatId) !== undefined) return true;
+  return scope === chatId || (threadId !== undefined && scope === `${chatId}:${threadId}`);
+}
+
+function textualReplyAnswer(messageType: string, content: string): string | undefined {
+  if (messageType !== 'text' && messageType !== 'post') return undefined;
+  const answer = content.trim();
+  return answer || undefined;
 }
 
 function larkGroupHistorySource(channel: LarkChannel): GroupHistorySource {

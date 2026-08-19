@@ -156,7 +156,7 @@ SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段
 继续规划时 agent 会收到意见、修订计划并再次请求确认。门禁无固定十分钟截止，跟随所属 run 的取消
 信号；停止任务会精确取消该 session 的 pending 卡并撤回。legacy headless adapter 不具备工具回调能力。
 
-**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本），回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
+**任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入任意文字；单选/多选没有合适项时，回复文字就是补充答案。系统按被回复的 card messageId 精确匹配 pending 问题，回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
 计划、审批与问答卡提交后会立即显示成功提示、发送一条终态确认并撤回原卡，避免按钮仍停留在聊天中造成“未生效”的误解；确认或撤回失败不会影响已经提交给 agent 的决策、审批结果或答案。
 
@@ -347,7 +347,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成时推送到飞书并自动切换会话映射（`0` 关闭）|
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊|
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）|
-| `DSH_LARK_GROUP_NO_AT` | `false` | 开启已登记群聊的无 @ 历史轮询；要求 `im:message.group_msg` 权限和非空 `allowed_users` |
+| `DSH_LARK_GROUP_NO_AT` | `false` | 处理白名单实时无 @ 消息并轮询已登记群聊历史；要求 `im:message.group_msg` 权限和非空 `allowed_users` |
 | `DSH_LARK_GROUP_POLL_MS` | `3000` | 无 @ 群消息轮询间隔（毫秒，最小 1000）|
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）|
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期|
@@ -380,13 +380,15 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **飞书凭据**：PersonalAgent 应用的 `app_id` / `app_secret`，明文写入本机 `~/.dsh-lark/config.json`（文件权限 600）。
 - **文件系统**：读取 / 写入你通过 `/cd`、`/ws` 指定的工作目录（含执行 shell 命令、修改文件）。
 - **网络**：向飞书开放平台建立 WebSocket 出站长连接收发消息；向 DeepSeek API 发送任务上下文。
-- **可选群消息历史**：仅当 `DSH_LARK_GROUP_NO_AT=true` 时，轮询曾经通过事件登记的群聊 / 话题；只处理启动后的、未删除的白名单真人消息，并与实时事件按 message ID 去重。该模式会让 bot 读取群内未 @ 它的消息，需管理员授予 `im:message.group_msg` 权限并确认符合团队隐私政策。
+- **群消息与可选历史**：为识别“直接回复问答卡”，群实时事件先进入 bridge，再由 bridge 忽略未 @ 且未命中 pending 卡的消息。仅当 `DSH_LARK_GROUP_NO_AT=true` 时，实时无 @ 消息会进入任务管线，并轮询曾经通过事件登记的群聊 / 话题；两条路径都只处理白名单真人消息（及可选群白名单），历史消息还须为启动后的未删除消息，并与实时事件按 message ID 去重。该模式需管理员授予 `im:message.group_msg` 权限并确认符合团队隐私政策。
 - **成员隔离标识与群可见性**：`member` 模式把发送者 `open_id` 写入本机 `isolation.json` 派生的
   session / scope directory / worktree / archive 索引或路径，并显示在共享群任务卡。它只隔离 agent
   上下文，不隐藏群消息：输入、进度卡与回复仍对群成员可见；其他成员不能操作该成员的任务卡。
 - **本地会话用量**：adapter 上报的 input/output/cache token 与 context used/limit 随 scope 写入
   `~/.dsh-lark/profiles/<profile>/sessions.json`（0600），并显示在 `/status` 卡；成员 scope 仅 owner
   可刷新，但群内已经发送的状态卡仍遵循共享群消息可见性。
+- **scope 路由**：`scopes.json` 保存 chat/thread 与最近入站 messageId；messageId 仅用于把 agent
+  后续问答卡作为 reply 正确发回原话题。
 - **本地回调**：运行 `lark_notify`、`lark_ask_user` 或 `lark_request_plan_approval` 工具时，dsh
   runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
   不监听公网）；计划内容与决策卡会发送到当前飞书 / Lark 会话。

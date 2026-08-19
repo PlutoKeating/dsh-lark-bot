@@ -170,7 +170,8 @@ SDK / ACP 模式需要对应 runtime profile：
 （IM 无法回达的原生 `ask_user_question` 默认拒绝）与 HMR；agent 提问改走桥接自建
 `lark_ask_user` 工具（`dsh-lark-bot/ask` + bridge `POST /ask` 问答卡）与
 `lark_request_plan_approval`（`dsh-lark-bot/plan` + bridge `POST /plan` 计划消息/决策卡），
-SDK / ACP runtime 均自动装配。
+SDK / ACP runtime 均自动装配。问答卡提交与直接回复卡片的自由文本共用同一 pending promise；
+回复按 card messageId 定向，bridge 负责 topic/member 授权，adapter 契约无需新增事件。
 
 ---
 

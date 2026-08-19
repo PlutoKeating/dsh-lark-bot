@@ -53,6 +53,10 @@ export function renderQuestionCard(input: QuestionCardInput): object {
       elements: [
         { tag: 'markdown', content: `❓ ${input.question}` },
         {
+          tag: 'markdown',
+          content: '💬 也可以直接回复本卡片作答；选项不合适时可输入补充说明。',
+        },
+        {
           tag: 'form',
           name: `form-${input.id}`,
           elements: [

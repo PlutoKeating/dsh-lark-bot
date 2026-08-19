@@ -97,6 +97,9 @@
   最终消息发送失败会把完整回答回填过程卡，同时 exchange 仍持久化。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
+- **P23 done**：问答卡绑定发送后的 messageId；用户可直接回复卡片输入自由文本，单选/多选也接受
+  选项外补充。并发问题按卡定向并按 native session 独立清理/暂停看门狗；topic 卡使用最近入站
+  messageId 锚定原 thread，member 授权与隔离切换连续性保持不变（issue #22）。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
   子路径与 CLI 入口，杜绝 v0.9.0 的 `ask` 入口漏拷类问题；GitHub Release 显式标记 Latest。
 - **0.9.2 released**：`setup` 固定安装当前包的精确版本（`dsh plugin add

@@ -52,7 +52,7 @@ export interface CommandChannel {
     markdown: string,
     options?: SendOptions,
   ): Promise<void>;
-  sendCard?(chatId: string, card: object, options?: SendOptions): Promise<unknown>;
+  sendCard?(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
   updateCard?(messageId: string, card: object): Promise<void>;
   /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
   createChat?(opts: {
@@ -586,6 +586,10 @@ async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
     channel: ctx.channel,
     chatId: ctx.chatId,
     scope: ctx.scope,
+    sendOptions: {
+      replyTo: ctx.messageId,
+      ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+    },
   })({
     kind: 'text',
     question,

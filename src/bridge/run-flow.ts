@@ -28,6 +28,7 @@ import type { CardStreamController, StreamingChannel } from './types.js';
 import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
 import { archiveSessionDir, classifySessionError } from '../session/heal.js';
+import type { SendOptions } from './send-options.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -330,7 +331,8 @@ async function runAttempt(
                   timeoutTimer = setTimeout(() => {
                     if (timedOut) return;
                     if (
-                      input.questions?.pendingCount(input.scope) ||
+                      (activeSessionId !== undefined &&
+                        input.questions?.pendingCount(input.scope, activeSessionId)) ||
                       (activeSessionId !== undefined &&
                         input.plans?.pendingCount(input.scope, activeSessionId))
                     ) {
@@ -355,7 +357,9 @@ async function runAttempt(
           armTimeout?.();
         };
         const unsubscribeQuestion = timeoutPromise
-          ? input.questions?.onSettled(input.scope, rearmAfterHumanInput)
+          ? input.questions?.onSettled(input.scope, (settledSessionId) => {
+              if (settledSessionId === activeSessionId) rearmAfterHumanInput();
+            })
           : undefined;
         const unsubscribePlan = timeoutPromise
           ? input.plans?.onSettled(input.scope, (settledSessionId) => {
@@ -504,8 +508,8 @@ async function runAttempt(
     if (input.approvals) {
       input.approvals.settleAll(input.scope, 'cancelled');
     }
-    if (input.questions) {
-      input.questions.settleAll(input.scope);
+    if (input.questions && activeSessionId !== undefined) {
+      input.questions.settleSession(input.scope, activeSessionId);
     }
     if (input.plans && activeSessionId !== undefined) {
       input.plans.settleSession(input.scope, activeSessionId);
@@ -534,7 +538,7 @@ async function pruneArchives(input: RunFlowInput): Promise<void> {
 export function approvalHandlerFor(
   input: {
     approvals: ApprovalRegistry | undefined;
-    channel: { sendCard?: (chatId: string, card: object) => Promise<unknown> };
+    channel: { sendCard?: (chatId: string, card: object) => Promise<string | undefined> };
     chatId: string;
     scope: string;
   },
@@ -566,9 +570,16 @@ export function approvalHandlerFor(
 export function questionHandlerFor(
   input: {
     questions: QuestionRegistry | undefined;
-    channel: { sendCard?: (chatId: string, card: object) => Promise<unknown> };
+    channel: {
+      sendCard?: (
+        chatId: string,
+        card: object,
+        options?: SendOptions,
+      ) => Promise<string | undefined>;
+    };
     chatId: string;
     scope: string;
+    sendOptions?: SendOptions;
   },
 ): (question: QuestionCardInput) => Promise<string | string[] | undefined> {
   return async (question) => {
@@ -580,13 +591,15 @@ export function questionHandlerFor(
       ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
     });
     try {
-      await input.channel.sendCard(
+      const messageId = await input.channel.sendCard(
         input.chatId,
         renderQuestionCard({ ...question, id, actionScope: input.scope }),
+        input.sendOptions,
       );
+      if (messageId) input.questions.bindMessage(input.scope, id, messageId);
     } catch (error) {
       log.fail('question-card', error, { scope: input.scope });
-      input.questions.settleAll(input.scope);
+      input.questions.cancel(input.scope, id);
       return undefined;
     }
     return promise;

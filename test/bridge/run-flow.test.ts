@@ -11,8 +11,10 @@ import type {
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ApprovalRegistry } from '../../src/bot/approvals.js';
 import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
+import { QuestionRegistry } from '../../src/bot/questions.js';
 import {
   approvalHandlerFor,
+  questionHandlerFor,
   runAgentBatch,
 } from '../../src/bridge/run-flow.js';
 import type { StreamingChannel } from '../../src/bridge/types.js';
@@ -75,6 +77,37 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('does not cancel another concurrent session question when this run completes', async () => {
+    const questions = new QuestionRegistry();
+    const questionA = questions.register(
+      'chat-concurrent-question',
+      { kind: 'text', question: 'A?' },
+      'session-a',
+    );
+    questions.bindMessage('chat-concurrent-question', questionA.id, 'card-a');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-concurrent-question',
+      chatId: 'chat-concurrent-question',
+      messages: ['run B'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' },
+        { type: 'done', sessionId: 'session-b', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      questions,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(questions.pendingForMessage('card-a')?.id).toBe(questionA.id);
+    questions.resolve('chat-concurrent-question', questionA.id, 'A answer');
+    await expect(questionA.promise).resolves.toBe('A answer');
+  });
+
   it('sends the final answer as a separate markdown message with reply routing', async () => {
     const sent: Array<{ markdown: string; options: unknown }> = [];
     const fake = makeChannel();
@@ -1192,5 +1225,50 @@ describe('approvalHandlerFor', () => {
         options: [],
       }),
     ).resolves.toBe('cancelled');
+  });
+});
+
+describe('questionHandlerFor', () => {
+  it('binds the sent card message id so a text reply can resolve the exact question', async () => {
+    const questions = new QuestionRegistry();
+    const sendCard = vi.fn().mockResolvedValue('question-card-message');
+    const handler = questionHandlerFor({
+      questions,
+      channel: { sendCard },
+      chatId: 'chat-a',
+      scope: 'chat-a',
+      sendOptions: { replyTo: 'om-source', threadId: 'thread-a' },
+    });
+
+    const answer = handler({ id: '', kind: 'text', question: 'Why?' });
+    await vi.waitFor(() => {
+      expect(questions.pendingForMessage('question-card-message')).toBeDefined();
+    });
+    const pending = questions.pendingForMessage('question-card-message');
+    expect(pending?.input.question).toBe('Why?');
+    expect(sendCard).toHaveBeenCalledWith(
+      'chat-a',
+      expect.any(Object),
+      { replyTo: 'om-source', threadId: 'thread-a' },
+    );
+    expect(questions.resolve('chat-a', pending!.id, 'Because')).toBe(true);
+    await expect(answer).resolves.toBe('Because');
+  });
+
+  it('cancels only its own question when sending its card fails', async () => {
+    const questions = new QuestionRegistry();
+    const other = questions.register('chat-a', { kind: 'text', question: 'Other?' });
+    questions.bindMessage('chat-a', other.id, 'other-card');
+    const handler = questionHandlerFor({
+      questions,
+      channel: { sendCard: vi.fn().mockRejectedValue(new Error('send failed')) },
+      chatId: 'chat-a',
+      scope: 'chat-a',
+    });
+
+    await expect(handler({ id: '', kind: 'text', question: 'Why?' })).resolves.toBeUndefined();
+    expect(questions.pendingForMessage('other-card')?.id).toBe(other.id);
+    questions.resolve('chat-a', other.id, 'answer');
+    await expect(other.promise).resolves.toBe('answer');
   });
 });
