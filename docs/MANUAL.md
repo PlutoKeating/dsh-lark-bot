@@ -89,6 +89,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看并原位刷新 scope / cwd / 模型 / session / run / context / token / pending / 任务账本 |
+| `/doctor` | 管理员生成脱敏诊断 Markdown 文件并上传到原聊天/话题 |
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务状态、查看 checkpoint、确认后重试中断/失败任务 |
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
@@ -299,6 +300,10 @@ dsh-lark-bot guardian uninstall
   “暂无”，不估算百分比。最近 context 快照按 native session 与 canonical provider/model 分别保存，
   并行 run 不互相覆盖；只有当前 workspace/session/model 身份匹配的快照才展示。点击“刷新”原位更新；
   指标写入 `sessions.json`，仅当前工作区的新建/重置会清零，切换目录不会清零。
+- `/doctor` 是无终端排障入口：只允许管理员，内存生成后直接上传，不落临时文件。报告含版本、
+  平台、非敏感配置计数、当前 workspace 的运行/pending/job 摘要、服务状态与当前 bridge 进程内
+  有界结构化事件（不读取共享 dsh 宿主 stdout）；
+  不含消息正文/transcript/凭据，并再次脱敏已知敏感值与主目录。群文件对成员可见，优先私聊使用。
 - 普通 agent 消息先原子写入 `jobs.json` 再排队。重启自动恢复 queued；running 转为 interrupted，
   保留最后阶段但不自动重复可能已有副作用的工具。`/jobs show` 对账后可用 `/jobs retry` 显式重跑；
   `/status` 与重连提示显示当前 workspace 的账本统计。仅已被 bridge 接收并成功落盘的事件受此保证，

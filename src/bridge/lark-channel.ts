@@ -34,6 +34,13 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
     async updateCard(messageId, card) {
       await channel.updateCard(messageId, card);
     },
+    async sendFile(chatId, fileName, content, options) {
+      await channel.send(
+        chatId,
+        { file: { source: content, fileName } },
+        toLarkSendOptions(options),
+      );
+    },
   };
 
   return {

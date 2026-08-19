@@ -28,6 +28,7 @@
 | **P25 默认逐操作审批** Default tool approval | rc.8 `approval/request` answerer + `/approval` 回调；默认 SDK/Web 与 ACP 统一一次性允许/拒绝卡、session 精确等待/清理（issue #24） | ✅ 已完成 Done |
 | **P26 多机器人交接** Multi-bot handoff | 独立 bridge/dsh profile、PersonalAgent 身份、用户服务与上下文；可信 peer 真实 @ 交接；跨进程 per-chat 回合上限与真人重置；附加实例拒绝共享 Web mux（issue #25） | ✅ 已完成 Done |
 | **P27 消息与任务可靠性** Durable job reliability | messageId 持久 receipt、queued 重启重放、running checkpoint/interrupted 对账、`/jobs` 显式重试与 `/status` 统计（issue #28） | ✅ 已完成 Done |
+| **P28 会话内诊断包** In-chat diagnostics | 管理员 `/doctor` 生成可下载的内存 Markdown 诊断文件；版本/运行/服务状态/当前进程有限事件快照，凭据与主目录二次脱敏（issue #29） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 

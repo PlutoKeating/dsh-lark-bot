@@ -113,6 +113,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看可刷新状态卡（模型 / session / run / context / token / pending / 任务账本） |
+| `/doctor` | 生成并上传脱敏诊断 Markdown 文件（管理员） |
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务、查看 checkpoint、显式重试失败/中断任务 |
 | `/resume` | 查看当前会话最近上下文 |
 | `/stop` | 终止当前任务 |
@@ -141,6 +142,8 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 显示，建议在私聊中使用。
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
+无法使用终端时，管理员可在飞书私聊发送 `/doctor`，取得版本、非敏感配置摘要、当前运行状态和
+有限最近日志组成的脱敏文件；它不代替终端命令的 adapter 实际握手探测。
 
 默认 backend 为官方 `@deepseek-ai/dsh-sdk-client`（`DSH_LARK_ADAPTER=sdk`）：首次启动会自动在
 `~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +

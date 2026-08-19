@@ -76,6 +76,10 @@
 - 会话续跑 `/resume`；`/status` 以可原位刷新的卡片展示工作区、有效模型、session、active runs、
   版本、真实 context used/limit/percentage、累计 input/output/cache token 与待审批/提问/计划数。
   上游不可得字段必须显示“暂无”，不得估算；pending 只统计当前 workspace 的 session/run，成员 scope 状态卡只允许 owner 刷新。
+- 管理员可在飞书使用 `/doctor` 生成可下载诊断文件：版本/平台、非敏感配置计数、当前 workspace
+  运行与账本摘要、服务状态、当前 bridge 进程内有界最近结构化事件（不读取共享 dsh 宿主 stdout）；
+  不含凭据、消息正文或 transcript，内存生成、
+  上传前再次脱敏，失败明确回执。
 - **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
   为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope + workspace 保留窗口，
   超窗消息自动归档；`/archive list` 查看、`/archive clean` 只按当前 workspace 的保留策略清理

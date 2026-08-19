@@ -202,6 +202,13 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程本身不依赖任何 dsh /
    Cordis 代码。
 
+12. **会话内诊断导出（issue #29）**：`src/diagnostics/bundle.ts` 接收 bridge 已有的只读运行快照，
+   输出内存 Markdown `Buffer`；`CommandChannel.sendFile` 通过 `@larksuite/channel` 的 Buffer 上传能力
+   发回原 chat/thread，不授予任意本地文件读取目录，也不产生临时文件。命令仅管理员可用，内容排除
+   消息正文/transcript/凭据标识和值；日志只来自当前进程内 logger ring，不读取共享宿主 stdout，
+   按限额投影并在上传前再次做常见模式、已知环境敏感值和
+   home path 脱敏；终端 `doctor` 的真实 adapter 探测保持独立，聊天命令不会启动第二套 runtime。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |
@@ -218,6 +225,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
+| `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载与文本注入 |
 | `src/notify/` | 进程内 `/notify` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
 | `src/platform/` | 跨平台原子写入 |

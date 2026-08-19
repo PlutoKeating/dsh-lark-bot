@@ -640,7 +640,7 @@ export interface Logger {
   `profiles/<name>/` 会话、worktree、archive 与日志；`default` 主机器人不可由 fleet remove，
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
-飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/resume`、
+飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
@@ -680,6 +680,19 @@ export interface Logger {
 `MentionTarget { userId, name? }`：`sendMarkdown` / `sendCard` / `streamCard` 均接受该选项，
 `adaptLarkChannel` 把 `mentions` 映射为 `@larksuite/channel` 的 `SendOptions.mentions`
 （自动拼接 `<at>` 提及标记），`threadId` 映射为 `replyInThread`。
+`CommandChannel.sendFile(chatId,fileName,Buffer,options)` 只接受调用方已经构造的内存内容；Lark adapter
+以 `{ file: { source: Buffer, fileName } }` 上传，因此 `/doctor` 不需要开放 channel 的
+`allowedFileDirs`，也不会让消息参数变成本地文件读取路径。
+
+`src/diagnostics/bundle.ts` 的 `createDiagnosticBundle(input)` 生成下载文件：环境/版本、非敏感配置
+计数、当前 scope+workspace 的 model/session/run/pending/job 摘要、managed service 状态，以及
+当前 bridge 进程内可识别的结构化事件（最多 64 KiB；不读取共享 dsh 宿主 stdout）；
+日志投影仅保留代码内固定枚举的 category/event 与固定数值字段，并规范化时间；其他字段名和值
+全部丢弃。生成等待为 15 秒；上传等待为 30 秒。channel SDK 不提供上传取消，因此上传等待超时
+返回“结果未知、文件可能迟到”，不会错误建议立即重试。
+它不接收消息正文或 transcript；输出前应用
+`redactSecrets`、当前进程敏感环境值精确替换、home path 缩写和代码围栏中和。`/doctor` 在读取日志
+之前先执行管理员鉴权，上传/生成失败时只返回通用错误，不回显底层异常。
 
 `src/bridge/scope-directory.ts` 提供持久化 `ScopeDirectory`（`<profile>/scopes.json`）：每个
 入站消息注册 scope → `{chatId, threadId, chatMode, messageId}`，其中最近的入站 messageId 是

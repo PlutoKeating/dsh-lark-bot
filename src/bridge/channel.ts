@@ -43,6 +43,7 @@ import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
 import { ReconnectNotifier } from './reconnect-notifier.js';
 import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
+import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -98,6 +99,7 @@ export interface StartChannelDeps {
   jobs?: JobLedger;
   /** Injectable history source for deterministic tests. */
   groupHistorySource?: GroupHistorySource;
+  createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
 }
@@ -323,6 +325,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
               return true;
             },
           }
+        : {}),
+      ...(deps.createDiagnosticBundle
+        ? { createDiagnosticBundle: deps.createDiagnosticBundle }
         : {}),
       defaultModel: deps.defaultModel,
       ...(deps.resolveDefaultModel

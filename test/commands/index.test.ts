@@ -536,6 +536,156 @@ describe('command router', () => {
     );
   });
 
+  it('lets an admin generate and download a diagnostic bundle in the original thread', async () => {
+    const sendFile = vi.fn().mockResolvedValue(undefined);
+    const createDiagnosticBundle = vi.fn().mockResolvedValue({
+      fileName: 'dsh-lark-diagnostic-20260820.md',
+      content: Buffer.from('# diagnostic'),
+    });
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      threadId: 'thread-a',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle,
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendFile,
+      },
+    });
+
+    await expect(tryHandleCommand('/doctor', ctx)).resolves.toBe(true);
+
+    expect(createDiagnosticBundle).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'chat-a',
+      chatMode: 'p2p',
+      workspace: '/tmp/default',
+    }));
+    expect(sendFile).toHaveBeenCalledWith(
+      'chat-a',
+      'dsh-lark-diagnostic-20260820.md',
+      expect.any(Buffer),
+      { replyTo: 'msg-1', threadId: 'thread-a' },
+    );
+  });
+
+  it('rejects diagnostic export for non-admins before reading logs', async () => {
+    const createDiagnosticBundle = vi.fn();
+    const sendFile = vi.fn();
+    const ctx = makeContext({
+      senderId: 'ou_guest',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle,
+      channel: { sendMarkdown: vi.fn().mockResolvedValue(undefined), sendFile },
+    });
+
+    await tryHandleCommand('/doctor', ctx);
+
+    expect(createDiagnosticBundle).not.toHaveBeenCalled();
+    expect(sendFile).not.toHaveBeenCalled();
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('仅管理员'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('reports diagnostic upload failures instead of claiming success', async () => {
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle: vi.fn().mockResolvedValue({
+        fileName: 'diagnostic.md',
+        content: Buffer.from('safe'),
+      }),
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendFile: vi.fn().mockRejectedValue(new Error('upload unavailable')),
+      },
+    });
+
+    await tryHandleCommand('/doctor', ctx);
+
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('诊断包发送失败'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('does not turn a successful file upload into a failure when confirmation fails', async () => {
+    const sendFile = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle: vi.fn().mockResolvedValue({
+        fileName: 'diagnostic.md',
+        content: Buffer.from('safe'),
+      }),
+      channel: {
+        sendMarkdown: vi.fn().mockRejectedValue(new Error('confirmation unavailable')),
+        sendFile,
+      },
+    });
+
+    await expect(tryHandleCommand('/doctor', ctx)).resolves.toBe(true);
+    expect(sendFile).toHaveBeenCalledOnce();
+  });
+
+  it('reports a generation failure when diagnostic collection hangs', async () => {
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle: vi.fn(() => new Promise<never>(() => undefined)),
+      diagnosticTimeoutMs: { generate: 10, upload: 10 },
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendFile: vi.fn(),
+      },
+    });
+
+    await expect(tryHandleCommand('/doctor', ctx)).resolves.toBe(true);
+    expect(ctx.channel.sendFile).not.toHaveBeenCalled();
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('诊断包生成失败'),
+      { replyTo: 'msg-1' },
+    );
+  });
+
+  it('reports an unknown result and does not claim success when a timed-out upload finishes late', async () => {
+    let finishUpload: (() => void) | undefined;
+    const upload = new Promise<void>((resolve) => {
+      finishUpload = resolve;
+    });
+    const ctx = makeContext({
+      senderId: 'ou_owner',
+      accessManager: makeAccessManager({ admins: ['ou_owner'] }),
+      createDiagnosticBundle: vi.fn().mockResolvedValue({
+        fileName: 'diagnostic.md',
+        content: Buffer.from('safe'),
+      }),
+      diagnosticTimeoutMs: { generate: 10, upload: 10 },
+      channel: {
+        sendMarkdown: vi.fn().mockResolvedValue(undefined),
+        sendFile: vi.fn(() => upload),
+      },
+    });
+
+    await expect(tryHandleCommand('/doctor', ctx)).resolves.toBe(true);
+    finishUpload?.();
+    await upload;
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('结果未知'),
+      { replyTo: 'msg-1' },
+    );
+    expect(ctx.channel.sendMarkdown).not.toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('已生成并发送'),
+      expect.anything(),
+    );
+  });
+
   it('lets an admin add another admin via /invite admin', async () => {
     const ctx = makeContext({
       senderId: 'ou_owner',

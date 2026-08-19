@@ -15,7 +15,7 @@ export interface CommandResult {
 export type CommandRunner = (
   command: string,
   args: readonly string[],
-  options?: { env?: NodeJS.ProcessEnv },
+  options?: { env?: NodeJS.ProcessEnv; timeoutMs?: number },
 ) => Promise<CommandResult>;
 
 export interface ServiceSpec {
