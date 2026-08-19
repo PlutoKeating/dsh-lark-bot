@@ -14,6 +14,7 @@ export function readDshCompatibility() {
   );
   const source = readFileSync(join(ROOT, 'src', 'config', 'dsh-compat.ts'), 'utf8');
   const lockfile = readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8');
+  const lockPackages = lockfile.split('\nsnapshots:\n', 1)[0];
   const get = (key) => source.match(new RegExp(`\\b${key}:\\s*'([^']+)'`))?.[1];
   return {
     harness: get('harness'),
@@ -25,8 +26,10 @@ export function readDshCompatibility() {
     packageSdkClient: packageJson.dependencies?.['@deepseek-ai/dsh-sdk-client'],
     packageDshTools: packageJson.dependencies?.['@deepseek-ai/dsh-tools'],
     workshopDshVersions: packageJson.dshWorkshop?.compatibility?.dshVersions,
-    legacyRc6LockEntries: [...new Set(
-      lockfile.match(/@deepseek-ai\/dsh-[a-z0-9-]+@0\.1\.0-rc\.6/g) ?? [],
+    staleCoreLockEntries: [...new Set(
+      [...lockPackages.matchAll(/^  '(@deepseek-ai\/dsh-[a-z0-9-]+)@([^']+)':$/gm)]
+        .filter(([, , version]) => version !== get('harness'))
+        .map(([, name, version]) => `${name}@${version}`),
     )],
   };
 }

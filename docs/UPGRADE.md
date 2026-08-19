@@ -27,6 +27,10 @@
 | 兼容矩阵 | `docs/COMPATIBILITY.md` | 版本 pin 与上游一致性的单一事实来源 |
 | 会话/worktree/archive schema | `<bridge-profile>/sessions.json` + `worktrees/` + `archives/` | 首次启动从旧 worktree 的 Git registry 核验 owning repo，把 schema 1 会话与旧 retention archive header 归回真实项目；owner 匹配时原位迁移，不匹配时保留旧树并另建 hashed worktree |
 
+> dsh rc.8 的“不兼容 SQLite schema 17”只涉及上游 opt-in
+> `@deepseek-ai/dsh-session-persistence-sqlite`，托管 SDK/ACP profile 使用 JSONL。upgrade 不打开或改写
+> 用户自定义 SQLite 数据库；自定义 SQLite profile 必须保留 rc.7 runtime 或自行导出后新建 schema 17。
+
 ## 3. 版本探测 · Version probing（#14 修复后的语义）
 
 - `fetchNpmLatestVersion`（`src/upgrade/versions.ts`）：**最多 3 次尝试 + 退避重试**，每次依次

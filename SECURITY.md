@@ -46,7 +46,7 @@
    （`isSafeHttpUrl`）。
 7. **交互工具默认禁用**：SDK / ACP runtime profile 禁用 `user-questions`；
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
-8. **审批**：默认 SDK / Web 宿主在 `tools/pre-execute` 强制阻断未确认的高风险调用，并通过 dsh rc.7 官方 `approval/request` waterfall，把高风险工具逐次
+8. **审批**：默认 SDK / Web 宿主在 `tools/pre-execute` 强制阻断未确认的高风险调用，并通过 dsh rc.8 官方 `approval/request` waterfall，把高风险工具逐次
    映射为“允许执行一次 / 拒绝”飞书卡；ACP 继续通过 `session/request_permission` 使用同一交互。
    授权不持久化，拒绝作为工具结果返回 agent；run 结束 / callback 断连只结算所属 session 的挂起请求。
    SDK / ACP / Web agent 对较大或高风险动作还会通过 `lark_request_plan_approval` 暂停；同一 turn

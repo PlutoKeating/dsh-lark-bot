@@ -119,7 +119,7 @@ describe('repairRuntimeProfiles', () => {
 
   it('re-provisions an existing profile whose upstream runtime is stale', async () => {
     const home = await makeHome();
-    await buildSdkProfileWithStaleLink(home, '0.1.0-rc.6');
+    await buildSdkProfileWithStaleLink(home, '0.1.0-rc.7');
     const root = sdkRoot(home);
     const ensureSdkFn = async () => {
       await writeFile(
@@ -151,7 +151,7 @@ describe('repairRuntimeProfiles', () => {
     await mkdir(join(root, 'node_modules', ...ACP_PACKAGE.split('/')), { recursive: true });
     await writeFile(
       join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
-      JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.6' }),
+      JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.7' }),
     );
     await writeFile(join(root, 'package.json'), '{}');
     await writeFile(join(root, 'cordis.yml'), '[]\n');

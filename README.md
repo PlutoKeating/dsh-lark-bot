@@ -194,7 +194,7 @@ guardian 仍只救援其配置的主实例。
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
-**默认逐操作审批**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.7 官方 `approval/request` seam；执行前会弹出“允许执行一次 / 拒绝”审批卡，展示工具、理由、调用标识以及 bridge 已取得的执行参数。等待没有固定截止并暂停所属 run 的 idle watchdog；每次允许只授权当前调用，拒绝作为工具结果返回 agent，由它改用安全方案继续。ACP 仍走原生 `session/request_permission`，三条路径共用同一张卡与精确的 session 生命周期。
+**默认逐操作审批**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.8 官方 `approval/request` seam；执行前会弹出“允许执行一次 / 拒绝”审批卡，展示工具、理由、调用标识以及 bridge 已取得的执行参数。等待没有固定截止并暂停所属 run 的 idle watchdog；每次允许只授权当前调用，拒绝作为工具结果返回 agent，由它改用安全方案继续。ACP 仍走原生 `session/request_permission`，三条路径共用同一张卡与精确的 session 生命周期。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
@@ -356,10 +356,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 兼容性
 
-- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.7**（最后验证 2026-08-19：临时安装 + SDK JSON-RPC / ACP runtime initialize 握手），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
+- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.8**（最后验证 2026-08-20：临时安装 + SDK JSON-RPC / ACP runtime initialize、工具/审批、live session 续接与 restart collision 探针），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
   具体锁定版本、升级政策与自动化探测见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)，
-  adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)，rc.7 差异、已知风险和
-  自动/人工验证边界见 [`docs/DSH_RC7_AUDIT.md`](docs/DSH_RC7_AUDIT.md)。
+  adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)，rc.8 差异、已知风险和
+  自动/人工验证边界见 [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md)。
 - **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
 - 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +

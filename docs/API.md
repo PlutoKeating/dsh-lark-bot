@@ -284,10 +284,10 @@ per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作�
 dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
-当前 rc.7 runtime profile 会校验物理安装包的精确版本，不能仅凭目录存在判定 ready；
+当前 rc.8 runtime profile 会校验物理安装包的精确版本，不能仅凭目录存在判定 ready；
 `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 直接向宿主 registry 注册 raw JSON Schema tool definition；
 `dsh-lark-bot/approval` 以 structural listener 接入宿主 `approval/request` waterfall；两者都不携带
-第二份 `dsh-tools`。完整审计见 [`DSH_RC7_AUDIT.md`](DSH_RC7_AUDIT.md)。
+第二份 `dsh-tools`。完整审计见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
 
 `src/session/store.ts` 的 `SessionStore`（schema 2）按 canonical `scope + workspace cwd` 保存各自最近 `retention` 条对话
 （默认 40），`recordExchange` 支持传入 `{ retention, onArchive }`：超出保留窗口的消息先交给
@@ -432,8 +432,9 @@ export interface AgentRun {
 export interface AgentAdapter {
   readonly id: string;
   readonly displayName: string;
-  /** True for the SDK adapter: `run()` natively resumes `options.sessionId`.
-   *  ACP / headless 每次全新，桥接层会为其把 scope 转写重放进 prompt。 */
+  /** True for the SDK adapter: a live runtime natively resumes `options.sessionId`.
+   *  A persisted-log collision after restart is cleared and retried by run-flow;
+   *  ACP / headless 每次全新，桥接层会为其把 scope transcript 重放进 prompt。 */
   resumeCapable?: boolean;
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
@@ -590,7 +591,7 @@ export interface Logger {
   `DSH_LARK_NOTIFY_TOKEN` 环境变量。
 - `dsh-lark-bot/plan`：`lark_request_plan_approval` 工具（见 §9），完整计划消息 + 决策卡，
   配置缺省时读取 `DSH_LARK_PLAN_URL` / `DSH_LARK_NOTIFY_TOKEN`。
-- `dsh-lark-bot/approval`：高风险 `tools/pre-execute` 强制门禁 + dsh rc.7 `approval/request` terminal answerer，配置缺省时读取
+- `dsh-lark-bot/approval`：高风险 `tools/pre-execute` 强制门禁 + dsh rc.8 `approval/request` terminal answerer，配置缺省时读取
   `DSH_LARK_APPROVAL_URL` / `DSH_LARK_NOTIFY_TOKEN`；默认 SDK 与 host bundle 装配，ACP 不重复装配。
 
 桥接引擎始终由 dsh 宿主进程内的插件运行，不存在第二套 bridge runtime。可选 `service` 命令只把

@@ -6,7 +6,7 @@
 
 - Node.js ≥ 22.19
 - 已安装 DeepSeek Harness（`dsh`）并配置 `DEEPSEEK_API_KEY`
-- 当前兼容基线为 dsh `0.1.0-rc.7`；托管 SDK / ACP runtime 会自动修复旧版本 profile
+- 当前兼容基线为 dsh `0.1.0-rc.8`；托管 SDK / ACP runtime 会自动修复旧版本 profile
 - 一个飞书 / Lark 账号
 
 ## 2. 安装（唯一路径）
@@ -144,7 +144,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 
 默认 backend 为官方 `@deepseek-ai/dsh-sdk-client`（`DSH_LARK_ADAPTER=sdk`）：首次启动会自动在
 `~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +
-`dsh-sdk-jsonrpc-server`），需要本机可用 `pnpm`；默认 SDK 已通过 rc.7 approval answerer 支持逐工具审批。
+`dsh-sdk-jsonrpc-server`），需要本机可用 `pnpm`；默认 SDK 已通过 rc.8 approval answerer 支持逐工具审批。
 也可切换 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，改用 ACP
 `session/request_permission` 原生回调）；`headless` 保留旧版子进程 fallback；
 `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`，
@@ -166,7 +166,7 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 或填写意见后“继续规划”；未批准时 runtime 会拒绝写入、删除、移动、命令执行与 `run_code`，等待仅暂停
 该 session 的空闲超时，批准后原任务自动继续。停止任务会取消并撤回该 session 的卡；legacy headless 不支持工具回调。
 
-**逐操作审批**：默认 SDK 安装无需切换 adapter。计划获批后，dsh rc.7 对实际高风险工具调用会
+**逐操作审批**：默认 SDK 安装无需切换 adapter。计划获批后，dsh rc.8 对实际高风险工具调用会
 自动弹“允许执行一次 / 拒绝”卡；卡上显示工具、理由与可取得的参数，等待不计入 idle timeout。
 拒绝不会终止整个任务，而会交给 agent 改用安全方案。Web host 同样可用；ACP 使用原生 permission 通道。
 

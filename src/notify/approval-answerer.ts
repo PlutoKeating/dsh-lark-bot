@@ -35,7 +35,7 @@ type ApprovalContext = Context & {
   ): unknown;
 };
 
-/** Terminal rc.7 approval answerer for the nested SDK and host runtimes. */
+/** Terminal rc.8 approval answerer for the nested SDK and host runtimes. */
 export function apply(ctx: Context, config: Config = {}): void {
   const approvalCtx = ctx as ApprovalContext & ToolPluginContext;
   const inFlightGrant = new WeakMap<object, string>();

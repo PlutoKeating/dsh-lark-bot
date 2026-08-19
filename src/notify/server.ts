@@ -37,7 +37,7 @@ export interface NotifyServerDeps {
   ask?: (payload: AskPayload) => Promise<AskResult>;
   /** Optional handler for the `lark_request_plan_approval` channel. */
   plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
-  /** Optional handler for dsh rc.7 one-shot tool approval requests. */
+  /** Optional handler for dsh rc.8 one-shot tool approval requests. */
   approval?: (payload: ApprovalPayload, signal?: AbortSignal) => Promise<ApprovalResult>;
 }
 

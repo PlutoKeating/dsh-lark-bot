@@ -123,7 +123,7 @@
 ## 7. 当前阻塞 · Current blocker
 
 - ~~`dsh-type-meta` 404 阻塞~~：**已复核并解除**（2026-08-14）。当前 npm registry 上
-  （历史实施基线；当前已由 #51 升级至 rc.7）`@deepseek-ai/dsh-sdk-client@0.1.0-rc.6` /
+  （历史实施基线；当前已由 #52 升级至 rc.8）`@deepseek-ai/dsh-sdk-client@0.1.0-rc.6` /
   `@deepseek-ai/dsh-acp@0.1.0-rc.6` 的真实依赖链为
   `@deepseek-ai/cordis@^4.0.1`、`dsh-llm` / `dsh-session` / `dsh-invariants` / `dsh-sdk-protocol` / `dsh-user-approval` 等，
   **全部已发布且可安装**，`dsh-type-meta` 已不在依赖链中（详见第 8 节验证记录）。
@@ -146,7 +146,7 @@
    `AgentAdapter` 抽象保留，agent 后端可换。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
 3. **审批复用官方 seam**：ACP adapter 使用 `session/request_permission`；默认 SDK / Web 不要求
-   JSON-RPC server→client 扩展，而是在对应 runtime 内装配官方 rc.7 `approval/request` waterfall
+   JSON-RPC server→client 扩展，而是在对应 runtime 内装配官方 rc.8 `approval/request` waterfall
    answerer，经 bridge `/approval` 回调展示同一张一次性卡。
 4. **唯一自研差异化**：git worktree 工作区管理 + AGENTS.md 注入 + 多 agent 抽象，继续投入。
 5. **License 维持 AGPL-3.0**（所有者决策项，见 8.7）；`package.json.homepage` 已存在，无需新增。
@@ -156,7 +156,7 @@
 | # | 动作 | 验收 |
 | --- | --- | --- |
 | P0-1 | 验证 npm 依赖链（`dsh-type-meta` 404 已解除） | registry 实测通过 ✅ |
-| P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`（历史值；当前 rc.7）、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
+| P0-2 | 新增依赖 `@deepseek-ai/dsh-sdk-client@0.1.0-rc.6`（历史值；当前 rc.8）、`@agentclientprotocol/sdk@0.25.1` | pnpm install 通过 ✅ |
 | P0-3 | `src/adapters/dsh/sdk-runtime.ts`：解析 / 确保 `dsh-lark-sdk` SDK runtime profile（bundle `dsh-base` + `dsh-sdk-jsonrpc-server` overlay） | 本地真实握手通过 ✅ |
 | P0-4 | `src/adapters/dsh/sdk-translate.ts`：SDK `session.event`（`assistant/chunk` / `tool/call` / `tool/result` / `assistant/message`）→ `AgentEvent` | 单元测试覆盖 |
 | P0-5 | `src/adapters/dsh/sdk-adapter.ts`：`SdkDshAdapter`（按 cwd 管理 runtime 池 + `session(id)` 原生续跑 + `/stop` 关闭 runtime） | 单元测试 + 真实 runtime 探测 |
@@ -172,7 +172,7 @@
 | P0-10 | `src/card/question-card.ts`：问答卡（单选 / 多选 / 自由文本） | 渲染 + 答案提取测试 |
 | P0-11 | `src/bot/approvals.ts`：pending 审批按 scope + session + request id 精确注册/结算 | 并发生命周期测试 |
 | P0-12 | 桥接接线：`run-flow` 提供 `onApprovalRequest`（发卡 + 等待按钮）、`channel.ts` 处理 `cmd=approve` | 集成测试 |
-| P0-13 | `./approval` + `/approval`：默认 SDK / Web 接入 rc.7 one-shot approval answerer | raw listener、HTTP、真实 compat probe |
+| P0-13 | `./approval` + `/approval`：默认 SDK / Web 接入 rc.8 one-shot approval answerer | raw listener、HTTP、真实 compat probe |
 
 ### 8.4 P1：安全模块（借鉴 dsh-lark-bridge）
 
