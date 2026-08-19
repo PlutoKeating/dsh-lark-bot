@@ -56,6 +56,11 @@ import {
   persistJobTerminal,
   recoverDurableJobs,
 } from '../../bridge/job-recovery.js';
+import {
+  createDiagnosticBundle,
+  knownSecretsFromEnv,
+} from '../../diagnostics/bundle.js';
+import { ServiceManager } from '../../service/manager.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -161,6 +166,8 @@ export async function startBridgeEngine(
   const env = options.env;
   const paths = resolveAppPaths(env.home);
   const profileName = options.profileName;
+  const dshProfileName = process.env.DSH_LARK_DSH_PROFILE ??
+    (profileName === 'default' ? env.guardianProfile : `dsh-lark-${profileName}`);
   const configStore = new ConfigStore(paths.configFile);
   const fleet = new BotFleetStore(paths.fleetFile);
   const handoffGuard = new BotHandoffGuard(paths.handoffFile);
@@ -168,8 +175,7 @@ export async function startBridgeEngine(
   await fleet.ensure({
     name: profileName,
     bridgeProfile: profileName,
-    dshProfile: process.env.DSH_LARK_DSH_PROFILE ??
-      (profileName === 'default' ? env.guardianProfile : `dsh-lark-${profileName}`),
+    dshProfile: dshProfileName,
     dshHome: resolveDshHome(homedir(), process.env),
   });
 
@@ -546,6 +552,49 @@ export async function startBridgeEngine(
     botHandoffMax: env.botHandoffMax,
     handoffGuard,
     jobs,
+    createDiagnosticBundle: async (request) => {
+      const service = new ServiceManager({
+        profile: dshProfileName,
+        env: process.env,
+        paths,
+        version: currentVersion(),
+      });
+      const serviceStatus = await service.status().catch(() => undefined);
+      return createDiagnosticBundle({
+        version: currentVersion(),
+        node: process.version,
+        platform: `${process.platform}/${process.arch}`,
+        profile: profileName,
+        dshProfile: dshProfileName,
+        tenant: activeProfile.tenant,
+        adapter: adapter.id,
+        config: {
+          credentialsConfigured: Boolean(activeProfile.accounts.appId && activeProfile.accounts.appSecret),
+          allowedUsers: activeProfile.access.allowedUsers.length,
+          allowedChats: activeProfile.access.allowedChats.length,
+          admins: activeProfile.access.admins.length,
+          groupNoAt: env.groupNoAt,
+        },
+        request,
+        ...(serviceStatus
+          ? {
+              service: {
+                installed: serviceStatus.installed,
+                state: serviceStatus.state,
+                platform: serviceStatus.platform,
+                autostartEnabled: serviceStatus.autostartEnabled,
+                detail: serviceStatus.detail,
+              },
+            }
+          : {}),
+        runtimeLogs: log.recent(200),
+        knownSecrets: [
+          activeProfile.accounts.appSecret,
+          ...knownSecretsFromEnv(process.env),
+        ],
+        homeDir: homedir(),
+      });
+    },
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
     ...(options.createChannel ? { createChannel: options.createChannel } : {}),

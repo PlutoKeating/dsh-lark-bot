@@ -11,6 +11,7 @@ export const runCommand: CommandRunner = (command, args, options) =>
       {
         env: options?.env,
         maxBuffer: 16 * 1024 * 1024,
+        timeout: options?.timeoutMs ?? 30_000,
         windowsHide: true,
       },
       (error, stdout, stderr) => {

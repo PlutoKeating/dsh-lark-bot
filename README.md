@@ -109,6 +109,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/ws use <name>` | 切换到命名工作空间|
 | `/ws remove <name>` | 删除命名工作空间|
 | `/status` | 查看可刷新状态卡（工作区 / 模型 / session / run / context / token / pending / 任务账本）|
+| `/doctor` | 生成脱敏诊断包并作为文件发送（管理员；可下载转发）|
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账排队/运行/完成/失败/中断任务；确认后显式重试 |
 | `/resume` | 查看当前会话最近上下文|
 | `/stop` | 终止当前任务|
@@ -463,6 +464,12 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **本地会话用量**：adapter 上报的 input/output/cache token 与 context used/limit 随 scope 写入
   `~/.dsh-lark/profiles/<profile>/sessions.json`（0600），并显示在 `/status` 卡；成员 scope 仅 owner
   可刷新，但群内已经发送的状态卡仍遵循共享群消息可见性。
+- **诊断包**：管理员可在会话发送 `/doctor`，bridge 在内存中生成 Markdown 文件并上传到原聊天 /
+  话题；包含版本、平台、非敏感配置计数、当前 workspace 的运行/pending/任务账本摘要、服务状态与
+  当前 bridge 进程内有界最近结构化事件（不读取 dsh 宿主共享 stdout）。不包含 App ID/Secret、凭据值、消息正文或 session transcript；常见密钥形态、
+  当前进程已知敏感环境值及主目录会再次脱敏。文件一旦发到群中即对群成员可见，建议在私聊生成并在
+  转发前人工复核。生成等待有超时边界，底层服务命令也会被有界终止；上传等待超时时会明确提示
+  结果未知及文件可能迟到，避免用户立即重试造成重复投递。
 - **持久任务账本**：`profiles/<profile>/jobs.json`（0600）保存 bridge 已接收任务的原始消息正文、
   附件/提及元数据、chat/thread/scope、workspace、状态与安全 checkpoint，最多保留 500 条终态记录。
   `/jobs` 输出会脱敏并按当前 scope + workspace 隔离；文件内容与 `sessions.json` 一样可能包含用户在
@@ -491,6 +498,8 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 
 先运行 `dsh-lark-bot doctor`，它会检查 profile、工作目录，并对当前 adapter 做真实可用性探测
 （`sdk` / `acp` / `headless` 对应 runtime 的初始化握手）；启用无 @ 群消息后，还会使用一个已登记群聊探测历史消息权限。
+无法接触终端时，管理员可直接在飞书发送 `/doctor` 获取可下载的脱敏诊断包；聊天版为运行态快照，
+不会另起 adapter 做破坏性探测，终端版仍是完整可用性检查。
 
 常见问题：
 
@@ -621,6 +630,7 @@ pnpm publish:dual
 | `src/card/` | 流式卡片、Card JSON 2.0 per-viewer 中英国际化与审批 / 问答 / 计划决策卡渲染|
 | `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略、多机器人 fleet / 交接限制|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
+| `src/diagnostics/` | `/doctor` 内存诊断文件生成、限额与二次脱敏 |
 | `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏运行入口|
 | `src/service/` | 正常 dsh profile 的跨平台用户服务、0600 环境快照、状态与日志管理|
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|

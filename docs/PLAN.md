@@ -34,6 +34,8 @@
 - [x] `/new` `/cd` `/ws` `/resume` `/stop` `/timeout` `/help`
 - [x] `/status` 可刷新状态卡：工作区 / 模型 / session / runs / context / 累计 token / 待处理卡；
   不可得指标明确显示“暂无”
+- [x] issue #29：管理员 `/doctor` 在飞书内生成并上传内存诊断文件，覆盖版本/非敏感配置/当前运行/
+  服务状态/当前 bridge 进程内有界事件，统一脱敏、不读取共享宿主 stdout 且不写临时文件
 - [x] 真实飞书账号连续两轮 E2E 验收
 
 ## 3. P2 验收标准

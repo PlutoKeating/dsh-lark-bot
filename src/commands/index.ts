@@ -49,6 +49,10 @@ import { reachableScopes } from '../bridge/scope-isolation.js';
 import { bilingualMarkdown } from '../card/i18n.js';
 import type { JobLedger, JobRecord } from '../bot/job-ledger.js';
 import { redactSecrets, truncateUtf8Safe } from '../config/security.js';
+import type {
+  DiagnosticFile,
+  DiagnosticRequestSnapshot,
+} from '../diagnostics/bundle.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -58,6 +62,12 @@ export interface CommandChannel {
   ): Promise<void>;
   sendCard?(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
   updateCard?(messageId: string, card: object): Promise<void>;
+  sendFile?(
+    chatId: string,
+    fileName: string,
+    content: Buffer,
+    options?: SendOptions,
+  ): Promise<void>;
   /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
   createChat?(opts: {
     name: string;
@@ -109,9 +119,31 @@ export interface CommandContext {
   defaultWorkspace: string;
   jobs?: Pick<JobLedger, 'list' | 'get' | 'counts'>;
   requeueJob?: (messageId: string, scope: string, workspaceCwd: string) => Promise<boolean>;
+  createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
+  diagnosticTimeoutMs?: { generate: number; upload: number };
 }
 
 type Handler = (args: string, ctx: CommandContext) => Promise<void>;
+
+const DOCTOR_GENERATE_TIMEOUT_MS = 15_000;
+const DOCTOR_UPLOAD_TIMEOUT_MS = 30_000;
+
+class OperationTimeoutError extends Error {}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new OperationTimeoutError('operation timed out')), timeoutMs);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 const HELP = [
   '**dsh-lark-bot 命令**',
@@ -123,6 +155,7 @@ const HELP = [
   '- `/status` — 查看可刷新状态卡、上下文/token 用量与待处理卡',
   '- `/jobs [show <消息ID>|retry <消息ID>]` — 对账排队/运行/失败任务并显式重试',
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
+  '- `/doctor` — 生成脱敏诊断包并作为文件发送（管理员）',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
@@ -158,6 +191,7 @@ const HELP_EN = [
   '- `/status` — open a refreshable status card with context/token usage and pending actions',
   '- `/jobs [show <message-id>|retry <message-id>]` — reconcile queued/running/failed jobs and retry explicitly',
   '- `/version` — show the installed and latest versions',
+  '- `/doctor` — generate and send a redacted diagnostic bundle (admin)',
   '- `/resume` — show recent context for this session',
   '- `/stop` — stop current tasks',
   '- `/timeout [N|off|default]` — view or set the idle timeout',
@@ -546,6 +580,61 @@ async function handleVersion(_args: string, ctx: CommandContext): Promise<void> 
     english.push('Latest-version lookup is unavailable (network or registry error).');
   }
   await reply(ctx, lines.join('\n'), english.join('\n'));
+}
+
+async function handleDoctor(_args: string, ctx: CommandContext): Promise<void> {
+  if (!requireAdmin(ctx)) return;
+  if (!ctx.createDiagnosticBundle || !ctx.channel.sendFile) {
+    await reply(ctx, '当前渠道不支持生成或发送诊断文件。', 'Diagnostic generation or file delivery is unavailable in this channel.');
+    return;
+  }
+  let file: DiagnosticFile;
+  try {
+    const status = await statusCardInputFor(ctx);
+    file = await withTimeout(ctx.createDiagnosticBundle({
+      scope: ctx.scope,
+      chatMode: ctx.chatMode,
+      workspace: status.cwd,
+      model: status.model,
+      ...(status.sessionId ? { sessionId: status.sessionId } : {}),
+      activeRunIds: status.activeRunIds,
+      pending: status.pending,
+      ...(status.jobs ? { jobs: status.jobs } : {}),
+    }), ctx.diagnosticTimeoutMs?.generate ?? DOCTOR_GENERATE_TIMEOUT_MS);
+  } catch {
+    await reply(
+      ctx,
+      '⚠️ 诊断包生成失败。请稍后重试；若持续失败，请在本机运行 `dsh-lark-bot doctor`。',
+      '⚠️ Failed to generate the diagnostic bundle. Retry later; if it keeps failing, run `dsh-lark-bot doctor` locally.',
+    );
+    return;
+  }
+  try {
+    await withTimeout(ctx.channel.sendFile(ctx.chatId, file.fileName, file.content, {
+      replyTo: ctx.messageId,
+      ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+    }), ctx.diagnosticTimeoutMs?.upload ?? DOCTOR_UPLOAD_TIMEOUT_MS);
+  } catch (error) {
+    if (error instanceof OperationTimeoutError) {
+      await reply(
+        ctx,
+        '⚠️ 诊断包上传等待超时，结果未知：文件仍可能稍后到达。请先检查当前聊天，不要立即重试。',
+        '⚠️ Diagnostic upload timed out with an unknown result: the file may still arrive later. Check this chat before retrying.',
+      );
+      return;
+    }
+    await reply(
+      ctx,
+      '⚠️ 诊断包发送失败。请稍后重试；若持续失败，请在本机运行 `dsh-lark-bot doctor`。',
+      '⚠️ Failed to send the diagnostic bundle. Retry later; if it keeps failing, run `dsh-lark-bot doctor` locally.',
+    );
+    return;
+  }
+  await reply(
+    ctx,
+    '✅ 脱敏诊断包已生成并发送，可直接下载转发给维护者。',
+    '✅ The redacted diagnostic bundle was generated and sent. You can download and forward it to a maintainer.',
+  ).catch(() => undefined);
 }
 
 async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
@@ -952,6 +1041,7 @@ const handlers: Record<string, Handler> = {
   '/status': handleStatus,
   '/jobs': handleJobs,
   '/version': handleVersion,
+  '/doctor': handleDoctor,
   '/resume': handleResume,
   '/stop': handleStop,
   '/timeout': handleTimeout,

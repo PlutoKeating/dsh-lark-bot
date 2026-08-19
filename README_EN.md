@@ -106,6 +106,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/ws use <name>` | Switch to a named workspace |
 | `/ws remove <name>` | Remove a named workspace |
 | `/status` | Show a refreshable status card (workspace / model / session / runs / context / tokens / pending cards / job ledger) |
+| `/doctor` | Generate and upload a redacted diagnostic bundle (admin; downloadable and forwardable) |
 | `/jobs [list\|show <message-id>\|retry <message-id>]` | Reconcile queued/running/completed/failed/interrupted jobs and explicitly retry after review |
 | `/resume` | Show the session's recent context |
 | `/stop` | Stop the current task |
@@ -436,6 +437,14 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Local session usage**: adapter-reported input/output/cache tokens and context used/limit are stored per scope
   in `~/.dsh-lark/profiles/<profile>/sessions.json` (mode 0600) and displayed by `/status`. Only the member-scope
   owner can refresh its card, but a status card already sent to a shared group follows normal group visibility.
+- **Diagnostic bundle**: an admin can send `/doctor` to generate an in-memory Markdown file and upload it to
+  the original chat/thread. It contains versions, platform, non-sensitive configuration counts, current-workspace
+  run/pending/job summaries, managed-service state, and bounded recent in-process bridge events; shared dsh host
+  stdout is not read. It omits App ID/Secret,
+  credential values, message bodies, and session transcripts; common secret patterns, known sensitive environment
+  values, and the local home path are redacted again. A file posted in a group remains visible to group members, so
+  prefer a DM and review it before forwarding. Generation waits and service commands are bounded. If an upload wait
+  times out, the bot reports that delivery is unknown and may still arrive, preventing an immediate duplicate retry.
 - **Durable job ledger**: `profiles/<profile>/jobs.json` (mode 0600) stores the original message body,
   attachment/mention metadata, chat/thread/scope, workspace, state, and safe checkpoints for jobs accepted by
   the bridge, retaining at most 500 terminal records. `/jobs` redacts its output and isolates it by current scope
@@ -459,6 +468,8 @@ All data flows only between this machine, Feishu and DeepSeek; nothing is collec
 ## Troubleshooting
 
 Run `dsh-lark-bot doctor` first; it checks the profile and working directory and performs a real availability probe for the current adapter (`sdk` / `acp` / `headless` runtime handshake). When no-@ group polling is enabled, it also probes the history API against one registered group.
+When the terminal is unavailable, an admin can send `/doctor` in Feishu/Lark to download a redacted runtime snapshot.
+The chat command does not start a second adapter probe; the CLI command remains the full availability check.
 
 Common issues:
 
@@ -574,6 +585,7 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/card/` | Streaming, approval, question and plan-decision cards |
 | `src/bot/` | Run/queue, decision/isolation registries, multi-bot fleet and handoff guard |
 | `src/commands/` | Slash commands |
+| `src/diagnostics/` | In-memory `/doctor` bundle rendering, bounds, and second-pass redaction |
 | `src/cli/` | CLI entry: setup / bot add/list/status/remove / service / doctor / upgrade / hidden runtime entries |
 | `src/service/` | Cross-platform normal-profile supervision, private environment snapshot, status and logs |
 | `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |

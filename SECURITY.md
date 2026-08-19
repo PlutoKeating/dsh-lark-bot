@@ -57,7 +57,7 @@
    `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
    与 `/invite remove …`），以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
-   （`/model`、`/providers`、`/key list`）开放。
+   （`/model`、`/providers`、`/key list`）开放。`/doctor` 因包含本机运行状态与最近日志，仅管理员可执行。
 10. **本地回调隔离**：`lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 与
     `approval/request` answerer 的回调
     服务只绑定 `127.0.0.1`，每次启动生成随机
@@ -103,6 +103,13 @@
   `/proc` starttime、`service-supervise` 命令和 profile 后才可发送信号，强制停止作用于已验证的
   独立进程组，避免 PID 复用误杀或遗留孤儿 dsh。stop/uninstall intent 会阻止 guardian 回拉。
 - 桥接引擎日志以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获），密钥字段脱敏后输出；
+- `/doctor` 诊断文件在内存生成并直接上传，不创建临时文件；仅包含非敏感配置计数、当前 workspace
+  的运行摘要、服务状态与最多 64 KiB 的当前 bridge 进程内结构化事件；不读取共享 dsh 宿主 stdout。
+  结构化事件只保留代码内固定枚举的 category/event 与固定数值字段，
+  时间被规范化，所有其他字段名和值均丢弃，
+  因而不含消息正文/transcript/凭据标识或值。
+  导出前会再次对 Bearer、`sk-`、`api_key`、当前进程已知敏感环境值及主目录脱敏。群中上传的文件
+  对群成员可见，因此命令仅限管理员，仍建议私聊生成并由发送者转发前复核。
   `logs/bot.log` 是 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入。
 - 聊天命令管理的 dsh 配置按官方存储协议写入：`~/.dsh/settings.yaml`（只存 `apiKeyEnv`
   引用，不落字面密钥）与 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）。bot 永不回显
