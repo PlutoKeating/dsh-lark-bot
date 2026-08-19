@@ -68,7 +68,8 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 | `/new` `/reset` | 开始新会话 |
 | `/cd <path>` | 切换到该目录的独立会话（切回可继续） |
 | `/ws list` `/ws save <name>` `/ws use <name>` | 查看 / 保存 / 切换命名工作空间 |
-| `/status` | 查看可刷新状态卡、上下文/token 用量与待处理卡 |
+| `/status` | 查看可刷新状态卡、上下文/token 用量、待处理卡与任务账本 |
+| `/jobs [list|show <消息ID>|retry <消息ID>]` | 对账任务状态、查看 checkpoint、显式重试中断/失败任务 |
 | `/stop` | 终止当前任务 |
 | `/concurrency [N]` | 查看或设置当前 scope 并行任务数（默认 2） |
 | `/role list` `/role set <id>` | 查看角色 / 为当前 scope 绑定角色 |
@@ -123,6 +124,12 @@ LaunchAgent / Windows 登录计划任务托管同一个标准 dsh profile；用 
 
 同一群里可以同时跑多个任务，各自会话隔离（默认 2 个并行，`/concurrency` 可调），
 连续发来的多条消息会以独立 run 并行推进。
+
+### 崩溃后任务可对账
+
+普通任务先写入本机 `jobs.json`（0600）再排队。进程重启后 queued 自动恢复；已经 running 的任务
+转为 interrupted 并保留最后安全 checkpoint，不会自动重复可能已有副作用的命令。用 `/jobs show`
+核对后再 `/jobs retry`。这只保证 bridge 已经接收并落盘的消息；断网期间平台未投递的事件无法恢复。
 
 ### 会话归档与清理
 

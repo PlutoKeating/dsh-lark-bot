@@ -25,6 +25,7 @@ import { WorkspaceStore } from '../../src/workspace/store.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { JobLedger } from '../../src/bot/job-ledger.js';
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
 
@@ -1203,5 +1204,72 @@ describe('startChannel', () => {
     const reply = fake.sent.at(-1);
     expect(JSON.stringify(reply?.input)).toContain('命令执行失败');
     expect(pending.push).not.toHaveBeenCalled();
+  });
+
+  it('persists an accepted message before enqueue and deduplicates a replayed event', async () => {
+    const fake = makeChannel();
+    const pending = {
+      push: vi.fn(), size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false),
+    };
+    const jobs = new JobLedger(':memory:');
+    await jobs.load();
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-ledger-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never, jobs, defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    const handle = fake.handlers.message as (msg: NormalizedMessage) => Promise<void>;
+    await handle(message({ messageId: 'durable-message', content: 'do durable work' }));
+    await handle(message({ messageId: 'durable-message', content: 'do durable work' }));
+
+    expect(jobs.queued()).toHaveLength(1);
+    expect(jobs.queued()[0]?.message).toMatchObject({
+      messageId: 'durable-message', scope: 'chat-1', workspaceCwd: '/tmp/project',
+    });
+    expect(pending.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed with a visible receipt when durable enqueue cannot be persisted', async () => {
+    const fake = makeChannel();
+    const pending = {
+      push: vi.fn(), size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false),
+    };
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-ledger-fail-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never,
+      jobs: { enqueue: vi.fn().mockRejectedValue(new Error('disk full')) } as never,
+      defaultWorkspace: '/tmp/project', createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+      message({ messageId: 'not-durable', content: 'must not run' }),
+    );
+
+    expect(pending.push).not.toHaveBeenCalled();
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('未能写入持久任务账本');
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('not-durable');
   });
 });

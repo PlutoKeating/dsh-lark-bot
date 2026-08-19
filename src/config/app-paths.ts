@@ -17,6 +17,7 @@ export interface AppPaths {
   profileDir: (profile: string) => string;
   profilePath: (profile: string, ...parts: string[]) => string;
   sessionsFile: (profile: string) => string;
+  jobsFile: (profile: string) => string;
   sessionCatalogFile: (profile: string) => string;
   archivesDir: (profile: string) => string;
   workspacesFile: (profile: string) => string;
@@ -50,6 +51,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     profileDir,
     profilePath,
     sessionsFile: (profile) => profilePath(profile, 'sessions.json'),
+    jobsFile: (profile) => profilePath(profile, 'jobs.json'),
     sessionCatalogFile: (profile) => profilePath(profile, 'sessions.json.catalog.json'),
     archivesDir: (profile) => profilePath(profile, 'archives'),
     workspacesFile: (profile) => profilePath(profile, 'workspaces.json'),

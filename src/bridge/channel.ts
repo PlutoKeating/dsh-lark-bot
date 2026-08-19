@@ -42,6 +42,7 @@ import type { ScopeDirectory } from './scope-directory.js';
 import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
 import { ReconnectNotifier } from './reconnect-notifier.js';
 import type { BotHandoffGuard } from '../bot/handoff-guard.js';
+import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -94,6 +95,7 @@ export interface StartChannelDeps {
   isTrustedBot?: (openId: string) => Promise<boolean>;
   botHandoffMax?: number;
   handoffGuard?: Pick<BotHandoffGuard, 'recordHuman' | 'recordBot'>;
+  jobs?: JobLedger;
   /** Injectable history source for deterministic tests. */
   groupHistorySource?: GroupHistorySource;
   stopGraceMs?: number;
@@ -141,7 +143,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
 
   const streaming = adaptLarkChannel(channel);
   const commandChannel: CommandChannel = streaming;
-  const reconnectNotifier = new ReconnectNotifier(commandChannel, deps.scopeDirectory);
+  const reconnectNotifier = new ReconnectNotifier(
+    commandChannel,
+    deps.scopeDirectory,
+    Date.now,
+    deps.jobs
+      ? (scope) => {
+          const cwd = deps.workspaces.cwdFor(scope) ?? deps.defaultWorkspace;
+          const counts = deps.jobs!.counts(scope, cwd);
+          return {
+            zhCn: `账本对账：queued ${counts.queued} · running ${counts.running} · interrupted ${counts.interrupted} · failed ${counts.failed}；详情见 \`/jobs\`。`,
+            enUs: `Ledger reconciliation: queued ${counts.queued} · running ${counts.running} · interrupted ${counts.interrupted} · failed ${counts.failed}; use \`/jobs\` for details.`,
+          };
+        }
+      : undefined,
+  );
   const isolationStore = deps.isolationStore ?? EMPTY_ISOLATION_STORE;
   let groupPoller: GroupMessagePoller | undefined;
 
@@ -297,6 +313,17 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       dshConfig: deps.dshConfig,
       channel: commandChannel,
       defaultWorkspace: deps.defaultWorkspace,
+      ...(deps.jobs
+        ? {
+            jobs: deps.jobs,
+            requeueJob: async (messageId: string, jobScope: string, workspaceCwd: string) => {
+              const record = await deps.jobs!.retry(messageId, jobScope, workspaceCwd);
+              if (!record) return false;
+              deps.pending.push(jobScope, queuedMessageFromDurable(record.message));
+              return true;
+            },
+          }
+        : {}),
       defaultModel: deps.defaultModel,
       ...(deps.resolveDefaultModel
         ? { resolveDefaultModel: () => deps.resolveDefaultModel!(scope) }
@@ -335,6 +362,35 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         queued > 0 ||
         deps.pending.isFlushing(scope) ||
         deps.pending.isBlocked(scope);
+      const workspaceCwd = deps.workspaces.cwdFor(scope) ?? deps.defaultWorkspace;
+      const queuedMessage = botSender
+        ? {
+            ...msg,
+            content: `[来自可信机器人 ${msg.senderName ?? msg.senderId} 的交接]\n${msg.content}`,
+            workspaceCwd,
+          }
+        : { ...msg, workspaceCwd };
+      if (deps.jobs) {
+        let inserted: boolean;
+        try {
+          inserted = await deps.jobs.enqueue(durableMessageFor(queuedMessage, scope));
+        } catch (error) {
+          log.fail('job-ledger', error, { step: 'enqueue', messageId: msg.messageId, scope });
+          await commandChannel.sendMarkdown(
+            msg.chatId,
+            bilingualMarkdown(
+              `⚠️ 消息 \`${msg.messageId}\` 未能写入持久任务账本，因此没有接收或执行。请检查本机存储后重新发送；本次不会在后台悄悄运行。`,
+              `⚠️ Message \`${msg.messageId}\` could not be written to the durable job ledger, so it was not accepted or executed. Check local storage and resend it; this attempt will not run silently in the background.`,
+            ),
+            { replyTo: msg.messageId, ...(msg.threadId ? { threadId: msg.threadId } : {}) },
+          ).catch((noticeError) => log.fail('job-ledger', noticeError, {
+            step: 'enqueue-failure-notice',
+            messageId: msg.messageId,
+          }));
+          return;
+        }
+        if (!inserted) return;
+      }
       if (busy) {
         await commandChannel.sendMarkdown(
           msg.chatId,
@@ -345,14 +401,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           { replyTo: msg.messageId },
         );
       }
-      const workspaceCwd = deps.workspaces.cwdFor(scope) ?? deps.defaultWorkspace;
-      deps.pending.push(scope, botSender
-        ? {
-            ...msg,
-            content: `[来自可信机器人 ${msg.senderName ?? msg.senderId} 的交接]\n${msg.content}`,
-            workspaceCwd,
-          }
-        : { ...msg, workspaceCwd });
+      deps.pending.push(scope, queuedMessage);
     }
   };
 
@@ -581,6 +630,54 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       await groupPoller?.stop();
       await channel.disconnect();
     },
+  };
+}
+
+function durableMessageFor(message: QueuedMessage, scope: string): DurableQueuedMessage {
+  return {
+    messageId: message.messageId,
+    scope,
+    workspaceCwd: message.workspaceCwd,
+    chatId: message.chatId,
+    chatType: message.chatType,
+    ...(message.chatMode ? { chatMode: message.chatMode } : {}),
+    senderId: message.senderId,
+    ...(message.senderName ? { senderName: message.senderName } : {}),
+    ...(message.senderType ? { senderType: message.senderType } : {}),
+    content: message.content,
+    rawContentType: message.rawContentType,
+    resources: structuredClone(message.resources) as unknown[],
+    mentions: structuredClone(message.mentions) as unknown[],
+    mentionAll: message.mentionAll,
+    mentionedBot: message.mentionedBot,
+    ...(message.rootId ? { rootId: message.rootId } : {}),
+    ...(message.threadId ? { threadId: message.threadId } : {}),
+    ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
+    createTime: message.createTime,
+  };
+}
+
+export function queuedMessageFromDurable(message: DurableQueuedMessage): QueuedMessage {
+  return {
+    messageId: message.messageId,
+    chatId: message.chatId,
+    chatType: message.chatType,
+    ...(message.chatMode ? { chatMode: message.chatMode } : {}),
+    senderId: message.senderId,
+    ...(message.senderName ? { senderName: message.senderName } : {}),
+    ...(message.senderType ? { senderType: message.senderType } : {}),
+    ...(message.senderType === 'bot' ? { senderIsBot: true } : {}),
+    content: message.content,
+    rawContentType: message.rawContentType,
+    resources: message.resources as QueuedMessage['resources'],
+    mentions: message.mentions as QueuedMessage['mentions'],
+    mentionAll: message.mentionAll,
+    mentionedBot: message.mentionedBot,
+    ...(message.rootId ? { rootId: message.rootId } : {}),
+    ...(message.threadId ? { threadId: message.threadId } : {}),
+    ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
+    createTime: message.createTime,
+    workspaceCwd: message.workspaceCwd,
   };
 }
 

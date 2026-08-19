@@ -21,6 +21,7 @@ describe('renderStatusCard', () => {
         contextWindow: 64_000,
       },
       pending: { approvals: 2, questions: 1, plans: 3 },
+      jobs: { queued: 4, running: 1, completed: 8, failed: 2, interrupted: 3 },
     });
 
     const json = JSON.stringify(card);
@@ -28,6 +29,8 @@ describe('renderStatusCard', () => {
     expect(json).toContain('input `10,000`');
     expect(json).toContain('cache read `30,000`');
     expect(json).toContain('审批 `2` · 提问 `1` · 计划 `3`');
+    expect(json).toContain('排队 `4` · 运行 `1` · 中断 `3` · 失败 `2`');
+    expect(json).toContain('queued `4` · running `1` · interrupted `3` · failed `2`');
     expect(json).toContain('gateway/deepseek-v4-flash');
     expect(json).toContain('run-1');
     expect(json).toContain('0.15.9');

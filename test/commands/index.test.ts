@@ -25,6 +25,7 @@ import { SessionStore } from '../../src/session/store.js';
 import type { SessionArchive } from '../../src/session/archive.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
 import { latestVersion } from '../../src/upgrade/update-check.js';
+import { JobLedger } from '../../src/bot/job-ledger.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
@@ -645,5 +646,31 @@ describe('command router', () => {
     const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[1] as string;
     expect(body).toContain('已是最新');
+  });
+
+  it('/jobs only lists and retries jobs in the current scope and workspace', async () => {
+    const jobs = new JobLedger(':memory:');
+    await jobs.load();
+    await jobs.enqueue({
+      messageId: 'job-a', scope: 'chat-a', workspaceCwd: '/tmp/default', chatId: 'chat-a',
+      chatType: 'p2p', senderId: 'user-a', senderType: 'user', content: 'deploy api_key=supersecret123',
+      rawContentType: 'text', resources: [], mentions: [], mentionAll: false, mentionedBot: true,
+      createTime: 1,
+    });
+    await jobs.markRunning(['job-a'], 'run-a');
+    await jobs.finish(['job-a'], 'interrupted', 'bridge stopped');
+    const requeueJob = vi.fn(async (id: string, scope: string, cwd: string) =>
+      Boolean(await jobs.retry(id, scope, cwd)));
+    const ctx = makeContext({ jobs, requeueJob });
+
+    await tryHandleCommand('/jobs', ctx);
+    const list = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1] as string;
+    expect(list).toContain('job-a');
+    expect(list).toContain('interrupted');
+    expect(list).not.toContain('secret');
+
+    await tryHandleCommand('/jobs retry job-a', ctx);
+    expect(requeueJob).toHaveBeenCalledWith('job-a', 'chat-a', '/tmp/default');
+    expect(jobs.counts('chat-a', '/tmp/default').queued).toBe(1);
   });
 });

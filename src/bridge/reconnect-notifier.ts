@@ -9,6 +9,7 @@ export class ReconnectNotifier {
     private readonly channel: CommandChannel,
     private readonly directory: ScopeDirectory | undefined,
     private readonly now: () => number = Date.now,
+    private readonly reconciliation?: (scope: string) => { zhCn: string; enUs: string },
   ) {}
 
   async reconnecting(): Promise<void> {
@@ -24,9 +25,11 @@ export class ReconnectNotifier {
     if (this.startedAt === undefined) return;
     const elapsed = Math.max(0, this.now() - this.startedAt);
     this.startedAt = undefined;
+    const target = this.directory?.recentDestination();
+    const summary = target ? this.reconciliation?.(target.scope) : undefined;
     await this.send(
-      `✅ 机器人连接已恢复（中断约 ${formatDuration(elapsed)}）。`,
-      `✅ The bot connection recovered after about ${formatDurationEnglish(elapsed)}.`,
+      `✅ 机器人连接已恢复（中断约 ${formatDuration(elapsed)}）。${summary ? `\n${summary.zhCn}` : ''}`,
+      `✅ The bot connection recovered after about ${formatDurationEnglish(elapsed)}.${summary ? `\n${summary.enUs}` : ''}`,
     );
   }
 

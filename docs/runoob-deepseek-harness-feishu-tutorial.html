@@ -43,7 +43,8 @@
 <tr><td><code>/new</code> <code>/reset</code></td><td>开始新会话</td></tr>
 <tr><td><code>/cd &lt;path&gt;</code></td><td>切换到该目录的独立会话（切回可继续）</td></tr>
 <tr><td><code>/ws list</code> <code>/ws save &lt;name&gt;</code> <code>/ws use &lt;name&gt;</code></td><td>查看 / 保存 / 切换命名工作空间</td></tr>
-<tr><td><code>/status</code></td><td>查看可刷新状态卡、上下文/token 用量与待处理卡</td></tr>
+<tr><td><code>/status</code></td><td>查看可刷新状态卡、上下文/token 用量、待处理卡与任务账本</td></tr>
+<tr><td><code>/jobs [list|show &lt;消息ID&gt;|retry &lt;消息ID&gt;]</code></td><td>对账任务状态、查看 checkpoint、显式重试中断/失败任务</td></tr>
 <tr><td><code>/stop</code></td><td>终止当前任务</td></tr>
 <tr><td><code>/concurrency [N]</code></td><td>查看或设置当前 scope 并行任务数（默认 2）</td></tr>
 <tr><td><code>/role list</code> <code>/role set &lt;id&gt;</code></td><td>查看角色 / 为当前 scope 绑定角色</td></tr>
@@ -74,11 +75,13 @@
 <p>用 <code>dsh-lark-bot bot add reviewer --model gateway/review-model</code> 增加独立 PersonalAgent 实例；每个实例有自己的模型、凭据、服务与上下文。把实例加入同一群后，只有登记为可信 peer 的 bot 通过真实 @ 才能交接任务；连续 bot 回合默认最多 6 次，真人消息会重置，避免无限互聊。<code>bot list|status|remove</code> 用于查看和移除实例；移除时保留 session/worktree/archive 数据。附加实例使用 SDK/ACP（或 legacy headless）；共享 Web agent 的广播流无法隔离 session，因此不支持 Web adapter。</p>
 <p>3. 并行多任务：不用排队</p>
 <p>同一群里可以同时跑多个任务，各自会话隔离（默认 2 个并行，<code>/concurrency</code> 可调），连续发来的多条消息会以独立 run 并行推进。</p>
-<p>4. 会话归档与清理</p>
+<p>4. 崩溃后任务可对账</p>
+<p>普通任务先写入本机 <code>jobs.json</code>（0600）再排队。进程重启后 queued 自动恢复；已经 running 的任务转为 interrupted 并保留最后安全 checkpoint，不会自动重复可能已有副作用的命令。用 <code>/jobs show</code> 核对后再 <code>/jobs retry</code>。这只保证 bridge 已经接收并落盘的消息；断网期间平台未投递的事件无法恢复。</p>
+<p>5. 会话归档与清理</p>
 <p><code>/archive</code> 归档旧任务、<code>/retention</code> 配置自动保留策略，长期使用会话列表也不会越积越多。</p>
-<p>5. 跨会话主动通知</p>
+<p>6. 跨会话主动通知</p>
 <p>Agent 在 A 群跑完任务，可以主动发消息到 B 群或私聊并 <code>@</code> 你（内置 <code>lark_notify</code> dsh 工具），而不是「你问它答」。</p>
-<p>6. 对话内管理模型和密钥</p>
+<p>7. 对话内管理模型和密钥</p>
 <p><code>/model</code>、<code>/providers</code>、<code>/provider</code>、<code>/key</code> 直接在聊天里查看、切换供应商、热更新密钥，全程不离开飞书；密钥写入 <code>~/.dsh/.credentials.yaml</code>（0600），不在聊天记录中显示。</p>
 
 <p><strong>安全性说明</strong></p>

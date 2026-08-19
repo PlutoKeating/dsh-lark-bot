@@ -302,6 +302,20 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 `/cd` / `/ws use` 会中断原 workspace active run，但不清理其数据，切回可续接；`clearSession(scope,cwd)` 的原生绑定自愈保留该 workspace 的
 指标和 transcript。schema 1 的单 scope record 会在启动时按 `WorkspaceStore` 当前选择迁移，旧版无 metrics 也兼容。
 
+`src/bot/job-ledger.ts` 的 `JobLedger` 使用独立 `jobs.json` schema 1。`enqueue(message)` 仅在原子
+0600 snapshot 成功后返回，并按平台 `messageId` 幂等；`markRunning`、`checkpoint`、`finish` 记录
+状态机 `queued → running → completed|failed|interrupted`。checkpoint 只允许阶段、工具名、runId 与
+nativeSessionId，不保存 reasoning 或 tool input。`recoverInterrupted()` 只在 outbound channel ready 后将
+启动前冻结的 running 转为 interrupted，并持久化待通知标记；通知失败或进程再次退出会在下次启动继续投递。
+启动恢复只自动重放 queued。`retry(messageId,scope,cwd)` 仅允许当前 scope + workspace
+的 failed/interrupted，并增加 attempts。`list/get/counts` 同样强制该隔离边界，终态裁剪为最近 500 条。
+`/jobs [list|show <messageId>|retry <messageId>]` 提供对账；`/status` 显示 queued/running/interrupted/
+failed 数。账本损坏会原名旁移为 `.corrupt-<timestamp>`；普通读取权限错误 fail closed，不被误判损坏。
+启动在 channel connect 前只读冻结 recovery plan，连接后的新事件只走 live enqueue，避免恢复扫描重复回灌；
+running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉对账通知。
+首次 enqueue 落盘失败会向原消息明确回复“未接收/未执行”；terminal `finish` 失败写结构化日志并发送
+对账提示，保留 running receipt 供下次启动转 interrupted，不阻塞 scope 队列解锁。
+
 `src/session/heal.ts` 提供会话自愈分类与归档：`classifySessionError(message)` 以锚定正则将
 会话错误分为 `broken`（持久化日志与 live session 不一致 → 重置 scope 绑定、保留历史）与
 `corrupt`（日志损坏 / seq gap → 归档后重置）两类，普通文本（模型输出 / 工具结果）不会误触发；
@@ -491,7 +505,7 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
   workspace/cwd、有效模型、session、当前 workspace runs、版本、context used/limit/percentage、累计四类 token
-  与待审批/提问/计划数。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
+  与待审批/提问/计划数、持久任务账本统计。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
   owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新。Card JSON 2.0 发送被拒绝时
   `/status` 回退等价 Markdown；未知值显示“暂无”。
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。

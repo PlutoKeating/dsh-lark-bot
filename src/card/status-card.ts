@@ -16,6 +16,13 @@ export interface StatusCardInput {
     questions: number;
     plans: number;
   };
+  jobs?: {
+    queued: number;
+    running: number;
+    completed: number;
+    failed: number;
+    interrupted: number;
+  };
 }
 
 function amount(value: number | undefined, locale: CardLocale): string {
@@ -64,6 +71,11 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
     zh
       ? `⏳ **待处理**：审批 \`${String(input.pending.approvals)}\` · 提问 \`${String(input.pending.questions)}\` · 计划 \`${String(input.pending.plans)}\``
       : `⏳ **Pending**: approvals \`${String(input.pending.approvals)}\` · questions \`${String(input.pending.questions)}\` · plans \`${String(input.pending.plans)}\``,
+    ...(input.jobs
+      ? [zh
+          ? `🧾 **任务账本**：排队 \`${input.jobs.queued}\` · 运行 \`${input.jobs.running}\` · 中断 \`${input.jobs.interrupted}\` · 失败 \`${input.jobs.failed}\``
+          : `🧾 **Job ledger**: queued \`${input.jobs.queued}\` · running \`${input.jobs.running}\` · interrupted \`${input.jobs.interrupted}\` · failed \`${input.jobs.failed}\``]
+      : []),
   ].join('\n');
 }
 

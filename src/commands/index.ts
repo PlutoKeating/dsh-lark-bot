@@ -47,6 +47,8 @@ import {
 } from '../upgrade/update-check.js';
 import { reachableScopes } from '../bridge/scope-isolation.js';
 import { bilingualMarkdown } from '../card/i18n.js';
+import type { JobLedger, JobRecord } from '../bot/job-ledger.js';
+import { redactSecrets, truncateUtf8Safe } from '../config/security.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -105,6 +107,8 @@ export interface CommandContext {
   accessManager: AccessManager;
   channel: CommandChannel;
   defaultWorkspace: string;
+  jobs?: Pick<JobLedger, 'list' | 'get' | 'counts'>;
+  requeueJob?: (messageId: string, scope: string, workspaceCwd: string) => Promise<boolean>;
 }
 
 type Handler = (args: string, ctx: CommandContext) => Promise<void>;
@@ -117,6 +121,7 @@ const HELP = [
   '- `/cd <path>` — 切换到该目录的独立会话（切回可继续）',
   '- `/ws list|save <name>|use <name>|remove <name>` — 管理工作空间',
   '- `/status` — 查看可刷新状态卡、上下文/token 用量与待处理卡',
+  '- `/jobs [show <消息ID>|retry <消息ID>]` — 对账排队/运行/失败任务并显式重试',
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/stop` — 终止当前任务',
@@ -151,6 +156,7 @@ const HELP_EN = [
   '- `/cd <path>` — switch to that directory’s independent session',
   '- `/ws list|save <name>|use <name>|remove <name>` — manage workspaces',
   '- `/status` — open a refreshable status card with context/token usage and pending actions',
+  '- `/jobs [show <message-id>|retry <message-id>]` — reconcile queued/running/failed jobs and retry explicitly',
   '- `/version` — show the installed and latest versions',
   '- `/resume` — show recent context for this session',
   '- `/stop` — stop current tasks',
@@ -377,6 +383,7 @@ export type StatusContext = Pick<
   | 'resolveDefaultModel'
   | 'defaultModel'
   | 'defaultWorkspace'
+  | 'jobs'
 >;
 
 export async function statusCardInputFor(
@@ -433,6 +440,7 @@ export async function statusCardInputFor(
       questions: pendingForWorkspace(ctx.questions),
       plans: pendingForWorkspace(ctx.plans),
     },
+    ...(ctx.jobs ? { jobs: ctx.jobs.counts(ctx.scope, cwd) } : {}),
   };
 }
 
@@ -554,6 +562,98 @@ async function handleResume(_args: string, ctx: CommandContext): Promise<void> {
   });
 
   await reply(ctx, [`当前 scope：\`${ctx.scope}\``, '', ...recent].join('\n'), [`Current scope: \`${ctx.scope}\``, '', ...recent].join('\n'));
+}
+
+async function handleJobs(args: string, ctx: CommandContext): Promise<void> {
+  if (!ctx.jobs) {
+    await reply(ctx, '当前运行环境未启用持久任务账本。', 'The durable job ledger is not enabled in this runtime.');
+    return;
+  }
+  const cwd = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
+  const [sub, id] = args.trim().split(/\s+/, 2);
+  const records = ctx.jobs.list(ctx.scope, cwd, 20);
+
+  if (sub === 'retry') {
+    if (!id) {
+      await reply(ctx, '用法：`/jobs retry <消息ID>`', 'Usage: `/jobs retry <message-id>`');
+      return;
+    }
+    const queued = await ctx.requeueJob?.(id, ctx.scope, cwd);
+    await reply(
+      ctx,
+      queued
+        ? `♻️ 已将任务 **${id}** 重新入队。重复执行可能重复外部副作用，请留意原任务 checkpoint。`
+        : `无法重试 **${id}**：只允许重试当前 workspace 内的 failed / interrupted 任务。`,
+      queued
+        ? `♻️ Requeued job **${id}**. Retrying may repeat external side effects; review the original checkpoint.`
+        : `Cannot retry **${id}**: only failed or interrupted jobs in the current workspace are eligible.`,
+    );
+    return;
+  }
+
+  if (sub === 'show') {
+    const record = id ? ctx.jobs.get(id, ctx.scope, cwd) : undefined;
+    if (!record) {
+      await reply(ctx, `当前 workspace 未找到任务：**${id ?? ''}**`, `Job not found in this workspace: **${id ?? ''}**`);
+      return;
+    }
+    await reply(ctx, jobDetail(record, 'zh'), jobDetail(record, 'en'));
+    return;
+  }
+
+  if (sub && sub !== 'list') {
+    await reply(ctx, '用法：`/jobs [list|show <消息ID>|retry <消息ID>]`', 'Usage: `/jobs [list|show <message-id>|retry <message-id>]`');
+    return;
+  }
+
+  const counts = ctx.jobs.counts(ctx.scope, cwd);
+  const rows = records.slice(0, 10);
+  await reply(
+    ctx,
+    [
+      '**任务对账**',
+      `- queued ${counts.queued} · running ${counts.running} · interrupted ${counts.interrupted} · failed ${counts.failed} · completed ${counts.completed}`,
+      '',
+      ...(rows.length > 0 ? rows.map((record) => jobLine(record, 'zh')) : ['暂无任务记录。']),
+      '',
+      '用 `/jobs show <消息ID>` 查看 checkpoint；只对 failed / interrupted 使用 `/jobs retry <消息ID>`。',
+    ].join('\n'),
+    [
+      '**Job reconciliation**',
+      `- queued ${counts.queued} · running ${counts.running} · interrupted ${counts.interrupted} · failed ${counts.failed} · completed ${counts.completed}`,
+      '',
+      ...(rows.length > 0 ? rows.map((record) => jobLine(record, 'en')) : ['No job records.']),
+      '',
+      'Use `/jobs show <message-id>` for its checkpoint; `/jobs retry <message-id>` is limited to failed/interrupted jobs.',
+    ].join('\n'),
+  );
+}
+
+function jobLine(record: JobRecord, locale: 'zh' | 'en'): string {
+  const preview = jobPreview(record.message.content);
+  const stage = jobPreview(record.checkpoint?.detail ?? record.checkpoint?.stage ?? '-');
+  return locale === 'zh'
+    ? `- **${record.message.messageId}** · **${record.state}** · ${stage} · ${preview}`
+    : `- **${record.message.messageId}** · **${record.state}** · ${stage} · ${preview}`;
+}
+
+function jobDetail(record: JobRecord, locale: 'zh' | 'en'): string {
+  const lines = locale === 'zh'
+    ? ['**任务详情**', `- 消息 ID：\`${record.message.messageId}\``, `- 状态：**${record.state}**`, `- 尝试次数：${record.attempts}`]
+    : ['**Job details**', `- Message ID: \`${record.message.messageId}\``, `- State: **${record.state}**`, `- Attempts: ${record.attempts}`];
+  if (record.runId) lines.push(`- run: \`${record.runId}\``);
+  if (record.checkpoint) {
+    lines.push(`- checkpoint: **${record.checkpoint.stage}**${record.checkpoint.detail ? ` · ${jobPreview(record.checkpoint.detail)}` : ''}`);
+  }
+  if (record.error) lines.push(`- ${locale === 'zh' ? '错误' : 'Error'}: ${jobPreview(record.error)}`);
+  lines.push('', `${locale === 'zh' ? '消息摘要' : 'Message preview'}: ${jobPreview(record.message.content)}`);
+  return lines.join('\n');
+}
+
+function jobPreview(text: string): string {
+  return truncateUtf8Safe(redactSecrets(text), 240)
+    .replaceAll('`', '\\`')
+    .replaceAll(/\s+/gu, ' ');
 }
 
 async function handleStop(_args: string, ctx: CommandContext): Promise<void> {
@@ -850,6 +950,7 @@ const handlers: Record<string, Handler> = {
   '/cd': handleCd,
   '/ws': handleWs,
   '/status': handleStatus,
+  '/jobs': handleJobs,
   '/version': handleVersion,
   '/resume': handleResume,
   '/stop': handleStop,

@@ -122,6 +122,11 @@
   产生它的 native sessionId 与 canonical provider/model 身份，并可由
   `/status` 卡在身份匹配时展示。未知或身份不匹配字段不估算；member scope 的刷新动作
   校验 operator `open_id` 与 owner，但共享群里已发送的状态卡仍对群成员可见。
+- bridge 接收的普通 agent 消息在入队前写入 `profiles/<profile>/jobs.json`（0600）：包含原始正文、
+  附件/提及元数据、chat/thread/scope、workspace、状态及受控 checkpoint，最多保留 500 条终态记录。
+  checkpoint 不含隐藏推理正文或工具参数；`/jobs` 展示先脱敏并按 scope + workspace 隔离。原始 prompt
+  仍可能包含用户主动输入的密钥，安全边界与 `sessions.json` 相同。running 崩溃后只标记 interrupted，
+  不自动重跑可能已有副作用的工具；显式 retry 会再次执行，用户必须先对账。
 - 审批卡会把工具名、理由、调用标识及可取得的执行参数发送到当前会话；member scope 只限制谁能
   点击，并不隐藏卡片正文。涉及密钥、私有路径或敏感命令时应使用私聊。
 - 群消息在底层 channel 进入 bridge 后执行 mention gate：普通群消息仍需 @bot（或管理员明确开启

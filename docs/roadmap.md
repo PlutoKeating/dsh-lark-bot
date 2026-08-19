@@ -27,6 +27,7 @@
 | **P22 会话状态指标** Session status metrics | `/status` 可刷新卡：工作区 / 模型 / session / runs / 版本、真实 context 占用、累计 input/output/cache token、待审批/提问/计划；不可得字段不估算（issue #20） | ✅ 已完成 Done |
 | **P25 默认逐操作审批** Default tool approval | rc.7 `approval/request` answerer + `/approval` 回调；默认 SDK/Web 与 ACP 统一一次性允许/拒绝卡、session 精确等待/清理（issue #24） | ✅ 已完成 Done |
 | **P26 多机器人交接** Multi-bot handoff | 独立 bridge/dsh profile、PersonalAgent 身份、用户服务与上下文；可信 peer 真实 @ 交接；跨进程 per-chat 回合上限与真人重置；附加实例拒绝共享 Web mux（issue #25） | ✅ 已完成 Done |
+| **P27 消息与任务可靠性** Durable job reliability | messageId 持久 receipt、queued 重启重放、running checkpoint/interrupted 对账、`/jobs` 显式重试与 `/status` 统计（issue #28） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -103,9 +104,13 @@
 - **P23 done**：问答卡绑定发送后的 messageId；用户可直接回复卡片输入自由文本，单选/多选也接受
   选项外补充。并发问题按卡定向并按 native session 独立清理/暂停看门狗；topic 卡使用最近入站
   messageId 锚定原 thread，member 授权与隔离切换连续性保持不变（issue #22）。
-- **P27 done（issue #27）**：bot 固定命令/状态/错误文案与所有交互卡提供中英双语；Card JSON 2.0
+- **UI 国际化 done（issue #27）**：bot 固定命令/状态/错误文案与所有交互卡提供中英双语；Card JSON 2.0
   通过文本组件的 `i18n_content` 在同一共享卡内按读者客户端语言显示，无法取得 locale 的
   Markdown/toast/legacy 路径中英并列；agent、用户与工具动态内容保持原文。
+- **消息可靠性 done（issue #28）**：bridge 对普通 agent 消息先以 messageId 原子写入 profile
+  `jobs.json` 再入队；重启自动重放 queued，running 变为带最后安全 checkpoint 的 interrupted，
+  由 `/jobs show|retry` 对账后显式重跑，避免静默重复外部副作用。`/status` 与重连提示提供当前
+  workspace 统计；边界明确为“已由 bridge 接收并落盘”，不冒充可恢复平台未投递事件。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
   子路径与 CLI 入口，杜绝 v0.9.0 的 `ask` 入口漏拷类问题；GitHub Release 显式标记 Latest。
 - **0.9.2 released**：`setup` 固定安装当前包的精确版本（`dsh plugin add

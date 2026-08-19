@@ -77,6 +77,50 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it('reports durable stage checkpoints and a terminal outcome without storing hidden content', async () => {
+    const checkpoints: Array<Record<string, unknown>> = [];
+    const outcome = await runAgentBatch({
+      scope: 'chat-ledger', chatId: 'chat-ledger', messages: ['do work'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-ledger', cwd: '/tmp/project', model: 'm' },
+        { type: 'thinking', delta: 'private chain content' },
+        { type: 'tool_use', id: 'tool-1', name: 'bash', input: { command: 'secret' } },
+        { type: 'tool_result', id: 'tool-1', output: 'done', isError: false },
+        { type: 'final_text', content: 'complete' },
+        { type: 'done', sessionId: 'session-ledger', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+      onCheckpoint: async (checkpoint) => { checkpoints.push(checkpoint); },
+    });
+
+    expect(outcome).toBe('completed');
+    expect(checkpoints.map((entry) => [entry.stage, entry.detail])).toEqual([
+      ['starting', undefined], ['thinking', undefined], ['tool', 'bash'],
+      ['responding', undefined], ['finalizing', undefined],
+    ]);
+    expect(JSON.stringify(checkpoints)).not.toContain('private chain content');
+    expect(JSON.stringify(checkpoints)).not.toContain('secret');
+  });
+
+  it('does not abandon a live run when checkpoint persistence is temporarily unavailable', async () => {
+    const activeRuns = new ActiveRuns();
+    const outcome = await runAgentBatch({
+      scope: 'chat-ledger-failure', chatId: 'chat-ledger-failure', messages: ['continue'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-ledger', cwd: '/tmp/project', model: 'm' },
+        { type: 'final_text', content: 'complete' },
+        { type: 'done', sessionId: 'session-ledger', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns, channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+      onCheckpoint: vi.fn().mockRejectedValue(new Error('disk unavailable')),
+    });
+
+    expect(outcome).toBe('completed');
+    expect(activeRuns.count('chat-ledger-failure')).toBe(0);
+  });
+
   it('resumes each workspace independently across A to B to A switches', async () => {
     const sessions = new SessionStore(':memory:');
     const workspaces = new WorkspaceStore(':memory:');
