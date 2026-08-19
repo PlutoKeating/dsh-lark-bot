@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('dsh bundle manifest', () => {
-  it('declares dsh.bundle.patch, plugin/invariant/notify exports and cordis peer', async () => {
+  it('declares dsh.bundle.patch, runtime exports and cordis peer', async () => {
     const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
       dsh?: { bundle?: { patch?: string } };
       exports?: Record<string, unknown>;
@@ -14,6 +14,8 @@ describe('dsh bundle manifest', () => {
     expect(pkg.exports?.['./plugin']).toBeDefined();
     expect(pkg.exports?.['./invariant']).toBeDefined();
     expect(pkg.exports?.['./notify']).toBeDefined();
+    expect(pkg.exports?.['./ask']).toBeDefined();
+    expect(pkg.exports?.['./plan']).toBeDefined();
     expect(pkg.files).toContain('cordis.patch.yml');
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis']).toMatch(/^(\^|>=)/);
     // Tool plugins register raw JSON-Schema definitions against the host

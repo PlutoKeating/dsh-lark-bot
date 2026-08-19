@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,12 +8,14 @@ import { ownPackageInfo } from '../../src/adapters/dsh/own-package.js';
 import {
   DEFAULT_SDK_PROFILE,
   isSdkProfileReady,
+  patchYamlFor,
   sdkProfileRoot,
   SDK_SERVER_VERSION,
 } from '../../src/adapters/dsh/sdk-runtime.js';
 import {
   ACP_PACKAGE,
   ACP_VERSION,
+  acpPatchYaml,
   acpProfileRoot,
   DEFAULT_ACP_PROFILE,
   isAcpProfileReady,
@@ -64,7 +66,7 @@ async function buildSdkProfileWithStaleLink(
   );
   await writeFile(join(root, 'package.json'), '{}', 'utf8');
   await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
-  await writeFile(join(root, 'cordis.patch.yml'), '[]\n', 'utf8');
+  await writeFile(join(root, 'cordis.patch.yml'), patchYamlFor(), 'utf8');
 }
 
 describe('repairRuntimeProfiles', () => {
@@ -162,6 +164,10 @@ describe('repairRuntimeProfiles', () => {
         join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
         JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
       );
+      await writeFile(
+        join(root, 'cordis.patch.yml'),
+        acpPatchYaml(options.provider ?? 'deepseek-official', options.model ?? 'deepseek-v4-flash'),
+      );
       return { ok: true, created: true };
     };
 
@@ -173,6 +179,36 @@ describe('repairRuntimeProfiles', () => {
       ok: true,
     });
     expect(isAcpProfileReady(root)).toBe(true);
+  });
+
+  it('refreshes a stale ACP overlay while preserving its provider and model', async () => {
+    const home = await makeHome();
+    const root = acpRoot(home);
+    const own = ownPackageInfo();
+    await mkdir(join(root, 'node_modules', ...ACP_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
+    );
+    await mkdir(join(root, 'node_modules'), { recursive: true });
+    await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
+    await writeFile(join(root, 'package.json'), '{}');
+    await writeFile(join(root, 'cordis.yml'), '[]\n');
+    await writeFile(
+      join(root, 'cordis.patch.yml'),
+      '    provider: custom-gateway\n    model: custom-model\n',
+    );
+
+    const states = await repairRuntimeProfiles({ dshHome: home });
+
+    expect(states.find((s) => s.profile === DEFAULT_ACP_PROFILE)).toMatchObject({
+      existed: true,
+      repaired: true,
+      ok: true,
+    });
+    await expect(readFile(join(root, 'cordis.patch.yml'), 'utf8')).resolves.toBe(
+      acpPatchYaml('custom-gateway', 'custom-model'),
+    );
   });
 
   it('reports not-ok when the profile is broken beyond the link', async () => {

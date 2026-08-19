@@ -48,10 +48,10 @@
 **基础能力**：
 
 - 私聊、群聊、话题（thread）里指挥本机 dsh coding agent，图片 / 文本文件直接发给 bot 即可；
-- 流式卡片实时展示思考、工具调用与结果，支持交互按钮（停止 / 审批 / 问答卡）；
+- 流式卡片实时展示思考、工具调用与结果，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-**六项全网独有组合**：
+**七项全网独有组合**：
 
 - 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。
 - 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
@@ -59,6 +59,7 @@
 - 🗂 **会话归档与清理——“会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留策略。
 - 📣 **跨会话主动通知 + @人——“活干完了它会来找你”**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
 - 🔑 **对话内管理模型和密钥——“不用离开飞书”**：`/providers` `/provider` `/key` 直接查看、切换供应商、热更新密钥。
+- 🧭 **关键任务先拍板——“计划看清再动手”**：完整计划先单独发出，再用卡片批准执行或附意见继续规划，原任务自动续跑。
 
 ## 30 秒上手
 
@@ -141,9 +142,16 @@ dsh --profile dsh-lark
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
+**关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
+`lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
+移动、命令执行与 `run_code`。bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
+继续规划”决策卡；卡内可填写修改意见。工具在等待期间阻塞且暂停空闲超时，批准后原任务自动继续；
+继续规划时 agent 会收到意见、修订计划并再次请求确认。门禁无固定十分钟截止，跟随所属 run 的取消
+信号；停止任务会精确取消该 session 的 pending 卡并撤回。legacy headless adapter 不具备工具回调能力。
+
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本），回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
-审批卡与问答卡提交后会立即显示成功提示、发送一条终态确认并撤回原卡，避免按钮仍停留在聊天中造成“未生效”的误解；确认或撤回失败不会影响已经提交给 agent 的审批结果或答案。
+计划、审批与问答卡提交后会立即显示成功提示、发送一条终态确认并撤回原卡，避免按钮仍停留在聊天中造成“未生效”的误解；确认或撤回失败不会影响已经提交给 agent 的决策、审批结果或答案。
 
 **安全网守护**：独立于 dsh 进程、系统级常驻的最小守护进程（systemd / LaunchAgent / Windows 启动项），默认随 `setup` 安装。dsh 正常时静默；dsh 下线或无法 boot（如第三方插件破坏 profile 组合）时自动接管飞书通道，无需命令行即可自救：
 
@@ -369,8 +377,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **成员隔离标识与群可见性**：`member` 模式把发送者 `open_id` 写入本机 `isolation.json` 派生的
   session / scope directory / worktree / archive 索引或路径，并显示在共享群任务卡。它只隔离 agent
   上下文，不隐藏群消息：输入、进度卡与回复仍对群成员可见；其他成员不能操作该成员的任务卡。
-- **本地回调**：运行 `lark_notify` 工具时，dsh runtime 子进程通过 `127.0.0.1` 随机端口 +
-  每启动随机 token 回调 bridge 进程（仅本机回环，不监听公网）。
+- **本地回调**：运行 `lark_notify`、`lark_ask_user` 或 `lark_request_plan_approval` 工具时，dsh
+  runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
+  不监听公网）；计划内容与决策卡会发送到当前飞书 / Lark 会话。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
@@ -513,8 +522,8 @@ pnpm publish:dual
 | `src/session/` | 会话路由、排队、访问控制|
 | `src/workspace/` | 项目工作区、git worktree 隔离与规则注入|
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者）|
-| `src/card/` | 流式卡片状态与渲染|
-| `src/bot/` | 运行注册、消息排队、审批/问答注册表、群聊隔离策略|
+| `src/card/` | 流式卡片与审批 / 问答 / 计划决策卡渲染|
+| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划注册表、群聊隔离策略|
 | `src/commands/` | 斜杠命令（/cd /ws /new …）|
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run`|
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本探测、升级状态、guardian/profile 重启、runtime 链接及依赖迁移|

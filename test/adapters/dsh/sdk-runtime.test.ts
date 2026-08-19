@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SDK_PROFILE,
   ensureSdkProfile,
@@ -27,6 +27,9 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain("id: lark-notify");
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
+    expect(patch).toContain("id: lark-plan-approval");
+    expect(patch).toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).toContain('use lark_request_plan_approval');
   });
 
   it('omits the bridge tools from the core-only safe SDK overlay', () => {
@@ -35,6 +38,8 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain('id: user-questions');
     expect(patch).not.toContain('id: lark-notify');
     expect(patch).not.toContain('id: lark-ask');
+    expect(patch).not.toContain('id: lark-plan-approval');
+    expect(patch).not.toContain('use lark_request_plan_approval');
   });
 
   it('uses the discovered bin with the SDK profile', () => {
@@ -117,6 +122,33 @@ describe('ensureSdkProfile', () => {
     expect(result.ok).toBe(true);
     expect(result.created).toBe(true);
     expect(isSdkProfileReady(profileRoot)).toBe(true);
+  });
+
+  it('rewrites a stale managed overlay without reinstalling ready packages', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-overlay-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const first = await ensureSdkProfile({
+      home,
+      install: async (root) => {
+        const own = ownPackageInfo();
+        await mkdir(join(root, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), {
+          recursive: true,
+        });
+        await writeFile(
+          join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+          JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+        );
+        await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
+      },
+    });
+    expect(first.ok).toBe(true);
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), '[]\n');
+    const install = vi.fn();
+    const repaired = await ensureSdkProfile({ home, install });
+    expect(repaired).toMatchObject({ ok: true, created: true });
+    expect(install).not.toHaveBeenCalled();
+    expect(await readFile(join(profileRoot, 'cordis.patch.yml'), 'utf8')).toBe(patchYamlFor());
   });
 
   it('rejects an otherwise complete profile with a stale server version', async () => {

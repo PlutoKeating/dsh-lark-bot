@@ -48,14 +48,15 @@ dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding
 **Core**:
 
 - Drive your local dsh coding agent from private chats, group chats and threads; images / text files can be sent straight to the bot;
-- Streaming cards showing reasoning, tool calls and results in real time, with interactive buttons (stop / approval / question cards);
+- Streaming cards showing reasoning, tool calls and results in real time, with interactive buttons (stop / plan gate / approval / question cards);
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
-**Six exclusive capabilities**:
+**Seven exclusive capabilities**:
 
 - 🆘 **Guardian safety net — "always reachable"**: Feishu still replies after dsh crashes; `/safemode` enters core-only safe mode to locate the problem and restart directly.
 - 👥 **Multi-role agents — "one bot, a whole team"**: switch or assign PM / dev / docs roles with `/role`; each role has its own persona, model preference and rules.
 - ⚡ **Parallel tasks — "no queueing"**: run multiple tasks in the same chat simultaneously with isolated sessions; other solutions serialize everything.
+- 🧭 **Plan before action — "review it before it moves"**: receive the complete plan first, then approve execution or add feedback and request another planning pass without restarting the task.
 - 🗂 **Session archival & cleanup — "your session list never rots"**: archive old tasks with `/archive` and configure auto-retention with `/retention`.
 - 📣 **Cross-session proactive notifications + @mentions — "it comes to you when done"**: after a task in chat A finishes, push a report to chat B / DMs and @mention you.
 - 🔑 **In-chat model & key management — "never leave Feishu"**: `/providers` `/provider` `/key` to view, switch vendors and hot-update keys.
@@ -134,13 +135,21 @@ Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (a
 **Group session isolation**: admins can switch `/isolation group|topic|member` between one shared
 group scope, per-topic scopes, and per-member scopes. `topic` remains the default. Switching only changes
 how future messages are routed; existing sessions are retained and resume when their mode is selected again.
-Stop, approval and question actions created before a switch remain bound to their original scope, while
+Stop, plan, approval and question actions created before a switch remain bound to their original scope, while
 `/stop` also covers the actor's reachable pre-switch scopes. Member-isolated run cards show the sender open_id. Policies persist in
 `~/.dsh-lark/profiles/<profile>/isolation.json`.
 
 **Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name> --persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` and bind one to the current scope with `/role set <id>`; every run carries the role instructions, and the role model wins below the per-session `/model use` override. Role definitions persist in `~/.dsh-lark/profiles/<profile>/roles.json`.
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
+
+**Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
+changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
+moves, command execution and `run_code` in that turn until a plan is approved. The bridge sends the complete Markdown plan as a normal
+message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
+and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires
+another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
+stopping it cancels and recalls only that session's pending card. The legacy headless adapter cannot use callback tools.
 
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text) and resumes automatically once you answer; the run-timeout watchdog pauses while a card is waiting. (The opposite direction of `/ask`, where you ask the agent.)
 
@@ -343,7 +352,9 @@ This tool runs **locally**; before installing, be aware that it accesses:
   session/scope-directory/worktree/archive indexes or paths derived from `isolation.json`, and shows it on the
   shared group run card. It isolates agent context, not group-message visibility: prompts, progress cards and
   replies remain visible to the group; other members cannot operate that member's run cards.
-- **Local callback**: when the `lark_notify` tool runs, the dsh runtime subprocess calls the bridge process back over a random 127.0.0.1 port with a per-boot token (loopback only).
+- **Local callback**: `lark_notify`, `lark_ask_user` and `lark_request_plan_approval` call the bridge over a
+  random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
+  current Feishu / Lark conversation.
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).
 - **Safety-net guardian (installed by default with `setup`)**: a system-level resident process reads the Feishu credentials from `~/.dsh-lark/config.json`; it takes over the same bot's Feishu long connection only after dsh goes down and scans local processes (command lines via `ps` only, no memory access). On `/safemode` it provisions a core-only dsh profile (headless or SDK JSON-RPC runtime, both without third-party plugins) and runs one task per message; the SDK engine provides real-time streaming events via the official `dsh-sdk-jsonrpc-server` subprocess.
@@ -465,8 +476,8 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/session/` | Session routing, queueing, access control |
 | `src/workspace/` | Project workspace, git worktree isolation & rule injection |
 | `src/adapters/` | Agent backend adapters (sdk / acp / headless / web single-writer) |
-| `src/card/` | Streaming card state & rendering |
-| `src/bot/` | Run registry, queueing, approval/question registries, group isolation policies |
+| `src/card/` | Streaming, approval, question and plan-decision cards |
+| `src/bot/` | Run/queue plus approval, question, plan and isolation registries |
 | `src/commands/` | Slash commands |
 | `src/cli/` | CLI entry: setup / doctor / upgrade / hidden run |
 | `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |

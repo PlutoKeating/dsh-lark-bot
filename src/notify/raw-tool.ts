@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 
 export interface RawToolExecution {
-  agent?: { session?: { id?: unknown } };
+  agent?: object & { session?: { id?: unknown } };
   signal?: AbortSignal;
 }
 
@@ -18,7 +18,12 @@ export interface RawToolDefinition {
 }
 
 export type ToolPluginContext = Context & {
-  tools: { register(definition: RawToolDefinition): void };
+  tools: {
+    register(definition: RawToolDefinition): void;
+    get?(name: string, scope?: unknown): {
+      presentCall?(args: unknown): { card?: string; kind?: string } | undefined;
+    } | undefined;
+  };
 };
 
 export function objectArgs(value: unknown, toolName: string): Record<string, unknown> {

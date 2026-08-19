@@ -27,6 +27,10 @@
     "./ask": {
       "types": "./dist/ask.d.ts",
       "import": "./dist/ask.js"
+    },
+    "./plan": {
+      "types": "./dist/plan.d.ts",
+      "import": "./dist/plan.js"
     }
   },
   "files": [

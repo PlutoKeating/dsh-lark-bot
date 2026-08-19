@@ -11,6 +11,7 @@ import { ApprovalRegistry } from '../../src/bot/approvals.js';
 import { ConcurrencyStore } from '../../src/bot/concurrency-store.js';
 import { ModelStore } from '../../src/bot/model-store.js';
 import { QuestionRegistry } from '../../src/bot/questions.js';
+import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
 import { WizardStore } from '../../src/bot/wizard-store.js';
 import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
@@ -230,6 +231,7 @@ describe('startChannel', () => {
   it('confirms and recalls a question card after recording the submitted answer', async () => {
     const fake = makeChannel();
     const questions = new QuestionRegistry();
+    const plans = new PlanApprovalRegistry();
     const pendingQuestion = questions.register('chat-1:member:user-1', {
       question: 'Deploy now?',
       kind: 'single',
@@ -272,6 +274,7 @@ describe('startChannel', () => {
         isBlocked: vi.fn().mockReturnValue(false),
       } as never,
       questions,
+      plans,
       defaultWorkspace: '/tmp/project',
       createChannel: fake.createChannel,
     });
@@ -298,6 +301,29 @@ describe('startChannel', () => {
       expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('已提交');
       expect(fake.sent.at(-1)?.options).toEqual({ replyTo: 'question-card-message' });
       expect(fake.recalled).toEqual(['question-card-message']);
+    });
+
+    const pendingPlan = plans.register('chat-1', 'session-plan');
+    const planResponse = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'plan-card-message',
+      operator: { openId: 'user-1' },
+      action: {
+        value: {
+          cmd: 'plan-submit',
+          id: pendingPlan.id,
+          decision: 'revise',
+          scope: 'chat-1',
+        },
+        formValue: { feedback: '先不要修改文件' },
+      },
+    });
+    await expect(pendingPlan.promise).resolves.toEqual({
+      decision: 'revise',
+      feedback: '先不要修改文件',
+    });
+    expect(planResponse).toEqual({
+      toast: { type: 'info', content: '已要求继续规划' },
     });
   });
 
@@ -390,6 +416,7 @@ describe('startChannel', () => {
     const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(1);
     const approvals = new ApprovalRegistry();
     const questions = new QuestionRegistry();
+    const plans = new PlanApprovalRegistry();
     approvals.register('chat-1:member:user-1', {
       id: 'member-approval',
       sessionId: 'session-1',
@@ -401,6 +428,7 @@ describe('startChannel', () => {
       question: 'Proceed?',
       kind: 'text',
     });
+    const memberPlan = plans.register('chat-1:member:user-1', 'session-plan');
     const pending = {
       push: vi.fn(),
       size: vi.fn().mockReturnValue(0),
@@ -423,6 +451,7 @@ describe('startChannel', () => {
       roleStore: new RoleStore(':memory:'),
       approvals,
       questions,
+      plans,
       archiver: {
         archive: vi.fn(),
         list: vi.fn().mockResolvedValue([]),
@@ -472,6 +501,12 @@ describe('startChannel', () => {
         id: memberQuestion.id,
         scope: 'chat-1:member:user-1',
       },
+      {
+        cmd: 'plan-submit',
+        id: memberPlan.id,
+        decision: 'approved',
+        scope: 'chat-1:member:user-1',
+      },
     ]) {
       const rejected = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
         chatId: 'chat-1',
@@ -486,6 +521,7 @@ describe('startChannel', () => {
     expect(interrupt).not.toHaveBeenCalled();
     expect(approvals.pendingCount('chat-1:member:user-1')).toBe(1);
     expect(questions.pendingCount('chat-1:member:user-1')).toBe(1);
+    expect(plans.pendingCount('chat-1:member:user-1')).toBe(1);
 
     const missingOperator = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
       chatId: 'chat-1',

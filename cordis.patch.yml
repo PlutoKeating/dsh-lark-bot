@@ -8,6 +8,8 @@
 #     runtime) and exposes `ctx.larkBridge` (status / stop).
 #   - `dsh-lark-bot/notify` mounts the `lark_notify` tool for the host agent
 #     (mentions + cross-session messages).
+#   - `dsh-lark-bot/plan` mounts the host plan gate; managed SDK / ACP overlays
+#     mount the same tool for their nested agents.
 # First boot without credentials prints a QR code for one-time binding.
 # Set DSH_LARK_DISABLED=1 to keep the engine stopped.
 
@@ -28,4 +30,10 @@
       name: 'dsh-lark-bot/notify'
       config:
         endpoint: !!js process.env.DSH_LARK_NOTIFY_URL
+        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
+
+    - id: lark-plan-approval
+      name: 'dsh-lark-bot/plan'
+      config:
+        endpoint: !!js process.env.DSH_LARK_PLAN_URL
         token: !!js process.env.DSH_LARK_NOTIFY_TOKEN

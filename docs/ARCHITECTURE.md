@@ -106,19 +106,24 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
-   审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
+   计划、审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
    完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
    失败只记录结构化日志，不能阻塞 agent 继续运行。
 5. **多角色 Agent**：`RoleStore`（`<profile>/roles.json`）定义命名角色（persona / 模型 /
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
    重启 runtime，也能与 scope 内并行 run 共存。
-6. **出站通知通道**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
+6. **通知与人机决策回调**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
    持久化 scope → chat/thread 映射；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
-   `lark_notify` / `lark_ask_user` 以宿主支持的 raw JSON Schema definition 注册，不运行时
-   导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
+   `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
+   definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
+   计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
+   Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
+   可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
+   `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；run 或 HTTP request
+   取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
 7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
@@ -156,14 +161,14 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/session/` | 会话路由、上下文记忆、持久化 |
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
-| `src/card/` | 流式卡片状态与渲染 |
-| `src/bot/` | 运行注册、消息排队、群聊隔离策略持久化 |
+| `src/card/` | 流式卡片、审批 / 问答 / 计划决策卡状态与渲染 |
+| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略持久化 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |
 | `src/media/` | 附件下载与文本注入 |
-| `src/notify/` | 进程内通知回调服务与 `lark_notify` 工具插件 |
+| `src/notify/` | 进程内 `/notify` `/ask` `/plan` 回调与 raw-schema dsh 工具插件 |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |

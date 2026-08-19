@@ -171,6 +171,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   `http://127.0.0.1:<随机端口>/ask` 回调 bridge，向当前会话弹单选 / 多选 / 自由文本问答卡并
   等待你回答；你提交后任务自动继续。等待期间任务运行超时看门狗暂停（答完重新计时）。
   与 `/ask`（你主动发结构化问题）方向相反。
+- agent 侧工具 `lark_request_plan_approval`（计划门禁）：较大或高风险动作前先经 `/plan` 回调
+  发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
+  pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
+  截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
 
 ### 安全网守护 · Safety-net guardian
 
@@ -213,6 +217,11 @@ dsh-lark-bot guardian uninstall
 `dsh-lark-bot guardian uninstall`。
 
 ## 5. 会话与工作区 · Sessions & workspaces
+
+- SDK / ACP / Web agent 对修改文件、运行脚本等较大或高风险动作使用计划门禁：先发送完整计划，
+  再等待“批准，开始执行 / 继续规划”卡片；可在卡内填写约束或修改意见。批准后原任务自动续跑，
+  继续规划则由 agent 修订后再次请求确认；未批准时写入/删除/移动/命令执行/`run_code` 被拒绝，
+  等待期间仅所属 session 不触发 idle timeout。legacy headless 不支持。
 
 - 私聊始终独立；群聊默认按话题隔离 scope。管理员可用 `/isolation group|topic|member` 改为
   整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /

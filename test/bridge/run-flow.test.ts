@@ -10,6 +10,7 @@ import type {
 } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ApprovalRegistry } from '../../src/bot/approvals.js';
+import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
 import {
   approvalHandlerFor,
   runAgentBatch,
@@ -158,6 +159,100 @@ describe('runAgentBatch', () => {
     const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
     expect(lastText).toContain('无响应');
     expect(activeRuns.get('chat-timeout')).toBeUndefined();
+  });
+
+  it('pauses the idle watchdog while a plan decision is pending', async () => {
+    let release: (() => void) | undefined;
+    const stopped = new Promise<void>((resolve) => { release = resolve; });
+    const stop = vi.fn(async () => { release?.(); });
+    const plans = new PlanApprovalRegistry();
+    const gate = plans.register('chat-plan', 'session-plan');
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      isAvailable: async () => true,
+      checkAvailability: async () => ({ ok: true, error: undefined, version: 'test' }),
+      run: () => ({
+        runId: 'run-plan',
+        events: (async function* () {
+          yield {
+            type: 'system',
+            sessionId: 'session-plan',
+            cwd: '/tmp/project',
+            model: undefined,
+          };
+          yield { type: 'text', delta: 'planning' };
+          await stopped;
+        })(),
+        stop,
+        waitForExit: async () => true,
+      }),
+    };
+    setTimeout(() => {
+      plans.resolve('chat-plan', gate.id, { decision: 'approved' });
+    }, 35);
+    const started = Date.now();
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-plan',
+      chatId: 'chat-plan',
+      messages: ['large task'],
+      adapter,
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      plans,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 10,
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('does not cancel or inherit another concurrent session plan gate', async () => {
+    const plans = new PlanApprovalRegistry();
+    const otherGate = plans.register('chat-plan', 'session-a');
+    const stop = vi.fn(async () => undefined);
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      isAvailable: async () => true,
+      checkAvailability: async () => ({ ok: true, error: undefined, version: 'test' }),
+      run: () => ({
+        runId: 'run-b',
+        events: (async function* () {
+          yield {
+            type: 'system',
+            sessionId: 'session-b',
+            cwd: '/tmp/project',
+            model: undefined,
+          };
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        })(),
+        stop,
+        waitForExit: async () => true,
+      }),
+    };
+
+    await runAgentBatch({
+      scope: 'chat-plan',
+      chatId: 'chat-plan',
+      messages: ['second task'],
+      adapter,
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      plans,
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 10,
+    });
+
+    expect(stop).toHaveBeenCalledOnce();
+    expect(plans.pendingCount('chat-plan', 'session-a')).toBe(1);
+    plans.resolve('chat-plan', otherGate.id, { decision: 'approved' });
+    await expect(otherGate.promise).resolves.toEqual({ decision: 'approved' });
   });
 
   it('keeps a run alive while events keep arriving and only stops after idle', async () => {

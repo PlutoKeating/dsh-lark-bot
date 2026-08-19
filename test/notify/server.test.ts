@@ -174,4 +174,73 @@ describe('NotifyServer', () => {
     });
     expect(response.status).toBe(404);
   });
+
+  it('serves authenticated plan decisions', async () => {
+    const plan = vi.fn().mockResolvedValue({
+      ok: true,
+      decision: 'revise',
+      feedback: 'keep it read-only',
+    });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        plan: '1. inspect\n2. change',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      decision: 'revise',
+      feedback: 'keep it read-only',
+    });
+  });
+
+  it('propagates a disconnected plan request as an abort signal', async () => {
+    let observedAbort = false;
+    const plan = vi.fn(async (_payload, signal?: AbortSignal) => {
+      await new Promise<void>((resolve) => {
+        if (signal?.aborted) {
+          observedAbort = true;
+          resolve();
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          observedAbort = true;
+          resolve();
+        }, { once: true });
+      });
+      return { ok: false, error: 'cancelled' };
+    });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+    const controller = new AbortController();
+    const request = fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 'session-1', plan: 'Plan' }),
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(request).rejects.toThrow();
+    await vi.waitFor(() => expect(observedAbort).toBe(true));
+  });
 });

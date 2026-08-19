@@ -7,10 +7,11 @@
 本项目已将 dsh harness、SDK client/server 与 ACP 托管 runtime 精确对齐到
 `0.1.0-rc.7`。重新生成的 lockfile 中不存在 `@deepseek-ai/dsh-*@0.1.0-rc.6`，
 临时 DSH_HOME 中的官方 rc.7 SDK 与 ACP runtime 均完成真实 initialize 握手；SDK 还通过
-本地 OpenAI-compatible fixture 完成任务、`lark_notify` / `lark_ask_user` 回调和带第一轮
+本地 OpenAI-compatible fixture 完成任务、`lark_notify` / `lark_ask_user` /
+`lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 批准后真实执行顺序和带第一轮
 历史哨兵的同一 session 续接。
 
-`lark_notify` / `lark_ask_user` 改为向宿主 `ctx.tools` 注册原始 JSON Schema
+`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 向宿主 `ctx.tools` 注册原始 JSON Schema
 `ToolDefinition`，本包不再直接依赖或运行时导入 `@deepseek-ai/dsh-tools`。这避免插件副本
 与宿主工具运行时各持有一份模块级 Symbol。根 lockfile 仍会因 SDK client 的 peer 图包含
 一份 rc.7 `dsh-tools`；它属于 SDK client 进程依赖图，不会被两个工具插件 import。
@@ -67,7 +68,8 @@
 已自动完成：typecheck、全量单测、构建、发布包检查、依赖图/版本漂移检查，以及在临时
 DSH_HOME 安装官方 dsh/base rc.7 后的 SDK server 与 ACP initialize 握手。探针使用本地
 OpenAI-compatible HTTP fixture 驱动真实 SDK 协议循环，验证 `lark_notify`、
-`lark_ask_user` 工具回调和同一 `compat-session` 的续接；续接响应必须观察到第一轮工具调用、
+`lark_ask_user` / `lark_request_plan_approval` 工具回调、未批准 `bash` 的 pre-execute 拒绝与批准后真实执行，
+以及同一 `compat-session` 的续接；续接响应必须观察到第一轮工具调用、
 工具结果与最终回答哨兵，不会仅凭第二轮 prompt 通过。该探针不需要外部模型密钥，也不会
 产生收费请求。
 

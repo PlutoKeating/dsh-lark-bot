@@ -22,6 +22,7 @@
 | **P17 一键彻底升级** One-command upgrade | `dsh-lark-bot upgrade`：包本体 + guardian 幂等重装重启 + runtime profile 链接修复及陈旧 SDK/ACP 依赖即时重装 + doctor 验证；`--check` / `--restart` / `--rollback` / `--force` / `--no-guardian`；运行中实例安全；旧版本经 `npx dsh-lark-bot@latest upgrade` 引导（issue #10） | ✅ 已完成 Done（0.12.0；runtime 版本迁移于 #51 补强） |
 | **P18 更新体验与热管理** Update experience & hot management | 更新链路架构审查（docs/UPGRADE.md）；doctor 更新提醒（`DSH_LARK_UPGRADE_CHECK`）；guardian 单元稳定路径（避免 npx 缓存）；运行中实例排队重启 / 热重载 / 版本 pin 漂移自愈（issue #15） | 🚧 进行中 In progress |
 | **P19 群聊会话隔离** Group session isolation | `/isolation group|topic|member` 持久化选择；消息与卡片动作共用 scope 路由；成员轮次在群卡中明确标记，既有各级会话数据保持可恢复（issue #17） | ✅ 已完成 Done |
+| **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 
@@ -59,6 +60,8 @@
   `./plugin`（`ctx.larkBridge` 服务）、`./invariant`（invariants 伴生）、`./notify`
   （lark_notify 工具）导出；`dsh plugin --profile demo add` 实测通过（含 dump-config 层验证
   与真实 SDK runtime 握手）。
+- **P12 后续强化（issue #18）**：新增 `./plan` 导出与宿主 `lark-plan-approval` 工具行；SDK /
+  ACP managed overlay 同步装配计划门禁。
 - **0.6.0 released**：`dsh-lark-bot@0.6.0` / `dsh-feishu-bot@0.6.0`（npm + GitHub Packages +
   GitHub Release），双包均带 dsh bundle 清单。
 - **0.7.0 released**：唯一路径定稿——`dsh-lark-bot setup` 安装 dsh profile bundle，桥接引擎
@@ -78,6 +81,10 @@
 - **P19 done（issue #17）**：群聊管理员可用 `/isolation group|topic|member` 选择共享群、话题或
   成员级会话；切换仅改变后续消息的 scope 路由，不删除既有 session / worktree / archive；成员
   模式在共享群运行卡中显示 owner。该能力只隔离 agent 上下文，不改变群消息对群成员的可见性。
+- **P20 done（issue #18）**：`lark_request_plan_approval` 在较大或高风险动作前把完整计划作为普通
+  Markdown 消息发送，再用 schema 2.0 form card 收集批准 / 继续规划与可选反馈；工具阻塞等待并在
+  决策后续接同一 agent turn；pre-execute 强制阻断未批准的 mutating/execute 调用，run/callback
+  结束按 session 精确取消并撤回卡片，等待期间只暂停所属 run 的 idle watchdog。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
 - **0.9.1 released**：发布产物完整性门禁——整目录同步 `dist/`，发布前校验全部 `exports`
