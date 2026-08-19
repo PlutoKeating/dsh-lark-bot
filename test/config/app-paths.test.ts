@@ -21,6 +21,7 @@ describe('resolveAppPaths', () => {
     expect(paths.sessionsFile('main')).toBe(
       '/tmp/dsh-lark-test/profiles/main/sessions.json',
     );
+    expect(paths.jobsFile('main')).toBe('/tmp/dsh-lark-test/profiles/main/jobs.json');
     expect(paths.mediaDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/media');
     expect(paths.logsDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/logs');
     expect(paths.archivesDir('main')).toBe(

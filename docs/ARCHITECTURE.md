@@ -106,6 +106,15 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `/archive list|clean` 都只展示或操作当前 workspace，并发 run 不互相覆盖。
    `/status` 的纯 renderer 从 stores/registries 组装可刷新卡；refresh action
    固化 scope，并复用 member owner 授权后通过消息 `messageId` 原位更新。
+   `JobLedger`（`<profile>/jobs.json`，schema 1）以飞书 messageId 为 receipt key：bridge 先原子落盘
+   最小消息/routing/workspace 快照再交给 `PendingQueue`，run-flow 只回报 starting/thinking/tool-name/
+   responding/finalizing 等安全 checkpoint。启动且出站通道 ready 后自动重放 queued；遗留 running
+   在 outbound ready 后转为 interrupted，并通过持久待通知标记投递原 chat/thread；发送失败会跨启动重试，
+   且必须由 `/jobs retry` 显式重跑以避免重复外部副作用。
+   账本按 scope + workspace 查询、终态最多保留 500 条；重连只对账已收妥事件，不能补造平台未投递事件。
+   启动恢复集在 channel connect 前冻结，避免 live/replay 双重入队；首次、dispatch receipt 或终态
+   落盘失败均向原会话显式告警。dispatch receipt 失败时不执行并明确落 failed/保留 queued；终态失败的
+   running receipt 留待下次启动转 interrupted，队列锁仍保证释放。
 4. **模型 / provider / 凭据管理**：`/model` `/providers` `/provider` `/key` 命令直接读写
    dsh 官方配置存储（`~/.dsh/settings.yaml` + `~/.dsh/.credentials.yaml`），与 dsh Web
    Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），
@@ -203,7 +212,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
 | `src/card/` | 流式过程卡（schema 2.0 原生折叠面板 + 顶层兼容快照 + legacy renderer）、审批 / 问答 / 计划决策卡状态与渲染；最终回答由正常 run-flow / guardian 分别单独发送 |
-| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略，以及多机器人 fleet / 跨进程交接计数 |
+| `src/bot/` | 持久任务账本、运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略，以及多机器人 fleet / 跨进程交接计数 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏 `run` |
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |

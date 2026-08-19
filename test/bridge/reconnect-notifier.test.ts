@@ -10,7 +10,15 @@ describe('ReconnectNotifier', () => {
     directory.register('recent', 'chat-new', 'thread-1', 'topic', 'anchor-1');
     const sendMarkdown = vi.fn().mockResolvedValue(undefined);
     let now = 1_000;
-    const notifier = new ReconnectNotifier({ sendMarkdown }, directory, () => now);
+    const notifier = new ReconnectNotifier(
+      { sendMarkdown },
+      directory,
+      () => now,
+      () => ({
+        zhCn: '账本：queued 2 · interrupted 1',
+        enUs: 'Ledger: queued 2 · interrupted 1',
+      }),
+    );
 
     await notifier.reconnecting();
     now = 4_600;
@@ -25,7 +33,7 @@ describe('ReconnectNotifier', () => {
     expect(sendMarkdown).toHaveBeenNthCalledWith(
       2,
       'chat-new',
-      expect.stringContaining('4 秒'),
+      expect.stringMatching(/4 秒[\s\S]*queued 2/),
       { replyTo: 'anchor-1', threadId: 'thread-1' },
     );
   });

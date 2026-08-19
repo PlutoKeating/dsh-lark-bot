@@ -101,6 +101,7 @@ export class ScopeDirectory {
 
   /** Most recently active destination, used for narrowly scoped service notices. */
   recentDestination(): {
+    scope: string;
     chatId: string;
     threadId: string | undefined;
     messageId?: string;
@@ -110,6 +111,7 @@ export class ScopeDirectory {
     )[0];
     if (!entry) return undefined;
     return {
+      scope: entry.scope,
       chatId: entry.chatId,
       threadId: entry.threadId,
       ...(entry.messageId ? { messageId: entry.messageId } : {}),

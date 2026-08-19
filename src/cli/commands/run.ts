@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import type { AgentAdapter } from '../../adapters/types.js';
 import type { LarkChannel } from '@larksuite/channel';
 import type { RuntimeEnv } from '../../config/env.js';
@@ -48,6 +49,13 @@ import { BotFleetStore } from '../../bot/fleet-store.js';
 import { BotHandoffGuard } from '../../bot/handoff-guard.js';
 import { resolveDshHome } from '../../config/dsh-runtime.js';
 import { homedir } from 'node:os';
+import { JobLedger } from '../../bot/job-ledger.js';
+import {
+  claimJobDispatch,
+  prepareDurableJobRecovery,
+  persistJobTerminal,
+  recoverDurableJobs,
+} from '../../bridge/job-recovery.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -183,6 +191,7 @@ export async function startBridgeEngine(
   await mkdir(defaultWorkspace, { recursive: true });
 
   const sessions = new SessionStore(paths.sessionsFile(profileName));
+  const jobs = new JobLedger(paths.jobsFile(profileName));
   const archiver = new SessionArchive(paths.archivesDir(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
   const roleStore = new RoleStore(paths.profilePath(profileName, 'roles.json'));
@@ -193,11 +202,16 @@ export async function startBridgeEngine(
   });
   await Promise.all([
     sessions.load(),
+    jobs.load(),
     workspaces.load(),
     roleStore.load(),
     scopeDirectory.load(),
     isolationStore.load(),
   ]);
+  // Freeze the recovery set before the channel can deliver live events. A
+  // message accepted after connect then belongs only to the live path and
+  // cannot be pushed once more by the startup replay.
+  const jobRecovery = await prepareDurableJobRecovery(jobs);
   // Schema 1 keyed a scope by its execution cwd, which could be a generated
   // worktree. Prefer the legacy worktree's verified owning repository: old
   // `/cd B` could update WorkspaceStore while still reusing A's scope-only
@@ -322,14 +336,27 @@ export async function startBridgeEngine(
       const first = batch[0];
       if (!first) return;
       pending.block(scope);
+      let ledgerMessageIds: string[] = [];
+      let ledgerState: 'completed' | 'failed' | 'interrupted' = 'failed';
+      let ledgerError: string | undefined;
+      let ledgerClaimed = false;
       try {
         // Merge only messages captured for the same workspace. Messages for a
         // different project keep their immutable snapshot and return to the
         // queue for the next run instead of being dropped or cross-routed.
         const selected = batch.filter((message) => message.workspaceCwd === first.workspaceCwd);
+        ledgerMessageIds = selected.map((message) => message.messageId);
         for (const deferred of batch) {
           if (deferred.workspaceCwd !== first.workspaceCwd) pending.push(scope, deferred);
         }
+        ledgerClaimed = await claimJobDispatch({
+          jobs,
+          messageIds: ledgerMessageIds,
+          runId: `dispatch-${randomUUID()}`,
+          first,
+          channel: streaming,
+        });
+        if (!ledgerClaimed) return;
         const prepared = await Promise.all(selected.map(async (message) => ({
           message,
           attachments: await prepareAttachments(
@@ -419,13 +446,45 @@ export async function startBridgeEngine(
             ? {}
             : { provider: modelRoute.provider }),
           model: modelRoute?.model ?? resolvedModel,
+          onCheckpoint: (checkpoint) => jobs.checkpoint(
+            ledgerMessageIds,
+            {
+              stage: checkpoint.stage,
+              ...(checkpoint.detail ? { detail: checkpoint.detail } : {}),
+              ...(checkpoint.nativeSessionId
+                ? { nativeSessionId: checkpoint.nativeSessionId }
+                : {}),
+            },
+            checkpoint.runId,
+          ),
         };
         if (activeProfile.preferences.stopGraceMs !== undefined) {
           runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
         }
-        await runAgentBatch(runInput);
+        const outcome = await runAgentBatch(runInput);
+        ledgerState = outcome === 'completed'
+          ? 'completed'
+          : outcome === 'interrupted'
+            ? 'interrupted'
+            : 'failed';
+      } catch (error) {
+        ledgerError = error instanceof Error ? error.message : String(error);
+        throw error;
       } finally {
-        pending.unblock(scope);
+        try {
+          if (ledgerClaimed) {
+            await persistJobTerminal({
+              jobs,
+              messageIds: ledgerMessageIds,
+              state: ledgerState,
+              ...(ledgerError ? { error: ledgerError } : {}),
+              first,
+              channel: streaming,
+            });
+          }
+        } finally {
+          pending.unblock(scope);
+        }
       }
     },
     (scope) => concurrencyStore.get(scope) ?? env.scopeConcurrency,
@@ -486,6 +545,7 @@ export async function startBridgeEngine(
     isTrustedBot: (openId) => fleet.isTrustedPeer(openId, profileName),
     botHandoffMax: env.botHandoffMax,
     handoffGuard,
+    jobs,
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
     ...(options.createChannel ? { createChannel: options.createChannel } : {}),
@@ -514,6 +574,7 @@ export async function startBridgeEngine(
   }
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
+  await recoverDurableJobs(jobRecovery, jobs, pending, streaming);
   // In `web` adapter mode, watch web-GUI turn completions: push them to Feishu
   // and auto-switch the chat's session mapping (single writer = web agent).
   let webWatcher: WebSessionWatcher | undefined;
@@ -593,6 +654,7 @@ export async function startBridgeEngine(
         roleStore.flush(),
         scopeDirectory.flush(),
         isolationStore.flush(),
+        jobs.flush(),
       ]);
     },
   };

@@ -53,12 +53,13 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 - A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
-**Eight exclusive capabilities**:
+**Nine exclusive capabilities**:
 
 - 🆘 **Guardian safety net — "always reachable"**: Feishu still replies after dsh crashes; `/safemode` enters core-only safe mode to locate the problem and restart directly.
 - 👥 **Multi-role agents — "one bot, a whole team"**: switch or assign PM / dev / docs roles with `/role`; each role has its own persona, model preference and rules.
 - 🤝 **Multi-bot handoff — "multiple independent agents in one group"**: `bot add` creates an isolated identity/service/context; trusted bots hand work off with a real @mention and a bounded conversation counter.
 - ⚡ **Parallel tasks — "no queueing"**: run multiple tasks in the same chat simultaneously with isolated sessions; other solutions serialize everything.
+- 🧾 **Crash-safe reconciliation — "sent does not mean vanished"**: persist messages before queueing, replay queued work after restart, and inspect/retry interrupted checkpoints with `/jobs`.
 - 🧭 **Plan before action — "review it before it moves"**: receive the complete plan first, then approve execution or add feedback and request another planning pass without restarting the task.
 - 🗂 **Session archival & cleanup — "your session list never rots"**: archive old tasks with `/archive` and configure auto-retention with `/retention`.
 - 📣 **Cross-session proactive notifications + @mentions — "it comes to you when done"**: after a task in chat A finishes, push a report to chat B / DMs and @mention you.
@@ -104,7 +105,8 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/ws save <name>` | Save the current workspace |
 | `/ws use <name>` | Switch to a named workspace |
 | `/ws remove <name>` | Remove a named workspace |
-| `/status` | Show a refreshable status card (workspace / model / session / runs / context / cumulative tokens / pending cards) |
+| `/status` | Show a refreshable status card (workspace / model / session / runs / context / tokens / pending cards / job ledger) |
+| `/jobs [list\|show <message-id>\|retry <message-id>]` | Reconcile queued/running/completed/failed/interrupted jobs and explicitly retry after review |
 | `/resume` | Show the session's recent context |
 | `/stop` | Stop the current task |
 | `/timeout [N\|off\|default]` | View or set the current session run timeout |
@@ -144,6 +146,19 @@ Unavailable fields say “暂无” rather than being estimated. Sessions and me
 so returning resumes it; `/new` and `/reset` clear only the current workspace. Pending cards and archive list/clean
 operations are likewise scoped to the current workspace. Recent context snapshots are retained separately by native session and
 canonical provider/model, so concurrent runs do not overwrite each other and stale identities remain hidden. Only the owner may refresh a member-isolated status card.
+
+**Message and job reliability**: ordinary agent messages are deduplicated by Feishu `messageId` and atomically
+written to the profile's mode-0600 `jobs.json` before entering the in-memory queue. After a process restart,
+queued messages return to their original scope, thread, and workspace. Jobs that were running become
+`interrupted`, retain their last safe checkpoint and run/native-session identity, and are not automatically
+rerun because external side effects may already have happened. Reconcile with `/jobs`, inspect with
+`/jobs show <message-id>`, and retry explicitly with `/jobs retry <message-id>`. `/status` and reconnect notices
+include current-workspace ledger counts. This guarantee starts only after the bridge received and persisted an
+event; an event that Feishu never delivered while the WebSocket was offline cannot be reconstructed locally.
+If the initial write fails, the bot explicitly says the message was not accepted or executed and asks for a
+resend. If the pre-execution `running` receipt fails, execution does not start and the job is either durably marked
+`failed` or left `queued` for startup replay. A failed terminal write also produces a reconciliation warning; any
+remaining `running` receipt becomes `interrupted` only after outbound delivery is ready, and its notice retries across restarts.
 
 **Group session isolation**: admins can switch `/isolation group|topic|member` between one shared
 group scope, per-topic scopes, and per-member scopes. `topic` remains the default. Switching only changes
@@ -316,7 +331,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: How is dsh-lark-bot different from other DeepSeek Harness Feishu plugins (e.g. harness-lark)?**
 
-**A:** The most complete eight-part feature set: safety-net guardian, multi-role agents, trusted multi-bot handoffs, parallel tasks, session archival, cross-session proactive notifications, in-chat model/key management, and a plan-before-action gate. `setup` is the single install path; optional `service install` only asks the OS to supervise that same profile, not a second runtime.
+**A:** The most complete nine-part feature set: safety-net guardian, multi-role agents, trusted multi-bot handoffs, parallel tasks, durable job reconciliation, session archival, cross-session proactive notifications, in-chat model/key management, and a plan-before-action gate. `setup` is the single install path; optional `service install` only asks the OS to supervise that same profile, not a second runtime.
 
 **Q: Where do I download the project? Are there impostors?**
 
@@ -421,6 +436,11 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Local session usage**: adapter-reported input/output/cache tokens and context used/limit are stored per scope
   in `~/.dsh-lark/profiles/<profile>/sessions.json` (mode 0600) and displayed by `/status`. Only the member-scope
   owner can refresh its card, but a status card already sent to a shared group follows normal group visibility.
+- **Durable job ledger**: `profiles/<profile>/jobs.json` (mode 0600) stores the original message body,
+  attachment/mention metadata, chat/thread/scope, workspace, state, and safe checkpoints for jobs accepted by
+  the bridge, retaining at most 500 terminal records. `/jobs` redacts its output and isolates it by current scope
+  and workspace. Like `sessions.json`, the file can contain sensitive text deliberately placed in a prompt, so
+  protect the profile directory and sanitize it before sharing. Hidden reasoning and tool arguments are not stored.
 - **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
   the reply anchor that places later agent question cards back in the original topic.
 - **Local callback**: `lark_notify`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
@@ -597,7 +617,7 @@ See [`docs/roadmap.md`](docs/roadmap.md).
 - omdsh-dev/community listing: [Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ accepted, discussion active (latest notes v0.10.2); v0.15.1 update note — 📨 prepared, paste manually
 - Platform refresh (v0.14.0 → v0.15.1) — ✅ resumed (2026-08-17): awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh note prepared
 
-**Historical highlights follow-ups** (the then-current six capabilities and issue #6 design; see the eight-part list above for the current product):
+**Historical highlights follow-ups** (the then-current six capabilities and issue #6 design; see the nine-part list above for the current product):
 
 - awesome-dsh-plugins leaderboard row sync (repo description → latest) & agent-test name anomaly: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 submitted (maintainer confirmed; awaiting the snapshot/render cycle)
 - dshfind detail page: add the in-chat model/key management highlight: [#2 follow-up](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 submitted

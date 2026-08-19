@@ -20,6 +20,7 @@
 | P15 | 安全模式实时可见性：SDK 流式引擎优先 + headless 活动卡回退、超时 / 停止 / 忙碌回执、正常模式排队回执与卡住提示 | ✅ 完成（0.10.0） |
 | P19 | 群聊 group / topic / member 会话隔离、持久化切换与成员轮次标记（issue #17） | ✅ 完成 |
 | P20 | 关键任务完整计划消息 + approve/revise/feedback 决策卡 + 原任务续跑（issue #18） | ✅ 完成 |
+| P27 | 持久消息 receipt、崩溃恢复与 `/jobs` 对账（issue #28） | ✅ 完成 |
 
 ## 2. P1 验收标准
 
@@ -64,6 +65,7 @@
 - [x] bot UI 中英国际化（issue #27）：Card JSON 2.0 per-viewer `zh_cn` / `en_us`，Markdown/toast 双语降级，agent 内容不翻译
 - [x] 关键任务计划门禁（完整计划消息 → 批准 / 继续规划 + feedback → 原 agent turn 自动续跑）
 - [x] 异步任务队列（scope 内并行 run + 消息批量合并；workflow 编排仍待上游能力）
+- [x] 持久任务账本（先落盘后入队、queued 重放、running 中断对账、显式 retry，issue #28）
 - [ ] 沙箱调度与 workflow 编排
 - [x] 会话 / 任务归档（`/archive`、`/retention`、自动保留策略）
 

@@ -67,6 +67,10 @@
   切换不迁移或删除旧 scope，会话可在切回后继续，旧运行的停止 / 审批 / 问答动作仍可达。
   成员任务卡按入队 scope 显示发送者 open_id，不受排队期间的策略切换影响。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
+- 消息可靠性（issue #28）：普通 agent 消息必须以 messageId 幂等、先原子写 profile 级任务账本再
+  进入内存队列；启动自动重放 queued，遗留 running 标记 interrupted 并保留安全 checkpoint，
+  不自动重跑可能已有外部副作用的任务。`/jobs` 按 scope + workspace 对账/显式重试，`/status` 与
+  重连提示显示统计。保证仅覆盖 bridge 已接收并落盘的事件，不宣称恢复平台从未投递的消息。
 - 中断命令：`/new` 只打断并清空当前 workspace 的任务；`/stop` 仍可打断 scope 内任务。
   `/cd`、`/ws use` 切换前中断旧 workspace 的 active run，但其 native session、transcript、指标与归档保留。
 - 会话续跑 `/resume`；`/status` 以可原位刷新的卡片展示工作区、有效模型、session、active runs、
@@ -104,6 +108,8 @@
 - 异步任务队列（0.6.0）：同一 scope 默认 2 个 run 并行（`/concurrency` /
   `DSH_LARK_SCOPE_CONCURRENCY` 调整，1 为严格串行），消息批量合并后以独立 run 推进，
   互不阻塞事件回调；并行 run 使用独立 dsh session 与 runId，`/status` / `/stop` 覆盖全部。
+- 持久任务 receipt（issue #28）：`jobs.json` 以 0600 原子快照保存最小消息/routing/workspace 与
+  queued/running/terminal 状态，checkpoint 不含隐藏推理或工具参数；终态最多保留 500 条。
 - 定时任务 / 依赖编排（dsh 自带 workflow capability）：规划中，依赖上游能力接入。
 
 > 状态说明：**scope 内并行 run 与异步任务队列已实现（0.6.0）**；定时任务 / workflow 编排

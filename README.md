@@ -51,12 +51,13 @@
 - 流式过程卡以飞书原生折叠面板实时展示思考、工具调用与结果，完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-**八项全网独有组合**：
+**九项全网独有组合**：
 
 - 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。
 - 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
 - 🤝 **多机器人交接——“一个群，多个独立 Agent”**：`bot add` 增加独立身份/服务/凭据/上下文的实例，可信机器人可在同群通过真实 @ 交接，连续协作有硬上限。
 - ⚡ **并行多任务——“不用排队”**：同一群聊同时跑多个任务、会话隔离；其他方案只能串行排队。
+- 🧾 **崩溃后可对账——“发出去了不是石沉大海”**：消息先写持久任务账本再入队；重启恢复排队项，中断任务保留 checkpoint 并由 `/jobs` 显式重试。
 - 🗂 **会话归档与清理——“会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留策略。
 - 📣 **跨会话主动通知 + @人——“活干完了它会来找你”**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
 - 🔑 **对话内管理模型和密钥——“不用离开飞书”**：`/providers` `/provider` `/key` 直接查看、切换供应商、热更新密钥。
@@ -107,7 +108,8 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/ws save <name>` | 保存当前工作空间|
 | `/ws use <name>` | 切换到命名工作空间|
 | `/ws remove <name>` | 删除命名工作空间|
-| `/status` | 查看可刷新状态卡（工作区 / 模型 / session / run / context / 累计 token / 待处理卡）|
+| `/status` | 查看可刷新状态卡（工作区 / 模型 / session / run / context / token / pending / 任务账本）|
+| `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账排队/运行/完成/失败/中断任务；确认后显式重试 |
 | `/resume` | 查看当前会话最近上下文|
 | `/stop` | 终止当前任务|
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时|
@@ -147,6 +149,16 @@ SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段
 持久化；`/cd` / `/ws use` 会中断原工作区仍在运行的任务，但不会删除其会话、指标或归档，切回即可
 继续；只有 `/new` / `/reset` 清空当前 workspace。待处理卡与归档列表/清理也只统计当前 workspace。
 成员 scope 的刷新只允许 owner 操作。
+
+**消息与任务可靠性**：普通 agent 消息以飞书 `messageId` 去重，先原子写入 profile 的
+`jobs.json`（0600）再进入内存队列。进程重启后，尚未开始的 queued 消息自动回到原 scope、thread
+与 workspace；崩溃时已 running 的任务会转为 interrupted，保留最后安全阶段、run/native session
+标识，但不会自动重复可能已有外部副作用的操作。用 `/jobs` 对账、`/jobs show <消息ID>` 查看，确认后
+再 `/jobs retry <消息ID>`。`/status` 和重连提示会显示当前 workspace 的账本统计。保证范围从 bridge
+已经收到并成功落盘开始；断网期间飞书从未投递给 bridge 的事件无法由本地账本恢复。
+若首次落盘失败，bot 会明确回复“未接收/未执行，请重发”；若执行前 running receipt 失败，任务不会
+启动，并明确落为 failed 或保留 queued 等待重启恢复。终态落盘失败也会提示对账；残留 running 会在
+出站通道就绪后安全标为 interrupted，中断通知失败会跨启动继续投递。
 
 **群聊会话隔离**：管理员可用 `/isolation group|topic|member` 在“整群共享 / 话题独立 /
 成员独立”之间切换；默认 `topic` 保持既有行为。切换只改变后续消息的 scope 路由，不迁移或
@@ -328,7 +340,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、会话归档、跨会话主动通知、对话内模型 / 密钥管理与关键任务计划门禁八项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
+**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、对话内模型 / 密钥管理与关键任务计划门禁九项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -451,6 +463,10 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 - **本地会话用量**：adapter 上报的 input/output/cache token 与 context used/limit 随 scope 写入
   `~/.dsh-lark/profiles/<profile>/sessions.json`（0600），并显示在 `/status` 卡；成员 scope 仅 owner
   可刷新，但群内已经发送的状态卡仍遵循共享群消息可见性。
+- **持久任务账本**：`profiles/<profile>/jobs.json`（0600）保存 bridge 已接收任务的原始消息正文、
+  附件/提及元数据、chat/thread/scope、workspace、状态与安全 checkpoint，最多保留 500 条终态记录。
+  `/jobs` 输出会脱敏并按当前 scope + workspace 隔离；文件内容与 `sessions.json` 一样可能包含用户在
+  prompt 中主动提供的敏感文本，应保护 profile 目录并在分享前清理。账本不保存隐藏推理或工具参数。
 - **scope 路由**：`scopes.json` 保存 chat/thread 与最近入站 messageId；messageId 仅用于把 agent
   后续问答卡作为 reply 正确发回原话题。
 - **本地回调**：运行 `lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 或逐工具审批时，dsh
@@ -654,7 +670,7 @@ pnpm publish:dual
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）；v0.15.1 更新说明 — 📨 已备妥，待人工粘贴
 - 平台数据刷新（v0.14.0 → v0.15.1）— ✅ 已恢复提交（2026-08-17）：awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 跟进](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh 说明备妥
 
-**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方八项清单）：
+**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方九项清单）：
 
 - awesome-dsh-plugins 榜单行同步（仓库描述 → 最新）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交（维护方已确认，等待渲染周期同步）
 - dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交

@@ -88,7 +88,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
-| `/status` | 查看并原位刷新 scope / cwd / 模型 / session / run / context / 累计 token / 待处理卡 |
+| `/status` | 查看并原位刷新 scope / cwd / 模型 / session / run / context / token / pending / 任务账本 |
+| `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务状态、查看 checkpoint、确认后重试中断/失败任务 |
 | `/resume` | 查看最近上下文 |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
@@ -298,6 +299,11 @@ dsh-lark-bot guardian uninstall
   “暂无”，不估算百分比。最近 context 快照按 native session 与 canonical provider/model 分别保存，
   并行 run 不互相覆盖；只有当前 workspace/session/model 身份匹配的快照才展示。点击“刷新”原位更新；
   指标写入 `sessions.json`，仅当前工作区的新建/重置会清零，切换目录不会清零。
+- 普通 agent 消息先原子写入 `jobs.json` 再排队。重启自动恢复 queued；running 转为 interrupted，
+  保留最后阶段但不自动重复可能已有副作用的工具。`/jobs show` 对账后可用 `/jobs retry` 显式重跑；
+  `/status` 与重连提示显示当前 workspace 的账本统计。仅已被 bridge 接收并成功落盘的事件受此保证，
+  WebSocket 断开期间平台未投递的事件无法恢复。执行前 running receipt 落盘失败时不会启动任务，
+  并明确落 failed 或保留 queued；中断通知持久化并在投递失败后跨启动重试。
 - 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
   Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
   可审计、可回放；`/archive [note]` 可随时手动导出完整会话，`list` / `clean` 只作用于当前 workspace。

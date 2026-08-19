@@ -68,9 +68,17 @@ export interface RunFlowInput {
   scopeOwner?: string;
   /** Trusted peer identities available for an explicit lark_notify handoff. */
   collaborationPeers?: Array<{ name: string; openId: string; displayName?: string }>;
+  onCheckpoint?: (checkpoint: {
+    runId: string;
+    stage: 'starting' | 'thinking' | 'tool' | 'responding' | 'finalizing';
+    detail?: string;
+    nativeSessionId?: string;
+  }) => void | Promise<void>;
 }
 
-export async function runAgentBatch(input: RunFlowInput): Promise<void> {
+export type RunBatchOutcome = 'completed' | 'failed' | 'interrupted';
+
+export async function runAgentBatch(input: RunFlowInput): Promise<RunBatchOutcome> {
   const replyOptions = input.replyTo ? { replyTo: input.replyTo } : {};
 
   const activeBefore = input.activeRuns.count(input.scope);
@@ -81,7 +89,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     ), {
       ...replyOptions,
     });
-    return;
+    return 'failed';
   }
 
   const requestedCwd = input.workspaceCwd ??
@@ -101,7 +109,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
   const resuming = sessionId !== undefined && input.adapter.resumeCapable === true;
 
   try {
-    await runAttempt(input, cwd, requestedCwd, sessionId, resuming, replyOptions);
+    return terminalOutcome(await runAttempt(input, cwd, requestedCwd, sessionId, resuming, replyOptions));
   } catch (error) {
     if (resuming) {
       // A native-session resume can be rejected by the dsh runtime when its
@@ -130,18 +138,20 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
       }
       input.sessions.clearSession(input.scope, requestedCwd);
       try {
-        await runAttempt(input, cwd, requestedCwd, undefined, false, replyOptions);
-        return;
+        return terminalOutcome(
+          await runAttempt(input, cwd, requestedCwd, undefined, false, replyOptions),
+        );
       } catch (retryError) {
         log.fail('run-flow', retryError, {
           scope: input.scope,
           step: 'resume-fallback',
         });
         await reportRunFailure(input, retryError, replyOptions);
-        return;
+        return 'failed';
       }
     }
     await reportRunFailure(input, error, replyOptions);
+    return 'failed';
   }
 }
 
@@ -169,7 +179,7 @@ async function runAttempt(
   sessionId: string | undefined,
   resuming: boolean,
   replyOptions: Record<string, unknown>,
-): Promise<void> {
+): Promise<Exclude<RunState['terminal'], 'running'>> {
   // A native-resuming adapter (SDK) already has the conversation persisted in
   // the dsh session; replaying the transcript would duplicate it and can drift
   // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
@@ -217,8 +227,43 @@ async function runAttempt(
   let activeSessionId = sessionId;
   let activeModel = modelRoute(input.provider, input.model);
   const density = input.densityStore?.get(input.scope) ?? 'standard';
+  let checkpointKey = '';
+  const emitCheckpoint = async (value: Parameters<NonNullable<RunFlowInput['onCheckpoint']>>[0]): Promise<void> => {
+    try {
+      await input.onCheckpoint?.(value);
+    } catch (error) {
+      // Checkpoint persistence is observability, not execution control. A
+      // transient disk failure must not abandon a live adapter run; the
+      // already-durable running receipt will be reconciled after restart.
+      log.warn('run-flow', 'checkpoint-failed', {
+        scope: input.scope,
+        runId,
+        stage: value.stage,
+        error,
+      });
+    }
+  };
+  const checkpoint = async (
+    stage: 'thinking' | 'tool' | 'responding' | 'finalizing',
+    detail?: string,
+  ): Promise<void> => {
+    const key = `${stage}:${detail ?? ''}:${activeSessionId ?? ''}`;
+    if (key === checkpointKey) return;
+    checkpointKey = key;
+    await emitCheckpoint({
+      runId,
+      stage,
+      ...(detail ? { detail } : {}),
+      ...(activeSessionId ? { nativeSessionId: activeSessionId } : {}),
+    });
+  };
 
   try {
+    await emitCheckpoint({
+      runId,
+      stage: 'starting',
+      ...(sessionId ? { nativeSessionId: sessionId } : {}),
+    });
     const produceCard = async (
       controller: CardStreamController,
       renderer: typeof renderCard,
@@ -309,6 +354,9 @@ async function runAttempt(
               activeModel = modelRoute(input.provider, event.model ?? input.model);
               input.sessions.set(input.scope, event.sessionId, workspaceCwd);
             }
+            if (event.type === 'thinking') await checkpoint('thinking');
+            if (event.type === 'tool_use') await checkpoint('tool', event.name);
+            if (event.type === 'text' || event.type === 'final_text') await checkpoint('responding');
             if (event.type === 'tool_use' && activeSessionId !== undefined) {
               input.approvals?.recordToolCall(activeSessionId, event.id, event.input);
             }
@@ -409,6 +457,7 @@ async function runAttempt(
             ? markIdleTimeout(state, timeoutMs / 60_000)
             : finalizeIfRunning(state);
           await safeUpdate();
+          await checkpoint('finalizing');
           if (state.terminal === 'done' && assistantOutput.trim() !== '') {
             try {
               await input.channel.sendMarkdown(input.chatId, assistantOutput, {
@@ -531,7 +580,7 @@ async function runAttempt(
               ),
           { ...replyOptions },
         );
-        return;
+        return 'error';
       }
     }
     try {
@@ -541,6 +590,7 @@ async function runAttempt(
     } catch {
       // best effort; the card may already have failed
     }
+    return 'error';
   } finally {
     input.activeRuns.delete(input.scope, runId);
     if (input.approvals) {
@@ -557,6 +607,13 @@ async function runAttempt(
       input.plans.settleSession(input.scope, activeSessionId);
     }
   }
+  return state.terminal === 'running' ? 'interrupted' : state.terminal;
+}
+
+function terminalOutcome(terminal: Exclude<RunState['terminal'], 'running'>): RunBatchOutcome {
+  if (terminal === 'done') return 'completed';
+  if (terminal === 'interrupted' || terminal === 'idle_timeout') return 'interrupted';
+  return 'failed';
 }
 
 function modelRoute(provider: string | undefined, model: string | undefined): string | undefined {
