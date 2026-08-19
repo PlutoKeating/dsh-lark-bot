@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import type { AgentAdapter } from '../../adapters/types.js';
-import type { LarkChannel, NormalizedMessage } from '@larksuite/channel';
+import type { LarkChannel } from '@larksuite/channel';
 import type { RuntimeEnv } from '../../config/env.js';
 import { buildAgentAdapter } from '../../adapters/index.js';
 import { ActiveRuns } from '../../bot/active-runs.js';
@@ -16,7 +16,7 @@ import { RoleStore } from '../../bot/role-store.js';
 import { RunPolicyStore } from '../../bot/run-policy.js';
 import { IsolationStore } from '../../bot/isolation-store.js';
 import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
-import { startChannel } from '../../bridge/channel.js';
+import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
@@ -197,6 +197,23 @@ export async function startBridgeEngine(
     scopeDirectory.load(),
     isolationStore.load(),
   ]);
+  // Schema 1 keyed a scope by its execution cwd, which could be a generated
+  // worktree. Prefer the legacy worktree's verified owning repository: old
+  // `/cd B` could update WorkspaceStore while still reusing A's scope-only
+  // worktree. Keep the current pointer on B, but correctly bind that session
+  // to A so each project can recover independently under schema 2.
+  for (const scope of sessions.legacyScopeIds()) {
+    const legacyCwd = sessions.legacyWorkspaceCwd(scope);
+    const legacyBase = await worktreeManager.legacyWorkspaceBase(scope);
+    const canonicalCwd = legacyBase ?? workspaces.cwdFor(scope) ?? defaultWorkspace;
+    // Rebind archives before committing schema 2. If any archive I/O fails,
+    // schema 1 remains durable and the whole idempotent migration retries on
+    // the next boot rather than losing its only retry marker.
+    if (legacyCwd !== undefined) {
+      await archiver.rebindWorkspaceCwd(scope, legacyCwd, canonicalCwd);
+    }
+    sessions.adoptLegacyWorkspace(scope, canonicalCwd);
+  }
 
   const adapter =
     options.adapter ??
@@ -297,7 +314,7 @@ export async function startBridgeEngine(
   });
   process.env.DSH_LARK_NOTIFY_TOKEN = notifyToken;
 
-  const pending = new PendingQueue<NormalizedMessage>(
+  const pending = new PendingQueue<QueuedMessage>(
     DEBOUNCE_MS,
     async (scope, batch) => {
       if (!streaming) return;
@@ -305,15 +322,25 @@ export async function startBridgeEngine(
       if (!first) return;
       pending.block(scope);
       try {
-        const attachments = await prepareAttachments(
-          larkChannel,
-          first,
-          paths.mediaDir(profileName),
-        );
-        const messages = [
-          first.content,
+        // Merge only messages captured for the same workspace. Messages for a
+        // different project keep their immutable snapshot and return to the
+        // queue for the next run instead of being dropped or cross-routed.
+        const selected = batch.filter((message) => message.workspaceCwd === first.workspaceCwd);
+        for (const deferred of batch) {
+          if (deferred.workspaceCwd !== first.workspaceCwd) pending.push(scope, deferred);
+        }
+        const prepared = await Promise.all(selected.map(async (message) => ({
+          message,
+          attachments: await prepareAttachments(
+            larkChannel,
+            message,
+            paths.mediaDir(profileName),
+          ),
+        })));
+        const messages = prepared.flatMap(({ message, attachments }) => [
+          message.content,
           ...attachments.textFileNotes,
-        ].filter(Boolean);
+        ]).filter(Boolean);
         const role = roleStore.roleForScope(scope);
         const collaborationPeers = await fleet.peersFor(profileName);
         const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
@@ -362,6 +389,7 @@ export async function startBridgeEngine(
           adapter,
           sessions,
           workspaces,
+          workspaceCwd: first.workspaceCwd,
           workspaceManager: worktreeManager,
           activeRuns,
           runPolicies,
@@ -379,7 +407,7 @@ export async function startBridgeEngine(
           runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
           maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
-          images: attachments.imagePaths,
+          images: prepared.flatMap(({ attachments }) => attachments.imagePaths),
           ...(modelRoute?.provider === undefined
             ? {}
             : { provider: modelRoute.provider }),

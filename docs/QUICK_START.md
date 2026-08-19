@@ -104,7 +104,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 开始新会话 |
-| `/cd <path>` | 切换工作目录并重置会话 |
+| `/cd <path>` | 切换到该目录的独立会话（切回可继续） |
 | `/ws list` | 查看命名工作空间 |
 | `/ws save <name>` | 保存当前工作空间 |
 | `/ws use <name>` | 切换到命名工作空间 |
@@ -148,7 +148,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可调），超出保留窗口的消息自动
 归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown + JSONL + Git commit，`/archive`
-可手动导出）；`/new` 会清空当前 scope 的会话记忆。
+可手动导出）；`/new` 只清空当前 `scope + workspace` 的会话记忆，其他工作区可切回续接。
 
 发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
 
@@ -209,7 +209,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 
 - 配置文件：`~/.dsh-lark/config.json`
 - 守护状态：`~/.dsh-lark/guardian.json`
-- 会话状态与每 scope session 累计 token/context 快照：`~/.dsh-lark/profiles/<profile>/sessions.json`
+- 会话状态与每 scope + workspace session 累计 token/context 快照：`~/.dsh-lark/profiles/<profile>/sessions.json`
 - 会话归档：`~/.dsh-lark/profiles/<profile>/archives/`
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
 - scope 目录（chat/thread 与 topic reply anchor messageId）：`~/.dsh-lark/profiles/<profile>/scopes.json`

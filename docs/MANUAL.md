@@ -100,8 +100,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/notify list` | 查看 bridge 已注册的 scope |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话（Markdown + JSONL） |
-| `/archive list [N]` | 查看当前 scope 最近 N 条归档 |
-| `/archive clean` | 清理过期归档 |
+| `/archive list [N]` | 查看当前 workspace 最近 N 条归档 |
+| `/archive clean` | 清理当前 workspace 的过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID；下一轮生效） |
@@ -282,22 +282,27 @@ dsh-lark-bot guardian uninstall
   整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /
   问答卡继续绑定原 scope，`/stop` 也覆盖操作者可达的旧 scope。成员任务卡显示入队时固化的 owner。
   注意：成员模式只隔离 agent 上下文，不隐藏共享群里的输入、进度卡或回复；这些内容仍对群成员可见。
-- 每个 scope 默认保存最近 40 条对话（`/retention` 调整，`DSH_LARK_RETENTION_MSGS` 配置默认值）。
+- 每个 scope + workspace 默认保存最近 40 条对话（`/retention` 调整，`DSH_LARK_RETENTION_MSGS` 配置默认值）。
+- `sessions.json` 按 `scope + workspace cwd` 保存独立 native session、transcript 与指标；`/cd` / `/ws use`
+  会中断原工作区仍在运行的任务，但不删除数据，切回会续接。`/new` / `/reset` 只清空当前工作区。
 - 同一 scope 默认允许 2 个任务并行（`/concurrency` 或 `DSH_LARK_SCOPE_CONCURRENCY` 调整，
-  1 为严格串行）；并行 run 各持独立 dsh session 与 runId，共享 scope 的会话转写与工作区，
-  `/status` 显示全部 active runs，`/stop` 终止全部。
+  1 为严格串行）；并行 run 各持独立 dsh session 与 runId。`/status` 只显示当前 workspace 的 active
+  runs，`/new` 只停止当前 workspace，`/stop` 仍终止 scope 内全部运行。
 - `/status` 状态卡还显示有效模型、版本、待审批 / 提问 / 计划数，以及当前 session 的累计
-  input / output / cache token。ACP `usage_update` 提供真实 context used/size；SDK 当前只保证
+  input / output / cache token；pending 数仅统计当前 workspace 的 session/run。ACP `usage_update` 提供真实 context used/size；SDK 当前只保证
   模型调用 token/cache usage。模型目录声明的 contextWindow 可作为上限；没有真实 used 时仍显示
   “暂无”，不估算百分比。最近 context 快照按 native session 与 canonical provider/model 分别保存，
-  并行 run 不互相覆盖；只有当前身份匹配的快照才展示。点击“刷新”原位更新；指标写入 `sessions.json`，新建/重置/切换目录时清零。
+  并行 run 不互相覆盖；只有当前 workspace/session/model 身份匹配的快照才展示。点击“刷新”原位更新；
+  指标写入 `sessions.json`，仅当前工作区的新建/重置会清零，切换目录不会清零。
 - 超出保留窗口的消息自动归档到 `~/.dsh-lark/profiles/<profile>/archives/`：每条归档同时写
   Markdown 转写与 JSONL 原始数据，归档目录初始化为独立 Git 仓库，每次归档 / 清理单独 commit，
-  可审计、可回放；`/archive [note]` 可随时手动导出完整会话。
-- 保留策略：每个 scope 最多保留 `DSH_LARK_ARCHIVE_MAX`（默认 50）条归档、超过
-  `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`（默认 90 天）的归档会被自动清理，`/archive clean` 手动触发。
+  可审计、可回放；`/archive [note]` 可随时手动导出完整会话，`list` / `clean` 只作用于当前 workspace。
+- 保留策略：每个 scope + workspace 最多保留 `DSH_LARK_ARCHIVE_MAX`（默认 50）条归档、超过
+  `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`（默认 90 天）的归档会被自动清理，`/archive clean` 只清当前 workspace。
 - SDK 模式使用 dsh 原生 session 续跑，headless 模式把历史注入下一次 prompt 作为近似上下文。
-- 工作目录是 Git 仓库时，自动创建独立 git worktree，避免多会话互相污染。
+- 工作目录是 Git 仓库时，按 scope + 项目路径自动创建独立 git worktree，避免多项目互相污染；
+  旧版 scope-only worktree 会先核验 Git owning repo，会话和旧自动归档归回真实项目；匹配时原位迁移，若当前指针
+  已是另一项目则保留旧树并另建新树，分支和未提交文件都不会被覆盖。
 - 非 Git 目录直接使用指定目录。
 - 项目根目录有 `AGENTS.md` 时，会注入到 worktree。
 
@@ -362,8 +367,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行） |
 | `DSH_LARK_BOT_HANDOFF_MAX` | `6` | 同 chat 连续可信 bot @ 交接上限（最小 2；真人消息重置） |
-| `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope 保留的消息条数（0=全部保留） |
-| `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope 最多保留的归档数（0=不清理） |
+| `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope + workspace 保留的消息条数（0=全部保留） |
+| `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope + workspace 最多保留的归档数（0=不清理） |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理） |
 | `DSH_LARK_DISABLED` | 未设置 | `1` 时保持桥接引擎停止（插件仍加载） |
 | `DSH_LARK_HEARTBEAT_MS` | `5000` | 桥接引擎心跳写入间隔（守护存活信号） |

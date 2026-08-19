@@ -43,6 +43,8 @@ export interface RunFlowInput {
   archiveMax?: number;
   archiveMaxAgeDays?: number;
   workspaces: WorkspaceStore;
+  /** Workspace selected when the inbound batch was queued; immutable for this run. */
+  workspaceCwd?: string;
   workspaceManager?: GitWorktreeManager;
   activeRuns: ActiveRuns;
   runPolicies?: RunPolicyStore;
@@ -78,21 +80,24 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
     return;
   }
 
-  const requestedCwd = input.workspaces.cwdFor(input.scope) ?? input.defaultWorkspace;
+  const requestedCwd = input.workspaceCwd ??
+    input.workspaces.cwdFor(input.scope) ?? input.defaultWorkspace;
+  const activeInWorkspace = input.activeRuns.countWorkspace(input.scope, requestedCwd);
   const workspace = input.workspaceManager
     ? await input.workspaceManager.ensure(input.scope, requestedCwd)
     : { cwd: requestedCwd };
   const cwd = workspace.cwd;
-  // Only the first run in a scope resumes the native dsh session: concurrent
-  // runs get fresh sessions so they never share one wire session id.
+  // Only the first run in this scope+workspace resumes its native dsh session:
+  // concurrent runs in the same workspace get fresh wire session ids, while a
+  // sibling workspace may safely resume its own independent binding.
   const sessionId =
-    activeBefore === 0
-      ? input.sessions.resumeFor(input.scope, cwd)
+    activeInWorkspace === 0
+      ? input.sessions.resumeFor(input.scope, requestedCwd)
       : undefined;
   const resuming = sessionId !== undefined && input.adapter.resumeCapable === true;
 
   try {
-    await runAttempt(input, cwd, sessionId, resuming, replyOptions);
+    await runAttempt(input, cwd, requestedCwd, sessionId, resuming, replyOptions);
   } catch (error) {
     if (resuming) {
       // A native-session resume can be rejected by the dsh runtime when its
@@ -119,9 +124,9 @@ export async function runAgentBatch(input: RunFlowInput): Promise<void> {
           });
         }
       }
-      input.sessions.clearSession(input.scope);
+      input.sessions.clearSession(input.scope, requestedCwd);
       try {
-        await runAttempt(input, cwd, undefined, false, replyOptions);
+        await runAttempt(input, cwd, requestedCwd, undefined, false, replyOptions);
         return;
       } catch (retryError) {
         log.fail('run-flow', retryError, {
@@ -156,6 +161,7 @@ async function reportRunFailure(
 async function runAttempt(
   input: RunFlowInput,
   cwd: string,
+  workspaceCwd: string,
   sessionId: string | undefined,
   resuming: boolean,
   replyOptions: Record<string, unknown>,
@@ -163,7 +169,7 @@ async function runAttempt(
   // A native-resuming adapter (SDK) already has the conversation persisted in
   // the dsh session; replaying the transcript would duplicate it and can drift
   // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
-  const history = resuming ? [] : input.sessions.historyFor(input.scope, cwd);
+  const history = resuming ? [] : input.sessions.historyFor(input.scope, workspaceCwd);
   const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers);
   const runId = randomUUID();
 
@@ -189,7 +195,7 @@ async function runAttempt(
         }
       : {}),
   });
-  input.activeRuns.set(input.scope, { runId, stop: run.stop });
+  input.activeRuns.set(input.scope, { runId, workspaceCwd, stop: run.stop });
 
   const now = Date.now();
   let state: RunState = {
@@ -251,7 +257,7 @@ async function runAttempt(
               healKind !== undefined &&
               !(resuming && !sawActivity)
             ) {
-              const brokenId = input.sessions.getRaw(input.scope)?.sessionId;
+              const brokenId = input.sessions.getRaw(input.scope, workspaceCwd)?.sessionId;
               if (brokenId !== undefined) {
                 let archivePath: string | undefined;
                 if (healKind === 'corrupt') {
@@ -271,7 +277,7 @@ async function runAttempt(
                     });
                   }
                 }
-                input.sessions.clearSession(input.scope);
+                input.sessions.clearSession(input.scope, workspaceCwd);
                 await input.channel.sendMarkdown(
                   input.chatId,
                   healKind === 'corrupt'
@@ -291,13 +297,13 @@ async function runAttempt(
             if (event.type === 'system' && event.sessionId) {
               activeSessionId = event.sessionId;
               activeModel = modelRoute(input.provider, event.model ?? input.model);
-              input.sessions.set(input.scope, event.sessionId, event.cwd ?? cwd);
+              input.sessions.set(input.scope, event.sessionId, workspaceCwd);
             }
             if (event.type === 'tool_use' && activeSessionId !== undefined) {
               input.approvals?.recordToolCall(activeSessionId, event.id, event.input);
             }
             if (event.type === 'usage') {
-              input.sessions.recordUsage(input.scope, {
+              input.sessions.recordUsage(input.scope, workspaceCwd, {
                 ...(event.inputTokens === undefined ? {} : { inputTokens: event.inputTokens }),
                 ...(event.outputTokens === undefined ? {} : { outputTokens: event.outputTokens }),
                 ...(event.cacheReadTokens === undefined
@@ -309,7 +315,7 @@ async function runAttempt(
               });
             } else if (event.type === 'context_usage') {
               if (activeSessionId !== undefined && activeModel !== undefined) {
-                input.sessions.recordContextUsage(input.scope, {
+                input.sessions.recordContextUsage(input.scope, workspaceCwd, {
                   usedTokens: event.usedTokens,
                   contextWindow: event.contextWindow,
                   sessionId: activeSessionId,
@@ -457,17 +463,17 @@ async function runAttempt(
     if (resuming && state.terminal === 'error' && !sawActivity) {
       throw new Error(state.errorMsg ?? 'native session resume failed');
     }
-    input.sessions.recordExchange(input.scope, cwd, input.messages, assistantOutput, {
+    input.sessions.recordExchange(input.scope, workspaceCwd, input.messages, assistantOutput, {
       ...(input.retention === undefined ? {} : { retention: input.retention }),
       ...(input.archiver
         ? {
             onArchive: (overflow) =>
               input.archiver!.archive({
                 scope: input.scope,
-                cwd,
+                cwd: workspaceCwd,
                 messages: overflow,
                 source: 'retention',
-              }).then(() => pruneArchives(input)),
+              }).then(() => pruneArchives(input, workspaceCwd)),
           }
         : {}),
     });
@@ -481,7 +487,7 @@ async function runAttempt(
     const runErrorText = errorMessage(error);
     const healKind = classifySessionError(runErrorText);
     if (healKind !== undefined) {
-      const brokenSessionId = input.sessions.getRaw(input.scope)?.sessionId;
+      const brokenSessionId = input.sessions.getRaw(input.scope, workspaceCwd)?.sessionId;
       if (brokenSessionId !== undefined) {
         let archivePath: string | undefined;
         if (healKind === 'corrupt') {
@@ -501,7 +507,7 @@ async function runAttempt(
             });
           }
         }
-        input.sessions.clearSession(input.scope);
+        input.sessions.clearSession(input.scope, workspaceCwd);
         await input.channel.sendMarkdown(
           input.chatId,
           healKind === 'corrupt'
@@ -542,9 +548,11 @@ function modelRoute(provider: string | undefined, model: string | undefined): st
   return provider === undefined ? model : `${provider}/${model}`;
 }
 
-async function pruneArchives(input: RunFlowInput): Promise<void> {
+async function pruneArchives(input: RunFlowInput, workspaceCwd: string): Promise<void> {
   if (!input.archiver) return;
   await input.archiver.prune({
+    scope: input.scope,
+    cwd: workspaceCwd,
     ...(input.archiveMax !== undefined && input.archiveMax > 0
       ? { maxArchives: input.archiveMax }
       : {}),
@@ -615,6 +623,7 @@ export function questionHandlerFor(
     };
     chatId: string;
     scope: string;
+    ownerSessionId?: string;
     sendOptions?: SendOptions;
   },
 ): (question: QuestionCardInput) => Promise<string | string[] | undefined> {
@@ -625,7 +634,7 @@ export function questionHandlerFor(
       question: question.question,
       ...(question.options === undefined ? {} : { options: question.options }),
       ...(question.placeholder === undefined ? {} : { placeholder: question.placeholder }),
-    });
+    }, input.ownerSessionId);
     try {
       const messageId = await input.channel.sendCard(
         input.chatId,

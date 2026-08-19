@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { access, copyFile, mkdir } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { access, copyFile, mkdir, realpath } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { isPathWithin } from '../config/security.js';
@@ -66,7 +66,11 @@ export class GitWorktreeManager {
     const isGit = await this.isGitRepository(base);
     if (!isGit) return { cwd: base, created: false };
 
-    const slug = slugify(scope);
+    // One scope may switch between repositories. Include the canonical base
+    // path so each project keeps a stable, independent worktree.
+    const scopeSlug = slugify(scope);
+    const project = createHash('sha256').update(base).digest('hex').slice(0, 10);
+    const slug = `${scopeSlug}-${project}`;
     const target = join(this.options.worktreesRoot, slug);
     if (!isPathWithin(this.options.worktreesRoot, target)) {
       throw new Error(`unsafe worktree target rejected: ${target}`);
@@ -74,6 +78,23 @@ export class GitWorktreeManager {
     if (await exists(target)) {
       await this.ensureProjectRules(base, target);
       return { cwd: target, created: false };
+    }
+
+    // v1 used only the scope slug. Move that registered worktree instead of
+    // creating a blank replacement, preserving its branch and uncommitted
+    // files during the schema-2 workspace migration.
+    const legacyTarget = join(this.options.worktreesRoot, scopeSlug);
+    if (await exists(legacyTarget)) {
+      const legacyBase = await this.legacyWorkspaceBase(scope);
+      if (legacyBase !== undefined && await samePath(legacyBase, base)) {
+        await mkdir(this.options.worktreesRoot, { recursive: true });
+        await this.runGit(['worktree', 'move', legacyTarget, target], legacyTarget);
+        await this.ensureProjectRules(base, target);
+        return { cwd: target, created: false };
+      }
+      // The old scope-only worktree can belong to another repository when an
+      // old /cd changed WorkspaceStore but reused the first project's tree.
+      // Leave it intact; create this project's hashed tree independently.
     }
 
     const branch = `dsh-lark/${slug}-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
@@ -92,6 +113,20 @@ export class GitWorktreeManager {
     }
   }
 
+  /** Owning main worktree for the legacy scope-only linked worktree. */
+  async legacyWorkspaceBase(scope: string): Promise<string | undefined> {
+    const legacyTarget = join(this.options.worktreesRoot, slugify(scope));
+    if (!(await exists(legacyTarget))) return undefined;
+    try {
+      const output = await this.runGit(['worktree', 'list', '--porcelain'], legacyTarget);
+      const first = output.split('\n').find((line) => line.startsWith('worktree '));
+      const path = first?.slice('worktree '.length).trim();
+      return path || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async ensureProjectRules(base: string, target: string): Promise<void> {
     const destination = join(target, 'AGENTS.md');
     if (await exists(destination)) return;
@@ -103,5 +138,13 @@ export class GitWorktreeManager {
         return;
       }
     }
+  }
+}
+
+async function samePath(left: string, right: string): Promise<boolean> {
+  try {
+    return await realpath(left) === await realpath(right);
+  } catch {
+    return false;
   }
 }

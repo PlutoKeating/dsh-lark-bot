@@ -33,9 +33,9 @@ export interface RuntimeEnv {
   botHandoffMax: number;
   /** Max agent runs allowed concurrently per scope (default 2). */
   scopeConcurrency: number;
-  /** Live messages kept per scope before overflow is archived (default 40). */
+  /** Live messages kept per scope + workspace before overflow is archived (default 40). */
   retentionMsgs: number;
-  /** Max archives retained per scope before pruning (default 50, 0 disables). */
+  /** Max archives retained per scope + workspace before pruning (default 50, 0 disables). */
   archiveMax: number;
   /** Archives older than this many days are pruned (default 90, 0 disables). */
   archiveMaxAgeDays: number;

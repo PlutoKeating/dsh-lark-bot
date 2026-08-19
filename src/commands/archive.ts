@@ -16,21 +16,23 @@ export async function handleArchive(args: string, ctx: CommandContext): Promise<
     const limitInput = rest[0] ?? '5';
     const limit = Number(limitInput);
     const n = Number.isInteger(limit) && limit > 0 ? limit : 5;
-    const records = (await archiver.list(ctx.scope)).slice(0, n);
+    const records = (await archiver.list(ctx.scope, cwd)).slice(0, n);
     if (records.length === 0) {
-      await reply(ctx, '当前 scope 还没有归档记录。');
+      await reply(ctx, '当前工作区还没有归档记录。');
       return;
     }
     const lines = records.map(
       (record) =>
         `- \`${record.archiveId}\` · ${String(record.messageCount)} msgs · ${record.source} · ${record.archivedAt}`,
     );
-    await reply(ctx, [`**当前 scope 归档记录**`, '', ...lines].join('\n'));
+    await reply(ctx, [`**当前工作区归档记录**`, `\`${cwd}\``, '', ...lines].join('\n'));
     return;
   }
 
   if (sub === 'clean') {
     const pruneOptions = {
+      scope: ctx.scope,
+      cwd,
       ...(ctx.archiveMax > 0 ? { maxArchives: ctx.archiveMax } : {}),
       ...(ctx.archiveMaxAgeDays > 0
         ? { maxAgeMs: ctx.archiveMaxAgeDays * 24 * 60 * 60 * 1000 }
@@ -62,6 +64,8 @@ export async function handleArchive(args: string, ctx: CommandContext): Promise<
     ].join('\n'),
   );
   await archiver.prune({
+    scope: ctx.scope,
+    cwd,
     ...(ctx.archiveMax > 0 ? { maxArchives: ctx.archiveMax } : {}),
     ...(ctx.archiveMaxAgeDays > 0
       ? { maxAgeMs: ctx.archiveMaxAgeDays * 24 * 60 * 60 * 1000 }

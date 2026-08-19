@@ -67,8 +67,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
 - `DSH_LARK_SCOPE_CONCURRENCY`：每个 scope 允许的并行 run 数，默认 `2`（`1` 为严格串行）。
-- `DSH_LARK_RETENTION_MSGS`：每个 scope 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
-- `DSH_LARK_ARCHIVE_MAX`：每个 scope 最多保留的归档数，默认 `50`（`0` 关闭清理）。
+- `DSH_LARK_RETENTION_MSGS`：每个 scope + workspace 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
+- `DSH_LARK_ARCHIVE_MAX`：每个 scope + workspace 最多保留的归档数，默认 `50`（`0` 关闭清理）。
 - `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
 - `DSH_LARK_DISABLED`：`1` 时保持桥接引擎停止（插件仍作为标准插件加载）。
 - `DSH_LARK_HEARTBEAT_MS`：桥接引擎心跳写入间隔，默认 `5000`（安全网守护的存活信号）。
@@ -289,17 +289,18 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 `dsh-lark-bot/approval` 以 structural listener 接入宿主 `approval/request` waterfall；两者都不携带
 第二份 `dsh-tools`。完整审计见 [`DSH_RC7_AUDIT.md`](DSH_RC7_AUDIT.md)。
 
-`src/session/store.ts` 的 `SessionStore` 保存每个 scope 最近 `retention` 条对话
+`src/session/store.ts` 的 `SessionStore`（schema 2）按 canonical `scope + workspace cwd` 保存各自最近 `retention` 条对话
 （默认 40），`recordExchange` 支持传入 `{ retention, onArchive }`：超出保留窗口的消息先交给
 `onArchive` 归档，再裁剪；支持 `fork(scopeId, newScopeId, cwd)` 复制历史。SDK 模式以原生
 `session(id)` 续跑，headless 模式把历史拼入下一次 prompt 作为近似上下文。
-同一 `sessions.json` 还以独立 `metrics[scope]` 保存当前 scope session 的累计
+同一 `sessions.json` 在对应 workspace state 中保存该 session 的累计
 `inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens`，以及最近 32 个按 `sessionId` / canonical
 `provider/model` 区分的协议 `contexts` 快照。`recordUsage` 只累加实际出现的非负字段；`recordContextUsage`
-仅在 run 已知 native session 与有效模型时更新对应身份的快照；`metricsFor(scope, currentIdentity)` 只在身份完全一致时返回
+仅在 run 已知 native session 与有效模型时更新对应身份的快照；`metricsFor(scope, cwd, currentIdentity)` 只在 workspace 与身份完全一致时返回
 `contextUsedTokens/contextWindow`，否则仅返回累计 token，避免模型切换、会话自愈或并行 run 交错后
-误报旧占用。`clear`（由 `/new`、`/reset`、`/cd` 使用）同时
-清除会话与指标，`clearSession` 的原生绑定自愈则保留指标和 transcript。旧版无 `metrics` 文件兼容加载。
+误报旧占用。`clear(scope,cwd)`（由 `/new`、`/reset` 使用）只清当前 workspace 的会话与指标，
+`/cd` / `/ws use` 会中断原 workspace active run，但不清理其数据，切回可续接；`clearSession(scope,cwd)` 的原生绑定自愈保留该 workspace 的
+指标和 transcript。schema 1 的单 scope record 会在启动时按 `WorkspaceStore` 当前选择迁移，旧版无 metrics 也兼容。
 
 `src/session/heal.ts` 提供会话自愈分类与归档：`classifySessionError(message)` 以锚定正则将
 会话错误分为 `broken`（持久化日志与 live session 不一致 → 重置 scope 绑定、保留历史）与
@@ -310,8 +311,9 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
-每次归档 / 清理单独 commit；`list(scope)` 列出归档，`prune({ maxArchives, maxAgeMs })` 按
-scope 保留策略清理。`src/bot/retention-store.ts` 提供内存级 per-scope 保留条数覆盖，
+每次归档 / 清理单独 commit；`list(scope,cwd)` 列出当前 workspace 归档，
+`prune({ scope, cwd, maxArchives, maxAgeMs })` 只按该 scope + workspace 的保留策略清理。
+`src/bot/retention-store.ts` 提供内存级 per-scope 保留条数覆盖，
 `/retention [N|default]` 读写。
 
 `src/bot/role-store.ts` 提供持久化 `RoleStore`（`<profile>/roles.json`，0600）：角色定义
@@ -355,13 +357,23 @@ export class GitWorktreeManager {
 }
 ```
 
-当前目录是 Git 仓库时，`runAgentBatch` 为每个 scope 在
-`~/.dsh-lark/profiles/<profile>/worktrees/<slug>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree
+当前目录是 Git 仓库时，`runAgentBatch` 为每个 scope + canonical base path 在
+`~/.dsh-lark/profiles/<profile>/worktrees/<scope-slug>-<path-hash>/` 创建 `dsh-lark/<slug>-*` 分支的 worktree
 （slug 经过净化并做 realpath containment 校验）；非 Git 目录保持原路径。若 base 下有
 `.dsh-lark/AGENTS.md` 或 `AGENTS.md` 且目标 worktree 没有，则复制为目标根目录 `AGENTS.md`。
+若升级时发现旧版 `<scope-slug>` worktree，manager 先用 `git worktree list --porcelain` 解析 owning
+main worktree；`SessionArchive.rebindWorkspaceCwd` 先以逐文件原子替换、可识别双文件半完成状态的
+幂等流程重写旧 execution-cwd JSONL header 与 Markdown 顶部 metadata（不扫描或改写 transcript
+正文），并提交归档仓库；全部成功后 `SessionStore` 才
+提交 schema 2 并将 session 绑定到真实项目。失败时 schema 1 保留供下次启动重试，使旧 retention
+归档始终可恢复为 list/clean。请求 base 与 owner 匹配时才用
+`git worktree move` 搬到 path-hash 目标并保留 branch/dirty state；不匹配或 owner 不可验证时保留旧树，
+为当前 base 新建独立 hashed worktree，避免从错误仓库移动或覆盖旧数据。
 
 `src/workspace/store.ts` 维护命名工作区 `lastUsed` 索引；`/ws list` 优先通过 `sendCard` 发送
-导航卡片，不支持卡片的通道回退 Markdown。
+导航卡片，不支持卡片的通道回退 Markdown。消息进入 pending queue 时固化 workspace cwd；即使等待期间
+切换工作台，该消息仍在原项目执行。pending queue 只合并同一固化 workspace 的连续消息，其他
+workspace 的消息按原快照重新排队，不会串入同一次 run，也不会因 debounce batch 丢失。
 
 ## 3. Agent 适配器 · Agent adapter
 
@@ -460,7 +472,7 @@ export async function buildAgentAdapter(
 usage 可用性：SDK `assistant/message.usage` 是每次模型调用的 disjoint input/output/cache 计数；
 ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，`session/update` 的
 `usage_update` 提供 context `used/size`。ACP bridge runtime 当前每次 run 创建新 ACP session，
-因此该累计值作为一次真实 usage 样本归入 scope session。headless/web 未提供的字段不产生事件。
+因此该累计值作为一次真实 usage 样本归入 scope + workspace session。headless/web 未提供的字段不产生事件。
 
 ## 4. 卡片与展示 · Cards & rendering
 
@@ -472,7 +484,7 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
-  workspace/cwd、有效模型、session、runs、版本、context used/limit/percentage、累计四类 token
+  workspace/cwd、有效模型、session、当前 workspace runs、版本、context used/limit/percentage、累计四类 token
   与待审批/提问/计划数。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
   owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新。Card JSON 2.0 发送被拒绝时
   `/status` 回退等价 Markdown；未知值显示“暂无”。

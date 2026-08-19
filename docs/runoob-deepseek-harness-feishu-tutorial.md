@@ -63,7 +63,7 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 | 命令 | 作用 |
 | --- | --- |
 | `/new` `/reset` | 开始新会话 |
-| `/cd <path>` | 切换工作目录并重置会话 |
+| `/cd <path>` | 切换到该目录的独立会话（切回可继续） |
 | `/ws list` `/ws save <name>` `/ws use <name>` | 查看 / 保存 / 切换命名工作空间 |
 | `/status` | 查看可刷新状态卡、上下文/token 用量与待处理卡 |
 | `/stop` | 终止当前任务 |
@@ -74,6 +74,12 @@ DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu \
 | `/model use <id>` | 热切换当前会话模型（下一轮生效） |
 | `/key set|remove|list` | 管理 dsh 凭据 |
 | `/help` | 查看命令帮助 |
+
+会话按 `scope + workspace` 保存；`/cd` / `/ws use` 会中断旧工作区仍在运行的任务，但不删除上下文，
+A → B → A 会恢复 A。只有 `/new` / `/reset` 清空当前工作区。状态 pending 与归档操作也只属于当前
+workspace；Git 项目 worktree 按 scope + 项目路径分别创建，旧版 worktree 核验真实 owning repo 后，
+会话与旧自动归档归回该项目并迁移，
+若当前指针已到另一项目则保留旧树并另建新树，未提交文件不会被覆盖。
 
 ## 核心能力
 

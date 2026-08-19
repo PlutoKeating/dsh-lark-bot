@@ -97,7 +97,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | --- | --- |
 | `/new` `/reset` | Start a new session |
 | `/newg <group name>` | Auto-create a group chat (with you invited) and start a fresh session there; the current session is untouched |
-| `/cd <path>` | Change working directory and reset the session |
+| `/cd <path>` | Switch to that directory's independent session (resume when returning) |
 | `/ws list` | List named workspaces |
 | `/ws save <name>` | Save the current workspace |
 | `/ws use <name>` | Switch to a named workspace |
@@ -131,14 +131,16 @@ Images in Feishu messages are downloaded to the local media directory and passed
 
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
-Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists every active run and `/stop` interrupts them all.
+Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists runs for the current workspace; `/new` stops only that workspace, while `/stop` interrupts all runs in the scope.
 
 **Session status card**: `/status` shows the workspace, effective model, session, active runs, version,
 context occupancy, cumulative input/output/cache tokens, and pending approvals/questions/plans. **Refresh**
 updates the same card in place. Values are shown only when the adapter or model catalog reports them: ACP can
 report real context `used / size` and cumulative usage, while SDK reports per-model-call token/cache usage.
-Unavailable fields say “暂无” rather than being estimated. Metrics persist with the current scope session and are
-cleared by `/new`, `/reset`, or `/cd`. Recent context snapshots are retained separately by native session and
+Unavailable fields say “暂无” rather than being estimated. Sessions and metrics persist by `scope + workspace`;
+`/cd` and `/ws use` interrupt active runs in the previous workspace but preserve its session, metrics, and archives
+so returning resumes it; `/new` and `/reset` clear only the current workspace. Pending cards and archive list/clean
+operations are likewise scoped to the current workspace. Recent context snapshots are retained separately by native session and
 canonical provider/model, so concurrent runs do not overwrite each other and stale identities remain hidden. Only the owner may refresh a member-isolated status card.
 
 **Group session isolation**: admins can switch `/isolation group|topic|member` between one shared
@@ -348,9 +350,9 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 - Template: [`.env.example`](.env.example)
 - Sensitive values: credentials (`DSH_LARK_APP_SECRET`, `DEEPSEEK_API_KEY`, …) stay in local config/env only; logs and cards are redacted; only `.env.example` is committed.
 
-When the session runs inside a Git repository, an isolated worktree is created at `~/.dsh-lark/profiles/<profile>/worktrees/<scope>/` and a project-level `AGENTS.md` is copied in.
+When the session runs inside a Git repository, an isolated worktree is created at `~/.dsh-lark/profiles/<profile>/worktrees/<scope-slug>-<path-hash>/` and a project-level `AGENTS.md` is copied in. On upgrade, the legacy `<scope-slug>` worktree's owning repo is verified through Git: its session and retention archives are rebound to that real project and the tree is moved in place when it matches; if the current pointer already names another project, the old tree is preserved and a separate hashed tree is created for the new project.
 
-Each Feishu scope keeps the last 40 conversation messages by default (adjustable with `/retention` or `DSH_LARK_RETENTION_MSGS`); messages beyond the retention window are archived to `~/.dsh-lark/profiles/<profile>/archives/` (Markdown + JSONL inside a Git repository, one commit per archive), and `/archive` exports the full session on demand. The SDK mode continues the native dsh session, while headless mode approximates memory by injecting history into the next prompt.
+Each Feishu scope + workspace keeps the last 40 conversation messages by default (adjustable with `/retention` or `DSH_LARK_RETENTION_MSGS`); messages beyond the retention window are archived to `~/.dsh-lark/profiles/<profile>/archives/` (Markdown + JSONL inside a Git repository, one commit per archive), and `/archive` exports, lists, and prunes only the current workspace session. The SDK mode continues the native dsh session, while headless mode approximates memory by injecting history into the next prompt.
 
 Core environment variables:
 
@@ -375,8 +377,8 @@ Core environment variables:
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | Grace period after SIGTERM before SIGKILL |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | Concurrent runs per scope (1 = strictly serial) |
-| `DSH_LARK_RETENTION_MSGS` | `40` | Messages kept per scope (0 keeps everything) |
-| `DSH_LARK_ARCHIVE_MAX` | `50` | Max archives kept per scope (0 disables pruning) |
+| `DSH_LARK_RETENTION_MSGS` | `40` | Messages kept per scope + workspace (0 keeps everything) |
+| `DSH_LARK_ARCHIVE_MAX` | `50` | Max archives kept per scope + workspace (0 disables pruning) |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | Max archive age in days (0 disables pruning) |
 | `DSH_LARK_HEARTBEAT_MS` | `5000` | Bridge heartbeat write interval (guardian liveness signal) |
 | `DSH_LARK_GUARDIAN_DISABLED` | `false` | `1` keeps the safety-net guardian stopped |

@@ -4,7 +4,7 @@
 | :--- | :--- | :--- |
 | **P0 脚手架** Scaffolding | 仓库结构、文档、CI 骨架、README | ✅ 已完成 Done |
 | **P1 MVP** | 飞书 bot + dsh 单会话往返（发消息 → 收流式卡片） | ✅ 已完成 Done |
-| **P2 工作区** Workspace | git worktree 隔离、项目级规则注入、多项目导航、SDK 原生 session 续跑 | ✅ 已完成 Done（SDK 接入） |
+| **P2 工作区** Workspace | scope + workspace 独立 session、A→B→A 续跑、按项目隔离 git worktree、项目级规则注入、多项目导航（issue #26） | ✅ 已完成 Done（SDK 接入） |
 | **P3 审批/调度** Approval & Scheduling | 访问白名单、SDK/Web/ACP 逐操作卡片审批、问答卡、异步任务队列、沙箱隔离 | 🚧 进行中（审批已接入） |
 | **P4 发布** Release | npm 一键安装、GitHub Release、自动发布工作流 | ✅ 已完成 Done |
 | **P5 后台托管** Background supervision | 同一 dsh profile 的 systemd user / launchd / Windows / portable 托管，登录自启、异常重启、状态/日志/生命周期，与 guardian/upgrade 闭环（#23） | ✅ 已完成 Done |
@@ -55,7 +55,7 @@
 - **P9 done**（0.6.0）：同一 scope 并行 run（默认 2，`/concurrency` / `DSH_LARK_SCOPE_CONCURRENCY`
   调整）；`ActiveRuns` 支持多 run 与定向终止，`PendingQueue` 按 scope 并发上限 flush，并行 run
   使用独立 dsh session；`/status` 展示全部 active runs。
-- **P22 done**：`/status` 改为可原位刷新卡片；`SessionStore` 随 scope session 持久累计
+- **P22 done**：`/status` 改为可原位刷新卡片；`SessionStore` 随 scope + workspace session 持久累计
   input/output/cache token，并按 native session/canonical provider-model 身份分别保存最近真实 context
   快照；并行 run 不互相覆盖，状态卡不复用与当前身份不匹配的旧值。SDK/ACP adapter 只翻译协议明确提供的数据，
   模型目录可补充已知 contextWindow；未知 used/limit/percentage 显示“暂无”。
