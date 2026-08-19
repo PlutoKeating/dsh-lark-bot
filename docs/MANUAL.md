@@ -105,6 +105,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/role remove <id>` | 删除角色（管理员） |
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
+| `/notifications [show\|off\|on …]` | 查看、关闭或开启当前 scope 的主动提醒 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
 | `/archive send <id> [scope\|chatId]` | 重发当前 scope + workspace 的归档；管理员可发到指定已登记会话 |
@@ -215,6 +216,10 @@ dsh-lark-bot bot remove reviewer
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
+- `/notifications on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]`
+  显式开启当前 scope 的主动提醒；默认事件全选、@ 操作者、审批等待 10 分钟提醒一次。普通用户只能
+  使用当前会话，管理员可选已登记的跨会话目标；`show` 查看，`off` 关闭。偏好以 0600 原子持久化，
+  `/status` 同步显示开关、事件、目标和审批延迟。通知失败只记日志，不改变任务终态。
 - agent 侧工具 `lark_send_file`：SDK / ACP runtime 与 Web 宿主自动装配；参数 `path` 与可选
   `file_name`。文件总是发回当前 native session 对应的原聊天 / 话题，不能指定其他目标。bridge
   仅允许当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档目录与实例日志目录；

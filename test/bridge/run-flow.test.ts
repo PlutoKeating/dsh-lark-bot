@@ -1389,11 +1389,14 @@ describe('approvalHandlerFor', () => {
   it('renders an approval card and resolves through the registry', async () => {
     const approvals = new ApprovalRegistry();
     const sendCard = vi.fn().mockResolvedValue(undefined);
+    const cancelReminder = vi.fn();
+    const onApprovalWaiting = vi.fn(() => cancelReminder);
     const handler = approvalHandlerFor({
       approvals,
       channel: { sendCard },
       chatId: 'chat-a',
       scope: 'chat-a',
+      onApprovalWaiting,
     });
     const outcome = handler({
       id: 'call-1',
@@ -1411,6 +1414,8 @@ describe('approvalHandlerFor', () => {
     expect(id).toBeTruthy();
     expect(approvals.resolve('chat-a', id!, 'allowed-once')).toBe(true);
     await expect(outcome).resolves.toBe('allowed-once');
+    expect(onApprovalWaiting).toHaveBeenCalledWith('chat-a', 'bash');
+    expect(cancelReminder).toHaveBeenCalledOnce();
   });
 
   it('keeps identical upstream call ids distinct across concurrent sessions', async () => {

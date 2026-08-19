@@ -156,7 +156,16 @@
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
 
-### 4.8.1 结果文件直接回传（outbound files，issue #31）
+### 4.8.1 主动通知偏好（issue #33）
+
+- 默认关闭；`/notifications on` 按当前 immutable scope 显式开启，事件可选任务完成、失败与审批等待，
+  可配置 @ open_id 和审批等待 N 分钟后的一次性提醒；`show` 查看、`off` 关闭，`/status` 可见。
+- 普通用户只能把提醒发到当前 scope；管理员可选择 `ScopeDirectory` 已登记的 scope/chat。偏好以
+  0600 atomic write 持久化，写失败回滚，重启不丢。
+- 完成/失败只在 durable job 终态落盘后发送一次；SDK/Web 与 ACP 工具审批均启动/取消 reminder。
+  通知失败不改变任务终态；未显式开启时不产生额外消息。
+
+### 4.8.2 结果文件直接回传（outbound files，issue #31）
 
 - SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
   固定为原 chat/thread，不允许模型指定其他会话。
@@ -166,7 +175,7 @@
 - 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
   channel 二进制上传能力发送。
 
-### 4.8.2 多机器人实例与交接（multi-bot handoff，issue #25）
+### 4.8.3 多机器人实例与交接（multi-bot handoff，issue #25）
 
 - `bot add|list|status|remove` 管理独立 bridge profile、dsh profile、PersonalAgent 身份和用户服务；
   每个实例的模型、provider、凭据、session、scope、worktree 与 archive 相互隔离。
@@ -180,7 +189,7 @@
 - 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
   消费同一个 Web agent 广播流而把 session 事件写入错误实例。
 
-### 4.8.3 scope 工具权限策略（issue #30）
+### 4.8.4 scope 工具权限策略（issue #30）
 
 - `/permission ask|allow|deny [scope]` 按隔离 scope 管理逐工具审批策略；查询开放，修改仅管理员；
   管理员可指定当前 chat 内的 member/topic scope，跨 chat 目标拒绝。

@@ -54,6 +54,7 @@ export interface RunFlowInput {
   maxConcurrency?: number;
   approvals?: ApprovalRegistry;
   permissionPolicies?: PermissionPolicyStore;
+  onApprovalWaiting?: (scope: string, toolName: string) => () => void;
   questions?: QuestionRegistry;
   plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
@@ -208,6 +209,7 @@ async function runAttempt(
             ownerSessionId: runId,
             sendOptions: replyOptions,
             ...(input.permissionPolicies ? { permissionPolicies: input.permissionPolicies } : {}),
+            ...(input.onApprovalWaiting ? { onApprovalWaiting: input.onApprovalWaiting } : {}),
           }),
         }
       : {}),
@@ -659,6 +661,7 @@ export function approvalHandlerFor(
     ownerSessionId?: string;
     sendOptions?: SendOptions;
     permissionPolicies?: PermissionPolicyStore;
+    onApprovalWaiting?: (scope: string, toolName: string) => () => void;
   },
 ): (request: ApprovalRequest) => Promise<ApprovalOutcome> {
   return async (request) => {
@@ -705,7 +708,12 @@ export function approvalHandlerFor(
       input.approvals.cancel(input.scope, cardRequest.id);
       return 'cancelled';
     }
-    return promise;
+    const cancelReminder = input.onApprovalWaiting?.(input.scope, cardRequest.toolName);
+    try {
+      return await promise;
+    } finally {
+      cancelReminder?.();
+    }
   };
 }
 

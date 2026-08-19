@@ -120,6 +120,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/role remove <id>` | Remove a role (admin) |
 | `/notify <scope\|chatId> <text>` | Push a cross-session notification (admin) |
 | `/notify list` | List scopes known to the bridge |
+| `/notifications [show\|off\|on …]` | Configure completion / failure / approval-wait reminders for this scope (off by default) |
 | `/retention [N\|default]` | View or set the live message retention window (overflow is archived) |
 | `/archive [note]`, `/archive send <id> [scope\|chatId]`, `/archive list [N]`, `/archive clean` | Archive and upload / resend here or to another session (admin) / list / clean |
 | `/density [compact\|standard\|detailed]` | View or set card density |
@@ -196,6 +197,8 @@ Additional instances support isolated `sdk` / `acp` runtimes (and legacy `headle
 reject `web`, because a shared Web agent broadcast stream cannot isolate sessions between bot instances.
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
+
+**Configurable proactive reminders**: off by default. Any user can run `/notifications on current` for the current scope to opt into completion, failure, and one-time approval-wait reminders (10 minutes by default, mentioning the caller). `events=`, `mentions=`, and `remind=` customize the policy; admins may route it to another registered `scope|chatId`. Preferences are atomically persisted across restarts, visible in `/status`, and disabled with `/notifications off`.
 
 **Direct result-file delivery**: SDK / ACP / Web agents can call `lark_send_file` to upload a file from the current session workspace, its actual execution worktree, its scope archive, or the instance logs to the originating Feishu chat/topic. `/archive [note]` uploads its Markdown and JSONL after the durable local write; `/archive send <id> [scope|chatId]` retries locally or lets an admin forward it to a registered session. Only regular files up to 20 MiB are accepted by default. The resolved path must remain inside roots computed by the bridge; a runtime-supplied cwd never expands access.
 

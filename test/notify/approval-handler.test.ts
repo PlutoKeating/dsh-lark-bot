@@ -35,7 +35,9 @@ describe('buildApprovalHandler', () => {
     directory.register('chat-a:thread-a', 'chat-a', 'thread-a', 'topic', 'root-message');
     const approvals = new ApprovalRegistry();
     const sendCard = vi.fn(async (_chatId: string, _card: object, _options?: unknown) => 'approval-card');
-    const handler = buildApprovalHandler({ sessions, scopeDirectory: directory, approvals, channel: { sendCard } });
+    const cancelReminder = vi.fn();
+    const onApprovalWaiting = vi.fn(() => cancelReminder);
+    const handler = buildApprovalHandler({ sessions, scopeDirectory: directory, approvals, onApprovalWaiting, channel: { sendCard } });
 
     const result = handler({
       token: 't', sessionId: 'session-1', toolName: 'bash', callId: 'call-1',
@@ -55,6 +57,8 @@ describe('buildApprovalHandler', () => {
     expect(id).toBeTruthy();
     approvals.resolve('chat-a:thread-a', id!, 'rejected');
     await expect(result).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    expect(onApprovalWaiting).toHaveBeenCalledWith('chat-a:thread-a', 'bash');
+    expect(cancelReminder).toHaveBeenCalledOnce();
   });
 
   it('cancels only its own approval when card delivery fails', async () => {

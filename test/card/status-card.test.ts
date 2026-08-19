@@ -12,6 +12,7 @@ describe('renderStatusCard', () => {
       version: '0.15.9',
       isolation: 'member',
       permissionPolicy: 'deny',
+      notificationPreference: { target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 600_000 },
       role: 'coder (Coder)',
       metrics: {
         inputTokens: 10_000,
@@ -36,6 +37,7 @@ describe('renderStatusCard', () => {
     expect(json).toContain('run-1');
     expect(json).toContain('0.15.9');
     expect(json).toContain('工具权限**：`deny`');
+    expect(json).toContain('`completed,approval` → `chat-b`');
     expect(json).toContain(
       '"value":{"cmd":"status-refresh","scope":"chat-a:member:user-1","isolation":"member"}',
     );
@@ -59,5 +61,6 @@ describe('renderStatusCard', () => {
     expect(json).toContain('input `暂无`');
     expect(json).toContain('cache read `暂无`');
     expect(json).not.toContain('0.0%');
+    expect(json).toContain('主动提醒**：关闭');
   });
 });

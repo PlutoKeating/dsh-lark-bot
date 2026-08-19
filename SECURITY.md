@@ -69,6 +69,8 @@
     workspace、该 scope 实际 worktree/归档与实例日志内的 realpath 普通文件；以 no-follow 打开后
     在同一文件句柄复核文件身份并有界读取，拒绝竞态 / symlink 越界、非法文件名和默认超过
     20 MiB 的文件；agent 工具目标固定为该 session 的原 chat/thread。归档跨会话转发仅管理员可用。
+    主动通知偏好默认关闭；普通用户只能为当前 scope 设置当前目标，跨会话目标要求管理员且必须已在
+    `ScopeDirectory` 登记。偏好文件为 0600，提醒发送失败不回写或改变 durable job 终态。
 11. **多机器人 peer 鉴权与防循环**：只有 `fleet.json` 中已启用且 identity 唯一的 bot open_id，
     在群内真实 @ 当前 bot 时才可交接；未知 bot、未 @、system/anonymous 消息拒绝。bot 文本不进入
     slash-command 管理管线。连续交接由跨进程 `handoffs.json` 原子计数、按 messageId 去重，超过

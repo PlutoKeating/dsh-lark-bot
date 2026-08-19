@@ -182,6 +182,10 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    隔离下可显式指定同一 chat 内目标 scope（跨 chat fail closed）；持久写成功后才回执，失败回滚。
    deny 返回 rejected 并显式通知。策略不参与 `lark_request_plan_approval`，所以自动放行逐工具审批
    也不能跳过关键任务计划门禁；legacy headless 因无工具回调不在保证范围。
+   `NotificationPreferenceStore`（`<profile>/notification-preferences.json`，0600）按 immutable scope
+   保存默认关闭的事件/目标/@/审批延迟；`NotificationDispatcher` 只在 durable job 终态落盘后发送
+   完成/失败提醒，并为 SDK/Web `/approval` 与 ACP permission 创建一次性 timer，结算即清除。
+   当前目标允许普通用户 opt-in；跨会话仅管理员且目标必须已登记。发送失败不污染任务终态。
 9. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
@@ -240,7 +244,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载、文本注入与出站文件边界校验 |
-| `src/notify/` | 进程内 `/notify` `/file` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |
