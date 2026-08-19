@@ -125,6 +125,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list` | 归档并上传 / 重发或由管理员转发 / 查看记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/notifications [show\|off\|on …]` | 配置当前 scope 主动提醒（默认关闭） |
+| `/replies [show\|default\|set …]` | 配置回复合并、频率、批量上限与近似去重（修改仅管理员） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
@@ -226,6 +227,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 群聊隔离策略：`~/.dsh-lark/profiles/<profile>/isolation.json`
 - 工具权限策略：`~/.dsh-lark/profiles/<profile>/permission-policies.json`（按隔离 scope 保存 `ask/allow/deny`，0600）
 - 通知偏好：`~/.dsh-lark/profiles/<profile>/notification-preferences.json`（按 scope 保存事件/目标/@/审批提醒延迟，0600）
+- 回复策略：`~/.dsh-lark/profiles/<profile>/reply-policies.json`（按 scope 保存合并窗口、批量/频率限制和近似去重窗口，0600）
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`

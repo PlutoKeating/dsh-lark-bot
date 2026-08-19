@@ -32,6 +32,7 @@
 | **P29 scope 工具权限** Scoped tool permissions | `/permission ask\|allow\|deny` 按隔离 scope 持久化；SDK/Web/ACP 审批统一执行，拒绝明确反馈且 `/status` 可见（issue #30） | ✅ 已完成 Done |
 | **P30 结果文件回传** Outbound result files | `lark_send_file` 按 native session 上传受限本地文件；`/archive` 自动发送 Markdown + JSONL，支持按 id 重发或管理员转发到指定会话（issue #31） | ✅ 已完成 Done |
 | **P31 主动通知偏好** Proactive notification preferences | 默认关闭；按 scope 持久化完成/失败/审批等待提醒、目标与 @，跨会话仅管理员，`/status` 可见（issue #33） | ✅ 已完成 Done |
+| **P32 回复流量控制** Reply flow control | 按 scope 持久化最终回答合并、批量/频率限制与同发送者近似任务去重；管理员 `/replies`，`/status` 可见（issue #34） | ✅ 已完成 Done |
 
 ## 里程碑 · Milestones
 

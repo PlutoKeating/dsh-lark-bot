@@ -67,6 +67,13 @@ export interface RunFlowInput {
   runTimeoutMs?: number;
   images?: string[];
   replyTo?: string;
+  /** Optional per-scope final-answer batching/rate-limit seam. */
+  deliverFinalReply?: (
+    scope: string,
+    chatId: string,
+    markdown: string,
+    options?: SendOptions,
+  ) => Promise<void>;
   /** Visible member identity when the group uses member-isolated scopes. */
   scopeOwner?: string;
   /** Trusted peer identities available for an explicit lark_notify handoff. */
@@ -465,9 +472,9 @@ async function runAttempt(
           await checkpoint('finalizing');
           if (state.terminal === 'done' && assistantOutput.trim() !== '') {
             try {
-              await input.channel.sendMarkdown(input.chatId, assistantOutput, {
-                ...replyOptions,
-              });
+              await (input.deliverFinalReply
+                ? input.deliverFinalReply(input.scope, input.chatId, assistantOutput, { ...replyOptions })
+                : input.channel.sendMarkdown(input.chatId, assistantOutput, { ...replyOptions }));
             } catch (error) {
               const message = errorMessage(error);
               log.fail('run-flow', error, { scope: input.scope, step: 'final-answer' });

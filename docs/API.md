@@ -202,12 +202,19 @@ outcome 并发送明确双语提示；计划门禁保持独立，不受该 store
 失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒；SDK/Web 与 ACP
 审批卡创建后启动单次 timer，结算/取消即清除。发送失败只记日志，不改变 job/approval outcome。
 
+`src/bot/reply-policy-store.ts` 提供 `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600），
+按 immutable scope 保存 `mergeWindowMs/maxBatchSize/minIntervalMs/dedupeWindowMs`；默认值保持即时逐条
+回复且不启用内容近似去重。`/replies` 查询开放、修改仅管理员，awaited atomic write 失败会回滚。
+`JobLedger.hasRecentDuplicate` 在 durable enqueue 前只比较同 sender + scope + workspace 的近期记录：
+短文本仅规范化精确匹配，长文本使用高阈值字符 bigram Dice，相似命中明确回执且不执行。
+
 `src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
 （`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
 `interrupt(scope)` 终止全部并返回数量，`interruptRun(scope, runId)` 定向终止单个。
 `src/bot/pending-queue.ts` 的 `PendingQueue` 支持按 scope 的并发上限
 （`concurrencyFor(scope)` 构造参数），同一 scope 可并行 flush 多个批次；
-`block(scope)` 只阻止新批次启动，不影响已运行的批次。
+`block(scope)` 只阻止新批次启动，不影响已运行的批次；正常 agent dispatch 不额外 block，
+使 `/concurrency` 的并行槽能让多个完成结果进入同一回复合并窗口。
 
 `runAgentBatch`（`src/bridge/run-flow.ts`）按 `maxConcurrency` 拒绝超限 run；同一 scope 的
 **首个** run 会续跑 dsh 原生 session，并发 run 一律使用全新 session id，避免共享 wire session。
@@ -522,7 +529,8 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
   workspace/cwd、有效模型、session、当前 workspace runs、版本、context used/limit/percentage、累计四类 token
   与工具权限策略、待审批/提问/计划数、持久任务账本统计。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
-  owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新。Card JSON 2.0 发送被拒绝时
+  owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新；启用 store 时还显示通知偏好与
+  回复合并/间隔/批量/近似去重策略。Card JSON 2.0 发送被拒绝时
   `/status` 回退等价 Markdown；未知值显示“暂无”。
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
 - `src/card/question-card.ts`：`renderQuestionCard(input)`（单选 / 多选 / 自由文本）与
@@ -658,7 +666,7 @@ export interface Logger {
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|on …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|on …]`、`/replies [show|default|set …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
@@ -722,6 +730,14 @@ topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(
 `/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
 `/notifications on [current|scope|chatId] [events=…] [mentions=…] [remind=N]` 为当前 scope
 显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或关闭。
+`/replies set merge=N batch=N interval=N dedupe=N` 由管理员配置当前 scope 的最终回答合并、每批任务
+上限、批次最小发送间隔与同发送者近似去重窗口；`show` 对所有成员开放，`default` 恢复兼容默认。
+
+`src/bridge/reply-dispatcher.ts` 的 `ReplyDispatcher.deliver(scope,chatId,markdown,options)` 是最终回答
+交付 seam。默认直接透传；启用策略后按 scope 等待合并窗口，每条取至多 `maxBatchSize`，超出项留在
+内存队列并按 `minIntervalMs` 继续发送。单项保留原 reply/thread；多项保留 thread、移除单一 reply
+anchor，并在正文标出每个原 messageId。发送失败 reject 对应批次，使 run-flow 继续使用既有过程卡
+失败回填；其他批次不丢失。
 
 `src/bridge/group-message-poller.ts` 提供 opt-in `GroupMessagePoller`（issue #50）：通过飞书
 `im.message.list` 对 `ScopeDirectory` 中已知的 group/topic 做增量轮询，再使用

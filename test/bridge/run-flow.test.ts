@@ -312,6 +312,23 @@ describe('runAgentBatch', () => {
     expect(JSON.stringify(fake.updates.at(-1))).not.toContain('**Final answer**');
   });
 
+  it('routes a final answer through the configured reply dispatcher seam', async () => {
+    const fake = makeChannel();
+    const deliverFinalReply = vi.fn().mockResolvedValue(undefined);
+    await runAgentBatch({
+      scope: 'chat-batched', chatId: 'chat-batched', messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'batched answer' },
+        { type: 'done', sessionId: 's-batched', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: fake.channel, defaultWorkspace: '/tmp/project',
+      replyTo: 'm-source', deliverFinalReply,
+    });
+    expect(deliverFinalReply).toHaveBeenCalledOnce();
+    expect(deliverFinalReply).toHaveBeenCalledWith('chat-batched', 'chat-batched', 'batched answer', { replyTo: 'm-source' });
+  });
+
   it('marks final delivery failure on the process card while preserving the exchange', async () => {
     const sessions = new SessionStore(':memory:');
     const fake = makeChannel();

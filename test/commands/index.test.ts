@@ -28,6 +28,7 @@ import { latestVersion } from '../../src/upgrade/update-check.js';
 import { JobLedger } from '../../src/bot/job-ledger.js';
 import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
 import type { NotificationPreference, NotificationPreferenceStore } from '../../src/bot/notification-preference-store.js';
+import type { ReplyPolicy, ReplyPolicyStore } from '../../src/bot/reply-policy-store.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
@@ -140,6 +141,30 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
 }
 
 describe('command router', () => {
+  it('lets everyone inspect reply flow control and only admins persist changes', async () => {
+    let policy: ReplyPolicy = { mergeWindowMs: 0, maxBatchSize: 1, minIntervalMs: 0, dedupeWindowMs: 0 };
+    let configured = false;
+    const replyPolicies = {
+      get: () => ({ ...policy }), isConfigured: () => configured,
+      set: vi.fn(async (_scope: string, value: ReplyPolicy | undefined) => {
+        configured = value !== undefined;
+        if (value) policy = value;
+      }),
+    } as unknown as ReplyPolicyStore;
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const regular = makeContext({ replyPolicies, senderId: 'user', channel: { sendMarkdown }, accessManager: makeAccessManager() });
+    await tryHandleCommand('/replies set merge=5 batch=3 interval=10 dedupe=60', regular);
+    expect(replyPolicies.set).not.toHaveBeenCalled();
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('仅管理员'), { replyTo: 'msg-1' });
+
+    const admin = makeContext({ replyPolicies, senderId: 'admin', channel: { sendMarkdown }, accessManager: makeAccessManager({ admins: ['admin'] }) });
+    await tryHandleCommand('/replies set merge=5 batch=3 interval=10 dedupe=60', admin);
+    expect(replyPolicies.set).toHaveBeenCalledWith('chat-a', { mergeWindowMs: 5_000, maxBatchSize: 3, minIntervalMs: 10_000, dedupeWindowMs: 60_000 });
+    await tryHandleCommand('/replies', regular);
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('合并 5 秒'), { replyTo: 'msg-1' });
+    await tryHandleCommand('/replies default', admin);
+    expect(replyPolicies.set).toHaveBeenLastCalledWith('chat-a', undefined);
+  });
   it('persists opt-in notifications and admin-gates cross-session targets', async () => {
     let preference: NotificationPreference | undefined;
     const notificationPreferences = {

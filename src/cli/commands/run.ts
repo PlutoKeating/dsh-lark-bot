@@ -20,6 +20,7 @@ import { IsolationStore } from '../../bot/isolation-store.js';
 import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
 import { PermissionPolicyStore } from '../../bot/permission-policy-store.js';
 import { NotificationPreferenceStore } from '../../bot/notification-preference-store.js';
+import { ReplyPolicyStore } from '../../bot/reply-policy-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -33,6 +34,7 @@ import { buildPlanHandler } from '../../notify/plan-handler.js';
 import { buildApprovalHandler } from '../../notify/approval-handler.js';
 import { buildFileHandler } from '../../notify/file-handler.js';
 import { NotificationDispatcher } from '../../notify/notification-dispatcher.js';
+import { ReplyDispatcher } from '../../bridge/reply-dispatcher.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -210,6 +212,7 @@ export async function startBridgeEngine(
   const isolationStore = new IsolationStore(paths.profilePath(profileName, 'isolation.json'));
   const permissionPolicies = new PermissionPolicyStore(paths.permissionPoliciesFile(profileName));
   const notificationPreferences = new NotificationPreferenceStore(paths.notificationPreferencesFile(profileName));
+  const replyPolicies = new ReplyPolicyStore(paths.replyPoliciesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -222,6 +225,7 @@ export async function startBridgeEngine(
     isolationStore.load(),
     permissionPolicies.load(),
     notificationPreferences.load(),
+    replyPolicies.load(),
   ]);
   // Freeze the recovery set before the channel can deliver live events. A
   // message accepted after connect then belongs only to the live path and
@@ -273,6 +277,13 @@ export async function startBridgeEngine(
   const notificationDispatcher = new NotificationDispatcher({
     preferences: notificationPreferences,
     scopeDirectory,
+    send: async (chatId, markdown, options) => {
+      if (!streaming) throw new Error('bridge channel is not ready');
+      await streaming.sendMarkdown(chatId, markdown, options);
+    },
+  });
+  const replyDispatcher = new ReplyDispatcher({
+    policies: replyPolicies,
     send: async (chatId, markdown, options) => {
       if (!streaming) throw new Error('bridge channel is not ready');
       await streaming.sendMarkdown(chatId, markdown, options);
@@ -379,7 +390,6 @@ export async function startBridgeEngine(
       if (!streaming) return;
       const first = batch[0];
       if (!first) return;
-      pending.block(scope);
       let ledgerMessageIds: string[] = [];
       let ledgerState: 'completed' | 'failed' | 'interrupted' = 'failed';
       let ledgerError: string | undefined;
@@ -482,6 +492,7 @@ export async function startBridgeEngine(
           channel: streaming,
           defaultWorkspace,
           replyTo: first.messageId,
+          deliverFinalReply: (replyScope, chatId, markdown, options) => replyDispatcher.deliver(replyScope, chatId, markdown, options),
           ...(scopeOwner ? { scopeOwner } : {}),
           ...(collaborationPeers.length > 0 ? { collaborationPeers } : {}),
           runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
@@ -517,21 +528,17 @@ export async function startBridgeEngine(
         ledgerError = error instanceof Error ? error.message : String(error);
         throw error;
       } finally {
-        try {
-          if (ledgerClaimed) {
-            await persistJobTerminalAndNotify({
-              jobs,
-              messageIds: ledgerMessageIds,
-              state: ledgerState,
-              ...(ledgerError ? { error: ledgerError } : {}),
-              first,
-              channel: streaming,
-              scope,
-              notify: (notificationScope, event) => notificationDispatcher.notify(notificationScope, event),
-            });
-          }
-        } finally {
-          pending.unblock(scope);
+        if (ledgerClaimed) {
+          await persistJobTerminalAndNotify({
+            jobs,
+            messageIds: ledgerMessageIds,
+            state: ledgerState,
+            ...(ledgerError ? { error: ledgerError } : {}),
+            first,
+            channel: streaming,
+            scope,
+            notify: (notificationScope, event) => notificationDispatcher.notify(notificationScope, event),
+          });
         }
       }
     },
@@ -560,6 +567,7 @@ export async function startBridgeEngine(
     approvals,
     permissionPolicies,
     notificationPreferences,
+    replyPolicies,
     questions,
     plans,
     densityStore,
@@ -750,6 +758,7 @@ export async function startBridgeEngine(
         isolationStore.flush(),
         permissionPolicies.flush(),
         notificationPreferences.flush(),
+        replyPolicies.flush(),
         jobs.flush(),
       ]);
     },
