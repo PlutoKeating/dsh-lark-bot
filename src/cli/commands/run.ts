@@ -19,6 +19,7 @@ import { RunPolicyStore } from '../../bot/run-policy.js';
 import { IsolationStore } from '../../bot/isolation-store.js';
 import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
 import { PermissionPolicyStore } from '../../bot/permission-policy-store.js';
+import { NotificationPreferenceStore } from '../../bot/notification-preference-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -31,6 +32,7 @@ import { buildAskHandler } from '../../notify/ask-handler.js';
 import { buildPlanHandler } from '../../notify/plan-handler.js';
 import { buildApprovalHandler } from '../../notify/approval-handler.js';
 import { buildFileHandler } from '../../notify/file-handler.js';
+import { NotificationDispatcher } from '../../notify/notification-dispatcher.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
 import { AccessManager } from '../../config/access-manager.js';
@@ -56,7 +58,7 @@ import { JobLedger } from '../../bot/job-ledger.js';
 import {
   claimJobDispatch,
   prepareDurableJobRecovery,
-  persistJobTerminal,
+  persistJobTerminalAndNotify,
   recoverDurableJobs,
 } from '../../bridge/job-recovery.js';
 import {
@@ -207,6 +209,7 @@ export async function startBridgeEngine(
   const scopeDirectory = new ScopeDirectory(paths.profilePath(profileName, 'scopes.json'));
   const isolationStore = new IsolationStore(paths.profilePath(profileName, 'isolation.json'));
   const permissionPolicies = new PermissionPolicyStore(paths.permissionPoliciesFile(profileName));
+  const notificationPreferences = new NotificationPreferenceStore(paths.notificationPreferencesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -218,6 +221,7 @@ export async function startBridgeEngine(
     scopeDirectory.load(),
     isolationStore.load(),
     permissionPolicies.load(),
+    notificationPreferences.load(),
   ]);
   // Freeze the recovery set before the channel can deliver live events. A
   // message accepted after connect then belongs only to the live path and
@@ -266,6 +270,14 @@ export async function startBridgeEngine(
   const dshConfig = new DshProviderManager({ env: process.env });
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
+  const notificationDispatcher = new NotificationDispatcher({
+    preferences: notificationPreferences,
+    scopeDirectory,
+    send: async (chatId, markdown, options) => {
+      if (!streaming) throw new Error('bridge channel is not ready');
+      await streaming.sendMarkdown(chatId, markdown, options);
+    },
+  });
   const notifyToken = generateNotifyToken();
   const notifyServer = new NotifyServer({
     token: notifyToken,
@@ -322,6 +334,7 @@ export async function startBridgeEngine(
       scopeDirectory,
       approvals,
       permissionPolicies,
+      onApprovalWaiting: (scope, toolName) => notificationDispatcher.scheduleApprovalReminder(scope, toolName),
       channel: {
         sendCard: async (chatId, card, options) => {
           if (!streaming) throw new Error('bridge channel is not ready');
@@ -462,6 +475,7 @@ export async function startBridgeEngine(
           ...(role === undefined ? {} : { role }),
           approvals,
           permissionPolicies,
+          onApprovalWaiting: (approvalScope, toolName) => notificationDispatcher.scheduleApprovalReminder(approvalScope, toolName),
           questions,
           plans,
           densityStore,
@@ -505,13 +519,15 @@ export async function startBridgeEngine(
       } finally {
         try {
           if (ledgerClaimed) {
-            await persistJobTerminal({
+            await persistJobTerminalAndNotify({
               jobs,
               messageIds: ledgerMessageIds,
               state: ledgerState,
               ...(ledgerError ? { error: ledgerError } : {}),
               first,
               channel: streaming,
+              scope,
+              notify: (notificationScope, event) => notificationDispatcher.notify(notificationScope, event),
             });
           }
         } finally {
@@ -543,6 +559,7 @@ export async function startBridgeEngine(
     archiveMaxAgeDays: env.archiveMaxAgeDays,
     approvals,
     permissionPolicies,
+    notificationPreferences,
     questions,
     plans,
     densityStore,
@@ -732,6 +749,7 @@ export async function startBridgeEngine(
         scopeDirectory.flush(),
         isolationStore.flush(),
         permissionPolicies.flush(),
+        notificationPreferences.flush(),
         jobs.flush(),
       ]);
     },

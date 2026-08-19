@@ -1,4 +1,5 @@
 import type { SessionMetrics } from '../session/store.js';
+import type { NotificationPreference } from '../bot/notification-preference-store.js';
 import { localizedCard, type CardLocale } from './i18n.js';
 
 export interface StatusCardInput {
@@ -10,6 +11,7 @@ export interface StatusCardInput {
   version: string;
   isolation: string;
   permissionPolicy?: 'ask' | 'allow' | 'deny';
+  notificationPreference?: NotificationPreference;
   role: string | undefined;
   metrics: SessionMetrics | undefined;
   pending: {
@@ -65,6 +67,11 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
     zh ? `🏃 **运行状态**：${runs}` : `🏃 **Runs**: ${runs}`,
     `🔒 **isolation**：\`${input.isolation}\``,
     zh ? `🛡️ **工具权限**：\`${input.permissionPolicy ?? 'ask'}\`` : `🛡️ **Tool permission**: \`${input.permissionPolicy ?? 'ask'}\``,
+    ...(input.notificationPreference
+      ? [zh
+          ? `🔔 **主动提醒**：\`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\`（审批 ${String(input.notificationPreference.approvalReminderMs / 60_000)} 分钟）`
+          : `🔔 **Notifications**: \`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\` (approval ${String(input.notificationPreference.approvalReminderMs / 60_000)} min)`]
+      : [zh ? '🔕 **主动提醒**：关闭' : '🔕 **Notifications**: off']),
     ...(input.role ? [`🎭 **role**：${input.role}`] : []),
     `🔖 **version**：\`${input.version}\``,
     '',

@@ -123,6 +123,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/role remove <id>` | 删除角色（管理员）|
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员）|
 | `/notify list` | 查看 bridge 已注册的 scope|
+| `/notifications [show\|off\|on …]` | 配置当前 scope 的完成 / 失败 / 审批等待提醒（默认关闭）|
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list [N]`、`/archive clean` | 归档并发送 / 重发到当前或指定会话（跨会话仅管理员）/ 查看 / 清理|
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度|
@@ -195,6 +196,8 @@ guardian 仍只救援其配置的主实例。
 拒绝 `web`，因为共享 Web agent 的广播事件流无法提供实例级 session 隔离。
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
+
+**可配置主动提醒**：默认关闭、不刷屏。普通用户可用 `/notifications on current` 为当前 scope 开启任务完成、失败和审批等待提醒，默认 @ 自己并在审批等待 10 分钟后只提醒一次；可用 `events=`、`mentions=`、`remind=` 调整。管理员还可把目标设为已登记的其他 `scope|chatId`。偏好原子持久化到 profile，重启不丢，并在 `/status` 显示；`/notifications off` 一键关闭。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 

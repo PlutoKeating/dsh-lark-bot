@@ -3,6 +3,7 @@ import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
 import type { PermissionPolicy, PermissionPolicyStore } from '../bot/permission-policy-store.js';
+import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
 import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
@@ -40,6 +41,7 @@ import {
 import { handleArchive, handleRetention } from './archive.js';
 import { handleRole } from './roles.js';
 import { handleNotify } from './notify.js';
+import { handleNotifications } from './notifications.js';
 import {
   currentVersion,
   isNewer,
@@ -106,6 +108,7 @@ export interface CommandContext {
   plans?: PlanApprovalRegistry;
   densityStore: DensityStore | undefined;
   permissionPolicies?: PermissionPolicyStore;
+  notificationPreferences?: NotificationPreferenceStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -169,6 +172,7 @@ const HELP = [
   '- `/role remove <id>` — 删除角色（管理员）',
   '- `/notify <scope|chatId> <text>` — 跨会话发送通知（管理员）',
   '- `/notify list` — 查看已注册 scope',
+  '- `/notifications [show|off|on …]` — 配置当前 scope 的完成 / 失败 / 审批提醒',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive send <id> [scope|chatId]`、`/archive list [N]`、`/archive clean` — 归档并上传 / 重发或转发 / 查看 / 清理',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
@@ -206,6 +210,7 @@ const HELP_EN = [
   '- `/role remove <id>` — remove a role (admin)',
   '- `/notify <scope|chatId> <text>` — notify another session (admin)',
   '- `/notify list` — list registered scopes',
+  '- `/notifications [show|off|on …]` — configure completion / failure / approval reminders',
   '- `/retention [N|default]` — view or set retained live messages',
   '- `/archive [note]`, `/archive send <id> [scope|chatId]`, `/archive list [N]`, `/archive clean` — archive and upload, resend/forward, list, or clean sessions',
   '- `/density [compact|standard|detailed]` — view or set card density',
@@ -417,6 +422,7 @@ export type StatusContext = Pick<
   | 'questions'
   | 'plans'
   | 'permissionPolicies'
+  | 'notificationPreferences'
   | 'models'
   | 'dshConfig'
   | 'resolveDefaultModel'
@@ -464,6 +470,7 @@ export async function statusCardInputFor(
     for (const owner of pendingOwners) count += registry.pendingCount(ctx.scope, owner);
     return count;
   };
+  const notificationPreference = ctx.notificationPreferences?.get(ctx.scope);
   return {
     scope: ctx.scope,
     cwd,
@@ -473,6 +480,7 @@ export async function statusCardInputFor(
     version: currentVersion(),
     isolation: ctx.chatMode === 'p2p' ? 'p2p' : (ctx.isolationMode ?? 'topic'),
     permissionPolicy: ctx.permissionPolicies?.get(ctx.scope) ?? 'ask',
+    ...(notificationPreference ? { notificationPreference } : {}),
     role: role ? `\`${role.id}\` (${role.name})` : undefined,
     metrics,
     pending: {
@@ -1098,6 +1106,7 @@ const handlers: Record<string, Handler> = {
   '/isolation': handleIsolation,
   '/role': handleRole,
   '/notify': handleNotify,
+  '/notifications': handleNotifications,
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,

@@ -182,6 +182,22 @@ export async function persistJobTerminal(input: {
   }
 }
 
+export async function persistJobTerminalAndNotify(input: {
+  jobs: Pick<JobLedger, 'finish'>;
+  messageIds: string[];
+  state: Extract<JobState, 'completed' | 'failed' | 'interrupted'>;
+  error?: string;
+  first: Pick<QueuedMessage, 'chatId' | 'messageId' | 'threadId'>;
+  channel: Pick<StreamingChannel, 'sendMarkdown'>;
+  scope: string;
+  notify: (scope: string, event: 'completed' | 'failed') => Promise<unknown>;
+}): Promise<boolean> {
+  const persisted = await persistJobTerminal(input);
+  if (!persisted || input.state === 'interrupted') return persisted;
+  await input.notify(input.scope, input.state);
+  return true;
+}
+
 function safeInline(value: string): string {
   return truncateUtf8Safe(redactSecrets(value), 240)
     .replaceAll('`', '\\`')

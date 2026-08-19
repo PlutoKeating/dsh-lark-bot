@@ -110,6 +110,7 @@ export interface AppPaths {
   profilePath(profile: string, ...parts: string[]): string;
   sessionsFile(profile: string): string;
   permissionPoliciesFile(profile: string): string;
+  notificationPreferencesFile(profile: string): string;
   sessionCatalogFile(profile: string): string;
   workspacesFile(profile: string): string;
   mediaDir(profile: string): string;
@@ -194,6 +195,12 @@ scope resolver：私聊始终用 chat ID；group 共用 chat ID；topic 使用 `
 必须属于当前 chat（用于 member 隔离下代改），持久写入完成后才回执，失败回滚内存值；`allow`/`deny` 在 SDK/Web
 `/approval` 回调和 ACP `onApprovalRequest` 入口于创建卡片前执行。`deny` 返回标准 rejected
 outcome 并发送明确双语提示；计划门禁保持独立，不受该 store 影响。
+
+`src/bot/notification-preference-store.ts` 提供默认关闭的 `NotificationPreferenceStore`
+（`<profile>/notification-preferences.json`，0600），按 immutable scope 保存目标、
+`completed|failed|approval` 事件、mention open_id 与审批提醒延迟。更新为 awaited atomic write，
+失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒；SDK/Web 与 ACP
+审批卡创建后启动单次 timer，结算/取消即清除。发送失败只记日志，不改变 job/approval outcome。
 
 `src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
 （`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
@@ -651,7 +658,7 @@ export interface Logger {
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|on …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
@@ -713,6 +720,8 @@ worktree、该 scope 归档目录和实例日志；runtime 提交的 cwd 只用�
 入站消息注册 scope → `{chatId, threadId, chatMode, messageId}`，其中最近的入站 messageId 是
 topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(chatId)` 用于跨会话出站；
 `/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
+`/notifications on [current|scope|chatId] [events=…] [mentions=…] [remind=N]` 为当前 scope
+显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或关闭。
 
 `src/bridge/group-message-poller.ts` 提供 opt-in `GroupMessagePoller`（issue #50）：通过飞书
 `im.message.list` 对 `ScopeDirectory` 中已知的 group/topic 做增量轮询，再使用

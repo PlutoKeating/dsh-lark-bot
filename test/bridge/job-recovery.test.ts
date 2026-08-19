@@ -4,6 +4,7 @@ import {
   claimJobDispatch,
   prepareDurableJobRecovery,
   persistJobTerminal,
+  persistJobTerminalAndNotify,
   recoverDurableJobs,
 } from '../../src/bridge/job-recovery.js';
 
@@ -165,5 +166,44 @@ describe('recoverDurableJobs', () => {
       expect.stringMatching(/终态落盘失败[\s\S]*jobs show m1/),
       { replyTo: 'm1', threadId: 'thread-a' },
     );
+  });
+
+  it.each(['completed', 'failed'] as const)(
+    'notifies exactly once after a durable %s terminal snapshot',
+    async (state) => {
+      const finish = vi.fn().mockResolvedValue(undefined);
+      const notify = vi.fn().mockResolvedValue(true);
+
+      await expect(persistJobTerminalAndNotify({
+        jobs: { finish },
+        messageIds: ['m1', 'm2'],
+        state,
+        first: { chatId: 'chat-a', messageId: 'm1' },
+        channel: { sendMarkdown: vi.fn() },
+        scope: 'chat-a',
+        notify,
+      })).resolves.toBe(true);
+
+      expect(finish).toHaveBeenCalledOnce();
+      expect(notify).toHaveBeenCalledOnce();
+      expect(notify).toHaveBeenCalledWith('chat-a', state);
+      expect(finish.mock.invocationCallOrder[0]!).toBeLessThan(notify.mock.invocationCallOrder[0]!);
+    },
+  );
+
+  it('does not notify when the terminal snapshot cannot be persisted', async () => {
+    const notify = vi.fn().mockResolvedValue(true);
+
+    await expect(persistJobTerminalAndNotify({
+      jobs: { finish: vi.fn().mockRejectedValue(new Error('disk full')) },
+      messageIds: ['m1'],
+      state: 'failed',
+      first: { chatId: 'chat-a', messageId: 'm1' },
+      channel: { sendMarkdown: vi.fn().mockResolvedValue(undefined) },
+      scope: 'chat-a',
+      notify,
+    })).resolves.toBe(false);
+
+    expect(notify).not.toHaveBeenCalled();
   });
 });

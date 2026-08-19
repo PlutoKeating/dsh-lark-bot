@@ -27,6 +27,7 @@ import { WorkspaceStore } from '../../src/workspace/store.js';
 import { latestVersion } from '../../src/upgrade/update-check.js';
 import { JobLedger } from '../../src/bot/job-ledger.js';
 import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
+import type { NotificationPreference, NotificationPreferenceStore } from '../../src/bot/notification-preference-store.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
@@ -139,6 +140,28 @@ function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
 }
 
 describe('command router', () => {
+  it('persists opt-in notifications and admin-gates cross-session targets', async () => {
+    let preference: NotificationPreference | undefined;
+    const notificationPreferences = {
+      get: () => preference,
+      set: vi.fn(async (_scope: string, value: NotificationPreference | undefined) => { preference = value; }),
+    } as unknown as NotificationPreferenceStore;
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const regular = makeContext({ notificationPreferences, senderId: 'ou_user', channel: { sendMarkdown }, accessManager: makeAccessManager() });
+    await tryHandleCommand('/notifications on current events=completed,approval mentions=self remind=5', regular);
+    expect(notificationPreferences.set).toHaveBeenCalledWith('chat-a', { events: ['completed', 'approval'], mentionUserIds: ['ou_user'], approvalReminderMs: 300_000 });
+    await tryHandleCommand('/notifications on chat-b', regular);
+    expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('只有管理员'), { replyTo: 'msg-1' });
+
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-b', 'chat-b', undefined);
+    const admin = makeContext({ notificationPreferences, scopeDirectory: directory, senderId: 'ou_admin', channel: { sendMarkdown }, accessManager: makeAccessManager({ admins: ['ou_admin'] }) });
+    await tryHandleCommand('/notifications on chat-b events=failed mentions=none remind=3', admin);
+    expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', { target: 'chat-b', events: ['failed'], mentionUserIds: [], approvalReminderMs: 180_000 });
+    await tryHandleCommand('/notifications off', admin);
+    expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', undefined);
+  });
+
   it('shows permission policy and restricts policy changes to admins', async () => {
     let policy = 'ask' as 'ask' | 'allow' | 'deny';
     const permissionPolicies = {

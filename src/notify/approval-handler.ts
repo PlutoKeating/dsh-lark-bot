@@ -29,6 +29,7 @@ export interface ApprovalHandlerDeps {
   scopeDirectory: ScopeDirectory;
   approvals: ApprovalRegistry;
   permissionPolicies?: PermissionPolicyStore;
+  onApprovalWaiting?: (scope: string, toolName: string) => () => void;
   channel: {
     sendCard(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
     sendMarkdown?(chatId: string, markdown: string, options?: SendOptions): Promise<void>;
@@ -102,7 +103,13 @@ export function buildApprovalHandler(
         }),
         options,
       );
-      const outcome = await promise;
+      const cancelReminder = deps.onApprovalWaiting?.(scope, payload.toolName);
+      let outcome: ApprovalOutcome;
+      try {
+        outcome = await promise;
+      } finally {
+        cancelReminder?.();
+      }
       if (outcome === 'cancelled') {
         await settleCancelledCard(deps, destination.chatId, cardMessageId, options);
         return { ok: false, error: 'approval cancelled' };

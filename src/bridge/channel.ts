@@ -45,6 +45,7 @@ import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
+import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -75,6 +76,7 @@ export interface StartChannelDeps {
   plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
   permissionPolicies?: PermissionPolicyStore;
+  notificationPreferences?: NotificationPreferenceStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -313,6 +315,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       ...(deps.plans ? { plans: deps.plans } : {}),
       densityStore: deps.densityStore,
       ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
+      ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
       models: deps.models,
       wizardStore: deps.wizardStore,
       dshConfig: deps.dshConfig,
@@ -480,6 +483,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             questions: deps.questions,
             ...(deps.plans ? { plans: deps.plans } : {}),
             ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
+            ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
             models: deps.models,
             dshConfig: deps.dshConfig,
             ...(deps.resolveDefaultModel
