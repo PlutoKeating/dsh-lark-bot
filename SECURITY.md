@@ -46,16 +46,19 @@
    （`isSafeHttpUrl`）。
 7. **交互工具默认禁用**：SDK / ACP runtime profile 禁用 `user-questions`；
    `DEFAULT_DENIED_INTERACTIVE_TOOLS` 提供工具级黑名单。
-8. **审批**：默认 SDK / Web 宿主在 `tools/pre-execute` 强制阻断未确认的高风险调用，并通过 dsh rc.8 官方 `approval/request` waterfall，把高风险工具逐次
-   映射为“允许执行一次 / 拒绝”飞书卡；ACP 继续通过 `session/request_permission` 使用同一交互。
-   授权不持久化，拒绝作为工具结果返回 agent；run 结束 / callback 断连只结算所属 session 的挂起请求。
+8. **审批**：默认 SDK / Web 宿主在 `tools/pre-execute` 强制阻断高风险调用并通过 dsh rc.8
+   `approval/request` 回调，ACP 使用 `session/request_permission`。按隔离 scope 持久化的
+   `ask/allow/deny` 策略（0600，失败回滚且不报成功）决定弹一次性卡、自动放行或直接拒绝；只有管理员可修改，
+   显式目标仅限当前 chat 内 scope，`deny`
+   会在聊天中明确告知。该策略只作用于逐工具审批，不跳过后续独立的计划门禁；run 结束或 callback
+   断连只结算所属 session 的挂起请求。legacy headless 无工具回调，因此不宣称受该策略保护。
    SDK / ACP / Web agent 对较大或高风险动作还会通过 `lark_request_plan_approval` 暂停；同一 turn
    未批准时 pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。完整计划发到当前飞书
    会话，只有卡片批准后才继续；继续规划会把可选文字意见返回 agent。run/callback 结束时只取消
    所属 session 的挂起门禁。该门禁是人机确认层，不替代 dsh sandbox 或 ACP 的逐工具权限审批。
 9. **管理操作鉴权**：飞书会话内对 dsh 配置与访问白名单的写操作（`/model default`、
    `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
-   与 `/invite remove …`），以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
+   与 `/invite remove …`）、`/permission ask|allow|deny`，以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。`/doctor` 因包含本机运行状态与最近日志，仅管理员可执行。
 10. **本地回调隔离**：`lark_notify`、`lark_ask_user`、`lark_request_plan_approval` 与

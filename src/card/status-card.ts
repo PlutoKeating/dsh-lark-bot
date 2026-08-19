@@ -9,6 +9,7 @@ export interface StatusCardInput {
   activeRunIds: string[];
   version: string;
   isolation: string;
+  permissionPolicy?: 'ask' | 'allow' | 'deny';
   role: string | undefined;
   metrics: SessionMetrics | undefined;
   pending: {
@@ -63,6 +64,7 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
     `🔗 **session**：\`${input.sessionId ?? (zh ? '暂无' : 'Unavailable')}\``,
     zh ? `🏃 **运行状态**：${runs}` : `🏃 **Runs**: ${runs}`,
     `🔒 **isolation**：\`${input.isolation}\``,
+    zh ? `🛡️ **工具权限**：\`${input.permissionPolicy ?? 'ask'}\`` : `🛡️ **Tool permission**: \`${input.permissionPolicy ?? 'ask'}\``,
     ...(input.role ? [`🎭 **role**：${input.role}`] : []),
     `🔖 **version**：\`${input.version}\``,
     '',

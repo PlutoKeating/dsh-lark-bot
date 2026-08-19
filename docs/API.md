@@ -109,6 +109,7 @@ export interface AppPaths {
   profileDir(profile: string): string;
   profilePath(profile: string, ...parts: string[]): string;
   sessionsFile(profile: string): string;
+  permissionPoliciesFile(profile: string): string;
   sessionCatalogFile(profile: string): string;
   workspacesFile(profile: string): string;
   mediaDir(profile: string): string;
@@ -186,6 +187,13 @@ scope resolver：私聊始终用 chat ID；group 共用 chat ID；topic 使用 `
 不会降级为共享群 scope。带 member scope 的 card action 还必须由同一 `open_id` 操作，其他成员
 或缺失 operator identity 时失败关闭；group / topic 卡保持共享群既有语义。运行卡的 owner 从
 入队时已经固化的 member scope 还原，不重读当前策略。
+
+`src/bot/permission-policy-store.ts` 提供持久化 `PermissionPolicyStore`
+（`<profile>/permission-policies.json`，0600），按隔离 scope 保存 `ask|allow|deny`，缺省为
+`ask`。`/permission [policy] [scope]` 只读查询对已授权用户开放，修改仅管理员；可指定的目标
+必须属于当前 chat（用于 member 隔离下代改），持久写入完成后才回执，失败回滚内存值；`allow`/`deny` 在 SDK/Web
+`/approval` 回调和 ACP `onApprovalRequest` 入口于创建卡片前执行。`deny` 返回标准 rejected
+outcome 并发送明确双语提示；计划门禁保持独立，不受该 store 影响。
 
 `src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
 （`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
@@ -506,7 +514,7 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
   workspace/cwd、有效模型、session、当前 workspace runs、版本、context used/limit/percentage、累计四类 token
-  与待审批/提问/计划数、持久任务账本统计。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
+  与工具权限策略、待审批/提问/计划数、持久任务账本统计。refresh value 固化 scope/isolation；`src/bridge/channel.ts` 复用 member
   owner 授权后调用 `LarkChannel.updateCard(messageId, card)` 原位更新。Card JSON 2.0 发送被拒绝时
   `/status` 回退等价 Markdown；未知值显示“暂无”。
 - `src/card/approval-card.ts`：`renderApprovalCard(input)`（allow-once / reject-once 按钮）。
@@ -641,7 +649,7 @@ export interface Logger {
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|list [N]|clean]`、`/density`、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、

@@ -119,6 +119,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数 |
+| `/permission [ask\|allow\|deny] [scope]` | 查看或设置工具权限策略（管理员可指定当前聊天内 scope） |
 | `/isolation [group\|topic\|member]` | 查看或设置群聊会话隔离（设置仅管理员） |
 | `/role set <id>`、`/role list` | 绑定 / 查看多角色 Agent |
 | `/archive [note]`、`/archive list` | 归档 / 查看会话记录 |
@@ -222,6 +223,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 角色定义：`~/.dsh-lark/profiles/<profile>/roles.json`
 - scope 目录（chat/thread 与 topic reply anchor messageId）：`~/.dsh-lark/profiles/<profile>/scopes.json`
 - 群聊隔离策略：`~/.dsh-lark/profiles/<profile>/isolation.json`
+- 工具权限策略：`~/.dsh-lark/profiles/<profile>/permission-policies.json`（按隔离 scope 保存 `ask/allow/deny`，0600）
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`

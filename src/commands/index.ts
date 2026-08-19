@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
+import type { PermissionPolicy, PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
@@ -104,6 +105,7 @@ export interface CommandContext {
   questions: QuestionRegistry | undefined;
   plans?: PlanApprovalRegistry;
   densityStore: DensityStore | undefined;
+  permissionPolicies?: PermissionPolicyStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -160,6 +162,7 @@ const HELP = [
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
   '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
+  '- `/permission [ask|allow|deny] [scope]` — 查看或设置工具权限策略（管理员可指定当前聊天内 scope）',
   '- `/isolation [group|topic|member]` — 查看或设置本群会话隔离模式（设置仅管理员）',
   '- `/role list|show <id>|set <id>|clear` — 查看 / 绑定角色',
   '- `/role save <id> <name> [--persona 文案] [--model <id>] [--tools <csv>] [--rules 文案]` — 创建/更新角色（管理员）',
@@ -196,6 +199,7 @@ const HELP_EN = [
   '- `/stop` — stop current tasks',
   '- `/timeout [N|off|default]` — view or set the idle timeout',
   '- `/concurrency [N|default]` — view or set parallel runs for this scope',
+  '- `/permission [ask|allow|deny] [scope]` — view or set tool permission policy (admin; optional same-chat scope)',
   '- `/isolation [group|topic|member]` — view or set group isolation (admin to set)',
   '- `/role list|show <id>|set <id>|clear` — view or bind roles',
   '- `/role save <id> <name> [--persona text] [--model <id>] [--tools <csv>] [--rules text]` — create/update a role (admin)',
@@ -412,6 +416,7 @@ export type StatusContext = Pick<
   | 'approvals'
   | 'questions'
   | 'plans'
+  | 'permissionPolicies'
   | 'models'
   | 'dshConfig'
   | 'resolveDefaultModel'
@@ -467,6 +472,7 @@ export async function statusCardInputFor(
     activeRunIds: active.map((run) => run.runId),
     version: currentVersion(),
     isolation: ctx.chatMode === 'p2p' ? 'p2p' : (ctx.isolationMode ?? 'topic'),
+    permissionPolicy: ctx.permissionPolicies?.get(ctx.scope) ?? 'ask',
     role: role ? `\`${role.id}\` (${role.name})` : undefined,
     metrics,
     pending: {
@@ -834,6 +840,48 @@ async function handleConcurrency(args: string, ctx: CommandContext): Promise<voi
   await reply(ctx, `已设置当前 scope 的并行任务数：**${String(n)}**。`, `Set parallel tasks for this scope to **${String(n)}**.`);
 }
 
+async function handlePermission(args: string, ctx: CommandContext): Promise<void> {
+  const [rawPolicy = '', rawTarget = '', ...extra] = args.trim().split(/\s+/);
+  const input = rawPolicy.toLowerCase();
+  const labels: Record<PermissionPolicy, { zh: string; en: string }> = {
+    ask: { zh: '每次询问', en: 'ask every time' },
+    allow: { zh: '自动放行', en: 'auto-allow' },
+    deny: { zh: '直接拒绝', en: 'always deny' },
+  };
+  if (!input) {
+    const current = ctx.permissionPolicies?.get(ctx.scope) ?? 'ask';
+    await reply(
+      ctx,
+      `当前 scope 的工具权限策略：**${labels[current].zh}**（\`${current}\`）。可用 \`/permission ask|allow|deny\` 调整（仅管理员）。`,
+      `Tool permission policy for this scope: **${labels[current].en}** (\`${current}\`). Use \`/permission ask|allow|deny\` to change it (admin only).`,
+    );
+    return;
+  }
+  if ((input !== 'ask' && input !== 'allow' && input !== 'deny') || extra.length > 0) {
+    await reply(ctx, '用法：`/permission [ask|allow|deny] [scope]`', 'Usage: `/permission [ask|allow|deny] [scope]`');
+    return;
+  }
+  if (!requireAdmin(ctx)) return;
+  if (!ctx.permissionPolicies) {
+    await reply(ctx, '当前运行环境未启用工具权限策略存储。', 'Tool permission policy storage is not enabled in this runtime.');
+    return;
+  }
+  const targetScope = rawTarget || ctx.scope;
+  if (
+    targetScope !== ctx.chatId &&
+    !targetScope.startsWith(`${ctx.chatId}:`)
+  ) {
+    await reply(ctx, '只能修改当前聊天内的 scope。请从目标会话 `/status` 复制完整 scope。', 'You can only modify a scope in the current chat. Copy the full scope from the target session’s `/status`.');
+    return;
+  }
+  await ctx.permissionPolicies.set(targetScope, input);
+  await reply(
+    ctx,
+    `已将 scope \`${targetScope}\` 的工具权限策略设为 **${labels[input].zh}**（\`${input}\`），从下一次工具审批起生效。计划审批仍会照常执行。`,
+    `Set scope \`${targetScope}\`'s tool permission policy to **${labels[input].en}** (\`${input}\`). It applies to the next tool approval; plan approval remains enforced.`,
+  );
+}
+
 async function handleDensity(args: string, ctx: CommandContext): Promise<void> {
   const input = args.trim().toLowerCase();
   if (!input) {
@@ -1046,6 +1094,7 @@ const handlers: Record<string, Handler> = {
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/concurrency': handleConcurrency,
+  '/permission': handlePermission,
   '/isolation': handleIsolation,
   '/role': handleRole,
   '/notify': handleNotify,

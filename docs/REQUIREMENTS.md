@@ -168,6 +168,15 @@
 - 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
   消费同一个 Web agent 广播流而把 session 事件写入错误实例。
 
+### 4.8.2 scope 工具权限策略（issue #30）
+
+- `/permission ask|allow|deny [scope]` 按隔离 scope 管理逐工具审批策略；查询开放，修改仅管理员；
+  管理员可指定当前 chat 内的 member/topic scope，跨 chat 目标拒绝。
+- 默认 `ask`；`allow` 自动返回一次性允许，`deny` 自动返回拒绝并向原聊天/话题明确说明。
+- 策略以 0600 文件持久化，写成功后才确认，失败回滚；重启不丢，并在 `/status` 展示当前有效值。
+- SDK/Web `/approval` 与 ACP 原生 permission 共用同一策略语义；计划审批仍独立强制执行。
+- legacy headless 不具备工具回调，不纳入策略执行保证。
+
 ### 4.9 dsh profile bundle（唯一安装-部署-使用路径）
 
 - `package.json` 声明 `dsh.bundle.patch` → `./cordis.patch.yml`，可用

@@ -44,6 +44,7 @@ import { ReconnectNotifier } from './reconnect-notifier.js';
 import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
+import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -73,6 +74,7 @@ export interface StartChannelDeps {
   questions?: QuestionRegistry;
   plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
+  permissionPolicies?: PermissionPolicyStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -310,6 +312,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       questions: deps.questions,
       ...(deps.plans ? { plans: deps.plans } : {}),
       densityStore: deps.densityStore,
+      ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
       models: deps.models,
       wizardStore: deps.wizardStore,
       dshConfig: deps.dshConfig,
@@ -476,6 +479,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             approvals: deps.approvals,
             questions: deps.questions,
             ...(deps.plans ? { plans: deps.plans } : {}),
+            ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
             models: deps.models,
             dshConfig: deps.dshConfig,
             ...(deps.resolveDefaultModel

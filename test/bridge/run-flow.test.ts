@@ -10,6 +10,7 @@ import type {
 } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ApprovalRegistry } from '../../src/bot/approvals.js';
+import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
 import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
 import { QuestionRegistry } from '../../src/bot/questions.js';
 import {
@@ -1365,6 +1366,26 @@ describe('runAgentBatch', () => {
 });
 
 describe('approvalHandlerFor', () => {
+  it('auto-allows or rejects without a card according to the persisted scope policy', async () => {
+    const sendCard = vi.fn();
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const request = {
+      id: 'call-1', sessionId: 's1', toolName: 'bash', reason: 'test', options: [],
+    };
+    const allow = approvalHandlerFor({
+      approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown }, chatId: 'chat-a', scope: 'chat-a',
+      permissionPolicies: { get: () => 'allow' } as unknown as PermissionPolicyStore,
+    });
+    await expect(allow(request)).resolves.toBe('allowed-once');
+    const deny = approvalHandlerFor({
+      approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown }, chatId: 'chat-a', scope: 'chat-a',
+      permissionPolicies: { get: () => 'deny' } as unknown as PermissionPolicyStore,
+    });
+    await expect(deny(request)).resolves.toBe('rejected');
+    expect(sendCard).not.toHaveBeenCalled();
+    expect(sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('deny'), undefined);
+  });
+
   it('renders an approval card and resolves through the registry', async () => {
     const approvals = new ApprovalRegistry();
     const sendCard = vi.fn().mockResolvedValue(undefined);
