@@ -102,6 +102,14 @@ LaunchAgent / Windows 登录计划任务托管同一个标准 dsh profile；用 
 用 `/role save` 定义 PM / 开发 / 文档等角色（persona、模型偏好、工具指引、角色规则），
 再用 `/role set <id>` 绑定到当前 scope。每个角色有持久化的人设与规则。
 
+### 多机器人 @ 交接：一个群，多个独立 Agent
+
+用 `dsh-lark-bot bot add reviewer --model gateway/review-model` 增加独立 PersonalAgent 实例；
+每个实例有自己的模型、凭据、服务与上下文。把实例加入同一群后，只有登记为可信 peer 的 bot
+通过真实 @ 才能交接任务；连续 bot 回合默认最多 6 次，真人消息会重置，避免无限互聊。
+`bot list|status|remove` 用于查看和移除实例；移除时保留 session/worktree/archive 数据。
+附加实例使用 SDK/ACP（或 legacy headless）；共享 Web agent 的广播流无法隔离 session，因此不支持 Web adapter。
+
 ### 并行多任务：不用排队
 
 同一群里可以同时跑多个任务，各自会话隔离（默认 2 个并行，`/concurrency` 可调），

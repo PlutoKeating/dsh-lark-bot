@@ -120,7 +120,18 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    工具指引 / 角色规则）并按 scope 绑定；运行期角色指令作为 prompt 前缀注入，角色模型参与
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
    重启 runtime，也能与 scope 内并行 run 共存。
-6. **通知与人机决策回调**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
+6. **多机器人实例与可信交接（issue #25）**：每个实例拥有独立 bridge profile、dsh profile、
+   `~/.dsh-lark/bots/<name>/dsh` DSH_HOME、
+   PersonalAgent 身份、用户服务与凭据快照，因此模型、session、scope、worktree 和 archive 不共享。
+   `BotFleetStore` 只在全局 `fleet.json` 保存实例元数据与已验证 bot `open_id`，不保存密钥；
+   `BotHandoffGuard` 以跨进程锁维护 `handoffs.json`，对同一 chat 的可信 bot 连续交接精确计数并按
+   messageId 去重，真人新消息会重置计数。只有飞书事件确认为 bot、真实 @ 当前 bot 且 sender
+   `open_id` 匹配已登记启用实例时才进入交接；未知 bot、系统消息和匿名事件 fail closed。
+   运行 prompt 只注入已登记 peer 的精确名称/open_id，交接复用 `lark_notify`。机器人在 member
+   隔离群中的交接降级到 group/topic scope，避免创建无人可操作的 bot-owned 决策卡。
+   附加实例的 adapter 限定为 `sdk` / `acp` / legacy `headless`；`web` 的共享广播流无法按实例
+   隔离 session，因此创建和运行时均 fail closed。
+7. **通知与人机决策回调**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
    持久化 scope → chat/thread/最近入站 messageId 映射（messageId 用于 topic reply anchor）；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
@@ -136,7 +147,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
    ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
    继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。
-7. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
+8. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
    `doctor` / `upgrade` / 隐藏 `run`，并提供 `service install|start|status|logs|restart|stop|uninstall`
@@ -153,7 +164,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
    通过 `npx dsh-lark-bot@latest upgrade` 引导：npx 拉取最新版执行升级。
-8. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
+10. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
    heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
@@ -179,9 +190,9 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
 | `src/card/` | 流式过程卡（schema 2.0 原生折叠面板 + 顶层兼容快照 + legacy renderer）、审批 / 问答 / 计划决策卡状态与渲染；最终回答由正常 run-flow / guardian 分别单独发送 |
-| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略持久化 |
+| `src/bot/` | 运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略，以及多机器人 fleet / 跨进程交接计数 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
-| `src/cli/` | CLI 入口：`setup`（唯一安装命令）/ `doctor`（诊断）/ `upgrade`（一键升级）/ 隐藏 `run` |
+| `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏 `run` |
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/core/` | 结构化日志 |

@@ -19,6 +19,7 @@
     - id: dsh-lark-bot
       name: 'dsh-lark-bot/plugin'
       config:
+        profile: !!js process.env.DSH_LARK_PROFILE ?? 'default'
         home: !!js process.env.DSH_LARK_HOME
         tenant: !!js process.env.DSH_LARK_TENANT ?? 'feishu'
         appId: !!js process.env.DSH_LARK_APP_ID

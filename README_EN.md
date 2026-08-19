@@ -51,10 +51,11 @@ dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding
 - A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
-**Seven exclusive capabilities**:
+**Eight exclusive capabilities**:
 
 - 🆘 **Guardian safety net — "always reachable"**: Feishu still replies after dsh crashes; `/safemode` enters core-only safe mode to locate the problem and restart directly.
 - 👥 **Multi-role agents — "one bot, a whole team"**: switch or assign PM / dev / docs roles with `/role`; each role has its own persona, model preference and rules.
+- 🤝 **Multi-bot handoff — "multiple independent agents in one group"**: `bot add` creates an isolated identity/service/context; trusted bots hand work off with a real @mention and a bounded conversation counter.
 - ⚡ **Parallel tasks — "no queueing"**: run multiple tasks in the same chat simultaneously with isolated sessions; other solutions serialize everything.
 - 🧭 **Plan before action — "review it before it moves"**: receive the complete plan first, then approve execution or add feedback and request another planning pass without restarting the task.
 - 🗂 **Session archival & cleanup — "your session list never rots"**: archive old tasks with `/archive` and configure auto-retention with `/retention`.
@@ -148,6 +149,30 @@ Stop, plan, approval and question actions created before a switch remain bound t
 `~/.dsh-lark/profiles/<profile>/isolation.json`.
 
 **Multi-role agents**: admins define roles (PM / dev / docs / …) with `/role save <id> <name> --persona <text> [--model <id>] [--tools <csv>] [--rules <text>]` and bind one to the current scope with `/role set <id>`; every run carries the role instructions, and the role model wins below the per-session `/model use` override. Role definitions persist in `~/.dsh-lark/profiles/<profile>/roles.json`.
+
+**Multiple bot instances and @ handoff**:
+
+```bash
+dsh-lark-bot bot add reviewer --model gateway/review-model
+dsh-lark-bot bot list
+dsh-lark-bot bot status reviewer
+dsh-lark-bot bot remove reviewer   # keeps session/worktree data
+```
+
+Each instance owns a bridge profile, `dsh-lark-<name>` profile, isolated
+`~/.dsh-lark/bots/<name>/dsh` DSH_HOME, user service, Feishu/provider credentials,
+model catalog and sessions/scopes/worktrees/archives. Set that instance's `DEEPSEEK_API_KEY` while running
+`bot add`; custom provider secrets can be written to its isolated credential store with `/key set` after startup.
+Adding or removing one does not restart the others.
+`fleet.json` trusts only registered bot open_ids; an inbound bot must really @ this bot, and slash-prefixed bot text
+is task input rather than an admin command. Agents receive exact peer open_ids and can use `lark_notify` for a
+real handoff mention. The shared, message-id-deduplicated `handoffs.json` stops the fleet after six consecutive
+bot handoffs by default; any fresh human message resets it, even without an @mention. Bot handoffs in a
+member-isolated group use the receiving instance's group/topic scope so human approval cards remain operable.
+Additional instances are kept alive by their own service; the guardian still rescues only its configured primary instance.
+The primary `default` bot cannot be deleted with `bot remove`, so fleet lifecycle cannot damage the existing bot.
+Additional instances support isolated `sdk` / `acp` runtimes (and legacy `headless`). Both `bot add` and startup
+reject `web`, because a shared Web agent broadcast stream cannot isolate sessions between bot instances.
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
 
@@ -287,7 +312,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 **Q: How is dsh-lark-bot different from other DeepSeek Harness Feishu plugins (e.g. harness-lark)?**
 
-**A:** The most complete feature set: safety-net guardian, multi-role agents, parallel tasks, session archival, cross-session proactive notifications, and in-chat model/key management. `setup` is the single install path; optional `service install` only asks the OS to supervise that same profile, not a second runtime.
+**A:** The most complete eight-part feature set: safety-net guardian, multi-role agents, trusted multi-bot handoffs, parallel tasks, session archival, cross-session proactive notifications, in-chat model/key management, and a plan-before-action gate. `setup` is the single install path; optional `service install` only asks the OS to supervise that same profile, not a second runtime.
 
 **Q: Where do I download the project? Are there impostors?**
 
@@ -346,6 +371,7 @@ Core environment variables:
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | Stale-message rejection window (0 disables) |
 | `DSH_LARK_GROUP_NO_AT` | `false` | Process allowlisted live no-@ messages and poll registered group history; requires `im:message.group_msg` and a non-empty `allowed_users` list |
 | `DSH_LARK_GROUP_POLL_MS` | `3000` | No-@ group polling interval in milliseconds (minimum 1000) |
+| `DSH_LARK_BOT_HANDOFF_MAX` | `6` | Fleet-wide consecutive trusted-bot @ handoff limit (minimum 2; a human message resets it) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | Grace period after SIGTERM before SIGKILL |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | Concurrent runs per scope (1 = strictly serial) |
@@ -375,6 +401,12 @@ On startup the bot auto-discovers common local `@deepseek-ai/dsh` installations.
 This tool runs **locally**; before installing, be aware that it accesses:
 
 - **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at `~/.dsh-lark/config.json` (file mode 600).
+- **Multi-bot identities and handoff state**: `fleet.json` (0600) stores instance/profile names, isolated DSH_HOME and bot open_id/name,
+  never secrets; `handoffs.json` (0600) stores chat ids, recent handoff message ids and counters. Only a registered
+  peer's real @mention enters the agent. Registered peer names/open_ids are included in every agent prompt and sent
+  to the model provider so it can produce an exact @ handoff; handoff prompts/cards/replies remain visible to the shared group.
+  Removing an instance deletes its Feishu config credentials, isolated `.credentials.yaml` and service env while
+  retaining provider settings/runtime sessions in DSH_HOME and `profiles/<name>/` session/worktree data for recovery.
 - **File system**: reads / writes the working directories you choose with `/cd` and `/ws` (including running shell commands and modifying files).
 - **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and task context sent to the DeepSeek API.
 - **Group events and optional history**: to recognize direct replies to question cards, live group events reach the bridge before its mention gate; unmentioned events that do not match a pending card are ignored. With `DSH_LARK_GROUP_NO_AT=true`, unmentioned live events enter the task pipeline and the bridge also polls previously registered groups/topics. Both paths enforce the current user/chat allowlists; historical messages must additionally be post-start and non-deleted, and are deduplicated against live events. Grant `im:message.group_msg` only after confirming that this matches your team's privacy policy.
@@ -516,9 +548,9 @@ The safety-net guardian (`src/guardian/`) installed by default runs as a separat
 | `src/workspace/` | Project workspace, git worktree isolation & rule injection |
 | `src/adapters/` | Agent backend adapters (sdk / acp / headless / web single-writer) |
 | `src/card/` | Streaming, approval, question and plan-decision cards |
-| `src/bot/` | Run/queue plus approval, question, plan and isolation registries |
+| `src/bot/` | Run/queue, decision/isolation registries, multi-bot fleet and handoff guard |
 | `src/commands/` | Slash commands |
-| `src/cli/` | CLI entry: setup / service / doctor / upgrade / hidden runtime entries |
+| `src/cli/` | CLI entry: setup / bot add/list/status/remove / service / doctor / upgrade / hidden runtime entries |
 | `src/service/` | Cross-platform normal-profile supervision, private environment snapshot, status and logs |
 | `src/upgrade/` | One-command upgrade (issues #10/#51): version/state detection, restarts, runtime links and dependency migration |
 | `src/guardian/` | Safety-net guardian: heartbeat, process watch, core-only safe profile, takeover state machine, service install |
@@ -561,11 +593,11 @@ See [`docs/roadmap.md`](docs/roadmap.md).
 - omdsh-dev/community listing: [Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ accepted, discussion active (latest notes v0.10.2); v0.15.1 update note — 📨 prepared, paste manually
 - Platform refresh (v0.14.0 → v0.15.1) — ✅ resumed (2026-08-17): awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 follow-up](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh note prepared
 
-**Highlights follow-ups** (six exclusive capabilities & the issue #6 design):
+**Historical highlights follow-ups** (the then-current six capabilities and issue #6 design; see the eight-part list above for the current product):
 
 - awesome-dsh-plugins leaderboard row sync (repo description → latest) & agent-test name anomaly: [#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 submitted (maintainer confirmed; awaiting the snapshot/render cycle)
 - dshfind detail page: add the in-chat model/key management highlight: [#2 follow-up](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 submitted
-- omdsh six-exclusive-highlights summary (incl. the Guardian design): [Discussion #11 highlights comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 submitted
+- omdsh then-six-exclusive-highlights summary (incl. the Guardian design): [Discussion #11 highlights comment](https://github.com/orgs/omdsh-dev/discussions/11#discussioncomment-18026370) — 📨 submitted
 
 ## Impostor Repository Warning
 

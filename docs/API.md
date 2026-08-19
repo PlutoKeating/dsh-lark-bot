@@ -32,6 +32,7 @@ export interface RuntimeEnv {
   eventFreshnessMs: number;
   groupNoAt: boolean;
   groupPollMs: number;
+  botHandoffMax: number;
   heartbeatMs: number;
   guardianDisabled: boolean;
   guardianProfile: string;
@@ -58,6 +59,10 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_GROUP_NO_AT`：是否轮询已登记群聊的未 @ 消息（默认 `false`）；开启时必须配置
   非空 `allowedUsers`，并要求应用具有 `im:message.group_msg` 权限。
 - `DSH_LARK_GROUP_POLL_MS`：无 @ 群消息轮询间隔（默认 `3000`，最小 `1000` 毫秒）。
+- `DSH_LARK_PROFILE` / `DSH_LARK_DSH_PROFILE`：多实例 service 自动写入的 bridge/dsh profile
+  identity；普通单实例无需手工设置。
+- `DSH_LARK_BOT_HANDOFF_MAX`：共享 fleet 中连续可信 bot @ 交接上限，默认 `6`、最小 `2`；
+  任一通过 freshness 检查的真人消息重置。
 - `DSH_LARK_RUN_TIMEOUT_MS`：单次运行空闲超时（持续无活动事件才终止，活跃任务不会被误杀），
   默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
@@ -97,6 +102,9 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 export interface AppPaths {
   root: string;
   configFile: string;
+  fleetFile: string;
+  handoffFile: string;
+  botDshHome: (name: string) => string;
   activeProfileFile: string;
   profileDir(profile: string): string;
   profilePath(profile: string, ...parts: string[]): string;
@@ -590,6 +598,14 @@ export interface Logger {
 - `dsh-lark-bot service logs [--profile <name>] [-n <count>] [-f]`：读取 / 跟随
   `profiles/<profile>/logs/service.log`。服务元数据与环境分别为 `service/<profile>.json`、`.env`
   （POSIX 0600；Windows 以 owner-only ACL 收紧）；环境仅快照 `DSH_LARK_*`、PATH/HOME/DSH_HOME、DeepSeek key 与 provider 实际引用键。
+- `dsh-lark-bot bot add <name> [--app-id/--app-secret] [--tenant] [--workspace] [--model]`：
+  安装独立 `dsh-lark-<name>` bundle profile、创建/保存同名 bridge profile、写 fleet row，并只启动
+  该实例的 OS 用户服务；任一步启动失败会卸载部分 service、删除 fleet row 与配置凭据。附加实例
+  支持 `sdk` / `acp` / `headless`，但 fail closed 拒绝共享广播流、无法隔离 session 的 `web` adapter。
+- `dsh-lark-bot bot list|status <name>|remove <name>`：查看 fleet/service/model 或移除单个实例；
+  remove 先卸载 service/env snapshot，再删除该 profile 的配置凭据/fleet row，保留
+  `profiles/<name>/` 会话、worktree、archive 与日志；`default` 主机器人不可由 fleet remove，
+  必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
@@ -621,7 +637,8 @@ export interface Logger {
 ## 9. 桥接层 · Bridge
 
 - `src/bridge/channel.ts`：`startChannel(deps)` 建立飞书长连接，路由 `message` / `cardAction`
-  事件，处理 `stop` / `approve` / `question-submit` 卡片按钮。
+  事件，处理 `stop` / `approve` / `question-submit` 卡片按钮；bot sender 只有在 fleet identity
+  唯一、enabled、真实 @ 当前 bot 时进入任务管线，且跳过 slash-command dispatch。
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
 - `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`。
@@ -643,6 +660,19 @@ topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(
 未删除、非 system、非 bot 且位于显式 `allowedUsers`（以及可选 `allowedChats`）中的消息；单群
 失败不阻塞其他群，处理失败不会推进该消息水位。`doctor` 在功能开启且已有登记群时真实探测
 历史 API 权限。
+
+`src/bot/fleet-store.ts` 持久化 `fleet.json`：实例名 → bridge profile / dsh profile / 独立 DSH_HOME /
+enabled / 官方 bot open_id/name。启动连接后通过 `LarkChannel.getBotIdentity()` 登记；`bot add`
+等待该 identity ready 后才成功，重复 open_id 会记录启动错误、断开并回滚第二实例。
+读 peer 时每次 reload；写入用原子 owner 目录与唯一 token 子文件串行化，心跳续租，dead-owner / 遗弃
+lease 可回收。释放与回收只删除精确 token 后对空目录执行 `rmdir`，不会误删替代 owner；JSON 仍以
+0600 atomic rename 提交。
+`src/bot/handoff-guard.ts` 持久化 `handoffs.json`，对 chat 的可信 bot messageId 去重并精确统计全
+fleet 连续交接；真人消息在 mention gate 前清零。到上限后只发送一次终态提示并 fail closed。
+`run-flow` 将 peer name/displayName/open_id 作为独立协作 preamble 注入（因此这些标识会随每轮
+任务上下文发送给模型 provider），要求 agent 仅按明确请求
+使用 `lark_notify` + 精确 `mention_user_ids` 交接。member isolation 下的 bot handoff 降为该实例的
+topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 
 `src/notify/server.ts` 提供 `NotifyServer`：127.0.0.1 回环 HTTP 服务，`POST /notify` 以
 `token` 鉴权，解析 scope/chat 后调用注入的 `send(destination, {text, mentions})`；token 由

@@ -14,6 +14,7 @@ import {
 import { runServiceCommand } from './cli/commands/service.js';
 import { runSupervise } from './cli/commands/supervise.js';
 import { runServiceRuntime } from './cli/commands/service-run.js';
+import { runBotCommand, type BotCommandOptions } from './cli/commands/bot.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -182,6 +183,29 @@ export function buildProgram(): Command {
         follow: opts.follow === true,
       }, { version: packageVersion() });
     });
+
+  const bots = program
+    .command('bot')
+    .description('Add, inspect and remove isolated Feishu/Lark bot instances');
+  bots.command('add <name>')
+    .description('Create and start an isolated bot instance')
+    .option('--app-id <id>', 'existing Feishu/Lark app id (otherwise QR onboarding)')
+    .option('--app-secret <secret>', 'existing Feishu/Lark app secret')
+    .option('--tenant <tenant>', 'feishu or lark')
+    .option('--workspace <path>', 'default workspace')
+    .option('--model <route>', 'default provider/model route')
+    .action(async (name: string, opts: BotCommandOptions) => {
+      await runBotCommand('add', { name, ...opts }, { version: packageVersion() });
+    });
+  bots.command('list')
+    .description('List bot instances and service state')
+    .action(async () => runBotCommand('list', {}, { version: packageVersion() }));
+  bots.command('status <name>')
+    .description('Show one bot instance')
+    .action(async (name: string) => runBotCommand('status', { name }, { version: packageVersion() }));
+  bots.command('remove <name>')
+    .description('Stop and remove one instance while preserving its session data')
+    .action(async (name: string) => runBotCommand('remove', { name }, { version: packageVersion() }));
 
   program
     .command('service-run', { hidden: true })

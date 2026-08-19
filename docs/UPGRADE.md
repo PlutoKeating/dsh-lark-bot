@@ -23,6 +23,7 @@
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
 | 升级状态 | `~/.dsh-lark/upgrade-state.json` | `--rollback` 的版本快照 |
+| 多机器人 fleet | `~/.dsh-lark/fleet.json` | 每个实例指向独立 dsh profile 与 `bots/<name>/dsh` DSH_HOME；升级状态与重启仍按 profile 管理 |
 | 兼容矩阵 | `docs/COMPATIBILITY.md` | 版本 pin 与上游一致性的单一事实来源 |
 
 ## 3. 版本探测 · Version probing（#14 修复后的语义）
@@ -67,6 +68,10 @@
 - **待生效标记**：升级记录 `pendingRestart`（运行中实例且未 `--restart` 时为 true），
   `doctor` 会提示「上次升级待重启生效」；重启后再次 upgrade / 手动清理即不再提示。
 - 换包后的首次启动较慢（pnpm 校验 / 构建策略，实测 ~30–90s），属已知现象，等待即可。
+- **多机器人实例**：`upgrade --profile <name>` 只升级指定 dsh profile，不会隐式中断或批量重启
+  其他实例。管理员应从 `bot list` 取得每个实例的 dsh profile 与 dsh home，逐个以
+  `DSH_HOME=<dsh-home> dsh-lark-bot upgrade --profile <dsh-profile> --yes` 执行 upgrade/doctor；
+  `--restart` 也只作用于该 profile 对应的用户服务。
 
 ## 6. 已知边界与风险清单 · Known boundaries
 
@@ -82,6 +87,7 @@
 | 运行中实例待生效 | `pendingRestart` 记录 + doctor 提示 | 已实现 |
 | runtime 链接漂移 | doctor 检测 sdk/acp 链接版本与已装版本不一致 | 已实现 |
 | runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写 | 已实现 + 单测覆盖 |
+| 多机器人版本漂移 | 每个实例是独立 dsh profile，单次 upgrade 不做 fleet-wide mutation | `bot list` 后逐 profile 升级并 doctor |
 
 ### 6.1 npx 引导回归矩阵 · Bootstrap regression matrix
 

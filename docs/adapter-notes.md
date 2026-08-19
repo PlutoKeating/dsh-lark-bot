@@ -198,6 +198,11 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
 8. **ACP rc.7 图片**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP，并在 runtime 宣告
    image capability 后发送原生 base64 block；不支持时显式失败。当前 channel 尚无图片出站
    契约，ACP assistant 图片会显示降级文本。详见 `DSH_RC7_AUDIT.md`。
+9. **多机器人交接**：adapter 契约不增加 bot 专用事件；bridge 先验证飞书 bot sender、真实 @ 与
+   fleet peer 身份，再把带来源标记的文本交给普通 run。运行 prompt 只注入登记 peer 的 name/open_id，
+   agent 通过既有 `lark_notify` + `mention_user_ids` 交接；跨进程回合限制位于 bridge/bot seam，
+   不污染 SDK/ACP/Web 协议层。附加实例只允许可独立装配的 SDK/ACP/headless；共享 Web mux 的
+   广播会被多个 watcher 消费，无法提供实例级 session 隔离，因此启动时 fail closed。
 
 ---
 

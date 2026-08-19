@@ -17,6 +17,7 @@ describe('resolveAppPaths', () => {
     const paths = resolveAppPaths();
 
     expect(paths.configFile).toBe('/tmp/dsh-lark-test/config.json');
+    expect(paths.botDshHome('reviewer')).toBe('/tmp/dsh-lark-test/bots/reviewer/dsh');
     expect(paths.sessionsFile('main')).toBe(
       '/tmp/dsh-lark-test/profiles/main/sessions.json',
     );

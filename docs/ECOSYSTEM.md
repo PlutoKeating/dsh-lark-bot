@@ -41,6 +41,10 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
 - pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报
   `ERR_PNPM_IGNORED_BUILDS`，按官方 publish 指引在 profile 的 `pnpm-workspace.yaml` 加入
   `allowBuilds: { protobufjs: true }` 后重试（与官方 dsh-lark-channel 行为一致）。
+- 多机器人仍遵循同一 bundle 形态：`bot add` 为每个实例建立独立 dsh profile、DSH_HOME 与用户服务，
+  共享的 `fleet.json` / `handoffs.json` 只承担可信身份发现和有界交接协调，不承载密钥或 agent
+  session。附加实例限定 SDK/ACP/headless，拒绝无法隔离广播 session 的共享 Web mux。发版自检至少
+  覆盖一个额外实例的 `bot status`，并逐个 profile 运行升级/doctor。
 
 ## 3. README 规范 · README Specification
 

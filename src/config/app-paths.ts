@@ -4,6 +4,9 @@ import { join, resolve } from 'node:path';
 export interface AppPaths {
   root: string;
   configFile: string;
+  fleetFile: string;
+  handoffFile: string;
+  botDshHome: (name: string) => string;
   activeProfileFile: string;
   serviceDir: string;
   serviceEnvFile: (profile: string) => string;
@@ -34,6 +37,9 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
   return {
     root,
     configFile: join(root, 'config.json'),
+    fleetFile: join(root, 'fleet.json'),
+    handoffFile: join(root, 'handoffs.json'),
+    botDshHome: (name) => join(root, 'bots', name, 'dsh'),
     activeProfileFile: join(root, 'active-profile'),
     serviceDir: join(root, 'service'),
     serviceEnvFile: (profile) => join(root, 'service', `${profile}.env`),

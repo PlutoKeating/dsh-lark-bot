@@ -40,6 +40,7 @@ import {
 import type { ScopeDirectory } from './scope-directory.js';
 import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
 import { ReconnectNotifier } from './reconnect-notifier.js';
+import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 
 export interface StartChannelDeps {
   appId: string;
@@ -86,6 +87,10 @@ export interface StartChannelDeps {
   eventFreshnessMs?: number;
   groupNoAt?: boolean;
   groupPollMs?: number;
+  /** Trusted fleet lookup for inbound bot-to-bot @ handoffs. */
+  isTrustedBot?: (openId: string) => Promise<boolean>;
+  botHandoffMax?: number;
+  handoffGuard?: Pick<BotHandoffGuard, 'recordHuman' | 'recordBot'>;
   /** Injectable history source for deterministic tests. */
   groupHistorySource?: GroupHistorySource;
   stopGraceMs?: number;
@@ -143,13 +148,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   ): Promise<void> => {
     if (groupPoller && !alreadyClaimed && !groupPoller.claim(msg.messageId)) return;
     const chatMode = msg.chatMode ?? msg.chatType;
+    const botSender = msg.senderType === 'bot';
+    if (msg.senderType && msg.senderType !== 'user' && !botSender) return;
     const isolationMode = isolationStore.get(msg.chatId);
+    // A peer bot has no human owner who could operate member-owned approval /
+    // question cards. Keep its handoff in this instance's group/topic scope;
+    // each bot instance is already isolated by its bridge profile.
+    const effectiveIsolationMode = botSender && isolationMode === 'member'
+      ? 'topic'
+      : isolationMode;
     const scope = isolatedScope({
       chatId: msg.chatId,
       chatMode,
       ...(msg.threadId ? { threadId: msg.threadId } : {}),
       ...(msg.senderId ? { senderId: msg.senderId } : {}),
-    }, isolationMode);
+    }, effectiveIsolationMode);
     if (
       deps.eventFreshnessMs !== undefined &&
       deps.eventFreshnessMs > 0 &&
@@ -160,6 +173,24 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         ageMs: Date.now() - msg.createTime,
       });
       return;
+    }
+    if (msg.senderType === 'user') await deps.handoffGuard?.recordHuman(msg.chatId);
+    if (botSender) {
+      if (!msg.mentionedBot || !msg.senderId || !await deps.isTrustedBot?.(msg.senderId)) return;
+      const decision = await deps.handoffGuard?.recordBot(
+        msg.chatId,
+        msg.messageId,
+        deps.botHandoffMax ?? 6,
+      );
+      if (decision && !decision.allowed) {
+        if (decision.firstTrip) {
+          await commandChannel.sendMarkdown(
+            msg.chatId,
+            `🛑 机器人连续协作已达到 ${deps.botHandoffMax ?? 6} 轮上限。请由任一成员发言后再继续。`,
+          );
+        }
+        return;
+      }
     }
     const repliedQuestion = msg.replyToMessageId
       ? deps.questions?.pendingForMessage(msg.replyToMessageId)
@@ -235,7 +266,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       threadId: msg.threadId,
       chatMode,
       isolationStore,
-      isolationMode,
+      isolationMode: effectiveIsolationMode,
       sessions: deps.sessions,
       workspaces: deps.workspaces,
       activeRuns: deps.activeRuns,
@@ -270,7 +301,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       senderId: msg.senderId,
     };
 
-    const handled = await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
+    const handled = botSender ? false : await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
       // A failing command must surface to the user, not be silently
       // forwarded to the agent (which would reply with an unrelated agent
       // error and look like the command does not exist).
@@ -302,7 +333,12 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           { replyTo: msg.messageId },
         );
       }
-      deps.pending.push(scope, msg);
+      deps.pending.push(scope, botSender
+        ? {
+            ...msg,
+            content: `[来自可信机器人 ${msg.senderName ?? msg.senderId} 的交接]\n${msg.content}`,
+          }
+        : msg);
     }
   };
 

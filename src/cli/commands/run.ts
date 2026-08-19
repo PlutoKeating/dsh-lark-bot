@@ -43,6 +43,10 @@ import { WorkspaceStore } from '../../workspace/store.js';
 import { startHeartbeat } from '../../guardian/heartbeat.js';
 import { currentVersion } from '../../upgrade/update-check.js';
 import { UpdateNotifier } from '../../upgrade/update-notifier.js';
+import { BotFleetStore } from '../../bot/fleet-store.js';
+import { BotHandoffGuard } from '../../bot/handoff-guard.js';
+import { resolveDshHome } from '../../config/dsh-runtime.js';
+import { homedir } from 'node:os';
 
 const DEBOUNCE_MS = 600;
 
@@ -149,7 +153,16 @@ export async function startBridgeEngine(
   const paths = resolveAppPaths(env.home);
   const profileName = options.profileName;
   const configStore = new ConfigStore(paths.configFile);
-  await configStore.load();
+  const fleet = new BotFleetStore(paths.fleetFile);
+  const handoffGuard = new BotHandoffGuard(paths.handoffFile);
+  await Promise.all([configStore.load(), fleet.load()]);
+  await fleet.ensure({
+    name: profileName,
+    bridgeProfile: profileName,
+    dshProfile: process.env.DSH_LARK_DSH_PROFILE ??
+      (profileName === 'default' ? env.guardianProfile : `dsh-lark-${profileName}`),
+    dshHome: resolveDshHome(homedir(), process.env),
+  });
 
   const ready = await ensureBotProfile(configStore, {
     env,
@@ -191,6 +204,12 @@ export async function startBridgeEngine(
       stopGraceMs: activeProfile.preferences.stopGraceMs ?? env.stopGraceMs,
       model: activeProfile.preferences.model,
     }));
+  if (profileName !== 'default' && fleet.get(profileName) && adapter.id === 'dsh-web') {
+    await adapter.dispose?.();
+    throw new Error(
+      '多机器人实例不能共享 Web adapter 事件流；请将该实例配置为 sdk 或 acp。',
+    );
+  }
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
   const concurrencyStore = new ConcurrencyStore();
@@ -296,6 +315,7 @@ export async function startBridgeEngine(
           ...attachments.textFileNotes,
         ].filter(Boolean);
         const role = roleStore.roleForScope(scope);
+        const collaborationPeers = await fleet.peersFor(profileName);
         const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
         const resolvedModel =
           models.get(scope) ??
@@ -355,6 +375,7 @@ export async function startBridgeEngine(
           defaultWorkspace,
           replyTo: first.messageId,
           ...(scopeOwner ? { scopeOwner } : {}),
+          ...(collaborationPeers.length > 0 ? { collaborationPeers } : {}),
           runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
           maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
@@ -427,6 +448,9 @@ export async function startBridgeEngine(
     eventFreshnessMs: env.eventFreshnessMs,
     groupNoAt: env.groupNoAt,
     groupPollMs: env.groupPollMs,
+    isTrustedBot: (openId) => fleet.isTrustedPeer(openId, profileName),
+    botHandoffMax: env.botHandoffMax,
+    handoffGuard,
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
     ...(options.createChannel ? { createChannel: options.createChannel } : {}),
@@ -435,6 +459,24 @@ export async function startBridgeEngine(
     channelInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
   }
   const bridge = await startChannel(channelInput);
+  if (typeof bridge.channel.getBotIdentity === 'function') {
+    const identity = bridge.channel.getBotIdentity();
+    try {
+      await fleet.registerIdentity(profileName, {
+        openId: identity.openId,
+        ...(identity.name ? { name: identity.name } : {}),
+      });
+    } catch (error) {
+      await bridge.disconnect();
+      await adapter.dispose?.();
+      throw error;
+    }
+  } else {
+    log.warn('fleet', 'identity-unavailable', {
+      profile: profileName,
+      error: 'channel does not expose getBotIdentity',
+    });
+  }
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
   // In `web` adapter mode, watch web-GUI turn completions: push them to Feishu

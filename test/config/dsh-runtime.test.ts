@@ -35,6 +35,18 @@ describe('dsh runtime discovery', () => {
     }
   });
 
+  it('reuses the canonical dsh CLI for an isolated instance DSH_HOME', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-runtime-isolated-'));
+    const bin = join(root, '.dsh', 'profiles', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+    await mkdir(join(bin, '..'), { recursive: true });
+    await writeFile(bin, '#!/usr/bin/env node\n');
+    try {
+      expect(discoverDshBin(root, { DSH_HOME: join(root, 'fleet', 'reviewer', 'dsh') })).toBe(bin);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps explicit command and args unchanged', () => {
     expect(
       resolveDshRuntime({
