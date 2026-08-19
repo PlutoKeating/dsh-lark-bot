@@ -81,6 +81,7 @@
 - **git worktree / 分支隔离**：每个会话绑定独立工作区，互不串改。
 - **项目级规则注入**：每项目注入 AGENTS.md / dsh preset / cordis.yml。
 - **上下文持久化**：append-only session log，支持 fork / resume / 回放。
+- **自然问答续接**：等待问答卡期间可提交表单或直接回复卡片；回复按 card messageId、topic 与 member owner 精确路由，单选/多选也接受自由文本补充，答案到达后原 agent turn 自动继续。
 - 多项目导航卡片。
 
 ### 4.4 审批与安全（approval & security）
@@ -131,7 +132,7 @@
 
 - 出站契约 `SendOptions { replyTo?, mentions?, threadId? }`：`mentions` 以
   `MentionTarget { userId, name? }` 表达，桥接层自动拼接 `<at>` 提及标记。
-- `ScopeDirectory`（`<profile>/scopes.json`）持久化 scope → chat/thread 映射；
+- `ScopeDirectory`（`<profile>/scopes.json`）持久化 scope → chat/thread/最近入站 messageId 映射；
   `/notify <scope|chatId> <text>`（管理员）与 `/notify list`。
 - agent 侧 `lark_notify` dsh 工具（SDK / ACP runtime 自动装配）：`text` / `scope` /
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token

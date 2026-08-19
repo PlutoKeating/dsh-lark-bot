@@ -230,7 +230,7 @@ export async function startBridgeEngine(
         sendCard: async (chatId, card, options) => {
           if (!streaming) throw new Error('bridge channel is not ready');
           if (!streaming.sendCard) throw new Error('bridge channel does not support cards');
-          await streaming.sendCard(chatId, card, options);
+          return streaming.sendCard(chatId, card, options);
         },
       },
     }),

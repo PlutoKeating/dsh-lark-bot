@@ -80,7 +80,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 
 ## 关键决策 · Key Decisions
 
-1. **飞书通道与 scope 隔离**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode`。`IsolationStore`（`<profile>/isolation.json`）按 chat 持久化 `group|topic|member` 策略，默认 `topic` 保持原有普通群/话题行为；成员模式生成 `<chat>:member:<open_id>`。消息入队时即固化 scope，owner 从该 scope 还原；运行 / 审批 / 问答 card action 携带创建时 scope，member action 还要求 operator `open_id` 与 owner 一致，`/stop` 遍历当前操作者可达的 group / topic / member scopes，因此切换策略不会孤立旧运行或越权操作其他成员会话。任务卡显示 owner。切换只影响后续路由，不迁移或删除旧 scope 数据。PersonalAgent 群事件默认只覆盖 @ 消息；可通过 `DSH_LARK_GROUP_NO_AT=true` 显式启用历史 API 增量轮询。轮询仅面向 `ScopeDirectory` 已登记的 group/topic，以 per-chat 水位和跨实时/轮询 message ID claim 去重，经过与实时事件相同的白名单、freshness、bot/system/deleted 过滤及消息处理管线；进程启动时间作为初始水位，不回放历史积压。该模式要求非空显式用户白名单与 `im:message.group_msg` 权限，并由 `doctor` 做 best-effort 实际权限探测。
+1. **飞书通道与 scope 隔离**：采用 `@larksuite/channel`（WebSocket 长连接 + PersonalAgent 应用），并开启 `resolveChatMode`。`IsolationStore`（`<profile>/isolation.json`）按 chat 持久化 `group|topic|member` 策略，默认 `topic` 保持原有普通群/话题行为；成员模式生成 `<chat>:member:<open_id>`。消息入队时即固化 scope，owner 从该 scope 还原；运行 / 审批 / 问答 card action 携带创建时 scope，member action 还要求 operator `open_id` 与 owner 一致，`/stop` 遍历当前操作者可达的 group / topic / member scopes，因此切换策略不会孤立旧运行或越权操作其他成员会话。任务卡显示 owner。问答卡发送后，`QuestionRegistry` 在内存中绑定 card messageId 与创建时 scope/question id；runtime 问题再绑定 native session，使并发 run 只清理/暂停自己的问题。输入消息回复该卡时优先作为自由文本答案；topic 卡以 `ScopeDirectory` 最近入站 messageId 作为 reply anchor。群聊 mention gate 在 bridge 匹配回复后执行：普通消息仍须 @（或显式 no-at 模式），只有 pending 问答卡 reply 可免 @；topic 必须匹配原 thread，member 必须匹配 owner。切换只影响后续路由，不迁移或删除旧 scope 数据。PersonalAgent 群事件默认只处理 @ 消息和 pending 问答卡回复；可通过 `DSH_LARK_GROUP_NO_AT=true` 显式启用历史 API 增量轮询及实时无 @ 消息；两条 no-at 路径都校验当前 `allowedUsers` / `allowedChats`。轮询仅面向 `ScopeDirectory` 已登记的 group/topic，以 per-chat 水位和跨实时/轮询 message ID claim 去重，经过与实时事件相同的白名单、freshness、bot/system/deleted 过滤及消息处理管线；进程启动时间作为初始水位，不回放历史积压。该模式要求非空显式用户白名单与 `im:message.group_msg` 权限，并由 `doctor` 做 best-effort 实际权限探测。
 2. **agent 后端解耦**：通过 adapter 接口抽象，`dsh` 为默认后端。默认走官方
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
@@ -120,7 +120,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    模型优先级（每会话 `/model use` > 角色 > profile > dsh 默认 > 环境），因此角色切换无需
    重启 runtime，也能与 scope 内并行 run 共存。
 6. **通知与人机决策回调**：bridge 出站契约支持 `mentions` 与跨 chat/thread 发送；`ScopeDirectory`
-   持久化 scope → chat/thread 映射；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
+   持久化 scope → chat/thread/最近入站 messageId 映射（messageId 用于 topic reply anchor）；`NotifyServer` 在 127.0.0.1 提供带 token 鉴权的回调，
    SDK / ACP runtime 装配 `lark_notify` 工具（`dsh-lark-bot/notify`），agent 可主动 @ 提及
    并向其他会话推送汇报；本地回环 + 每启动随机 token，不暴露公网。
    `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema

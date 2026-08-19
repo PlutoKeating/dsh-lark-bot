@@ -159,7 +159,7 @@ and pauses the idle watchdog; approval resumes the original turn, while revision
 another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
 stopping it cancels and recalls only that session's pending card. The legacy headless adapter cannot use callback tools.
 
-**Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text) and resumes automatically once you answer; the run-timeout watchdog pauses while a card is waiting. (The opposite direction of `/ask`, where you ask the agent.)
+**Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
 
 **Safety-net guardian**: a minimal system-level resident process (systemd / LaunchAgent / Windows startup), independent of the dsh process and installed **by default with `setup`**. Silent while dsh runs, it takes over the Feishu channel when dsh goes down or fails to boot (e.g. a third-party plugin breaks the profile composition), so you can self-heal without touching the command line:
 
@@ -322,7 +322,7 @@ Core environment variables:
 | `DSH_LARK_WEB_PUSH` | `true` | `web` adapter: push web-GUI turn completions to Feishu and auto-switch the chat mapping (`0` disables) |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | Reject private chats when no allowlist is configured |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | Stale-message rejection window (0 disables) |
-| `DSH_LARK_GROUP_NO_AT` | `false` | Poll registered groups for messages without @; requires `im:message.group_msg` and a non-empty `allowed_users` list |
+| `DSH_LARK_GROUP_NO_AT` | `false` | Process allowlisted live no-@ messages and poll registered group history; requires `im:message.group_msg` and a non-empty `allowed_users` list |
 | `DSH_LARK_GROUP_POLL_MS` | `3000` | No-@ group polling interval in milliseconds (minimum 1000) |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | Grace period after SIGTERM before SIGKILL |
@@ -355,7 +355,7 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Feishu credentials**: the PersonalAgent app `app_id` / `app_secret`, stored in plaintext at `~/.dsh-lark/config.json` (file mode 600).
 - **File system**: reads / writes the working directories you choose with `/cd` and `/ws` (including running shell commands and modifying files).
 - **Network**: an outbound WebSocket long connection to the Feishu open platform for messages, and task context sent to the DeepSeek API.
-- **Optional group history**: only with `DSH_LARK_GROUP_NO_AT=true`, the bridge polls groups/topics previously registered by an event. It accepts only post-start, non-deleted messages from explicitly allowlisted human users and deduplicates them against live events. This lets the bot read group messages that do not mention it; grant `im:message.group_msg` only after confirming that this matches your team's privacy policy.
+- **Group events and optional history**: to recognize direct replies to question cards, live group events reach the bridge before its mention gate; unmentioned events that do not match a pending card are ignored. With `DSH_LARK_GROUP_NO_AT=true`, unmentioned live events enter the task pipeline and the bridge also polls previously registered groups/topics. Both paths enforce the current user/chat allowlists; historical messages must additionally be post-start and non-deleted, and are deduplicated against live events. Grant `im:message.group_msg` only after confirming that this matches your team's privacy policy.
 - **Member-isolation identity and group visibility**: `member` mode writes the sender `open_id` into local
   session/scope-directory/worktree/archive indexes or paths derived from `isolation.json`, and shows it on the
   shared group run card. It isolates agent context, not group-message visibility: prompts, progress cards and
@@ -363,6 +363,8 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Local session usage**: adapter-reported input/output/cache tokens and context used/limit are stored per scope
   in `~/.dsh-lark/profiles/<profile>/sessions.json` (mode 0600) and displayed by `/status`. Only the member-scope
   owner can refresh its card, but a status card already sent to a shared group follows normal group visibility.
+- **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
+  the reply anchor that places later agent question cards back in the original topic.
 - **Local callback**: `lark_notify`, `lark_ask_user` and `lark_request_plan_approval` call the bridge over a
   random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
   current Feishu / Lark conversation.

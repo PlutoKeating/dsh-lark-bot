@@ -399,6 +399,166 @@ describe('startChannel', () => {
     });
   });
 
+  it('uses a non-mention text reply to the exact topic question card as its answer', async () => {
+    const fake = makeChannel();
+    const questions = new QuestionRegistry();
+    const pendingQuestion = questions.register('chat-1:thread-1', {
+      question: 'Which approach?',
+      kind: 'single',
+      options: ['A', 'B'],
+    });
+    questions.bindMessage('chat-1:thread-1', pendingQuestion.id, 'question-card-message');
+    const pending = {
+      push: vi.fn(),
+      size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false),
+      isBlocked: vi.fn().mockReturnValue(false),
+    };
+
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-test-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never, questions, defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'wrong-thread-reply', chatId: 'chat-1', chatType: 'group', chatMode: 'topic',
+      threadId: 'thread-2', senderId: 'user-1', content: 'wrong thread', rawContentType: 'text',
+      replyToMessageId: 'question-card-message', mentionedBot: false,
+    }));
+    expect(questions.pendingCount('chat-1:thread-1')).toBe(1);
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('其他成员或其他话题');
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'image-reply', chatId: 'chat-1', chatType: 'group', chatMode: 'topic',
+      threadId: 'thread-1', senderId: 'user-1', content: 'image-key', rawContentType: 'image',
+      replyToMessageId: 'question-card-message', mentionedBot: false,
+    }));
+    expect(questions.pendingCount('chat-1:thread-1')).toBe(1);
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('非空文字');
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'answer-message', chatId: 'chat-1', chatType: 'group', chatMode: 'topic',
+      threadId: 'thread-1', senderId: 'user-1', content: '  都不合适，换个思路  ',
+      rawContentType: 'text', replyToMessageId: 'question-card-message', mentionedBot: false,
+    }));
+
+    await expect(pendingQuestion.promise).resolves.toBe('都不合适，换个思路');
+    expect(pending.push).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('文字回答已记录');
+      expect(fake.recalled).toContain('question-card-message');
+    });
+  });
+
+  it('anchors a topic /ask card so a direct reply resumes the command', async () => {
+    const fake = makeChannel();
+    const questions = new QuestionRegistry();
+    const pending = {
+      push: vi.fn(), size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false),
+    };
+
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-test-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never, questions, defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    const command = (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'ask-command', chatId: 'chat-1', chatType: 'group', chatMode: 'topic',
+      threadId: 'thread-1', senderId: 'user-1', content: '/ask Why?', mentionedBot: true,
+    }));
+    await vi.waitFor(() => {
+      expect(questions.pendingForMessage('sent-message-id')).toBeDefined();
+    });
+    expect(fake.sent[0]?.options).toEqual(expect.objectContaining({
+      replyTo: 'ask-command',
+      replyInThread: true,
+    }));
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'ask-answer', chatId: 'chat-1', chatType: 'group', chatMode: 'topic',
+      threadId: 'thread-1', senderId: 'user-1', content: 'Because',
+      replyToMessageId: 'sent-message-id', mentionedBot: false,
+    }));
+    await command;
+
+    expect(pending.push).not.toHaveBeenCalled();
+    expect(fake.sent.some((item) => JSON.stringify(item.input).includes('已记录你的回答'))).toBe(true);
+  });
+
+  it('keeps member question replies owner-only after isolation switches', async () => {
+    const fake = makeChannel();
+    const questions = new QuestionRegistry();
+    const pendingQuestion = questions.register('chat-1:member:user-1', {
+      question: 'Add detail?', kind: 'multi', options: ['A', 'B'],
+    });
+    questions.bindMessage('chat-1:member:user-1', pendingQuestion.id, 'member-question-card');
+    const pending = {
+      push: vi.fn(), size: vi.fn().mockReturnValue(0),
+      isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false),
+    };
+
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      isolationStore: { get: () => 'group', set: vi.fn() } as never,
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-test-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: pending as never, questions, defaultWorkspace: '/tmp/project',
+      createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'missing-operator-answer', chatId: 'chat-1', chatType: 'group', chatMode: 'group',
+      senderId: '', content: 'anonymous answer', replyToMessageId: 'member-question-card',
+    }));
+    expect(questions.pendingCount('chat-1:member:user-1')).toBe(1);
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'foreign-answer', chatId: 'chat-1', chatType: 'group', chatMode: 'group',
+      senderId: 'user-2', content: 'I will answer for them',
+      replyToMessageId: 'member-question-card',
+    }));
+    expect(questions.pendingCount('chat-1:member:user-1')).toBe(1);
+    expect(pending.push).not.toHaveBeenCalled();
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'owner-answer', chatId: 'chat-1', chatType: 'group', chatMode: 'group',
+      senderId: 'user-1', content: 'Use C instead', replyToMessageId: 'member-question-card',
+    }));
+    await expect(pendingQuestion.promise).resolves.toBe('Use C instead');
+    expect(pending.push).not.toHaveBeenCalled();
+  });
+
   it('routes slash commands to the command channel and queues ordinary messages', async () => {
     const fake = makeChannel();
     const sessions = new SessionStore(':memory:');
@@ -452,6 +612,7 @@ describe('startChannel', () => {
     });
 
     expect(fake.createOptions?.resolveChatMode).toBe(true);
+    expect((fake.createOptions?.policy as { requireMention?: boolean })?.requireMention).toBe(false);
 
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
       message({ content: '/status' }),
@@ -464,6 +625,15 @@ describe('startChannel', () => {
     );
     expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({ content: 'build this feature' }));
 
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'unmentioned-group',
+      chatType: 'group',
+      chatMode: 'group',
+      content: 'do not process me',
+      mentionedBot: false,
+    }));
+    expect(pending.push).toHaveBeenCalledTimes(1);
+
     isolationMode = 'member';
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
       message({
@@ -472,6 +642,7 @@ describe('startChannel', () => {
         chatMode: 'group',
         senderId: 'user-2',
         content: 'private workbench',
+        mentionedBot: true,
       }),
     );
     expect(pending.push).toHaveBeenCalledWith(
@@ -728,6 +899,18 @@ describe('startChannel', () => {
           createTime: 10_001,
         }),
       );
+      await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
+        message({
+          messageId: 'om-unauthorized',
+          chatId: 'oc-group',
+          chatType: 'group',
+          chatMode: 'group',
+          senderId: 'ou-not-allowed',
+          senderType: 'user',
+          content: 'unmentioned unauthorized live event',
+          createTime: 10_001,
+        }),
+      );
     });
     let bridge: Awaited<ReturnType<typeof startChannel>> | undefined;
     try {
@@ -788,6 +971,7 @@ describe('startChannel', () => {
         'oc-group',
         undefined,
         'group',
+        'om-event',
       );
     } finally {
       await bridge?.disconnect();

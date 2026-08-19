@@ -472,7 +472,7 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/bot/density-store.ts`：per-scope 卡片密度覆盖；`/density` 命令读写。
 - `src/bot/approvals.ts`：`ApprovalRegistry`，pending 审批注册与结算（run 结束 / dispose 时
   `settleAll(scope, 'cancelled')`）。
-- `src/bot/questions.ts`：`QuestionRegistry`，`/ask` 问答卡注册与答案回写会话。
+- `src/bot/questions.ts`：`QuestionRegistry`，`/ask` / `lark_ask_user` 问答卡注册、card messageId 反向索引与答案结算；runtime 问题携带 sessionId，完成/失败只清理所属 session 或单个 id。
 - `src/bot/plan-approvals.ts`：`PlanApprovalRegistry`，计划门禁按 immutable scope + session 注册、决策与精确取消。
 
 计划、审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`cardAction` 成功结算
@@ -481,6 +481,12 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effort 异步收尾，失败只写
 `plan-confirm-failed` / `plan-recall-failed` / `approval-confirm-failed` / `approval-recall-failed` / `question-confirm-failed` /
 `question-recall-failed` 日志，不改变已结算的审批结果或答案（issue #48）。
+
+问答卡 `sendCard` 返回 messageId 后调用 `QuestionRegistry.bindMessage(scope,id,messageId)`；普通消息的
+`replyToMessageId` 命中 pending 卡时，bridge 在命令/任务队列之前把非空 text/post 正文作为字符串答案。
+该路径不把单选/多选文字强制映射回选项，因而可表达补充说明；未明确回复 pending 卡的消息绝不被吞。
+群聊 channel 底层允许事件进入 bridge 后再执行 mention gate：普通消息仍要求 @（`groupNoAt` 除外），
+只有 pending-card reply 免 @；topic scope 必须匹配 thread，member scope 必须匹配 sender open_id，拒绝路径不结算也不入队。
 
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
 `tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、命令执行与 `run_code`；通过 token 鉴权的
@@ -608,8 +614,9 @@ export interface Logger {
 （自动拼接 `<at>` 提及标记），`threadId` 映射为 `replyInThread`。
 
 `src/bridge/scope-directory.ts` 提供持久化 `ScopeDirectory`（`<profile>/scopes.json`）：每个
-入站消息注册 scope → `{chatId, threadId, chatMode}`，`resolve(scope)` / `resolveChat(chatId)` 用于
-跨会话出站；`/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
+入站消息注册 scope → `{chatId, threadId, chatMode, messageId}`，其中最近的入站 messageId 是
+topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(chatId)` 用于跨会话出站；
+`/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
 
 `src/bridge/group-message-poller.ts` 提供 opt-in `GroupMessagePoller`（issue #50）：通过飞书
 `im.message.list` 对 `ScopeDirectory` 中已知的 group/topic 做增量轮询，再使用
@@ -629,13 +636,15 @@ export interface Logger {
 同一服务器还提供 `POST /ask`（`server.askUrl`，桥接进程写 `DSH_LARK_ASK_URL`）：
 `src/notify/ask-handler.ts` 的 `buildAskHandler` 按 `sessionId` 反查 scope（
 `SessionStore.scopeForSession`）并解析到 chat/thread，用现有
-`QuestionRegistry` + `renderQuestionCard` 发送问答卡，等待卡片提交后把答案返回
+`QuestionRegistry` + `renderQuestionCard` 发送问答卡，绑定发送后的 messageId，等待卡片提交或
+用户直接回复该卡输入文字后把答案返回；topic 卡使用 scope directory 保存的最近入站 messageId
+作为 `replyTo` anchor，确保卡片实际创建在原 thread 内
 给 runtime。`src/notify/ask-tool.ts` 是 cordis 插件（`dsh-lark-bot/ask`，
 `inject: ['tools']`）：注册 dsh 工具 `lark_ask_user`（`question` / `kind` /
 `options` / `header`，`timeoutMs` 10 分钟），执行时以 `exec.agent.session.id`
 定位会话并 POST 到 `DSH_LARK_ASK_URL` 阻塞等待答案；答案作为普通工具结果
-回到 agent 循环。问答卡等待期间 run 超时看门狗暂停（`QuestionRegistry.pendingCount`
-/ `onSettled`），用户答完卡后重新计时。
+回到 agent 循环。问答卡按 native session 归属；等待期间仅暂停所属 run 的超时看门狗，run 结束
+调用 `settleSession`，单卡发送失败调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
 
 同一服务器还提供 `POST /plan`（`server.planUrl` / `DSH_LARK_PLAN_URL`）。
 `buildPlanHandler` 以 session id 定位当前 scope，先发完整 Markdown 计划，再以

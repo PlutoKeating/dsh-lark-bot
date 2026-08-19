@@ -25,7 +25,7 @@ export interface AskHandlerDeps {
   scopeDirectory: ScopeDirectory;
   questions: QuestionRegistry;
   channel: {
-    sendCard(chatId: string, card: object, options?: SendOptions): Promise<void>;
+    sendCard(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
   };
 }
 
@@ -56,16 +56,19 @@ export function buildAskHandler(
         ? { options: payload.options }
         : {}),
     };
-    const { id, promise } = deps.questions.register(scope, input);
+    const { id, promise } = deps.questions.register(scope, input, payload.sessionId);
     try {
-      await deps.channel.sendCard(
+      const messageId = await deps.channel.sendCard(
         destination.chatId,
         renderQuestionCard({ ...input, id, actionScope: scope }),
-        destination.threadId ? { threadId: destination.threadId } : undefined,
+        destination.threadId && destination.messageId
+          ? { threadId: destination.threadId, replyTo: destination.messageId }
+          : undefined,
       );
+      if (messageId) deps.questions.bindMessage(scope, id, messageId);
     } catch (error) {
       log.fail('ask-card', error, { scope });
-      deps.questions.settleAll(scope);
+      deps.questions.cancel(scope, id);
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
