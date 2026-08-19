@@ -11,7 +11,7 @@
 | P2 | 项目工作区管理 | ✅ 完成（SDK 原生 session 已接入） |
 | P3 | 审批、调度、沙箱 | 🚧 进行中（ACP 审批卡已接入） |
 | P4 | npm / GitHub Packages 发布 | ✅ 完成 |
-| P5 | 后台服务化（开机自启 + 自动重启） | ⛔ 0.7.0 移除（唯一路径收敛为 dsh bundle 内嵌运行，守护由 dsh 宿主负责） |
+| P5 | 正常 dsh profile 后台托管（开机自启 + 自动重启 + 状态/日志/生命周期） | ✅ 完成（#23；保持单一 dsh runtime） |
 | P6 | 模型 / provider / 凭据管理（飞书命令） | ✅ 完成（0.5.0） |
 | P7 | 兼容矩阵与自动化（单一事实来源 / 上游雷达 / 真实探测） | ✅ 完成（0.5.1） |
 | P8 | 会话 / 任务归档（保留窗口 + 文件 / Git 归档） | ✅ 完成（0.6.0） |
@@ -79,7 +79,9 @@
 3. ✅ 基于 ACP `session/request_permission` 实现卡片审批（ACP adapter 模式）
 4. ✅ 安全模块（SECURITY.md + 脱敏 / SSRF / 路径 containment / 默认拒绝 / UTF-8 安全截断）
 5. ✅ 三档可变卡片 + thinking 流式展示
-6. ⛔ 后台服务化：0.7.0 移除——唯一路径收敛为 dsh profile bundle，桥接引擎在 dsh 进程内运行，守护由 dsh 宿主负责
+6. ✅ 后台托管（issue #23）：桥接仍只在 dsh profile 内运行；`service` 将该 profile 注册到
+   systemd user / LaunchAgent / Windows 计划任务（Linux portable fallback），支持登录自启、崩溃
+   重启、status/logs/start/stop/restart/uninstall，并与 guardian / upgrade 共用重启入口
 7. ✅ 模型 / provider / 凭据管理（0.5.0）：`/model` `/providers` `/provider` `/key`，读写 dsh 官方配置
 8. ✅ 兼容矩阵与自动化（0.5.1）：`dsh-compat.ts` 单一事实来源 + 上游雷达 + CI 真实探测 + 升级手册
 9. ✅ scope 内并行 run 与异步任务队列（0.6.0）
@@ -106,8 +108,8 @@
       `dsh-headless`，无第三方插件），并以 `--dump-config` 探测通过后进入安全模式。
 - [x] 受限对话自愈：安全模式下普通消息经 `dsh --profile <safe> "<prompt>"` 与 dsh 核心逐条
       对话（历史上下文拼接），支持定位 / 修复 / 禁用损坏插件；`/safemode plugins` 列出插件。
-- [x] 可退出、可回退：`/safemode exit` 以 detached 方式重启完整 profile 并交还飞书通道；
-      全程不删除用户已有会话 / 工作区数据（恢复后原数据仍在）。
+- [x] 可退出、可回退：`/safemode exit` 优先复用正常引擎 service，未安装时才 detached 重启；
+      期望停止时保持安全模式，成功后交还飞书通道；全程不删除用户已有会话 / 工作区数据。
 - [x] 无需命令行：安装后全流程（接管 → 安全模式 → 自愈 → 退出恢复）只在飞书会话内完成。
 
 ## 7. 当前阻塞 · Current blocker
@@ -131,8 +133,9 @@
 1. **dsh profile bundle 即产品形态**（0.7.0 定稿）：`dsh.bundle.patch` →
    `cordis.patch.yml`，`dsh-lark-bot/plugin` 在 dsh 进程内运行完整桥接引擎
    （`startBridgeEngine`），`lark_notify` 作为标准工具行装载；CLI 只保留
-   `setup`（唯一安装命令）/ `doctor` / `upgrade`（一键彻底升级，issue #10）/ 隐藏 `run`。不再存在「独立后台服务 vs dsh 插件」
-   双路径。`AgentAdapter` 抽象保留，agent 后端可换。
+   `setup`（唯一安装命令）/ `doctor` / `upgrade` / `service` / 隐藏运行入口。不再存在
+   「独立 bridge runtime vs dsh 插件」双路径；`service` 只做同一 profile 的 OS 托管。
+   `AgentAdapter` 抽象保留，agent 后端可换。
 2. **不再手写 headless JSON 协议**：默认 adapter 换为官方 `@deepseek-ai/dsh-sdk-client`（原生 session + JSON-RPC 协议 + 流式事件）。
 3. **审批走官方 ACP**：SDK 协议目前未实现 server→client 请求（审批流），因此审批能力由 ACP adapter 模式提供
    （`@deepseek-ai/dsh-acp` + `@agentclientprotocol/sdk` 的 `ClientSideConnection` + `dsh-user-approval`）。
@@ -191,9 +194,12 @@
 - 报告建议 AGPL → MIT 重议。**License 属于所有者法律决策**：本计划不擅自变更 LICENSE，仅在
   README / roadmap / PLAN 中记录决策状态；`homepage` 已配置，无需新增。
 
-## 9. P5 后台服务化（0.7.0 已移除）· Background service (removed)
+## 9. P5 后台托管（issue #23）· Background supervision
 
-0.7.0 按最终需求「一行命令 + 一个扫码 + dsh 标准插件加载」收敛唯一路径：删除独立后台服务层
-（`src/service/`、`start/status/restart/stop/supervise`），桥接引擎改为 dsh profile bundle
-插件在 dsh 进程内运行，常驻 / 守护 / 重启由 dsh 宿主负责。历史 P5 验收项（systemd /
-launchd / 计划任务 / supervisor / 环境快照）全部随该层移除。
+0.7.0 删除的是自行运行 bridge engine 的第二套服务。#23 在不改变该决策的前提下恢复运维层：
+`src/service/` 只启动标准 `dsh --profile <name>`，提供 systemd user / LaunchAgent / Windows 登录
+计划任务 / XDG supervisor，登录自启、异常重启、状态、日志、start/stop/restart/uninstall；环境
+白名单快照在 POSIX 为 0600、Windows 为 owner-only ACL，metadata 为 0600。生命周期按 profile
+加锁并拒绝与现有前台 profile 并存；stop / uninstall 的持久化期望状态阻止 guardian 回拉。
+guardian 自动恢复和 `upgrade --restart` 优先调用已安装服务，避免另起 detached profile。
+睡眠 / 断网期间无法接收，恢复后向最近活跃会话提示。

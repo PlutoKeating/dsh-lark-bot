@@ -19,6 +19,7 @@
 | 包本体 Package | `~/.dsh/profiles/<profile>/node_modules/dsh-lark-bot` | pnpm 安装（vendor tgz 或 npm），`dsh plugin add <name>@<version>` 更新 |
 | runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接、上游依赖及 managed overlay 精确一致性，重写 ACP overlay 时保留当前 provider/model route |
 | guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向 CLI 入口；**必须指向稳定路径**（见 §5） |
+| 正常引擎服务 | `~/.dsh-lark/service/<profile>.json|env|intent.json` + OS 用户服务 | 可选；稳定 CLI runner 启动同一 dsh profile；env 在 POSIX 为 0600、Windows 为 owner-only ACL；intent 记录显式 stop/uninstall |
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
 | 升级状态 | `~/.dsh-lark/upgrade-state.json` | `--rollback` 的版本快照 |
@@ -47,8 +48,11 @@
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
    包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；
-6. `doctor` 升级后验证；
-7. 记录 `upgrade-state.json`（支持 `--rollback`）。
+6. 带 `--restart` 时先探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
+   重启（显式 upgrade 操作可覆盖先前 stop intent），未安装才回退旧的 detached process 重启，
+   避免重复 dsh 实例；
+7. `doctor` 升级后验证；
+8. 记录 `upgrade-state.json`（支持 `--rollback`）。
 
 ## 5. 生效机制与关键修复 · Activation & hardening
 
@@ -57,7 +61,8 @@
   `~/.dsh/profiles/<profile>/node_modules/<name>/dist/cli.js`（稳定路径），仅在 profile 内
   无包时回退到当前运行包；`doctor` 会检测单元内容并警告 npx 缓存路径。
 - 包更新后，**运行中的 dsh 进程仍执行旧代码**：默认只提示重启命令（不中断会话），
-  `--restart` 自动重启 guardian 服务与受管 profile；重启 dsh 会中断其中的会话（当前无热重载，
+  `--restart` 自动重启 guardian 服务与受管 profile；若安装了 `service`，优先走 OS 服务重启；
+  重启 dsh 会中断其中的会话（当前无热重载，
   cordis hmr 被禁用）。
 - **待生效标记**：升级记录 `pendingRestart`（运行中实例且未 `--restart` 时为 true），
   `doctor` 会提示「上次升级待重启生效」；重启后再次 upgrade / 手动清理即不再提示。

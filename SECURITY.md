@@ -76,8 +76,13 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
-- 桥接引擎在 dsh 宿主进程内运行，凭据与 `DSH_LARK_*` 环境直接随 dsh 进程提供，无独立服务
-  环境快照文件；敏感值不进日志与卡片。
+- 桥接引擎始终在 dsh 宿主进程内运行。可选 `service install` 会将启动所需的
+  `DSH_LARK_*`、运行路径及实际 provider `credentialRef` 环境键白名单快照到
+  `~/.dsh-lark/service/<profile>.env`（POSIX 0600；Windows 用 `icacls` 移除继承并只授予当前用户）；macOS plist / Windows 计划任务不嵌入密钥，
+  隐藏 runner 在启动时读取快照。敏感值不进日志与卡片；环境变更后需 `service restart` 刷新。
+- 正常服务生命周期以 profile 级原子锁串行化；portable status 的 PID 必须同时匹配 Linux
+  `/proc` starttime、`service-supervise` 命令和 profile 后才可发送信号，强制停止作用于已验证的
+  独立进程组，避免 PID 复用误杀或遗留孤儿 dsh。stop/uninstall intent 会阻止 guardian 回拉。
 - 桥接引擎日志以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获），密钥字段脱敏后输出；
   `logs/bot.log` 是 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入。
 - 聊天命令管理的 dsh 配置按官方存储协议写入：`~/.dsh/settings.yaml`（只存 `apiKeyEnv`

@@ -151,11 +151,15 @@
 - `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
-- 形态关系（0.7.0 定稿）：**dsh profile bundle 即产品形态**——`dsh-lark-bot/plugin` 在 dsh
+- 形态关系：**dsh profile bundle 即唯一运行时形态**——`dsh-lark-bot/plugin` 在 dsh
   进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
-  `doctor` / 隐藏 `run`，并额外提供 `guardian run|install|uninstall|status`（安全网守护）。
-  独立后台服务路径已移除，不再存在双安装路径；唯一进程级例外是默认安装的安全网守护
-  （见 4.10）。
+  `doctor` / 隐藏 `run`，并额外提供 guardian 与可选 `service` 生命周期命令。`service install`
+  不恢复旧的独立 bridge engine，只把同一标准 dsh profile 注册为登录自启、异常自动重启的
+  systemd user / LaunchAgent / Windows 计划任务（Linux fallback 为 XDG supervisor）；支持
+  status/logs/restart/stop/start/uninstall。POSIX 环境快照和元数据为 0600，Windows 环境快照使用
+  owner-only ACL；生命周期操作按 profile 加锁，启动前拒绝与现有前台 profile 并存。stop / uninstall
+  持久化期望停止状态，guardian 不会擅自拉起；guardian / upgrade 优先复用受管服务防双实例；
+  睡眠期间不可收消息，恢复重连后向最近活跃会话提示。
 
 ### 4.10 安全网守护（safety-net guardian，issue #6）
 
@@ -190,7 +194,8 @@
   并渲染超时卡，活跃任务不会被误杀）、
   `/safemode stop` 与卡片 ⏹ 按钮可终止；同一 scope 同时只允许一个安全任务，忙碌时新消息立即
   回执；“/safemode plugins”执行 `dsh plugin --profile <name> list` 展示清单。
-- **可退出、可回退**：`/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书
+- **可退出、可回退**：`/safemode exit` 优先复用已安装的正常引擎 service，未安装时才 detached
+  重启完整 profile；期望停止状态会阻止重启并让 guardian 留在安全模式。成功后短暂延迟、断开飞书
   连接并交还通道；守护状态持久化在 `~/.dsh-lark/guardian.json`（0600），重启不丢
   `profileSeenUp` / `mode`；全程不删除用户已有会话 / 工作区数据。
 - **安全约束**：守护进程只读本地状态与进程命令行（`ps`），不读内存；控制命令默认拒绝未授权

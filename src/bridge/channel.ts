@@ -39,6 +39,7 @@ import {
 } from './group-message-poller.js';
 import type { ScopeDirectory } from './scope-directory.js';
 import { isolatedScope, memberOwnerForScope } from './scope-isolation.js';
+import { ReconnectNotifier } from './reconnect-notifier.js';
 
 export interface StartChannelDeps {
   appId: string;
@@ -132,6 +133,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
 
   const streaming = adaptLarkChannel(channel);
   const commandChannel: CommandChannel = streaming;
+  const reconnectNotifier = new ReconnectNotifier(commandChannel, deps.scopeDirectory);
   const isolationStore = deps.isolationStore ?? EMPTY_ISOLATION_STORE;
   let groupPoller: GroupMessagePoller | undefined;
 
@@ -495,9 +497,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     },
     reconnecting: () => {
       log.warn('channel', 'reconnecting', {});
+      void reconnectNotifier.reconnecting().catch((error) => {
+        log.fail('channel-reconnect-notice', error);
+      });
     },
     reconnected: () => {
       log.info('channel', 'reconnected', {});
+      void reconnectNotifier.reconnected().catch((error) => {
+        log.fail('channel-reconnect-notice', error);
+      });
     },
     error: (error) => {
       log.fail('channel', error);

@@ -61,7 +61,16 @@ DSH_LARK_GROUP_NO_AT=true DSH_LARK_GROUP_POLL_MS=3000 dsh --profile dsh-lark
 
 在 Git 仓库中工作时，bot 会为每个会话自动创建独立 git worktree；非 Git 目录则直接使用你指定的目录。
 
-常驻 / 守护由 dsh 宿主负责（profile 在则引擎在；默认安装的「安全网守护」除外，见第 6 节）。
+桥接始终由 dsh profile 内插件运行。需要退出终端后常驻 / 登录自启时，可选执行：
+
+```bash
+dsh-lark-bot service install --profile dsh-lark
+dsh-lark-bot service status --profile dsh-lark
+dsh-lark-bot service logs --profile dsh-lark -f
+```
+
+`start|stop|restart|uninstall` 管理完整生命周期；这只是 OS 托管同一 profile，不是第二套引擎。
+机器睡眠/断网时不能收消息，恢复连接后会向最近活跃会话提示。默认安全网守护见第 6 节。
 已经有一个 PersonalAgent 应用时，
 可在启动命令的环境变量中提供凭据跳过扫码：
 
@@ -192,6 +201,10 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`
 - 运行日志：桥接引擎以 JSON Lines 输出到 stderr（由 dsh 宿主进程捕获；`logs/bot.log`
   是 0.6.0 独立服务时代的遗留路径，0.7.0 起不再写入）
+- 后台服务环境 / 元数据：`~/.dsh-lark/service/<profile>.env|json`（POSIX 文件为 0600；Windows
+  环境快照用当前 access token SID 的 owner-only ACL 收紧）
+- 后台服务运维意图：`~/.dsh-lark/service/<profile>.intent.json`（0600；stop/uninstall 后阻止 guardian 回拉）
+- 后台服务日志：`~/.dsh-lark/profiles/<profile>/logs/service.log`
 - 守护心跳：`~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（桥接引擎周期写入）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
@@ -209,6 +222,7 @@ dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）�
 
 ```bash
 dsh-lark-bot guardian uninstall   # 仅安装过守护时需要
+dsh-lark-bot service uninstall --profile dsh-lark  # 仅安装过正常后台服务时需要
 dsh plugin --profile dsh-lark remove dsh-lark-bot
 ```
 

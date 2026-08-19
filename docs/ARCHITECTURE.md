@@ -74,8 +74,9 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 本项目以 **dsh 标准 profile bundle** 交付：`dsh plugin add dsh-lark-bot`（或一行
 `dsh-lark-bot setup`）把包装进 profile，dsh 启动时以标准插件方式加载
 `dsh-lark-bot/plugin` —— 桥接引擎**在 dsh 进程内**运行（飞书 WebSocket 通道、会话/工作区、
-卡片、通知回调），并按需拉起官方 dsh SDK runtime 子进程执行 agent 任务。常驻 / 守护 / 重启
-由 dsh 宿主负责，不再有独立后台服务层（唯一进程级例外是默认安装的「安全网守护」，见关键决策 8）。
+卡片、通知回调），并按需拉起官方 dsh SDK runtime 子进程执行 agent 任务。可选 `src/service/`
+把这同一个 dsh profile 交给 OS 用户服务常驻，不产生第二套桥接引擎；默认安装的「安全网守护」
+是唯一独立于 dsh 的救援进程（见关键决策 8）。
 首次启动无凭据时打印二维码完成一次性绑定。
 
 ## 关键决策 · Key Decisions
@@ -130,11 +131,16 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
    `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
-7. **唯一安装-部署-使用路径**：不做「独立后台服务 vs dsh 插件」双路径。产品形态收敛为
+7. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /
-   `doctor` / `upgrade`（一键彻底升级，issue #10）/ 隐藏 `run`（诊断）以及安全网守护的
-   `guardian run|install|uninstall|status`，README 只记录这一条路径。
+   `doctor` / `upgrade` / 隐藏 `run`，并提供 `service install|start|status|logs|restart|stop|uninstall`
+   把标准 `dsh --profile` 交给 systemd user / LaunchAgent / Windows 计划任务（Linux 无 user systemd
+   时用 XDG supervisor）。原生入口启动 profile 内稳定 CLI runner，由其读取 0600 环境快照，避免
+   plist / 计划任务泄露密钥（Windows 另以 owner-only ACL 收紧 env）。guardian 自动重启和 `upgrade --restart` 优先操作该受管服务，避免双实例。
+   `service/<profile>.intent.json` 持久化 running/stopped 意图，stop/uninstall 后 guardian 不回拉；
+   生命周期目录锁串行化 mutation，install/start 还会拒绝已存在的未受管同 profile 进程。
+   WebSocket 在机器睡眠 / 断网期间无法收消息；恢复后仅向最近活跃 destination 发恢复通知。
 9. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
    runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复与陈旧上游依赖幂等重装
@@ -178,3 +184,4 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/notify/` | 进程内 `/notify` `/ask` `/plan` 回调与 raw-schema dsh 工具插件 |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
+| `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |
