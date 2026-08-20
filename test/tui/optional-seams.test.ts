@@ -30,4 +30,26 @@ describe('optional dsh-TUI seams', () => {
     } as unknown as Context;
     expect(() => attachOptionalTuiSeams(ctx)()).not.toThrow();
   });
+
+  it('uses each activation generation independently and cleans both resources', () => {
+    const disposeA = vi.fn();
+    const disposeB = vi.fn();
+    const descriptorA = vi.fn(() => ({ runtime: { generationId: 'generation-a', location: 'local' } }));
+    const descriptorB = vi.fn(() => ({ runtime: { generationId: 'generation-b', location: 'remote' } }));
+    const context = (descriptor: () => unknown, dispose: () => void) => ({
+      get: vi.fn((name: string) => name === 'tuiPluginHost'
+        ? { descriptor }
+        : name === 'tuiStatus'
+          ? { set: () => dispose }
+          : undefined),
+    }) as unknown as Context;
+    const detachA = attachOptionalTuiSeams(context(descriptorA, disposeA));
+    const detachB = attachOptionalTuiSeams(context(descriptorB, disposeB));
+    expect(descriptorA).toHaveBeenCalledOnce();
+    expect(descriptorB).toHaveBeenCalledOnce();
+    detachB();
+    detachA();
+    expect(disposeA).toHaveBeenCalledOnce();
+    expect(disposeB).toHaveBeenCalledOnce();
+  });
 });

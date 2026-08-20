@@ -150,9 +150,9 @@ export function apply(ctx: Context, config: Config = {}, deps: PluginDeps = {}) 
   }
   // Cordis uses the plugin's returned disposer to run cleanup when the fiber
   // unloads (profile stop / reload / `dsh plugin remove`).
-  return (): void => {
+  return async (): Promise<void> => {
     detachTui();
-    void service.stop();
+    await service.stop();
   };
 }
 

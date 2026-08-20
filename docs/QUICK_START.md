@@ -154,7 +154,14 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 也可切换 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，改用 ACP
 `session/request_permission` 原生回调）；`headless` 保留旧版子进程 fallback；
 `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`，
-网页端成为唯一写者，从根上消除多写者会话损坏；配合 `DSH_LARK_WEB_URL` / `DSH_LARK_WEB_PUSH`）。
+网页端成为唯一写者，从根上消除多写者会话损坏）。设置 `DSH_LARK_WEB_URL` 后，在飞书发送
+`/session`，从当前 canonical workspace 的无正文列表中选择并确认绑定；确认前不会披露历史，
+WebUI/TUI 的 open、resume 或 activity 也不会自动切换飞书 binding。可用
+`DSH_LARK_SESSION_BACKFILL_MESSAGES` / `DSH_LARK_SESSION_BACKFILL_BYTES` 限制历史回填，
+`DSH_LARK_SESSION_STREAM_UPDATE_MS` 控制 assistant 卡片更新间隔。
+
+开发/准入验证还应在 build 后运行 `pnpm check:tui-admission`（唯一 v0.15 manifest、artifact SHA-256、
+lock closure 与 local/remote Host Descriptor）及 `pnpm check:tui-tty`（真实 PTY；Windows 需 ConPTY）。
 
 bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可调），超出保留窗口的消息自动
 归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown + JSONL + Git commit，`/archive`

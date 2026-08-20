@@ -683,7 +683,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           operatorId: event.operator?.openId,
           chatId: event.chatId,
           threadId,
-          currentScope: scope,
+          currentScope,
         });
       }
     },

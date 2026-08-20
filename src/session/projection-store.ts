@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { log } from '../core/logger.js';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 
@@ -15,6 +16,13 @@ export interface ProjectedMessage {
   feishuMessageId: string;
   renderMode: ProjectionRenderMode;
   finalized: boolean;
+  /** Persisted only to resume an in-flight assistant card after restart. */
+  content?: string;
+}
+
+export interface ActiveTurnState {
+  turn: string;
+  feishuOrigin: boolean;
 }
 
 export interface PromptCorrelation {
@@ -30,9 +38,13 @@ export interface SessionProjectionBinding {
   chatId: string;
   threadId?: string;
   lastProjectedSeq: number;
+  /** Binding is exclusive, but live delivery waits until this snapshot is acknowledged. */
+  pendingHistoryThroughSeq?: number;
+  activeTurn?: ActiveTurnState;
   recentMessages: ProjectedMessage[];
   promptCorrelations: PromptCorrelation[];
   boundAt: string;
+  generationId: string;
 }
 
 interface ProjectionData {
@@ -99,6 +111,11 @@ export class SessionProjectionStore {
     chatId: string;
     threadId?: string;
     initialSeq: number;
+    pendingInitialHistory?: boolean;
+    /** Only an already-authorized administrator may displace another scope. */
+    allowCrossScopeMigration?: boolean;
+    /** Owner disclosed by the confirmation card; any change makes it stale. */
+    expectedOwner?: { scope: string; workspaceCwd: string };
   }): Promise<ExclusiveBindingResult> {
     return this.commit(async () => {
       const targetKey = keyFor(input.scope, input.workspaceCwd);
@@ -106,6 +123,18 @@ export class SessionProjectionStore {
       const displacedEntry = Object.entries(this.data.bindings).find(
         ([key, binding]) => key !== targetKey && binding.sessionId === input.sessionId,
       );
+      const currentOwner = displacedEntry?.[1]
+        ?? (replaced?.sessionId === input.sessionId ? replaced : undefined);
+      const expectedMatches = input.expectedOwner
+        ? currentOwner?.scope === input.expectedOwner.scope &&
+          currentOwner.workspaceCwd === input.expectedOwner.workspaceCwd
+        : currentOwner === undefined;
+      if (!expectedMatches) {
+        throw new Error('session binding owner changed after disclosure; open a new confirmation');
+      }
+      if (displacedEntry && input.allowCrossScopeMigration !== true) {
+        throw new Error('cross-scope exclusive session migration is not authorized');
+      }
       if (displacedEntry) delete this.data.bindings[displacedEntry[0]];
       const binding: SessionProjectionBinding = {
         scope: input.scope,
@@ -113,10 +142,15 @@ export class SessionProjectionStore {
         sessionId: input.sessionId,
         chatId: input.chatId,
         ...(input.threadId ? { threadId: input.threadId } : {}),
-        lastProjectedSeq: input.initialSeq,
-        recentMessages: [],
-        promptCorrelations: [],
+        lastProjectedSeq: input.pendingInitialHistory ? -1 : input.initialSeq,
+        ...(input.pendingInitialHistory ? { pendingHistoryThroughSeq: input.initialSeq } : {}),
+        ...(currentOwner?.activeTurn ? { activeTurn: structuredClone(currentOwner.activeTurn) } : {}),
+        recentMessages: currentOwner?.scope === input.scope && currentOwner.workspaceCwd === input.workspaceCwd
+          ? structuredClone(currentOwner.recentMessages)
+          : [],
+        promptCorrelations: structuredClone(currentOwner?.promptCorrelations ?? []),
         boundAt: new Date().toISOString(),
+        generationId: randomUUID(),
       };
       this.data.bindings[targetKey] = binding;
       return {
@@ -133,6 +167,7 @@ export class SessionProjectionStore {
     sessionId: string;
     seq: number;
     message?: ProjectedMessage;
+    activeTurn?: ActiveTurnState | null;
   }): Promise<boolean> {
     return this.commit(async () => {
       const binding = this.data.bindings[keyFor(input.scope, input.workspaceCwd)];
@@ -140,6 +175,8 @@ export class SessionProjectionStore {
         return false;
       }
       binding.lastProjectedSeq = input.seq;
+      if (input.activeTurn === null) delete binding.activeTurn;
+      else if (input.activeTurn) binding.activeTurn = structuredClone(input.activeTurn);
       if (input.message) {
         binding.recentMessages = [
           ...binding.recentMessages.filter((item) =>
@@ -151,6 +188,23 @@ export class SessionProjectionStore {
       }
       return true;
     }, { step: 'advance', scope: input.scope, sessionId: input.sessionId, seq: input.seq });
+  }
+
+  async completeInitialHistory(
+    scope: string,
+    workspaceCwd: string,
+    sessionId: string,
+    deliveredThroughSeq: number,
+  ): Promise<boolean> {
+    return this.commit(async () => {
+      const binding = this.data.bindings[keyFor(scope, workspaceCwd)];
+      if (!binding || binding.sessionId !== sessionId || binding.pendingHistoryThroughSeq === undefined) {
+        return false;
+      }
+      binding.lastProjectedSeq = Math.max(binding.lastProjectedSeq, deliveredThroughSeq);
+      delete binding.pendingHistoryThroughSeq;
+      return true;
+    }, { step: 'complete-initial-history', scope, sessionId, seq: deliveredThroughSeq });
   }
 
   async recordCorrelation(
@@ -264,9 +318,16 @@ function normalizeBinding(value: unknown): SessionProjectionBinding | undefined 
     chatId: item.chatId,
     ...(typeof item.threadId === 'string' && item.threadId ? { threadId: item.threadId } : {}),
     lastProjectedSeq: item.lastProjectedSeq as number,
+    ...(Number.isSafeInteger(item.pendingHistoryThroughSeq) && (item.pendingHistoryThroughSeq ?? -2) >= -1
+      ? { pendingHistoryThroughSeq: item.pendingHistoryThroughSeq as number }
+      : {}),
+    ...(normalizeActiveTurn(item.activeTurn) ? { activeTurn: normalizeActiveTurn(item.activeTurn)! } : {}),
     recentMessages: recentMessages.slice(-MAX_RECENT_MESSAGES),
     promptCorrelations: promptCorrelations.slice(-MAX_PROMPT_CORRELATIONS),
     boundAt: typeof item.boundAt === 'string' ? item.boundAt : new Date(0).toISOString(),
+    generationId: typeof item.generationId === 'string' && item.generationId
+      ? item.generationId
+      : `${item.scope}:${item.workspaceCwd}:${item.boundAt ?? new Date(0).toISOString()}`,
   };
 }
 
@@ -290,7 +351,16 @@ function normalizeMessage(value: unknown): ProjectedMessage | undefined {
     feishuMessageId: item.feishuMessageId,
     renderMode: item.renderMode as ProjectionRenderMode,
     finalized: item.finalized,
+    ...(typeof item.content === 'string' ? { content: item.content } : {}),
   };
+}
+
+function normalizeActiveTurn(value: unknown): ActiveTurnState | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const item = value as Partial<ActiveTurnState>;
+  return typeof item.turn === 'string' && item.turn && typeof item.feishuOrigin === 'boolean'
+    ? { turn: item.turn, feishuOrigin: item.feishuOrigin }
+    : undefined;
 }
 
 function normalizeCorrelation(value: unknown): PromptCorrelation | undefined {

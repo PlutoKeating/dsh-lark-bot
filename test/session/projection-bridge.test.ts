@@ -28,14 +28,15 @@ class FakeSource implements SessionProjectionSource {
   historyFailures = 0;
 
   async listSessions(): Promise<DshSessionSummary[]> { return structuredClone(this.sessions); }
-  async history(sessionId: string, options: { beforeSeq?: number } = {}): Promise<DshHistoryPage> {
+  async history(sessionId: string, options: { beforeSeq?: number; maxMessages?: number } = {}): Promise<DshHistoryPage> {
     if (this.historyFailures > 0) {
       this.historyFailures -= 1;
       throw new Error('token revoked');
     }
     const all = this.events.get(sessionId) ?? [];
-    const selected = all.filter((event) => options.beforeSeq === undefined || event.seq < options.beforeSeq);
-    return { events: structuredClone(selected), hasMore: false };
+    const eligible = all.filter((event) => options.beforeSeq === undefined || event.seq < options.beforeSeq);
+    const selected = options.maxMessages === undefined ? eligible : eligible.slice(-options.maxMessages);
+    return { events: structuredClone(selected), hasMore: selected.length < eligible.length };
   }
   async prompt(_sessionId: string, _text: string, rpcId: string = 'rpc'): Promise<{ rpcId: string }> { return { rpcId }; }
   async openMux(): Promise<WebSocket> {
@@ -152,6 +153,93 @@ describe('SessionProjectionBridge', () => {
     await bridge.close();
   });
 
+  it('keeps initial history pending and serializes live delivery behind its acknowledgement', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-pending-history-'));
+    const store = new SessionProjectionStore(join(root, 'projection.json'));
+    await store.load();
+    const source = new FakeSource();
+    source.sessions = [{ sessionId: 's1', updatedAt: 1, running: false, blank: false, cwd: '/repo' }];
+    source.events.set('s1', [user(0, 'u0', 'history')]);
+    let releaseHistory!: () => void;
+    const historyGate = new Promise<void>((resolve) => { releaseHistory = resolve; });
+    const sendCard = vi.fn(async (_chatId: string, _card: object) => {
+      if (sendCard.mock.calls.length === 1) await historyGate;
+      return `card-${sendCard.mock.calls.length}`;
+    });
+    const bridge = new SessionProjectionBridge({
+      source, store, channel: { sendMarkdown: vi.fn(), sendCard, updateCard: vi.fn() },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 2, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await bridge.start();
+    const binding = bridge.bindConfirmed({
+      scope: 'chat-a', workspaceCwd: '/repo', chatId: 'chat-a', prepared: await bridge.prepare('s1', '/repo'),
+    });
+    await vi.waitFor(() => expect(store.ownerOf('s1')?.pendingHistoryThroughSeq).toBe(0));
+    source.events.set('s1', [user(0, 'u0', 'history'), user(1, 'u1', 'live')]);
+    source.sockets[0]!.emit('s1', user(1, 'u1', 'live'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.ownerOf('s1')?.lastProjectedSeq).toBe(-1);
+    expect(sendCard).toHaveBeenCalledOnce();
+    releaseHistory();
+    await binding;
+    await vi.waitFor(() => expect(store.ownerOf('s1')?.lastProjectedSeq).toBe(1));
+    expect(sendCard).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain('history');
+    expect(JSON.stringify(sendCard.mock.calls[1]?.[1])).toContain('live');
+    await bridge.close();
+  });
+
+  it('retries an unacknowledged initial transcript after restart without skipping its cursor', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-pending-restart-'));
+    const path = join(root, 'projection.json');
+    const store = new SessionProjectionStore(path);
+    await store.load();
+    const source = new FakeSource();
+    source.sessions = [{ sessionId: 's1', updatedAt: 1, running: false, blank: false, cwd: '/repo' }];
+    source.events.set('s1', [user(0, 'u0', 'must retry')]);
+    const failedSend = vi.fn(async (
+      _chatId: string,
+      _card: object,
+      _options?: { idempotencyKey?: string },
+    ) => { throw new Error('delivery failed'); });
+    const first = new SessionProjectionBridge({
+      source, store,
+      channel: { sendMarkdown: vi.fn(), sendCard: failedSend },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 2, streamUpdateMs: 1, reconnectMs: 1_000 },
+    });
+    await first.start();
+    expect((await first.bindConfirmed({
+      scope: 'chat-a', workspaceCwd: '/repo', chatId: 'chat-a', prepared: await first.prepare('s1', '/repo'),
+    })).transcriptDelivered).toBe(false);
+    expect(store.ownerOf('s1')).toMatchObject({ lastProjectedSeq: -1, pendingHistoryThroughSeq: 0 });
+    source.sockets[0]!.emit('s1', user(0, 'u0', 'must retry'));
+    await vi.waitFor(() => expect(failedSend.mock.calls.length).toBeGreaterThan(1));
+    expect(store.ownerOf('s1')).toMatchObject({ lastProjectedSeq: -1, pendingHistoryThroughSeq: 0 });
+    await first.close();
+    source.events.set('s1', [user(0, 'u0', 'must retry'), user(1, 'u1', 'new after failed ack')]);
+
+    const restored = new SessionProjectionStore(path);
+    await restored.load();
+    const sendCard = vi.fn(async (
+      _chatId: string,
+      _card: object,
+      _options?: { idempotencyKey?: string },
+    ) => 'retried');
+    const second = new SessionProjectionBridge({
+      source, store: restored, channel: { sendMarkdown: vi.fn(), sendCard },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 2, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await second.start();
+    expect(restored.ownerOf('s1')?.pendingHistoryThroughSeq).toBeUndefined();
+    expect(restored.ownerOf('s1')?.lastProjectedSeq).toBe(1);
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).toContain('must retry');
+    expect(JSON.stringify(sendCard.mock.calls[0]?.[1])).not.toContain('new after failed ack');
+    expect(JSON.stringify(sendCard.mock.calls[1]?.[1])).toContain('new after failed ack');
+    expect(sendCard.mock.calls[0]?.[2]?.idempotencyKey)
+      .toBe(failedSend.mock.calls[0]?.[2]?.idempotencyKey);
+    await second.close();
+  });
+
   it('keeps the bridge alive and retries after history authorization failures', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-auth-'));
     const store = new SessionProjectionStore(join(root, 'projection.json'));
@@ -231,5 +319,194 @@ describe('SessionProjectionBridge', () => {
     });
     expect((await bridge.prepare('s1', '/repo')).messages.map((message) => message.content))
       .toEqual(['kept answer']);
+  });
+
+  it('paginates past non-human events to fill the bounded transcript', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-pages-'));
+    const store = new SessionProjectionStore(join(root, 'projection.json'));
+    await store.load();
+    const source = new FakeSource();
+    source.sessions = [{ sessionId: 's1', updatedAt: 1, running: false, blank: false, cwd: '/repo' }];
+    source.events.set('s1', [
+      user(0, 'u0', 'older human'),
+      { type: 'tool/call', seq: 1, time: 1, data: {} },
+      { type: 'tool/result', seq: 2, time: 2, data: {} },
+      { type: 'request/context', seq: 3, time: 3, data: {} },
+      user(4, 'u4', 'newer human'),
+      { type: 'step/end', seq: 5, time: 5, data: {} },
+    ]);
+    const bridge = new SessionProjectionBridge({
+      source, store, channel: { sendMarkdown: vi.fn() },
+      limits: { backfillMessages: 2, backfillBytes: 10_000, historyPageMessages: 3, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    expect((await bridge.prepare('s1', '/repo')).messages.map((message) => message.content))
+      .toEqual(['older human', 'newer human']);
+  });
+
+  it('restores Feishu-origin turn suppression from durable history and rpcId after restart', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-restart-echo-'));
+    const path = join(root, 'projection.json');
+    const firstStore = new SessionProjectionStore(path);
+    await firstStore.load();
+    await firstStore.bindExclusive({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', chatId: 'chat-a', initialSeq: -1,
+    });
+    await firstStore.recordCorrelation('chat-a', '/repo', 's1', {
+      rpcId: 'rpc-feishu', feishuMessageId: 'original-feishu', createdAt: Date.now(),
+    });
+    const firstSource = new FakeSource();
+    firstSource.events.set('s1', [
+      { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
+      user(2, 'u2', 'from Feishu', 'rpc-feishu'),
+      ...Array.from({ length: 12 }, (_, index) => ({
+        type: 'tool/result', seq: index + 3, time: index + 3, data: { index },
+      } satisfies DshSessionEvent)),
+    ]);
+    const firstBridge = new SessionProjectionBridge({
+      source: firstSource, store: firstStore,
+      channel: { sendMarkdown: vi.fn(), sendCard: vi.fn(async () => 'unexpected') },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 100, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await firstBridge.start();
+    expect(firstStore.ownerOf('s1')?.lastProjectedSeq).toBe(14);
+    await firstBridge.close();
+
+    const restoredStore = new SessionProjectionStore(path);
+    await restoredStore.load();
+    const restoredSource = new FakeSource();
+    restoredSource.events.set('s1', [
+      ...firstSource.events.get('s1')!,
+      chunk(15, 'must stay in normal run-flow', 1),
+      assistant(16, 'a4', 'must stay in normal run-flow', 1),
+      { type: 'step/end', seq: 17, time: 17, data: { turn: 1, step: 1 } },
+      { type: 'turn/end', seq: 18, time: 18, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]);
+    const sendCard = vi.fn(async () => 'duplicate');
+    const restoredBridge = new SessionProjectionBridge({
+      source: restoredSource, store: restoredStore,
+      channel: { sendMarkdown: vi.fn(), sendCard, updateCard: vi.fn() },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 3, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await restoredBridge.start();
+    expect(restoredStore.ownerOf('s1')?.lastProjectedSeq).toBe(18);
+    expect(sendCard).not.toHaveBeenCalled();
+    await restoredBridge.close();
+  });
+
+  it('resumes the same durable partial assistant card after restart', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-restart-stream-'));
+    const path = join(root, 'projection.json');
+    const firstStore = new SessionProjectionStore(path);
+    await firstStore.load();
+    await firstStore.bindExclusive({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', chatId: 'chat-a', initialSeq: -1,
+    });
+    // Simulate a crash after the card mapping was durable but before its event
+    // cursor advanced. Replaying seq 0 must not duplicate its text.
+    await firstStore.recordMessage('chat-a', '/repo', 's1', {
+      dshMessageId: 'stream:1:1', firstSeq: 0, lastSeq: 0,
+      role: 'assistant', source: 'other-dsh-client', feishuMessageId: 'partial-card',
+      renderMode: 'card', finalized: false, content: 'hello ',
+    });
+    expect(firstStore.ownerOf('s1')?.recentMessages).toContainEqual(
+      expect.objectContaining({ feishuMessageId: 'partial-card', finalized: false, content: 'hello ' }),
+    );
+    await firstStore.flush();
+
+    const restoredStore = new SessionProjectionStore(path);
+    await restoredStore.load();
+    const restoredSource = new FakeSource();
+    restoredSource.events.set('s1', [chunk(0, 'hello '), chunk(1, 'world')]);
+    const sendCard = vi.fn(async (_chatId: string, _card: object) => 'unexpected-new-card');
+    const updateCard = vi.fn(async (_messageId: string, _card: object) => undefined);
+    const restoredBridge = new SessionProjectionBridge({
+      source: restoredSource, store: restoredStore,
+      channel: { sendMarkdown: vi.fn(), sendCard, updateCard },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 2, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await restoredBridge.start();
+    expect(sendCard).not.toHaveBeenCalled();
+    expect(updateCard).toHaveBeenCalledWith('partial-card', expect.any(Object));
+    expect(JSON.stringify(updateCard.mock.calls[0]?.[1])).toContain('hello world');
+    await restoredBridge.close();
+  });
+
+  it('restores Feishu turn origin when replay starts after its message mapping commit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-user-crash-window-'));
+    const path = join(root, 'projection.json');
+    const firstStore = new SessionProjectionStore(path);
+    await firstStore.load();
+    await firstStore.bindExclusive({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', chatId: 'chat-a', initialSeq: -1,
+    });
+    await firstStore.advance({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', seq: 0,
+      activeTurn: { turn: '1', feishuOrigin: false },
+    });
+    await firstStore.recordMessage('chat-a', '/repo', 's1', {
+      dshMessageId: 'u1', firstSeq: 1, lastSeq: 1, role: 'user', source: 'feishu',
+      feishuMessageId: 'original-feishu', renderMode: 'text', finalized: true,
+    });
+    await firstStore.flush();
+
+    const restored = new SessionProjectionStore(path);
+    await restored.load();
+    const source = new FakeSource();
+    source.events.set('s1', [
+      { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
+      user(1, 'u1', 'from Feishu', 'rpc-feishu'),
+      assistant(2, 'a2', 'must not echo', 1),
+      { type: 'turn/end', seq: 3, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]);
+    const sendCard = vi.fn(async () => 'duplicate');
+    const bridge = new SessionProjectionBridge({
+      source, store: restored, channel: { sendMarkdown: vi.fn(), sendCard },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 2, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await bridge.start();
+    expect(restored.ownerOf('s1')?.lastProjectedSeq).toBe(3);
+    expect(sendCard).not.toHaveBeenCalled();
+    await bridge.close();
+  });
+
+  it('accepts pinned rc.8 non-projected events and fails closed on a new required type', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-vocabulary-'));
+    const store = new SessionProjectionStore(join(root, 'projection.json'));
+    await store.load();
+    await store.bindExclusive({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', chatId: 'chat-a', initialSeq: -1,
+    });
+    const source = new FakeSource();
+    source.events.set('s1', [
+      { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
+      { type: 'request/header', seq: 2, time: 2, data: {} },
+      { type: 'approval/asked', seq: 3, time: 3, data: {} },
+      { type: 'future/optional', seq: 4, time: 4, data: {}, ignorable: true },
+    ]);
+    const bridge = new SessionProjectionBridge({
+      source, store, channel: { sendMarkdown: vi.fn() },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 100, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await bridge.start();
+    expect(store.ownerOf('s1')?.lastProjectedSeq).toBe(4);
+    await bridge.close();
+
+    const requiredRoot = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-unknown-'));
+    const requiredStore = new SessionProjectionStore(join(requiredRoot, 'projection.json'));
+    await requiredStore.load();
+    await requiredStore.bindExclusive({
+      scope: 'chat-a', workspaceCwd: '/repo', sessionId: 's1', chatId: 'chat-a', initialSeq: -1,
+    });
+    const requiredSource = new FakeSource();
+    requiredSource.events.set('s1', [{ type: 'future/required', seq: 0, time: 0, data: {} }]);
+    const requiredBridge = new SessionProjectionBridge({
+      source: requiredSource, store: requiredStore, channel: { sendMarkdown: vi.fn() },
+      limits: { backfillMessages: 20, backfillBytes: 10_000, historyPageMessages: 100, streamUpdateMs: 1, reconnectMs: 1 },
+    });
+    await requiredBridge.start();
+    expect(requiredStore.ownerOf('s1')?.lastProjectedSeq).toBe(-1);
+    await requiredBridge.close();
   });
 });

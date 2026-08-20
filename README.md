@@ -149,8 +149,10 @@ transcript 卡并持久绑定。私聊允许已授权用户；member scope 仅�
 自动切换飞书绑定，也不会广播给所有 scope。绑定后，DSH `session/event` 是唯一真源：外部用户消息
 镜像为带来源的 bot 消息，assistant chunk 节流更新同一张 bot-owned 卡，最终消息原位终态化；更新
 失败才追加增量。bridge 以持久 seq cursor 重连补齐，并用 message ID / event seq / prompt `rpcId`
-抑制飞书回显；tool/thinking 默认不投影。状态位于 profile 的 `session-projections.json`（0600），只含
-路由/cursor/消息映射，不复制 transcript。
+抑制飞书回显；tool/thinking 默认不投影。状态位于 profile 的 `session-projections.json`（0600），包含
+路由、待确认历史水位/cursor、当前 turn 来源和消息映射；仅为跨重启续写流式卡保存其未终态正文，
+不复制完整 transcript。历史确认完成前 live 事件保持串行等待，发送失败会在启动/重连时重试。
+新投影卡使用稳定的飞书 `uuid` 幂等创建，覆盖发送成功但 cursor 尚未落盘时的崩溃重放。
 
 **`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
@@ -540,6 +542,12 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 本体，升级 / 回滚不会丢失配置与会话。
 
 ## 开发
+
+**dsh-TUI 兼容边界**：本包以唯一根 `dsh-plugin.json` 声明 v0.15 host facet，并在构建后运行
+`pnpm check:tui-admission` 与真实 PTY `pnpm check:tui-tty`。可选 TUI seam 缺失时安全 no-op；同步
+仍只依赖 DSH history/event，不监听 TUI input/session switch。该 facet 为 `trusted-in-process`，
+不是安全沙箱。项目继续采用 GNU AGPLv3；生态 listing 不改变许可证，也不代表兼容认证、安全审查
+或官方背书。
 
 ```bash
 pnpm install

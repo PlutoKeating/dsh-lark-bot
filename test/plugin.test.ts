@@ -90,13 +90,9 @@ describe('dsh-lark-bot bundle plugin', () => {
     expect(createChannel).toHaveBeenCalled();
     expect(adapter.dispose).not.toHaveBeenCalled();
 
-    dispose();
-    await vi.waitFor(() => {
-      expect(channel.disconnect).toHaveBeenCalled();
-    });
-    await vi.waitFor(() => {
-      expect(service.status().state).toBe('stopped');
-    });
+    await dispose();
+    expect(channel.disconnect).toHaveBeenCalled();
+    expect(service.status().state).toBe('stopped');
   });
 
   it('stays stopped when disabled', () => {
@@ -121,9 +117,10 @@ describe('dsh-lark-bot bundle plugin', () => {
     );
     const service = provided.larkBridge as LarkBridgeService;
     await vi.waitFor(() => expect(channel.connect).toHaveBeenCalledOnce());
-    dispose();
+    const stopping = dispose();
     releaseConnect();
-    await vi.waitFor(() => expect(channel.disconnect).toHaveBeenCalledOnce());
+    await stopping;
+    expect(channel.disconnect).toHaveBeenCalledOnce();
     expect(service.status().state).toBe('stopped');
     expect(adapter.dispose).toHaveBeenCalledOnce();
   });

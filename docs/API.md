@@ -21,8 +21,11 @@ export interface RuntimeEnv {
   adapterMode: 'sdk' | 'acp' | 'headless' | 'web';
   /** Base URL of the local dsh web agent used by the `web` adapter (default http://127.0.0.1:3080). */
   webBaseUrl: string;
-  /** Push web-GUI turn completions to Feishu in `web` adapter mode (default true; DSH_LARK_WEB_PUSH=0 disables). */
-  webPush: boolean;
+  /** Enable explicit DSH session history/live projection in `web` mode. */
+  sessionProjectionEnabled: boolean;
+  sessionBackfillMessages: number;
+  sessionBackfillBytes: number;
+  sessionStreamUpdateMs: number;
   provider: string;
   model: string;
   maxTokens: number | undefined;
@@ -50,8 +53,13 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 
 - `DSH_LARK_ADAPTER`：`sdk`（默认，官方 SDK client + approval answerer）/ `acp`（协议原生审批）/ `headless`（legacy）/
   `web`（本地 dsh web agent，单写者）。
-- `DSH_LARK_WEB_URL` / `DSH_LARK_WEB_PUSH`：`web` 适配器的本地 dsh web base URL（默认
-  `http://127.0.0.1:3080`）与网页端回合推送开关（默认开，`0` 关闭）。
+- `DSH_LARK_WEB_URL`：`web` 适配器的本地 dsh web base URL（默认
+  `http://127.0.0.1:3080`）。
+- `DSH_LARK_SESSION_PROJECTION`：显式 session 历史/实时投影开关，默认开启；它不允许
+  WebUI/TUI 活动自动修改飞书 binding。旧 `DSH_LARK_WEB_PUSH` 仅在新开关缺失时作为兼容别名。
+- `DSH_LARK_SESSION_BACKFILL_MESSAGES` / `DSH_LARK_SESSION_BACKFILL_BYTES`：确认绑定后
+  transcript 的人类消息数与 UTF-8 字节双重上限，默认 `20` / `65536`。
+- `DSH_LARK_SESSION_STREAM_UPDATE_MS`：同一 assistant 投影卡的最小更新间隔，默认 `800` ms。
 - `DSH_LARK_DSH_COMMAND` / `DSH_LARK_DSH_ARGS`：可选；未设置时自动发现本机 `@deepseek-ai/dsh` 安装路径。
 - `DSH_LARK_MAX_TOKENS`：可选，SDK-created agent 的每请求输出 token 上限。
 - `DSH_LARK_ACCESS_DEFAULT_DENY`：无白名单时是否拒绝私聊（默认 `false`，兼容 onboarding）。
@@ -109,6 +117,7 @@ export interface AppPaths {
   profileDir(profile: string): string;
   profilePath(profile: string, ...parts: string[]): string;
   sessionsFile(profile: string): string;
+  sessionProjectionsFile(profile: string): string;
   permissionPoliciesFile(profile: string): string;
   notificationPreferencesFile(profile: string): string;
   sessionCatalogFile(profile: string): string;
@@ -502,12 +511,36 @@ export async function buildAgentAdapter(
 - `headless`：`DshAdapter`（`src/adapters/dsh/adapter.ts`），legacy 子进程 JSONL 翻译。
 - `web`：`WebDshAdapter`（`src/adapters/dsh/web-adapter.ts`），驱动本地 dsh web agent
   （`session.create` / `session.prompt` + `/api/events.mux` WebSocket），网页端成为**唯一写者**，
-  从根上消除多写者会话损坏，跨实例续接天然可用；`web-watcher.ts` 在 `web` 模式下把网页端回合
-  完成推送到飞书并自动切换会话映射与工作区 cwd。
+  从根上消除多写者会话损坏，跨实例续接天然可用。`SessionProjectionBridge` 只消费用户在飞书
+  显式确认的 binding；WebUI/TUI 的 open/resume/activity 不会自动切换或广播。
 
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
 `AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
 `event-channel.ts`（有序事件队列）。
+
+### 3.1 显式 session 投影契约
+
+- `src/session/projection-protocol.ts`：rc.8 `session.list` / `session.history` / `session.prompt` 与
+  `/api/events.mux` 的窄类型 facade；prompt 接受 bridge 生成的 `rpcId` 作为可信回环关联。
+- `src/session/projection-store.ts`：以 `scope + canonical workspace` 为 key 原子持久化独占 binding、
+  历史待确认水位/`lastProjectedSeq`、当前 turn 来源、近期 DSH↔飞书 message mapping（含未终态卡的
+  恢复正文）和 prompt correlation；文件为 0600，写失败回滚。
+- `src/session/projection-bridge.ts`：初始 history、live mux 和重连 catch-up 共用按 session/seq 串行的
+  投影管线。独占 claim 可先落盘，但初始 history 确认前保持 pending cursor 并阻塞 live，发送失败由
+  启动/重连按持久水位重试（期间的新事件留给后续 catch-up）；所有新投影卡使用由 session/event
+  和持久 binding generation/目标派生的稳定 Feishu `uuid`；raw API 非零业务码或缺 message ID 一律
+  fail closed，覆盖远端成功与本地
+  cursor 落盘之间的崩溃窗口。低序号幂等跳过，未知必需事件 fail closed；cursor 只在飞书交付成功后前移。
+- `src/commands/session-projection.ts`：`/session`、`/session bind <id>`、`/session current`。选择器仅列
+  当前 canonical workspace 的非 subagent 元数据；确认 nonce 固化 operator/scope/workspace、一次性且超时失效。
+
+历史确认卡在发出正文前显示标题、session ID、workspace、更新时间、回填数量、当前 scope 与替换/
+迁移信息。私聊授权用户可绑定；member 只能绑定自己的 scope；共享 group/topic 与跨 scope 独占迁移
+仅 profile 管理员。确认时 store 在同一串行事务中比较卡片披露的 owner 并复核迁移授权；迁移成功后
+清除旧 scope 的 `SessionStore` 兼容 binding，启动恢复也会清除重复旧映射。历史只投影
+user/assistant，tool/thinking 默认不展开。实时 assistant chunk 节流更新
+同一 bot-owned 卡，未终态正文/卡 ID 持久化以便重启后继续原位完成；更新失败追加新卡。飞书原消息不编辑，飞书 prompt 依靠 `rpcId` /
+message identity 抑制回显；没有可信 provenance 时只标记“其他 DSH 客户端”，不猜测 WebUI/TUI。
 
 usage 可用性：SDK `assistant/message.usage` 是每次模型调用的 disjoint input/output/cache 计数；
 ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，`session/update` 的

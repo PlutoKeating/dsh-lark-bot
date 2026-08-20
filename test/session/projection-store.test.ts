@@ -16,7 +16,8 @@ describe('SessionProjectionStore', () => {
     });
     const result = await store.bindExclusive({
       scope: 'chat-new:thread-a', workspaceCwd: '/repo', sessionId: 'session-a',
-      chatId: 'chat-new', threadId: 'thread-a', initialSeq: 8,
+      chatId: 'chat-new', threadId: 'thread-a', initialSeq: 8, allowCrossScopeMigration: true,
+      expectedOwner: { scope: 'chat-old', workspaceCwd: '/repo' },
     });
     expect(result.displaced?.scope).toBe('chat-old');
     expect(store.get('chat-old', '/repo')).toBeUndefined();
@@ -44,6 +45,20 @@ describe('SessionProjectionStore', () => {
       .toBe('message-user');
     expect((await stat(path)).mode & 0o777).toBe(0o600);
     expect(JSON.parse(await readFile(path, 'utf8')).schemaVersion).toBe(1);
+  });
+
+  it('atomically rejects cross-scope displacement without migration authority', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-projection-migration-'));
+    const store = new SessionProjectionStore(join(root, 'projection.json'));
+    await store.load();
+    await store.bindExclusive({
+      scope: 'chat-old', workspaceCwd: '/repo', sessionId: 'session-a', chatId: 'chat-old', initialSeq: 1,
+    });
+    await expect(store.bindExclusive({
+      scope: 'chat-new', workspaceCwd: '/repo', sessionId: 'session-a', chatId: 'chat-new', initialSeq: 2,
+      expectedOwner: { scope: 'chat-old', workspaceCwd: '/repo' },
+    })).rejects.toThrow('not authorized');
+    expect(store.ownerOf('session-a')?.scope).toBe('chat-old');
   });
 
   it('rejects a loaded state that assigns one DSH session to multiple scopes', async () => {

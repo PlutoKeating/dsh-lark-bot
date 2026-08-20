@@ -21,6 +21,7 @@ interface PendingBinding {
   chatId: string;
   threadId?: string;
   prepared: PreparedSessionBinding;
+  expectedOwner?: { scope: string; workspaceCwd: string };
   expiresAt: number;
   timer: NodeJS.Timeout;
 }
@@ -133,17 +134,28 @@ export class SessionProjectionController {
       if (action !== 'confirm') throw new Error('unknown session action');
       clearTimeout(pending.timer);
       this.pending.delete(nonce); // one-shot before any asynchronous side effect
-      await this.deps.bridge.bindConfirmed({
+      const result = await this.deps.bridge.bindConfirmed({
         scope: pending.scope,
         workspaceCwd: pending.workspaceCwd,
         chatId: pending.chatId,
         ...(pending.threadId ? { threadId: pending.threadId } : {}),
         prepared: pending.prepared,
+        ...(this.deps.access.isAdmin(pending.actorId) ? { allowCrossScopeMigration: true } : {}),
+        ...(pending.expectedOwner ? { expectedOwner: pending.expectedOwner } : {}),
+        onBindingCommitted: () => {
+          // ProjectionStore is now the exclusive authority. Switch the legacy
+          // run-flow mapping synchronously before any transcript/catch-up I/O.
+          this.deps.sessions.clearSessionElsewhere(
+            pending.prepared.session.sessionId,
+            pending.scope,
+            pending.workspaceCwd,
+          );
+          this.deps.sessions.set(pending.scope, pending.prepared.session.sessionId, pending.workspaceCwd);
+        },
       });
-      // Existing run-flow resumes from SessionStore. ProjectionStore remains
-      // the durable authority and rehydrates this compatibility mapping at boot.
-      this.deps.sessions.set(pending.scope, pending.prepared.session.sessionId, pending.workspaceCwd);
-      return { toast: { type: 'success', content: '绑定完成，历史已回填 / Bound and history backfilled' } };
+      return result.transcriptDelivered
+        ? { toast: { type: 'success', content: '绑定完成，历史已回填 / Bound and history backfilled' } }
+        : { toast: { type: 'info', content: '绑定完成，但历史卡发送失败；可重新绑定重试 / Bound, but history delivery failed; bind again to retry' } };
     } catch (error) {
       return { toast: { type: 'error', content: error instanceof Error ? error.message : String(error) } };
     }
@@ -151,6 +163,7 @@ export class SessionProjectionController {
 
   rehydrateSessionMappings(): void {
     for (const binding of this.deps.store.list()) {
+      this.deps.sessions.clearSessionElsewhere(binding.sessionId, binding.scope, binding.workspaceCwd);
       this.deps.sessions.set(binding.scope, binding.sessionId, binding.workspaceCwd);
     }
   }
@@ -176,6 +189,11 @@ export class SessionProjectionController {
       throw new Error('该 session 已绑定其他飞书 scope；独占迁移仅 profile 管理员可确认');
     }
     const prepared = await this.deps.bridge.prepare(input.sessionId, input.identity.workspaceCwd);
+    const owner = this.deps.store.ownerOf(input.sessionId);
+    if (owner && owner.scope !== input.identity.scope &&
+        !this.deps.access.isAdmin(input.identity.actorId)) {
+      throw new Error('该 session 已绑定其他飞书 scope；独占迁移仅 profile 管理员可确认');
+    }
     const nonce = randomUUID();
     const expiresAt = Date.now() + (this.deps.confirmationTtlMs ?? 10 * 60_000);
     const timer = setTimeout(() => this.pending.delete(nonce), expiresAt - Date.now());
@@ -188,13 +206,13 @@ export class SessionProjectionController {
       chatId: input.chatId,
       ...(input.threadId ? { threadId: input.threadId } : {}),
       prepared,
+      ...(owner ? { expectedOwner: { scope: owner.scope, workspaceCwd: owner.workspaceCwd } } : {}),
       expiresAt,
       timer,
     };
     this.pending.set(nonce, pending);
     if (!this.deps.channel.sendCard) throw new Error('当前渠道不支持确认卡片');
     const current = this.deps.store.get(input.identity.scope, input.identity.workspaceCwd);
-    const owner = this.deps.store.ownerOf(input.sessionId);
     await this.deps.channel.sendCard(input.chatId, renderSessionBindingConfirmCard({
       nonce,
       session: prepared.session,
@@ -213,6 +231,13 @@ export class SessionProjectionController {
   ): string {
     if (!senderId) throw new Error('无法确认操作者身份');
     if (scope !== chatId && !scope.startsWith(`${chatId}:`)) throw new Error('scope 不属于当前聊天');
+    const access = this.deps.access.snapshot();
+    if (access.allowedUsers.length > 0 && !access.allowedUsers.includes(senderId)) {
+      throw new Error('操作者不在当前用户白名单中');
+    }
+    if (chatMode !== 'p2p' && access.allowedChats.length > 0 && !access.allowedChats.includes(chatId)) {
+      throw new Error('当前聊天不在群聊白名单中');
+    }
     const memberOwner = memberOwnerForScope(scope, chatId);
     if (memberOwner) {
       if (memberOwner !== senderId) throw new Error('member scope 只能由其本人绑定');

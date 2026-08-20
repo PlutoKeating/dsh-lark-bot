@@ -146,9 +146,12 @@ users may bind; a member scope is owner-only; shared group/topic scopes and cros
 profile-admin-only. WebUI or dsh-TUI open/resume/activity **never** changes a Feishu binding or broadcasts to
 known scopes. Once bound, the DSH `session/event` log is the sole source: external user messages become clearly
 labelled bot-owned mirrors, assistant chunks throttle-update one card, and the final message finalizes it in
-place; update failure appends a marked increment. A durable seq cursor catches up after reconnect/restart, while
-message IDs, event seqs and prompt `rpcId` suppress Feishu echo. Tool/thinking events stay hidden by default.
-`session-projections.json` (0600) stores routing/cursor/message mappings only—not a second transcript.
+place; update failure appends a marked increment. An exclusive claim keeps initial history pending and blocks
+live delivery until its durable seq cursor is acknowledged; failed history delivery retries on startup/reconnect.
+New projection cards use stable Feishu `uuid` values so a crash after remote acceptance but before cursor commit
+does not duplicate them. Durable turn origin, message IDs, event seqs and prompt `rpcId` suppress Feishu echo across restart. Tool/thinking
+events stay hidden by default. `session-projections.json` (0600) stores routing, pending/cursor, turn origin and
+message mappings, plus only the unfinished card body needed to resume that card—not a second transcript.
 
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
@@ -508,6 +511,12 @@ The bridge engine logs JSON Lines to stderr (captured by the dsh host; `logs/bot
 **Rollback**: remove the plugin and reinstall a pinned version (e.g. `dsh plugin --profile dsh-lark add dsh-lark-bot@0.6.0`); `~/.dsh-lark` state is independent of the package, so config and sessions survive upgrades / rollbacks.
 
 ## Development
+
+**dsh-TUI compatibility boundary:** this package declares one root `dsh-plugin.json` with a v0.15 host facet
+and runs `pnpm check:tui-admission` plus the real-PTY `pnpm check:tui-tty` after build. Optional TUI seams fail
+softly; synchronization relies only on DSH history/events and never intercepts TUI input or session switches.
+The facet is `trusted-in-process`, not a security sandbox. The project remains GNU AGPLv3; ecosystem listing
+does not change the license or imply compatibility certification, security review, or endorsement.
 
 ```bash
 pnpm install

@@ -3,13 +3,16 @@ import { fileURLToPath } from 'node:url';
 
 if (process.argv.includes('--child')) {
   if (process.stdout.isTTY !== true) throw new Error('stdout is not attached to a real PTY');
+  const plugin = await import('../dist/plugin.js');
+  if (typeof plugin.apply !== 'function' || plugin.name !== 'dsh-lark-bot') {
+    throw new Error('published plugin host facet could not be loaded inside the PTY');
+  }
   process.stdout.write('[tui-tty] real PTY presentation boundary verified\n');
   process.exit(0);
 }
 
 if (process.platform === 'win32') {
-  process.stdout.write('[tui-tty] automatic PTY allocation is unavailable on Windows; run the documented ConPTY smoke test\n');
-  process.exit(0);
+  throw new Error('[tui-tty] ConPTY verification is required on Windows; this build cannot claim a real-PTY pass without external ConPTY evidence');
 }
 
 const self = fileURLToPath(import.meta.url);

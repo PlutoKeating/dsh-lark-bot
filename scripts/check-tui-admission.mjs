@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
-import { resolve, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve, relative } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
 const root = resolve(import.meta.dirname, '..');
@@ -47,21 +49,65 @@ const importer = lock?.importers?.['.'];
 assert(importer && typeof importer === 'object', 'pnpm lockfile root importer is missing');
 for (const section of ['dependencies', 'peerDependencies', 'devDependencies']) {
   for (const name of Object.keys(packageJson[section] ?? {})) {
-    assert(importer[section]?.[name] !== undefined, `lockfile misses ${section}.${name}`);
+    const resolved = importer[section]?.[name]
+      ?? (section === 'peerDependencies' ? importer.dependencies?.[name] : undefined);
+    assert(resolved !== undefined, `lockfile misses ${section}.${name}`);
   }
 }
+for (const [coordinate, snapshot] of Object.entries(lock.packages ?? {})) {
+  assert(typeof snapshot?.resolution?.integrity === 'string' || typeof snapshot?.resolution?.tarball === 'string',
+    `lockfile package ${coordinate} has no immutable resolution`);
+}
 
-for (const name of ['host-descriptor.local.json', 'host-descriptor.remote.json']) {
-  const descriptor = JSON.parse(await readFile(resolve(root, 'docs/conformance', name), 'utf8'));
+for (const location of ['local', 'remote']) {
+  const name = `host-descriptor.${location}.json`;
+  const descriptorBytes = await readFile(resolve(root, 'docs/conformance', name));
+  const descriptor = JSON.parse(descriptorBytes.toString('utf8'));
   assert(descriptor.$schema === 'urn:dsh-tui:host-descriptor:0.15', `${name}: wrong schema`);
   assert(descriptor.trustLevel === 'trusted-in-process', `${name}: wrong trust level`);
   assert(Array.isArray(descriptor.facetApiVersions) && descriptor.facetApiVersions.includes('v1alpha1'),
     `${name}: missing host facet`);
   assert(typeof descriptor.runtime?.generationId === 'string' && descriptor.runtime.generationId,
     `${name}: missing runtime generation`);
+
+  const claimName = `claim.${location}.json`;
+  const claim = JSON.parse(await readFile(resolve(root, 'docs/conformance', claimName), 'utf8'));
+  const descriptorDigest = `sha256:${createHash('sha256').update(descriptorBytes).digest('hex')}`;
+  assert(claim.claimVersion === '0.15' && claim.specVersion === 'community-v0.15',
+    `${claimName}: wrong claim/spec version`);
+  assert(claim.subject === `${manifest.id}@${manifest.version}`, `${claimName}: wrong subject`);
+  assert(claim.hostDescriptorDigest === descriptorDigest, `${claimName}: host digest mismatch`);
+  assert(claim.artifactDigest === actualArtifactDigest, `${claimName}: artifact digest mismatch`);
+  assert(claim.evidenceLevel === 'Tested' && claim.result === 'pass' && claim.revoked === false,
+    `${claimName}: claim must be a non-revoked tested pass`);
+  assert(Array.isArray(claim.failedRequirements) && claim.failedRequirements.length === 0,
+    `${claimName}: failed requirements must be empty`);
 }
 
-process.stdout.write(`[tui-admission] manifest, artifact, dependency closure and host descriptors verified (${actualArtifactDigest})\n`);
+const packRoot = await mkdtemp(join(tmpdir(), 'dsh-lark-tui-pack-'));
+try {
+  const packed = JSON.parse(execFileSync('npm', [
+    'pack', '--ignore-scripts', '--json', '--pack-destination', packRoot,
+  ], { cwd: root, encoding: 'utf8' }));
+  const tarball = resolve(packRoot, packed[0]?.filename ?? '');
+  assert(relative(packRoot, tarball) && !relative(packRoot, tarball).startsWith('..'),
+    'npm pack did not return a package inside the temporary directory');
+  const consumer = resolve(packRoot, 'consumer');
+  await mkdir(consumer);
+  await writeFile(resolve(consumer, 'package.json'), '{"name":"dsh-lark-tui-consumer","private":true}\n');
+  execFileSync('npm', [
+    'install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false',
+    '--legacy-peer-deps', '--omit=dev', tarball,
+  ], { cwd: consumer, stdio: 'pipe' });
+  const installed = await readFile(resolve(consumer, 'node_modules', packageJson.name, artifact.path));
+  const installedDigest = `sha256:${createHash('sha256').update(installed).digest('hex')}`;
+  assert(installedDigest === actualArtifactDigest,
+    `installed npm artifact digest mismatch: ${installedDigest}`);
+} finally {
+  await rm(packRoot, { recursive: true, force: true });
+}
+
+process.stdout.write(`[tui-admission] manifest, packed/installed artifact, full lock integrity, descriptors and claims verified (${actualArtifactDigest})\n`);
 
 async function findManifests(directory, prefix = '') {
   const found = [];

@@ -154,9 +154,9 @@ answerer + `tools/pre-execute` 强制门禁，经 bridge `/approval` 提供逐�
 - **网页端 agent 成为唯一写者**：不再 spawn 自己的 agent runtime，多写者（bridge 子进程、
   守护重启、陈旧 live session 双写）导致的 `corrupt session log: seq gap` 从根上消失，
   旧会话天然可续接。
-- `web-watcher.ts`（`src/adapters/dsh/web-watcher.ts`）在 `web` 模式下监听网页端回合完成：
-  推送到飞书 + 自动切换聊天会话映射与工作区 cwd（`resumeFor` 要求两者一致）；
-  `DSH_LARK_WEB_PUSH=0` 关闭推送。
+- `SessionProjectionBridge` 只为飞书 `/session` 明确确认的 binding 消费 `session.history` 与
+  `session/event`；按持久 seq cursor 重连补齐，流式 assistant 原位更新，失败追加。WebUI/TUI
+  的 open/resume/activity 不自动切换任何 scope，也不向所有 scope 广播。
 - 回退：`DSH_LARK_ADAPTER=sdk`（默认）一行切回。
 
 ## 4.1 Runtime profile（自动维护）
@@ -208,8 +208,8 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
 9. **多机器人交接**：adapter 契约不增加 bot 专用事件；bridge 先验证飞书 bot sender、真实 @ 与
    fleet peer 身份，再把带来源标记的文本交给普通 run。运行 prompt 只注入登记 peer 的 name/open_id，
    agent 通过既有 `lark_notify` + `mention_user_ids` 交接；跨进程回合限制位于 bridge/bot seam，
-   不污染 SDK/ACP/Web 协议层。附加实例只允许可独立装配的 SDK/ACP/headless；共享 Web mux 的
-   广播会被多个 watcher 消费，无法提供实例级 session 隔离，因此启动时 fail closed。
+   不污染 SDK/ACP/Web 协议层。附加实例只允许可独立装配的 SDK/ACP/headless；共享 Web mux 无法
+   提供实例级 session 隔离，因此启动时 fail closed。
 
 ---
 

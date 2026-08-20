@@ -126,6 +126,20 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 ## 9. 交付清单 · Delivery Checklist
 
+### dsh-TUI v0.15 admission
+
+- 兼容保持当前仓库、当前 npm 包和 AGPL-3.0，不建立 companion 包，不 patch dsh-TUI 私有源码。
+- 根目录只能有一个 `dsh-plugin.json`；host facet 指向实际发布的 `dist/plugin.js`，静态声明 contracts、
+  permissions、subscriptions、commands 与 optional fallback，并携带最终 artifact SHA-256。
+- `pnpm check:tui-admission` 校验 manifest、发布 artifact、lock dependency closure 及 local/remote Host
+  Descriptor；`pnpm check:tui-tty` 使用真实 PTY。五态 negotiation 优先级为 unknown > rejected >
+  waiting > degraded > compatible；local/remote/container 不改变判断规则。
+- host facet 为 `trusted-in-process` 而非沙箱；可选 TUI seam 缺失必须 no-op，所有资源随 lifecycle
+  清理。DSH history/event 仍是同步真源，不使用 messages.observe、session-switch 或 storage.local
+  保存 binding/cursor/transcript。
+- 未来收录请求必须醒目标明 AGPLv3，并说明 listing 不改变许可证，也不代表兼容认证、安全审查或
+  官方背书；维护方明确确认前不得声称获得许可证豁免或生态认证。
+
 P1 代码完成后，实现工程师在提交前逐项确认：
 
 - [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
