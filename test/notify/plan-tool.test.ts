@@ -97,4 +97,79 @@ describe('lark_request_plan_approval tool', () => {
     await preStep({ agent, turn: 2 }, allow);
     await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
   });
+
+  it('allows simple read-only shell inspections without plan approval', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    const on = (event: string, listener: unknown): void => {
+      if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+    };
+    apply({
+      on,
+      tools: {
+        register: vi.fn(),
+        get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
+      },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const command of [
+      'date',
+      '/usr/bin/date +%F',
+      'pwd',
+      'ls -la /tmp',
+      'rg --files src',
+      'git status --short',
+      'git log -5 --oneline',
+      'git diff --check',
+      'git branch --show-current',
+      'git remote -v',
+      'ps aux',
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toEqual({
+        kind: 'allow',
+      });
+    }
+    expect(next).toHaveBeenCalledTimes(11);
+  });
+
+  it('keeps mutating, compound, redirected, and unknown shell commands behind the plan gate', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    const on = (event: string, listener: unknown): void => {
+      if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+    };
+    apply({
+      on,
+      tools: {
+        register: vi.fn(),
+        get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
+      },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const command of [
+      'rm -rf build',
+      'git push fork HEAD',
+      'date; rm file',
+      'pwd > location.txt',
+      'echo $(rm file)',
+      'node script.mjs',
+      'date --set=tomorrow',
+      'rg --pre=./transform pattern',
+      'git diff --output=changes.patch',
+      'git branch new-branch',
+      'git remote set-url origin example.invalid/repo',
+      './date',
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toMatchObject({
+        kind: 'deny',
+      });
+    }
+    expect(next).not.toHaveBeenCalled();
+  });
 });

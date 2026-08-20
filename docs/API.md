@@ -626,7 +626,9 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 只有 pending-card reply 免 @；topic scope 必须匹配 thread，member scope 必须匹配 sender open_id，拒绝路径不结算也不入队。
 
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
-`tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、命令执行与 `run_code`；通过 token 鉴权的
+`tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、非只读 shell 命令与 `run_code`。
+`bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
+subcommand 位于只读白名单时才绕过计划和逐工具审批；未知参数或语法一律保持高风险。通过 token 鉴权的
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。

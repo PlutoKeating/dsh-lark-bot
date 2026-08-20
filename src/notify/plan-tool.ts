@@ -20,6 +20,43 @@ export interface PlanPolicyExecution {
   agent?: object;
 }
 
+const READ_ONLY_SHELL_TOOLS = new Set(['bash', 'shell']);
+const READ_ONLY_COMMANDS = new Set([
+  'basename',
+  'cat',
+  'date',
+  'df',
+  'dirname',
+  'du',
+  'grep',
+  'head',
+  'id',
+  'jq',
+  'ls',
+  'pgrep',
+  'ps',
+  'pwd',
+  'readlink',
+  'realpath',
+  'rg',
+  'stat',
+  'tail',
+  'uname',
+  'wc',
+  'whoami',
+]);
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+  'diff',
+  'ls-files',
+  'ls-tree',
+  'log',
+  'merge-base',
+  'rev-parse',
+  'show',
+  'status',
+]);
+const SHELL_CONTROL_SYNTAX = /[\n\r;&|<>`]|\$\(|\$\{/u;
+
 type PlanPolicyContext = ToolPluginContext & {
   on(
     event: 'agent/pre-step',
@@ -141,6 +178,10 @@ export function apply(ctx: Context, config: Config = {}) {
 export function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExecution): boolean {
   if (execution.name === 'lark_request_plan_approval') return false;
   if (execution.name === 'run_code') return true;
+  const normalized = execution.name.toLowerCase().replaceAll('-', '_');
+  if (READ_ONLY_SHELL_TOOLS.has(normalized)) {
+    return !isSimpleReadOnlyShellCommand(execution.arguments);
+  }
   try {
     const view = ctx.tools.get?.(execution.name, execution.agent)?.presentCall?.(
       execution.arguments,
@@ -151,7 +192,84 @@ export function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExec
   } catch {
     // Fall through to the conservative name classifier.
   }
-  const normalized = execution.name.toLowerCase().replaceAll('-', '_');
   return /(^|_)(bash|shell|exec|execute|run|write|edit|patch|delete|remove|move|rename)(_|$)/u
     .test(normalized);
+}
+
+/**
+ * Read-only shell calls bypass both the plan gate and one-shot approval.
+ * Keep this deliberately narrow: one command only, no shell composition, and
+ * an allowlisted executable/subcommand. Unknown syntax remains high risk.
+ */
+function isSimpleReadOnlyShellCommand(rawArguments: unknown): boolean {
+  const command = shellCommand(rawArguments)?.trim();
+  if (!command || SHELL_CONTROL_SYNTAX.test(command)) return false;
+  const words = command.split(/\s+/u);
+  const executablePath = words[0];
+  if (
+    !executablePath ||
+    (executablePath.includes('/') &&
+      !executablePath.startsWith('/bin/') &&
+      !executablePath.startsWith('/usr/bin/'))
+  ) return false;
+  const executable = executablePath.split('/').at(-1);
+  if (!executable) return false;
+  if (executable === 'git') return isReadOnlyGitCommand(words.slice(1));
+  if (!READ_ONLY_COMMANDS.has(executable)) return false;
+  if (executable === 'date') {
+    return words.slice(1).every((word) =>
+      word === '-u' || word === '--utc' || word === '--universal' || word.startsWith('+')
+    );
+  }
+  if (executable === 'rg') {
+    return !words.slice(1).some((word) =>
+      word === '--pre' ||
+      word.startsWith('--pre=') ||
+      word === '--hostname-bin' ||
+      word.startsWith('--hostname-bin=')
+    );
+  }
+  return true;
+}
+
+function shellCommand(rawArguments: unknown): string | undefined {
+  if (typeof rawArguments === 'object' && rawArguments !== null && !Array.isArray(rawArguments)) {
+    const command = (rawArguments as { command?: unknown }).command;
+    return typeof command === 'string' ? command : undefined;
+  }
+  if (typeof rawArguments !== 'string') return undefined;
+  try {
+    return shellCommand(JSON.parse(rawArguments));
+  } catch {
+    return rawArguments;
+  }
+}
+
+function isReadOnlyGitCommand(words: readonly string[]): boolean {
+  let index = 0;
+  while (words[index] === '-C') {
+    if (!words[index + 1]) return false;
+    index += 2;
+  }
+  const subcommand = words[index];
+  if (subcommand === 'branch') {
+    const flags = words.slice(index + 1);
+    return flags.length === 0 || flags.every((word) =>
+      ['--show-current', '--list', '--all', '-a', '--remotes', '-r', '-v', '-vv'].includes(word)
+    );
+  }
+  if (subcommand === 'remote') {
+    const args = words.slice(index + 1);
+    return args.length === 0 ||
+      args.every((word) => word === '-v' || word === '--verbose') ||
+      args[0] === 'get-url';
+  }
+  if (!subcommand || !READ_ONLY_GIT_SUBCOMMANDS.has(subcommand)) return false;
+  return !words.slice(index + 1).some((word) =>
+    word === '-o' ||
+    word === '--output' ||
+    word.startsWith('--output=') ||
+    word === '--ext-diff' ||
+    word === '--textconv'
+  );
 }

@@ -230,7 +230,9 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
-moves, command execution and `run_code` in that turn until a plan is approved. The bridge sends the complete Markdown plan as a normal
+moves, non-read-only shell commands and `run_code` in that turn until a plan is approved. Single read-only
+inspections such as `date`, `pwd`, `ls`, `rg`, and `git status/log/diff` run directly; shell chaining,
+redirection, command substitution, and unknown executables remain behind the conservative plan gate. The bridge sends the complete Markdown plan as a normal
 message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
 and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires
 another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
