@@ -21,6 +21,7 @@ export interface AppPaths {
   permissionPoliciesFile: (profile: string) => string;
   notificationPreferencesFile: (profile: string) => string;
   replyPoliciesFile: (profile: string) => string;
+  executionModesFile: (profile: string) => string;
   sessionCatalogFile: (profile: string) => string;
   sessionProjectionsFile: (profile: string) => string;
   archivesDir: (profile: string) => string;
@@ -59,6 +60,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     permissionPoliciesFile: (profile) => profilePath(profile, 'permission-policies.json'),
     notificationPreferencesFile: (profile) => profilePath(profile, 'notification-preferences.json'),
     replyPoliciesFile: (profile) => profilePath(profile, 'reply-policies.json'),
+    executionModesFile: (profile) => profilePath(profile, 'execution-modes.json'),
     sessionCatalogFile: (profile) => profilePath(profile, 'sessions.json.catalog.json'),
     sessionProjectionsFile: (profile) => profilePath(profile, 'session-projections.json'),
     archivesDir: (profile) => profilePath(profile, 'archives'),

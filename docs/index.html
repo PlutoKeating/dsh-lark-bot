@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dsh-lark-bot：把 DeepSeek Harness 装进飞书 / Lark（扫码即用）</title>
-  <meta name="description" content="把 DeepSeek Harness (dsh) 装进飞书 / Lark 的开源桥接插件：扫码 30 秒绑定，手机即可指挥本机 coding agent。支持流式卡片、并行任务、多角色 Agent 与安全网守护。">
+  <meta name="description" content="把 DeepSeek Harness (dsh) 装进飞书 / Lark 的开源桥接插件：扫码 30 秒绑定，手机即可指挥本机 coding agent。支持快速/平衡/深度执行模式、流式卡片、并行任务、多角色 Agent 与安全网守护。">
   <meta name="keywords" content="deepseek harness 连接飞书,deepseek harness 飞书,deepseek 飞书机器人,deepseek harness 扫码,dsh 飞书,dsh-lark-bot,飞书 接入 deepseek,deepseek harness 插件,飞书 手机远程 coding agent">
   <meta name="author" content="PlutoKeating">
   <link rel="canonical" href="https://dsh-lark-bot.arr2018.dpdns.org/">
@@ -41,7 +41,8 @@
       "并行多任务：同一群聊同时跑多个任务，会话隔离",
       "会话归档与保留策略：会话列表不会越积越多",
       "跨会话主动通知并 @ 人：任务完成主动找你",
-      "对话内管理模型 / Provider / 密钥：全程不离开飞书"
+      "对话内管理模型 / Provider / 密钥：全程不离开飞书",
+      "按会话切换快速 / 平衡 / 深度执行模式：下一轮生效"
     ]
   }
   </script>
@@ -140,6 +141,7 @@
     <li><strong>会话归档与清理</strong>：/archive、/retention 管理旧任务与自动保留策略，会话列表不会越积越多。</li>
     <li><strong>跨会话主动通知 + @人</strong>：Agent 在 A 群跑完任务，可主动发消息到 B 群或私聊并 @ 你。</li>
     <li><strong>对话内管理模型和密钥</strong>：/model、/providers、/key 直接在聊天里查看、切换供应商、热更新密钥，全程不离开飞书。</li>
+    <li><strong>快速 / 平衡 / 深度执行模式</strong>：发送 <code>/mode</code> 用双语卡片按会话选择任务强度，简单问答更快、复杂重构更谨慎；下一轮生效且不打断当前任务。</li>
     <li><strong>关键任务计划门禁</strong>：先发送完整计划，再由卡片批准执行或带意见继续规划，原任务自动续跑。</li>
   </ul>
 

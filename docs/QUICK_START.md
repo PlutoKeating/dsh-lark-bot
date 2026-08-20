@@ -127,6 +127,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/notifications [show\|off\|on …]` | 配置当前 scope 主动提醒（默认关闭） |
 | `/replies [show\|default\|set …]` | 配置回复合并、频率、批量上限与近似去重（profile 管理员或当前群管理员可修改） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
+| `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 选择当前会话任务强度；下一轮生效 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId>` | 管理 provider 的模型（管理员） |
@@ -143,6 +144,8 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 `agent-default-model`；`/provider add|update` 管理 `deepseek-official` 与自定义 pi-ai provider
 （Base URL 根域名自动补 `/v1`）；`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中
 显示，建议在私聊中使用。
+
+任务强度用 `/mode` 双语卡片或 `/mode quick|balanced|deep` 切换：快速适合简单问答，平衡适合大多数任务，深度适合复杂重构与需要更多验证的工作。模式按 scope 持久化并显示在 `/status`；切换仅影响下一轮，不会中断当前任务或清空上下文。`/effort` 是等价别名。
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
 无法使用终端时，管理员可在飞书私聊发送 `/doctor`，取得版本、非敏感配置摘要、当前运行状态和
@@ -235,6 +238,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 工具权限策略：`~/.dsh-lark/profiles/<profile>/permission-policies.json`（按隔离 scope 保存 `ask/allow/deny`，0600）
 - 通知偏好：`~/.dsh-lark/profiles/<profile>/notification-preferences.json`（按 scope 保存事件/目标/@/审批提醒延迟，0600）
 - 回复策略：`~/.dsh-lark/profiles/<profile>/reply-policies.json`（按 scope 保存合并窗口、批量/频率限制和近似去重窗口，0600）
+- 执行模式：`~/.dsh-lark/profiles/<profile>/execution-modes.json`（按 scope 保存 `quick/balanced/deep`，0600）
 - 工作空间：`~/.dsh-lark/profiles/<profile>/workspaces.json`
 - Git worktree：`~/.dsh-lark/profiles/<profile>/worktrees/`
 - 媒体目录：`~/.dsh-lark/profiles/<profile>/media/`

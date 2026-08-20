@@ -59,6 +59,8 @@ import type {
   DiagnosticRequestSnapshot,
 } from '../diagnostics/bundle.js';
 import type { SessionProjectionController } from './session-projection.js';
+import type { ExecutionMode, ExecutionModeStore } from '../bot/execution-mode-store.js';
+import { renderExecutionModeCard } from '../card/execution-mode-card.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -113,6 +115,7 @@ export interface CommandContext {
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
   replyPolicies?: ReplyPolicyStore;
+  executionModes?: ExecutionModeStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -185,6 +188,7 @@ const HELP = [
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive send <id> [scope|chatId]`、`/archive list [N]`、`/archive clean` — 归档并上传 / 重发或转发 / 查看 / 清理',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
+  '- `/mode [quick|balanced|deep]` — 选择当前会话的任务执行强度（下一轮生效）',
   '- `/model` — 查看当前模型与 dsh 可用模型',
   '- `/model use <id>` — 热切换当前会话模型（下一轮生效）',
   '- `/model default <id>` — 写入 dsh 默认模型 agent-default-model（管理员）',
@@ -225,6 +229,7 @@ const HELP_EN = [
   '- `/retention [N|default]` — view or set retained live messages',
   '- `/archive [note]`, `/archive send <id> [scope|chatId]`, `/archive list [N]`, `/archive clean` — archive and upload, resend/forward, list, or clean sessions',
   '- `/density [compact|standard|detailed]` — view or set card density',
+  '- `/mode [quick|balanced|deep]` — choose this session’s task execution strength for the next turn',
   '- `/model` — view the current model and available dsh models',
   '- `/model use <id>` — hot-switch this session’s model for the next turn',
   '- `/model default <id>` — set dsh agent-default-model (admin)',
@@ -435,6 +440,7 @@ export type StatusContext = Pick<
   | 'permissionPolicies'
   | 'notificationPreferences'
   | 'replyPolicies'
+  | 'executionModes'
   | 'models'
   | 'dshConfig'
   | 'resolveDefaultModel'
@@ -498,6 +504,7 @@ export async function statusCardInputFor(
     version: currentVersion(),
     isolation: ctx.chatMode === 'p2p' ? 'p2p' : (ctx.isolationMode ?? 'topic'),
     permissionPolicy: ctx.permissionPolicies?.get(ctx.scope) ?? 'ask',
+    executionMode: ctx.executionModes?.get(ctx.scope) ?? 'balanced',
     ...(notificationPreference ? { notificationPreference } : {}),
     ...(replyPolicy ? { replyPolicy, replyPolicyConfigured: ctx.replyPolicies?.isConfigured(ctx.scope) ?? false } : {}),
     role: role ? `\`${role.id}\` (${role.name})` : undefined,
@@ -934,6 +941,42 @@ async function handleDensity(args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, `已设置当前会话卡片密度：**${density}**。`, `Set this session’s card density to **${density}**.`);
 }
 
+async function handleExecutionMode(args: string, ctx: CommandContext): Promise<void> {
+  const input = args.trim().toLowerCase();
+  if (!ctx.executionModes) {
+    await reply(ctx, '当前运行环境未启用执行模式存储。', 'Execution mode storage is unavailable in this runtime.');
+    return;
+  }
+  if (!input) {
+    const current = ctx.executionModes.get(ctx.scope);
+    const actorId = ctx.senderId;
+    if (ctx.channel.sendCard && actorId) {
+      try {
+        await ctx.channel.sendCard(ctx.chatId, renderExecutionModeCard({
+          scope: ctx.scope,
+          current,
+          actorId,
+        }), { replyTo: ctx.messageId, ...(ctx.threadId ? { threadId: ctx.threadId } : {}) });
+        return;
+      } catch {
+        // Preserve a complete text path when interactive cards are unavailable.
+      }
+    }
+    await reply(ctx,
+      `当前执行模式：**${current}**。可用 \`/mode quick|balanced|deep\` 切换；下一轮生效。`,
+      `Current execution mode: **${current}**. Use \`/mode quick|balanced|deep\`; changes apply next turn.`);
+    return;
+  }
+  if (input !== 'quick' && input !== 'balanced' && input !== 'deep') {
+    await reply(ctx, '用法：`/mode [quick|balanced|deep]`', 'Usage: `/mode [quick|balanced|deep]`');
+    return;
+  }
+  await ctx.executionModes.set(ctx.scope, input as ExecutionMode);
+  await reply(ctx,
+    `已将当前会话执行模式设为 **${input}**，从下一轮生效；正在运行的任务与现有上下文不受影响。`,
+    `Set this session’s execution mode to **${input}** for the next turn. Active work and existing context are unchanged.`);
+}
+
 async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
   const question = args.trim();
   if (!question) {
@@ -1143,6 +1186,8 @@ const handlers: Record<string, Handler> = {
   '/retention': handleRetention,
   '/archive': handleArchive,
   '/density': handleDensity,
+  '/mode': handleExecutionMode,
+  '/effort': handleExecutionMode,
   '/model': handleModelDispatch,
   '/providers': handleConfigHub,
   '/provider': handleProviderDispatch,

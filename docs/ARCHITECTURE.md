@@ -141,6 +141,7 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    计划、审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
    完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
    失败只记录结构化日志，不能阻塞 agent 继续运行。
+   **任务执行模式**由 `ExecutionModeStore` 在 profile 的 `execution-modes.json` 以 0600 原子写入，按 immutable scope 保存 `quick|balanced|deep`。`/mode`/`/effort` 与卡片回调写入时复检当前 scope/操作者，`/status` 读取有效值。队列开始新 run 时取一次快照，并由 `run-flow` 注入统一模式前置指令，因此 SDK、ACP、Web 行为一致；运行中的任务不被切换打断，安全、工具权限与计划门禁也不因模式降低。
 5. **bot UI 国际化 seam**：`src/card/i18n.ts` 把中文与英文 variant 组合为同一 Card JSON 2.0
    payload（`config.locales/use_custom_translation` + 每个文本组件的 `i18n_content.zh_cn/en_us`），并在出站前校验两种语言的 button
    callback value 完全一致。运行、状态、工作区、配置、审批、计划与问答卡只本地化固定 chrome，

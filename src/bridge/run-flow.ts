@@ -31,6 +31,7 @@ import type { QuestionCardInput } from '../card/question-card.js';
 import { archiveSessionDir, classifySessionError } from '../session/heal.js';
 import type { SendOptions } from './send-options.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
+import type { ExecutionMode } from '../bot/execution-mode-store.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -63,6 +64,8 @@ export interface RunFlowInput {
   /** Provider route resolved from `model` (hot-switch support). */
   provider?: string;
   model?: string;
+  /** Snapshotted when this run starts; later /mode changes affect only later runs. */
+  executionMode?: ExecutionMode;
   stopGraceMs?: number;
   runTimeoutMs?: number;
   images?: string[];
@@ -194,7 +197,7 @@ async function runAttempt(
   // the dsh session; replaying the transcript would duplicate it and can drift
   // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
   const history = resuming ? [] : input.sessions.historyFor(input.scope, workspaceCwd);
-  const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers);
+  const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers, input.executionMode ?? 'balanced');
   const runId = randomUUID();
 
   const run = input.adapter.run({
@@ -780,17 +783,19 @@ function buildPrompt(
   messages: string[],
   role: RoleDefinition | undefined,
   collaborationPeers: RunFlowInput['collaborationPeers'],
+  executionMode: ExecutionMode,
 ): string {
   const rolePreamble = role ? renderRolePreamble(role) : undefined;
   const collaborationPreamble = renderCollaborationPreamble(collaborationPeers);
+  const executionPreamble = renderExecutionModePreamble(executionMode);
   const userText = messages.join('\n\n');
-  if (history.length === 0 && !rolePreamble && !collaborationPreamble) return userText;
 
   const transcript = history
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${message.content}`)
     .join('\n\n');
 
   const parts: string[] = [];
+  parts.push(executionPreamble, '');
   if (rolePreamble) parts.push(rolePreamble, '');
   if (collaborationPreamble) parts.push(collaborationPreamble, '');
   if (history.length > 0) {
@@ -798,6 +803,19 @@ function buildPrompt(
   }
   parts.push(`Current user message:\n${userText}`);
   return parts.join('\n');
+}
+
+function renderExecutionModePreamble(mode: ExecutionMode): string {
+  const guidance = mode === 'quick'
+    ? 'Answer directly with only the necessary investigation and verification. Prefer the shortest reliable path.'
+    : mode === 'deep'
+      ? 'Investigate thoroughly and verify assumptions and results. Use additional checks when they materially reduce uncertainty.'
+      : 'Balance speed with reasonable investigation and verification. Use the normal reliable workflow for the task.';
+  return [
+    `[Execution mode: ${mode}]`,
+    guidance,
+    'Do not bypass safety, permission, or plan-approval requirements, and do not expand the user-requested scope.',
+  ].join('\n');
 }
 
 function renderCollaborationPreamble(
