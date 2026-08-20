@@ -54,7 +54,14 @@ export class ReplyDispatcher {
     const queue = this.queues.get(scope);
     if (!queue?.length) return;
     const policy = this.deps.policies.get(scope);
-    const batch = queue.splice(0, policy.maxBatchSize);
+    const firstRoute = replyRoute(queue[0]!);
+    let batchSize = 0;
+    while (
+      batchSize < queue.length &&
+      batchSize < policy.maxBatchSize &&
+      replyRoute(queue[batchSize]!) === firstRoute
+    ) batchSize += 1;
+    const batch = queue.splice(0, batchSize);
     if (queue.length === 0) this.queues.delete(scope);
     this.sending.add(scope);
     const first = batch[0]!;
@@ -69,6 +76,10 @@ export class ReplyDispatcher {
       this.schedule(scope, 0);
     }
   }
+}
+
+function replyRoute(reply: PendingReply): string {
+  return `${reply.chatId}\u0000${reply.options?.threadId ?? ''}`;
 }
 
 function mergedMarkdown(batch: PendingReply[]): string {

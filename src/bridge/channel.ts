@@ -312,6 +312,14 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       archiveMaxAgeDays: deps.archiveMaxAgeDays,
       defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
       accessManager: deps.accessManager,
+      isChatAdministrator: async (chatId: string, userId: string) => {
+        const response = await channel.rawClient.im.v1.chat.get({
+          params: { user_id_type: 'open_id' },
+          path: { chat_id: chatId },
+        });
+        const chat = response.data;
+        return chat?.owner_id === userId || chat?.user_manager_id_list?.includes(userId) === true;
+      },
       approvals: deps.approvals,
       questions: deps.questions,
       ...(deps.plans ? { plans: deps.plans } : {}),

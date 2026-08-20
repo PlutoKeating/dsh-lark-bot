@@ -106,7 +106,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
 | `/notifications [show\|off\|on …]` | 查看、关闭或开启当前 scope 的主动提醒 |
-| `/replies [show\|default\|set …]` | 查看或由管理员修改当前 scope 的回复流量策略 |
+| `/replies [show\|default\|set …]` | 查看或由 profile 管理员、当前群主/群管理员修改当前 scope 的回复流量策略 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
 | `/archive send <id> [scope\|chatId]` | 重发当前 scope + workspace 的归档；管理员可发到指定已登记会话 |

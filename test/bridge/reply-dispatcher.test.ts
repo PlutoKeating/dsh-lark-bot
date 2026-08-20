@@ -49,4 +49,22 @@ describe('ReplyDispatcher', () => {
     await vi.advanceTimersByTimeAsync(10);
     await rejected;
   });
+
+  it('never merges replies from different threads in a shared scope', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = new ReplyDispatcher({
+      policies: { get: () => ({ mergeWindowMs: 10, maxBatchSize: 3, minIntervalMs: 20, dedupeWindowMs: 0 }) },
+      send,
+    });
+    const first = dispatcher.deliver('chat-a', 'chat-a', 'thread one', { replyTo: 'm1', threadId: 't1' });
+    const second = dispatcher.deliver('chat-a', 'chat-a', 'thread two', { replyTo: 'm2', threadId: 't2' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenLastCalledWith('chat-a', 'thread one', { replyTo: 'm1', threadId: 't1' });
+    await vi.advanceTimersByTimeAsync(20);
+    await Promise.all([first, second]);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith('chat-a', 'thread two', { replyTo: 'm2', threadId: 't2' });
+  });
 });

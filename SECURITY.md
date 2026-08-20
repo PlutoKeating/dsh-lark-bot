@@ -58,9 +58,11 @@
    所属 session 的挂起门禁。该门禁是人机确认层，不替代 dsh sandbox 或 ACP 的逐工具权限审批。
 9. **管理操作鉴权**：飞书会话内对 dsh 配置与访问白名单的写操作（`/model default`、
    `/model add|remove`、`/provider add|update|remove`、`/key set|remove`、`/invite user|admin|group`
-   与 `/invite remove …`）、`/permission ask|allow|deny`、`/replies set|default`，以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
+   与 `/invite remove …`）、`/permission ask|allow|deny`，以及群聊会话隔离模式写操作（`/isolation group|topic|member`）仅 profile 管理员可执行；首个扫码绑定的 operator 自动成为管理员，之后由现有
    管理员经 `/invite admin <open_id>` 添加（`/invite list` 为只读、开放）。查看类命令
    （`/model`、`/providers`、`/key list`）开放。`/doctor` 因包含本机运行状态与最近日志，仅管理员可执行。
+   `/replies set|default` 另允许当前群的群主/群管理员修改当前 scope；角色通过
+   `im.v1.chat.get` 的 `owner_id/user_manager_id_list` 以 `open_id` 实时校验，查询失败时拒绝写入。
 10. **本地回调隔离**：`lark_notify`、`lark_send_file`、`lark_ask_user`、`lark_request_plan_approval` 与
     `approval/request` answerer 的回调
     服务只绑定 `127.0.0.1`，每次启动生成随机

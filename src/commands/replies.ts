@@ -7,7 +7,7 @@ export async function handleReplies(args: string, ctx: CommandContext): Promise<
   if (!store) return reply(ctx, '当前运行环境未启用回复策略。', 'Reply policies are unavailable in this runtime.');
   const tokens = args.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0 || tokens[0] === 'show') return reply(ctx, describe(store.get(ctx.scope), store.isConfigured(ctx.scope), true), describe(store.get(ctx.scope), store.isConfigured(ctx.scope), false));
-  if (!ctx.accessManager.isAdmin(ctx.senderId)) return reply(ctx, '仅管理员可修改回复策略。', 'Only admins can change reply policies.');
+  if (!(await canManageReplies(ctx))) return reply(ctx, '仅 profile 管理员或当前群的群主/群管理员可修改回复策略。', 'Only profile admins or the current group owner/managers can change reply policies.');
   if (tokens[0] === 'default') {
     await store.set(ctx.scope, undefined);
     return reply(ctx, '已恢复默认即时回复与仅 messageId 去重。', 'Restored immediate replies and message-ID-only deduplication.');
@@ -28,6 +28,16 @@ export async function handleReplies(args: string, ctx: CommandContext): Promise<
   if (tokens.length === 1) return usage(ctx);
   await store.set(ctx.scope, policy);
   await reply(ctx, `已设置。${describe(policy, true, true)}`, `Updated. ${describe(policy, true, false)}`);
+}
+
+async function canManageReplies(ctx: CommandContext): Promise<boolean> {
+  if (ctx.accessManager.isAdmin(ctx.senderId)) return true;
+  if (ctx.chatMode === 'p2p' || !ctx.senderId || !ctx.isChatAdministrator) return false;
+  try {
+    return await ctx.isChatAdministrator(ctx.chatId, ctx.senderId);
+  } catch {
+    return false;
+  }
 }
 
 function describe(policy: ReplyPolicy, configured: boolean, zh: boolean): string {

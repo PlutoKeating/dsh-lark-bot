@@ -167,10 +167,11 @@
 
 ### 4.8.2 回复流量控制与近似去重（issue #34）
 
-- 默认保持即时逐条回复；管理员通过 `/replies set merge=N batch=N interval=N dedupe=N` 按 immutable
+- 默认保持即时逐条回复；profile 管理员或当前群的群主/群管理员通过 `/replies set merge=N batch=N interval=N dedupe=N` 按 immutable
   scope 配置，所有成员可查看，`default` 恢复默认，`/status` 展示有效值。
-- 最终回答在合并窗口内聚合；每条消息最多包含配置数量的任务答案，超出部分保留队列并遵守批次最小
-  间隔，不丢弃答案。单任务兼容原 reply/thread anchor；合并任务保留 thread 并标出各原 messageId。
+- 最终回答在合并窗口内聚合；每条消息最多包含配置数量的任务答案，超出部分在 bridge 进程存活期间
+  保留内存队列并遵守批次最小间隔，不因批量上限丢弃答案。单任务兼容原 reply/thread anchor；
+  合并任务保留 thread 并标出各原 messageId。
 - messageId 继续由 durable ledger 精确幂等；启用近似去重后，仅比较同发送者、同 scope + workspace、
   配置时间窗内的规范化正文，短文本只做规范化精确匹配，高相似长文本明确提示后不执行。
 - 策略以 0600 atomic write 持久化，失败回滚且不报成功，重启不丢。

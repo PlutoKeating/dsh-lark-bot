@@ -204,9 +204,12 @@ outcome 并发送明确双语提示；计划门禁保持独立，不受该 store
 
 `src/bot/reply-policy-store.ts` 提供 `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600），
 按 immutable scope 保存 `mergeWindowMs/maxBatchSize/minIntervalMs/dedupeWindowMs`；默认值保持即时逐条
-回复且不启用内容近似去重。`/replies` 查询开放、修改仅管理员，awaited atomic write 失败会回滚。
-`JobLedger.hasRecentDuplicate` 在 durable enqueue 前只比较同 sender + scope + workspace 的近期记录：
-短文本仅规范化精确匹配，长文本使用高阈值字符 bigram Dice，相似命中明确回执且不执行。
+回复且不启用内容近似去重。`/replies` 查询开放，修改允许 profile 管理员或当前群的群主/群管理员；
+群角色通过 `im.v1.chat.get` 的 `owner_id/user_manager_id_list` 实时校验且失败关闭，awaited atomic write 失败会回滚。
+`JobLedger.enqueueWithDeduplication` 在同一串行 durable transaction 内完成近似判断与入队，返回
+`inserted|message-id-duplicate|content-duplicate`，避免并发消息同时越过检查。任务身份要求 sender、
+scope、workspace、`rawContentType` 与资源描述均一致，再比较正文：短文本仅规范化精确匹配，长文本
+使用高阈值字符 bigram Dice；不同附件不会因相同说明文字被误拦，相似命中会明确回执且不执行。
 
 `src/bot/active-runs.ts` 的 `ActiveRuns` 允许同一 scope 持有多个并发 run
 （`Map<scope, Map<runId, handle>>`）：`list(scope)` / `count(scope)` 查询，
@@ -730,7 +733,7 @@ topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(
 `/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
 `/notifications on [current|scope|chatId] [events=…] [mentions=…] [remind=N]` 为当前 scope
 显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或关闭。
-`/replies set merge=N batch=N interval=N dedupe=N` 由管理员配置当前 scope 的最终回答合并、每批任务
+`/replies set merge=N batch=N interval=N dedupe=N` 由 profile 管理员或当前群的群主/群管理员配置当前 scope 的最终回答合并、每批任务
 上限、批次最小发送间隔与同发送者近似去重窗口；`show` 对所有成员开放，`default` 恢复兼容默认。
 
 `src/bridge/reply-dispatcher.ts` 的 `ReplyDispatcher.deliver(scope,chatId,markdown,options)` 是最终回答

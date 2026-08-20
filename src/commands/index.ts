@@ -123,6 +123,8 @@ export interface CommandContext {
   setDefaultModelPreference?: (model: string) => Promise<void>;
   senderId: string | undefined;
   accessManager: AccessManager;
+  /** Verify current-chat owner/manager membership through Feishu/Lark. */
+  isChatAdministrator?: (chatId: string, userId: string) => Promise<boolean>;
   channel: CommandChannel;
   defaultWorkspace: string;
   jobs?: Pick<JobLedger, 'list' | 'get' | 'counts'>;
@@ -176,7 +178,7 @@ const HELP = [
   '- `/notify <scope|chatId> <text>` — 跨会话发送通知（管理员）',
   '- `/notify list` — 查看已注册 scope',
   '- `/notifications [show|off|on …]` — 配置当前 scope 的完成 / 失败 / 审批提醒',
-  '- `/replies [show|default|set …]` — 配置回复合并、频率与近似去重（修改仅管理员）',
+  '- `/replies [show|default|set …]` — 配置回复合并、频率与近似去重（profile 管理员或当前群管理员可修改）',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive send <id> [scope|chatId]`、`/archive list [N]`、`/archive clean` — 归档并上传 / 重发或转发 / 查看 / 清理',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
@@ -215,7 +217,7 @@ const HELP_EN = [
   '- `/notify <scope|chatId> <text>` — notify another session (admin)',
   '- `/notify list` — list registered scopes',
   '- `/notifications [show|off|on …]` — configure completion / failure / approval reminders',
-  '- `/replies [show|default|set …]` — configure reply batching, rate limits, and near-deduplication (admin writes)',
+  '- `/replies [show|default|set …]` — configure reply batching, rate limits, and near-deduplication (profile admin or current group admin writes)',
   '- `/retention [N|default]` — view or set retained live messages',
   '- `/archive [note]`, `/archive send <id> [scope|chatId]`, `/archive list [N]`, `/archive clean` — archive and upload, resend/forward, list, or clean sessions',
   '- `/density [compact|standard|detailed]` — view or set card density',

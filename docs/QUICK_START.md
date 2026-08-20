@@ -125,7 +125,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list` | 归档并上传 / 重发或由管理员转发 / 查看记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/notifications [show\|off\|on …]` | 配置当前 scope 主动提醒（默认关闭） |
-| `/replies [show\|default\|set …]` | 配置回复合并、频率、批量上限与近似去重（修改仅管理员） |
+| `/replies [show\|default\|set …]` | 配置回复合并、频率、批量上限与近似去重（profile 管理员或当前群管理员可修改） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
