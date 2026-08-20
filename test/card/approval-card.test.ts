@@ -17,7 +17,10 @@ describe('renderApprovalCard', () => {
       body: {
         elements: Array<{
           tag: string;
-          columns?: Array<{ elements: Array<{ tag: string; value?: Record<string, unknown> }> }>;
+          columns?: Array<{ elements: Array<{
+            tag: string;
+            behaviors?: Array<{ type: string; value?: Record<string, unknown> }>;
+          }> }>;
         }>;
       };
     };
@@ -27,7 +30,7 @@ describe('renderApprovalCard', () => {
       row?.columns
         ?.flatMap((column) => column.elements)
         .filter((button) => button.tag === 'button')
-        .map((button) => button.value) ?? [];
+        .map((button) => button.behaviors?.find((behavior) => behavior.type === 'callback')?.value) ?? [];
     expect(values).toContainEqual({
       cmd: 'approve',
       id: 'call-1',

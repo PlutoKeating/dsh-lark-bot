@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
 import type { NotifyMessage } from '../../src/notify/server.js';
 import { NotifyServer } from '../../src/notify/server.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
@@ -225,6 +226,41 @@ describe('NotifyServer', () => {
     });
   });
 
+  it('starts and keeps the plan response alive before the human decides', async () => {
+    let resolvePlan: ((result: { ok: true; decision: 'approved' }) => void) | undefined;
+    const plan = vi.fn(() => new Promise<{ ok: true; decision: 'approved' }>((resolve) => {
+      resolvePlan = resolve;
+    }));
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), plan,
+    });
+    servers.push(server);
+    await server.start();
+
+    const firstChunk = new Promise<{ response: IncomingMessage; chunk: string }>((resolve, reject) => {
+      const request = httpRequest(server.planUrl!, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }, (response) => {
+        response.once('data', (chunk: Buffer) => resolve({ response, chunk: chunk.toString() }));
+      });
+      request.once('error', reject);
+      request.end(JSON.stringify({
+        token: 'test-token', sessionId: 'session-1', plan: 'Plan',
+      }));
+    });
+
+    const started = await Promise.race([
+      firstChunk,
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error('plan response did not start')), 250);
+      }),
+    ]);
+    expect(started.response.statusCode).toBe(200);
+    expect(started.chunk.trim()).toBe('');
+    resolvePlan?.({ ok: true, decision: 'approved' });
+  });
+
   it('propagates a disconnected plan request as an abort signal', async () => {
     let observedAbort = false;
     const plan = vi.fn(async (_payload, signal?: AbortSignal) => {
@@ -250,7 +286,7 @@ describe('NotifyServer', () => {
     servers.push(server);
     await server.start();
     const controller = new AbortController();
-    const request = fetch(server.planUrl!, {
+    const response = await fetch(server.planUrl!, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token: 'test-token', sessionId: 'session-1', plan: 'Plan' }),
@@ -259,7 +295,7 @@ describe('NotifyServer', () => {
     await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
     controller.abort();
 
-    await expect(request).rejects.toThrow();
+    await expect(response.json()).rejects.toThrow();
     await vi.waitFor(() => expect(observedAbort).toBe(true));
   });
 
