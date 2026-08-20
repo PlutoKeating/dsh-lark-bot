@@ -114,6 +114,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive list [N]` | 查看当前 workspace 最近 N 条归档 |
 | `/archive clean` | 清理当前 workspace 的过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
+| `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 选择当前会话任务强度；下一轮生效 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID；下一轮生效） |
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
@@ -171,6 +172,13 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
 （`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在
 私聊使用，或优先用 `--api-key-env` 引用环境变量 / 在 dsh Web 页面录入。
+
+### 任务执行模式
+
+- `/mode` 打开 Card JSON 2.0 双语选择器；也可用 `/mode quick|balanced|deep`，`/effort` 等价。
+- `quick` 直接回答并只做必要检查；`balanced` 兼顾速度与可靠性（默认）；`deep` 充分调查并验证假设与结果。
+- 选择按 immutable scope 原子持久化到 `execution-modes.json`（0600），重启保留，`/status` 展示当前值。
+- run 创建时固化模式，所以切换只影响下一轮；正在运行的任务、session/context、工具权限与计划门禁均不改变。
 
 ### 多角色 Agent
 

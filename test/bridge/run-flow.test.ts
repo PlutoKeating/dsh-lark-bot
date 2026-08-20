@@ -78,6 +78,32 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it.each([
+    ['quick', 'Answer directly with only the necessary investigation'],
+    ['balanced', 'Balance speed with reasonable investigation and verification'],
+    ['deep', 'Investigate thoroughly and verify assumptions and results'],
+  ] as const)('applies the %s execution mode to the next adapter run', async (executionMode, instruction) => {
+    let prompt = '';
+    const adapter = fakeAdapter([
+      { type: 'done', sessionId: 'session-mode', terminationReason: 'normal' },
+    ]);
+    const originalRun = adapter.run.bind(adapter);
+    adapter.run = (options) => {
+      prompt = options.prompt;
+      return originalRun(options);
+    };
+
+    await runAgentBatch({
+      scope: 'chat-mode', chatId: 'chat-mode', messages: ['handle this'], executionMode,
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+    });
+
+    expect(prompt).toContain(`[Execution mode: ${executionMode}]`);
+    expect(prompt).toContain(instruction);
+    expect(prompt).toContain('Do not bypass safety, permission, or plan-approval requirements');
+  });
+
   it('reports durable stage checkpoints and a terminal outcome without storing hidden content', async () => {
     const checkpoints: Array<Record<string, unknown>> = [];
     const outcome = await runAgentBatch({

@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { JobLedger } from '../../src/bot/job-ledger.js';
+import { ExecutionModeStore } from '../../src/bot/execution-mode-store.js';
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
 
@@ -119,6 +120,41 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('persists a current-scope mode card action and rejects stale or foreign actors', async () => {
+    const fake = makeChannel();
+    const executionModes = new ExecutionModeStore(':memory:');
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-mode-home') }),
+      defaultModel: 'deepseek-v4-flash', executionModes,
+      accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
+      pending: { push: vi.fn(), size: vi.fn().mockReturnValue(0), isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false) } as never,
+      defaultWorkspace: '/tmp/project', createChannel: fake.createChannel,
+    });
+
+    const handle = fake.handlers.cardAction as (event: unknown) => Promise<{ toast?: { type: string } } | undefined>;
+    const accepted = await handle({
+      chatId: 'chat-1', messageId: 'mode-card', operator: { openId: 'user-1' },
+      action: { value: { cmd: 'execution-mode', mode: 'deep', scope: 'chat-1', actorId: 'user-1' } },
+    });
+    expect(accepted?.toast?.type).toBe('success');
+    expect(executionModes.get('chat-1')).toBe('deep');
+
+    const rejected = await handle({
+      chatId: 'chat-1', messageId: 'mode-card', operator: { openId: 'user-2' },
+      action: { value: { cmd: 'execution-mode', mode: 'quick', scope: 'chat-1', actorId: 'user-1' } },
+    });
+    expect(rejected?.toast?.type).toBe('error');
+    expect(executionModes.get('chat-1')).toBe('deep');
+  });
+
   it('authorizes reply policy changes from the current Feishu group manager list', async () => {
     const fake = makeChannel();
     fake.chatGet.mockResolvedValue({

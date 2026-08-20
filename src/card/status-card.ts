@@ -2,6 +2,7 @@ import type { SessionMetrics } from '../session/store.js';
 import type { NotificationPreference } from '../bot/notification-preference-store.js';
 import type { ReplyPolicy } from '../bot/reply-policy-store.js';
 import { localizedCard, type CardLocale } from './i18n.js';
+import type { ExecutionMode } from '../bot/execution-mode-store.js';
 
 export interface StatusCardInput {
   scope: string;
@@ -12,6 +13,7 @@ export interface StatusCardInput {
   activeRunIds: string[];
   version: string;
   isolation: string;
+  executionMode?: ExecutionMode;
   permissionPolicy?: 'ask' | 'allow' | 'deny';
   notificationPreference?: NotificationPreference;
   replyPolicy?: ReplyPolicy;
@@ -75,6 +77,7 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
       : [zh ? '📴 **显式投影绑定**：未绑定' : '📴 **Explicit projection binding**: unbound']),
     zh ? `🏃 **运行状态**：${runs}` : `🏃 **Runs**: ${runs}`,
     `🔒 **isolation**：\`${input.isolation}\``,
+    zh ? `🎚️ **执行模式**：\`${input.executionMode ?? 'balanced'}\`` : `🎚️ **Execution mode**: \`${input.executionMode ?? 'balanced'}\``,
     zh ? `🛡️ **工具权限**：\`${input.permissionPolicy ?? 'ask'}\`` : `🛡️ **Tool permission**: \`${input.permissionPolicy ?? 'ask'}\``,
     ...(input.notificationPreference
       ? [zh

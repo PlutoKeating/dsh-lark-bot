@@ -120,6 +120,8 @@ export interface AppPaths {
   sessionProjectionsFile(profile: string): string;
   permissionPoliciesFile(profile: string): string;
   notificationPreferencesFile(profile: string): string;
+  replyPoliciesFile(profile: string): string;
+  executionModesFile(profile: string): string;
   sessionCatalogFile(profile: string): string;
   workspacesFile(profile: string): string;
   mediaDir(profile: string): string;
@@ -247,6 +249,17 @@ export class ModelStore {
 
 飞书命令 `/model use <provider/model>` 写该 store（也兼容唯一模型 ID，下一轮消息生效），
 `/model reset` 清除覆盖。
+
+`src/bot/execution-mode-store.ts` 提供持久 `ExecutionModeStore`：
+
+```ts
+type ExecutionMode = 'quick' | 'balanced' | 'deep';
+get(scope: string): ExecutionMode; // 默认 balanced
+set(scope: string, mode: ExecutionMode): Promise<void>;
+flush(): Promise<void>;
+```
+
+状态原子写入 `<profile>/execution-modes.json`（0600），失败时回滚内存值并向命令/卡片回调传播失败。`/mode`（别名 `/effort`）无参数时发送双语选择卡，有参数时直接设置当前 immutable scope；卡片动作必须仍属于生成时的 scope 与 operator。`runAgentBatch` 在 run 创建时接收 `executionMode` 快照，并把统一执行指导加入 prompt，所以后续设置不会影响已经运行的 adapter。三档都明确保留安全、工具权限与计划审批边界。
 
 `src/config/dsh-config.ts` 的 `DshProviderManager` 直接读写 dsh 官方配置文件，与
 `dsh` Web **Settings → Models** 页面共用同一存储协议，改动在下一个请求生效、无需重启：
@@ -704,6 +717,7 @@ export interface Logger {
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|on …]`、`/replies [show|default|set …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
+`/mode [quick|balanced|deep]`（兼容 `/effort`）、
 `/model use|default|reset|add|remove`、`/providers`、
 `/provider add|update|remove`、`/key set|remove|list`、`/ask`、
 `/invite user|admin|group|list|remove`、`/help`。安全网守护接管期间额外支持

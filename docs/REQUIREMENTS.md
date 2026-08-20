@@ -129,6 +129,7 @@
 - `/provider add|update|remove <id>`：管理 `deepseek-official` 与自定义 pi-ai provider
   （协议白名单 `openai-completions` / `openai-responses` / `anthropic-messages`）。
 - `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
+- `/mode [quick|balanced|deep]`（兼容 `/effort`）：通过大白话双语卡片或文字命令选择当前 scope 的执行强度；默认 balanced，按 scope 持久化，`/status` 展示。每个 run 启动时固化模式，切换只影响下一轮，不中断已有任务或上下文；任何模式都不得降低权限与计划审批要求。
 - `/key set|remove|list <引用名>`：读写 `~/.dsh/.credentials.yaml`。
 - 实现约束：与 dsh Web **Settings → Models** 同一存储协议（`~/.dsh/settings.yaml` +
   `~/.dsh/.credentials.yaml`，`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、凭据文件

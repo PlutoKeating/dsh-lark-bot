@@ -29,6 +29,7 @@ import { JobLedger } from '../../src/bot/job-ledger.js';
 import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
 import type { NotificationPreference, NotificationPreferenceStore } from '../../src/bot/notification-preference-store.js';
 import type { ReplyPolicy, ReplyPolicyStore } from '../../src/bot/reply-policy-store.js';
+import { ExecutionModeStore } from '../../src/bot/execution-mode-store.js';
 
 vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/upgrade/update-check.js')>();
@@ -848,11 +849,43 @@ describe('command router', () => {
     expect(call?.[0]).toBe('chat-a');
     const body = call?.[1] as string;
     expect(body).toContain('/model');
+    expect(body).toContain('/mode');
     expect(body).toContain('/providers');
     expect(body).toContain('/provider');
     expect(body).toContain('/key');
     expect(body).toContain('/help');
     expect(body).toContain('/newg');
+  });
+
+  it('/mode opens a plain-language card and persists a selected mode for the scope', async () => {
+    const modes = new ExecutionModeStore(':memory:');
+    const sendCard = vi.fn().mockResolvedValue('mode-card');
+    const ctx = makeContext({
+      executionModes: modes,
+      senderId: 'ou_user',
+      channel: { sendMarkdown: vi.fn(), sendCard },
+    });
+
+    await tryHandleCommand('/mode', ctx);
+    const card = JSON.stringify(sendCard.mock.calls[0]?.[1]);
+    expect(card).toContain('快速');
+    expect(card).toContain('平衡');
+    expect(card).toContain('深度');
+    expect(card).toContain('Quick');
+    expect(card).toContain('Balance');
+    expect(card).toContain('Deep');
+    expect(card).toContain('"cmd":"execution-mode"');
+
+    await tryHandleCommand('/mode deep', ctx);
+    expect(modes.get('chat-a')).toBe('deep');
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('下一轮'),
+      { replyTo: 'msg-1' },
+    );
+
+    await tryHandleCommand('/effort quick', ctx);
+    expect(modes.get('chat-a')).toBe('quick');
   });
 
   it('/newg creates a group, invites the sender and replies with a link', async () => {

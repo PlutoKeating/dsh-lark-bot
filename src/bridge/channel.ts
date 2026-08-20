@@ -54,6 +54,7 @@ import {
   type SessionProjectionLimits,
 } from '../session/projection-bridge.js';
 import { SessionProjectionController } from '../commands/session-projection.js';
+import type { ExecutionModeStore } from '../bot/execution-mode-store.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -86,6 +87,7 @@ export interface StartChannelDeps {
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
   replyPolicies?: ReplyPolicyStore;
+  executionModes?: ExecutionModeStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -362,6 +364,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
       ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
       ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
+      ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
       models: deps.models,
       wizardStore: deps.wizardStore,
       dshConfig: deps.dshConfig,
@@ -551,6 +554,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
             ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
             ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
+            ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
             ...(sessionProjection ? { sessionProjection } : {}),
             models: deps.models,
             dshConfig: deps.dshConfig,
@@ -570,6 +574,25 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       if (value?.cmd === 'stop') {
         await deps.activeRuns.interrupt(scope);
         return;
+      }
+      if (value?.cmd === 'execution-mode' && deps.executionModes) {
+        const mode = value.mode;
+        const actorId = typeof value.actorId === 'string' ? value.actorId : undefined;
+        if (
+          scope !== currentScope ||
+          actorId === undefined ||
+          actorId !== event.operator?.openId ||
+          (mode !== 'quick' && mode !== 'balanced' && mode !== 'deep')
+        ) {
+          return { toast: { type: 'error', content: '此模式卡已失效，请重新发送 /mode / This mode card is stale; send /mode again' } };
+        }
+        try {
+          await deps.executionModes.set(scope, mode);
+          return { toast: { type: 'success', content: `已切换为 ${mode}，下一轮生效 / Switched to ${mode} for the next turn` } };
+        } catch (error) {
+          log.fail('execution-mode', error, { scope });
+          return { toast: { type: 'error', content: '执行模式保存失败 / Failed to save execution mode' } };
+        }
       }
       if (value?.cmd === 'approve' && typeof value.id === 'string' && deps.approvals) {
         const outcome = value.outcome === 'allow' ? 'allowed-once' : 'rejected';

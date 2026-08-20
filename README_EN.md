@@ -126,6 +126,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/retention [N\|default]` | View or set the live message retention window (overflow is archived) |
 | `/archive [note]`, `/archive send <id> [scope\|chatId]`, `/archive list [N]`, `/archive clean` | Archive and upload / resend here or to another session (admin) / list / clean |
 | `/density [compact\|standard\|detailed]` | View or set card density |
+| `/mode [quick\|balanced\|deep]` (alias `/effort`) | Choose this session's execution strength by card or command; effective next turn |
 | `/model`, `/providers`, `/provider`, `/key` | Open the interactive hub (tap a model or restore the default; management writes use a multi-turn wizard) |
 | `/model use <provider/model>` | Hot-switch the current session model (a unique bare model ID also works; effective next message, no restart) |
 | `/model default <id>` | Write the dsh default model `agent-default-model` (admin) |
@@ -218,6 +219,8 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 **Configurable proactive reminders**: off by default. Any user can run `/notifications on current` for the current scope to opt into completion, failure, and one-time approval-wait reminders (10 minutes by default, mentioning the caller). `events=`, `mentions=`, and `remind=` customize the policy; admins may route it to another registered `scope|chatId`. Preferences are atomically persisted across restarts, visible in `/status`, and disabled with `/notifications off`.
 
 **Reply flow control**: immediate one-answer-per-task delivery remains the default. A profile admin or the current group owner/manager can run `/replies set merge=5 batch=3 interval=10 dedupe=60` for the current scope to group answers for 5 seconds, include at most 3 tasks per grouped message, wait at least 10 seconds between batches, and suppress near-identical tasks from the same sender and workspace for 60 seconds. While the bridge process remains alive, overflow stays queued and is not discarded because of the batch cap. `/replies` and `/status` show the effective policy; `/replies default` restores compatibility mode.
+
+**Task execution modes**: send `/mode` to choose `quick` (direct answers with only necessary checks), `balanced` (the default balance of speed and reliability), or `deep` (thorough investigation and verification) from a bilingual card. `/mode quick|balanced|deep` and the `/effort` alias provide the text path. The selection persists per isolated scope and appears in `/status`. Each run snapshots its mode at startup, so changes affect only the next turn and never interrupt active work, clear context, or bypass permission/plan approval.
 
 **Direct result-file delivery**: SDK / ACP / Web agents can call `lark_send_file` to upload a file from the current session workspace, its actual execution worktree, its scope archive, or the instance logs to the originating Feishu chat/topic. `/archive [note]` uploads its Markdown and JSONL after the durable local write; `/archive send <id> [scope|chatId]` retries locally or lets an admin forward it to a registered session. Only regular files up to 20 MiB are accepted by default. The resolved path must remain inside roots computed by the bridge; a runtime-supplied cwd never expands access.
 

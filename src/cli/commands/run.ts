@@ -21,6 +21,7 @@ import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
 import { PermissionPolicyStore } from '../../bot/permission-policy-store.js';
 import { NotificationPreferenceStore } from '../../bot/notification-preference-store.js';
 import { ReplyPolicyStore } from '../../bot/reply-policy-store.js';
+import { ExecutionModeStore } from '../../bot/execution-mode-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -216,6 +217,7 @@ export async function startBridgeEngine(
   const permissionPolicies = new PermissionPolicyStore(paths.permissionPoliciesFile(profileName));
   const notificationPreferences = new NotificationPreferenceStore(paths.notificationPreferencesFile(profileName));
   const replyPolicies = new ReplyPolicyStore(paths.replyPoliciesFile(profileName));
+  const executionModes = new ExecutionModeStore(paths.executionModesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -230,6 +232,7 @@ export async function startBridgeEngine(
     permissionPolicies.load(),
     notificationPreferences.load(),
     replyPolicies.load(),
+    executionModes.load(),
   ]);
   // Freeze the recovery set before the channel can deliver live events. A
   // message accepted after connect then belongs only to the live path and
@@ -519,6 +522,7 @@ export async function startBridgeEngine(
             ? {}
             : { provider: modelRoute.provider }),
           model: modelRoute?.model ?? resolvedModel,
+          executionMode: executionModes.get(scope),
           onCheckpoint: (checkpoint) => jobs.checkpoint(
             ledgerMessageIds,
             {
@@ -584,6 +588,7 @@ export async function startBridgeEngine(
     permissionPolicies,
     notificationPreferences,
     replyPolicies,
+    executionModes,
     questions,
     plans,
     densityStore,
@@ -777,6 +782,7 @@ export async function startBridgeEngine(
         permissionPolicies.flush(),
         notificationPreferences.flush(),
         replyPolicies.flush(),
+        executionModes.flush(),
         jobs.flush(),
       ]);
     },

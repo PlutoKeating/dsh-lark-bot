@@ -129,6 +129,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list [N]`、`/archive clean` | 归档并发送 / 重发到当前或指定会话（跨会话仅管理员）/ 查看 / 清理|
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度|
+| `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 用卡片或命令切换当前会话任务强度；下一轮生效 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；管理写操作走多轮向导）|
 | `/model use <provider/model>` | 热切换当前会话模型（也兼容唯一模型 ID；下一轮生效，无需重启）|
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
@@ -215,6 +216,8 @@ guardian 仍只救援其配置的主实例。
 **可配置主动提醒**：默认关闭、不刷屏。普通用户可用 `/notifications on current` 为当前 scope 开启任务完成、失败和审批等待提醒，默认 @ 自己并在审批等待 10 分钟后只提醒一次；可用 `events=`、`mentions=`、`remind=` 调整。管理员还可把目标设为已登记的其他 `scope|chatId`。偏好原子持久化到 profile，重启不丢，并在 `/status` 显示；`/notifications off` 一键关闭。
 
 **回复流量控制**：默认保持即时逐条回复。profile 管理员或当前群的群主/群管理员可用 `/replies set merge=5 batch=3 interval=10 dedupe=60` 为当前 scope 开启 5 秒合并窗口、每条合并最多 3 个任务、两批至少间隔 10 秒，并在 60 秒内抑制同一发送者在同 workspace 的近似重复任务；超出批量上限的答案在 bridge 进程存活期间继续排队，不会因批量上限被丢弃。`/replies` 与 `/status` 显示有效策略，`/replies default` 恢复默认。
+
+**任务执行模式**：发送 `/mode` 可用双语卡片选择 `quick`（快速：直接回答，只做必要检查）、`balanced`（平衡：兼顾速度与可靠性，默认）或 `deep`（深度：充分调查并验证假设与结果）；也可直接发送 `/mode quick|balanced|deep`，`/effort` 是等价别名。选择按隔离 scope 持久化并显示在 `/status`。每个 run 启动时固化模式，因此切换只影响下一轮，不会中断当前任务、清空上下文或绕过权限/计划审批。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
