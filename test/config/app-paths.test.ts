@@ -24,6 +24,7 @@ describe('resolveAppPaths', () => {
     expect(paths.jobsFile('main')).toBe('/tmp/dsh-lark-test/profiles/main/jobs.json');
     expect(paths.notificationPreferencesFile('main')).toBe('/tmp/dsh-lark-test/profiles/main/notification-preferences.json');
     expect(paths.replyPoliciesFile('main')).toBe('/tmp/dsh-lark-test/profiles/main/reply-policies.json');
+    expect(paths.sessionProjectionsFile('main')).toBe('/tmp/dsh-lark-test/profiles/main/session-projections.json');
     expect(paths.mediaDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/media');
     expect(paths.logsDir('main')).toBe('/tmp/dsh-lark-test/profiles/main/logs');
     expect(paths.archivesDir('main')).toBe(

@@ -27,7 +27,7 @@ import { runAgentBatch } from '../../bridge/run-flow.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import { memberOwnerForScope } from '../../bridge/scope-isolation.js';
 import type { StreamingChannel } from '../../bridge/types.js';
-import { startWebSessionWatcher, type WebMuxProvider, type WebSessionWatcher } from '../../adapters/dsh/web-watcher.js';
+import { WebDshAdapter } from '../../adapters/dsh/web-adapter.js';
 import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
 import { buildPlanHandler } from '../../notify/plan-handler.js';
@@ -45,6 +45,8 @@ import { log } from '../../core/logger.js';
 import { onboardPersonalAgent } from '../../onboard/registration.js';
 import { prepareAttachments } from '../../media/attachments.js';
 import { SessionStore } from '../../session/store.js';
+import { SessionProjectionStore } from '../../session/projection-store.js';
+import { WebSessionProjectionSource } from '../../session/projection-protocol.js';
 import { archiveScopeSlug, SessionArchive } from '../../session/archive.js';
 import { GitWorktreeManager } from '../../workspace/git-worktree.js';
 import { WorkspaceStore } from '../../workspace/store.js';
@@ -204,6 +206,7 @@ export async function startBridgeEngine(
   await mkdir(defaultWorkspace, { recursive: true });
 
   const sessions = new SessionStore(paths.sessionsFile(profileName));
+  const sessionProjections = new SessionProjectionStore(paths.sessionProjectionsFile(profileName));
   const jobs = new JobLedger(paths.jobsFile(profileName));
   const archiver = new SessionArchive(paths.archivesDir(profileName));
   const workspaces = new WorkspaceStore(paths.workspacesFile(profileName));
@@ -218,6 +221,7 @@ export async function startBridgeEngine(
   });
   await Promise.all([
     sessions.load(),
+    sessionProjections.load(),
     jobs.load(),
     workspaces.load(),
     roleStore.load(),
@@ -260,6 +264,18 @@ export async function startBridgeEngine(
     throw new Error(
       '多机器人实例不能共享 Web adapter 事件流；请将该实例配置为 sdk 或 acp。',
     );
+  }
+  if (adapter instanceof WebDshAdapter) {
+    adapter.setPromptObserver(async ({ sessionId, rpcId, origin }) => {
+      const binding = sessionProjections.get(origin.scope, origin.workspaceCwd);
+      if (!binding || binding.sessionId !== sessionId) return;
+      await sessionProjections.recordCorrelation(
+        origin.scope,
+        origin.workspaceCwd,
+        sessionId,
+        { rpcId, feishuMessageId: origin.messageId, createdAt: Date.now() },
+      );
+    });
   }
   const activeRuns = new ActiveRuns();
   const runPolicies = new RunPolicyStore();
@@ -604,6 +620,19 @@ export async function startBridgeEngine(
     botHandoffMax: env.botHandoffMax,
     handoffGuard,
     jobs,
+    ...(env.sessionProjectionEnabled && adapter instanceof WebDshAdapter
+      ? {
+          sessionProjectionStore: sessionProjections,
+          sessionProjectionSource: new WebSessionProjectionSource(adapter),
+          sessionProjectionLimits: {
+            backfillMessages: env.sessionBackfillMessages,
+            backfillBytes: env.sessionBackfillBytes,
+            historyPageMessages: Math.max(env.sessionBackfillMessages, 100),
+            streamUpdateMs: env.sessionStreamUpdateMs,
+            reconnectMs: 5_000,
+          },
+        }
+      : {}),
     createDiagnosticBundle: async (request) => {
       const service = new ServiceManager({
         profile: dshProfileName,
@@ -626,6 +655,8 @@ export async function startBridgeEngine(
           allowedChats: activeProfile.access.allowedChats.length,
           admins: activeProfile.access.admins.length,
           groupNoAt: env.groupNoAt,
+          sessionProjectionEnabled: env.sessionProjectionEnabled && adapter instanceof WebDshAdapter,
+          projectionBindings: sessionProjections.list().length,
         },
         request,
         ...(serviceStatus
@@ -676,19 +707,6 @@ export async function startBridgeEngine(
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
   await recoverDurableJobs(jobRecovery, jobs, pending, streaming);
-  // In `web` adapter mode, watch web-GUI turn completions: push them to Feishu
-  // and auto-switch the chat's session mapping (single writer = web agent).
-  let webWatcher: WebSessionWatcher | undefined;
-  if (adapter.id === 'dsh-web' && env.webPush) {
-    webWatcher = startWebSessionWatcher({
-      adapter: adapter as unknown as WebMuxProvider,
-      channel: streaming,
-      sessions,
-      workspaces,
-      scopeDirectory,
-    });
-    log.info('cli', 'web-watcher-started', {});
-  }
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
   process.env.DSH_LARK_ASK_URL = notifyServer.askUrl ?? '';
@@ -744,7 +762,6 @@ export async function startBridgeEngine(
     stop: async () => {
       if (stopped) return;
       stopped = true;
-      webWatcher?.close();
       updateNotifier.stop();
       heartbeat.stop();
       await notifyServer.stop();
@@ -752,6 +769,7 @@ export async function startBridgeEngine(
       await adapter.dispose?.();
       await Promise.all([
         sessions.flush(),
+        sessionProjections.flush(),
         workspaces.flush(),
         roleStore.flush(),
         scopeDirectory.flush(),

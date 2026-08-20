@@ -112,6 +112,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/doctor` | 生成脱敏诊断包并作为文件发送（管理员；可下载转发）|
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账排队/运行/完成/失败/中断任务；确认后显式重试 |
 | `/resume` | 查看当前会话最近上下文|
+| `/session`、`/session bind <sessionId>`、`/session current` | 浏览当前 canonical workspace 的 DSH session，经披露确认后显式绑定 / 查看绑定（`web` adapter）|
 | `/stop` | 终止当前任务|
 | `/timeout [N\|off\|default]` | 查看或设置当前会话运行超时|
 | `/concurrency [N\|default]` | 查看或设置当前 scope 并行任务数（默认 2）|
@@ -140,11 +141,24 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
 
+**DSH session 消息级同步（`web` adapter）**：发送 `/session` 只会列出当前 canonical workspace
+的非 subagent session 元数据，不显示正文；选择后确认卡会列明标题、ID、workspace、更新时间、
+回填数量、当前 scope，以及是否替换/独占迁移。只有确认后才发送有数量和字节双重上限的历史
+transcript 卡并持久绑定。私聊允许已授权用户；member scope 仅本人；共享 group/topic 仅 profile
+管理员；跨 scope 独占迁移也仅 profile 管理员。WebUI 或 dsh-TUI 的 open/resume/activity **永远不会**
+自动切换飞书绑定，也不会广播给所有 scope。绑定后，DSH `session/event` 是唯一真源：外部用户消息
+镜像为带来源的 bot 消息，assistant chunk 节流更新同一张 bot-owned 卡，最终消息原位终态化；更新
+失败才追加增量。bridge 以持久 seq cursor 重连补齐，并用 message ID / event seq / prompt `rpcId`
+抑制飞书回显；tool/thinking 默认不投影。状态位于 profile 的 `session-projections.json`（0600），包含
+路由、待确认历史水位/cursor、当前 turn 来源和消息映射；仅为跨重启续写流式卡保存其未终态正文，
+不复制完整 transcript。历史确认完成前 live 事件保持串行等待，发送失败会在启动/重连时重试。
+新投影卡使用稳定的飞书 `uuid` 幂等创建，覆盖发送成功但 cursor 尚未落盘时的崩溃重放。
+
 **`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
 同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；`/status` 查看当前 workspace 的 run，`/new` 只停止当前 workspace，`/stop` 一次性终止 scope 内全部运行。
 
-**会话状态卡**：`/status` 展示工作区、有效模型、session、active runs、版本、上下文占用、
+**会话状态卡**：`/status` 展示工作区、有效模型、session、显式投影绑定/cursor、active runs、版本、上下文占用、
 累计 input / output / cache token，以及待审批 / 待提问 / 待批准计划；点击“刷新”会原位更新同一张卡。
 只展示 adapter 或模型目录明确提供的数据：ACP 可提供真实 context `used / size` 与累计 token，
 SDK 可提供每次模型调用的 token/cache 用量；上游未提供的字段显示“暂无”，不按文本长度估算。
@@ -422,7 +436,11 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型|
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限|
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent 的 base URL|
-| `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成时推送到飞书并自动切换会话映射（`0` 关闭）|
+| `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式绑定后的历史/实时消息投影；绝不自动切换（`0` 关闭）|
+| `DSH_LARK_SESSION_BACKFILL_MESSAGES` | `20` | 确认绑定时最多回填的人类消息数|
+| `DSH_LARK_SESSION_BACKFILL_BYTES` | `65536` | 一次历史 transcript 卡最多披露的 UTF-8 字节数|
+| `DSH_LARK_SESSION_STREAM_UPDATE_MS` | `800` | 同一 assistant 投影卡的最小更新间隔（最小 400ms）|
+| `DSH_LARK_WEB_PUSH` | 未设置 | 已弃用兼容别名；仅当新开关未设置时作为 `DSH_LARK_SESSION_PROJECTION` 读取|
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊|
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口（0 关闭）|
 | `DSH_LARK_GROUP_NO_AT` | `false` | 处理白名单实时无 @ 消息并轮询已登记群聊历史；要求 `im:message.group_msg` 权限和非空 `allowed_users` |
@@ -524,6 +542,12 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 本体，升级 / 回滚不会丢失配置与会话。
 
 ## 开发
+
+**dsh-TUI 兼容边界**：本包以唯一根 `dsh-plugin.json` 声明 v0.15 host facet，并在构建后运行
+`pnpm check:tui-admission` 与真实 PTY `pnpm check:tui-tty`。可选 TUI seam 缺失时安全 no-op；同步
+仍只依赖 DSH history/event，不监听 TUI input/session switch。该 facet 为 `trusted-in-process`，
+不是安全沙箱。项目继续采用 GNU AGPLv3；生态 listing 不改变许可证，也不代表兼容认证、安全审查
+或官方背书。
 
 ```bash
 pnpm install

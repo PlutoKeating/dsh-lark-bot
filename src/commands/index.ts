@@ -58,6 +58,7 @@ import type {
   DiagnosticFile,
   DiagnosticRequestSnapshot,
 } from '../diagnostics/bundle.js';
+import type { SessionProjectionController } from './session-projection.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -131,6 +132,7 @@ export interface CommandContext {
   requeueJob?: (messageId: string, scope: string, workspaceCwd: string) => Promise<boolean>;
   createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
   diagnosticTimeoutMs?: { generate: number; upload: number };
+  sessionProjection?: SessionProjectionController;
 }
 
 type Handler = (args: string, ctx: CommandContext) => Promise<void>;
@@ -167,6 +169,7 @@ const HELP = [
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
   '- `/doctor` — 生成脱敏诊断包并作为文件发送（管理员）',
   '- `/resume` — 查看当前会话最近上下文',
+  '- `/session [current|bind <sessionId>]` — 显式选择、确认并绑定当前 workspace 的 DSH session',
   '- `/stop` — 终止当前任务',
   '- `/timeout [N|off|default]` — 查看或设置当前会话空闲超时（持续无活动事件 N 分钟才终止）',
   '- `/concurrency [N|default]` — 查看或设置当前 scope 的并行任务数',
@@ -206,6 +209,7 @@ const HELP_EN = [
   '- `/version` — show the installed and latest versions',
   '- `/doctor` — generate and send a redacted diagnostic bundle (admin)',
   '- `/resume` — show recent context for this session',
+  '- `/session [current|bind <sessionId>]` — explicitly select, confirm, and bind a DSH session in this workspace',
   '- `/stop` — stop current tasks',
   '- `/timeout [N|off|default]` — view or set the idle timeout',
   '- `/concurrency [N|default]` — view or set parallel runs for this scope',
@@ -437,6 +441,7 @@ export type StatusContext = Pick<
   | 'defaultModel'
   | 'defaultWorkspace'
   | 'jobs'
+  | 'sessionProjection'
 >;
 
 export async function statusCardInputFor(
@@ -480,11 +485,15 @@ export async function statusCardInputFor(
   };
   const notificationPreference = ctx.notificationPreferences?.get(ctx.scope);
   const replyPolicy = ctx.replyPolicies?.get(ctx.scope);
+  const projection = ctx.sessionProjection?.current(ctx.scope, cwd);
   return {
     scope: ctx.scope,
     cwd,
     model,
     sessionId,
+    ...(projection
+      ? { projection: { sessionId: projection.sessionId, lastProjectedSeq: projection.lastProjectedSeq } }
+      : {}),
     activeRunIds: active.map((run) => run.runId),
     version: currentVersion(),
     isolation: ctx.chatMode === 'p2p' ? 'p2p' : (ctx.isolationMode ?? 'topic'),
@@ -1098,6 +1107,18 @@ async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
   await reply(ctx, HELP, HELP_EN);
 }
 
+async function handleSessionProjection(args: string, ctx: CommandContext): Promise<void> {
+  if (!ctx.sessionProjection) {
+    await reply(
+      ctx,
+      '当前 adapter 未提供 DSH session 投影；请使用 `web` adapter 并确认 Web host 可用。',
+      'The current adapter does not provide DSH session projection; use the `web` adapter and ensure the Web host is reachable.',
+    );
+    return;
+  }
+  await ctx.sessionProjection.handleCommand(args, ctx);
+}
+
 const handlers: Record<string, Handler> = {
   '/new': handleNew,
   '/reset': handleNew,
@@ -1109,6 +1130,7 @@ const handlers: Record<string, Handler> = {
   '/version': handleVersion,
   '/doctor': handleDoctor,
   '/resume': handleResume,
+  '/session': handleSessionProjection,
   '/stop': handleStop,
   '/timeout': handleTimeout,
   '/concurrency': handleConcurrency,

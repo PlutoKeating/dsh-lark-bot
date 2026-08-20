@@ -97,6 +97,25 @@
 
 ## 数据与凭据 · Data & credentials
 
+### DSH session 投影与 TUI 信任边界
+
+- Session 投影只在飞书用户显式确认后建立；WebUI/TUI 的 open、resume、switch 或 activity 不得
+  自动改变 binding，也不得把外部 session 广播给所有已知 scope。
+- 选择器只枚举当前 canonical workspace 的非 subagent session 元数据，不展示正文。确认卡在历史
+  披露前列出标题/ID、workspace、更新时间、回填数量、scope、替换/迁移；取消、超时或 operator/
+  scope/workspace 不匹配时不绑定也不发送历史。
+- 私聊遵循 allowlist；member 仅 scope owner；共享 group/topic 和跨 scope 独占迁移仅 profile
+  管理员。确认副作用在原子 store 事务中复核披露时 owner 与迁移授权；owner 变化必须重新开卡。
+  迁移同时清除旧 scope 的兼容 session mapping。一个 DSH session 默认最多绑定一个飞书 scope，
+  避免跨私聊/群聊的数据泄露。
+- `session-projections.json` 为 0600 原子状态，只保存 routing/cursor/message mapping/rpcId，不复制
+  transcript。DSH append-only session log 是唯一真源，bridge 不直接修改 JSONL、不启动第二 writer。
+- 来源标签只依据 DSH 事件提供的可信 provenance 或 bridge prompt correlation；无法确认时显示
+  “其他 DSH 客户端”，不根据进程、窗口或文本相似度猜测。飞书原始用户消息不被编辑。
+- 根 `dsh-plugin.json` 的 host facet 运行于 `trusted-in-process`：它与 dsh-TUI 宿主共享进程权限，
+  **不是安全沙箱**。可选 seam 缺失时 no-op，注册、定时器和状态均随插件 lifecycle 清理；不拦截
+  input/session switch，也不把 TUI observation/storage 当同步真源。
+
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
 - 卡片语言由飞书/Lark 客户端根据 Card JSON 2.0 的 `zh_cn` / `en_us` variant 本地选择；bridge

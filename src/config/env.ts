@@ -18,8 +18,14 @@ export interface RuntimeEnv {
   adapterMode: AdapterMode;
   /** Base URL of the local dsh web agent used by the `web` adapter (default http://127.0.0.1:3080). */
   webBaseUrl: string;
-  /** Push web-GUI turn completions to Feishu in `web` adapter mode (default true; DSH_LARK_WEB_PUSH=0 disables). */
-  webPush: boolean;
+  /** Enable explicit DSH session history/live projection in `web` mode. */
+  sessionProjectionEnabled: boolean;
+  /** Human-facing messages included in a confirmed session transcript backfill. */
+  sessionBackfillMessages: number;
+  /** Maximum UTF-8 bytes disclosed by one confirmed transcript backfill. */
+  sessionBackfillBytes: number;
+  /** Minimum interval between updates of one projected assistant card. */
+  sessionStreamUpdateMs: number;
   provider: string;
   model: string;
   maxTokens: number | undefined;
@@ -86,6 +92,9 @@ const DEFAULTS = {
   guardianBridgeProfile: 'default',
   upgradeNotify: false,
   upgradeCheckIntervalMs: 6 * 60 * 60_000,
+  sessionBackfillMessages: 20,
+  sessionBackfillBytes: 64 * 1024,
+  sessionStreamUpdateMs: 800,
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -239,7 +248,26 @@ export function loadRuntimeEnv(
     dshExplicit,
     adapterMode: parseAdapterMode(source.DSH_LARK_ADAPTER),
     webBaseUrl: nonEmpty(source.DSH_LARK_WEB_URL) ?? 'http://127.0.0.1:3080',
-    webPush: parseBoolean(source.DSH_LARK_WEB_PUSH, true),
+    sessionProjectionEnabled: parseBoolean(
+      source.DSH_LARK_SESSION_PROJECTION ?? source.DSH_LARK_WEB_PUSH,
+      true,
+    ),
+    sessionBackfillMessages: parseMinOneInt(
+      source.DSH_LARK_SESSION_BACKFILL_MESSAGES,
+      DEFAULTS.sessionBackfillMessages,
+      'DSH_LARK_SESSION_BACKFILL_MESSAGES',
+    ),
+    sessionBackfillBytes: parseMinOneInt(
+      source.DSH_LARK_SESSION_BACKFILL_BYTES,
+      DEFAULTS.sessionBackfillBytes,
+      'DSH_LARK_SESSION_BACKFILL_BYTES',
+    ),
+    sessionStreamUpdateMs: parseIntAtLeast(
+      source.DSH_LARK_SESSION_STREAM_UPDATE_MS,
+      DEFAULTS.sessionStreamUpdateMs,
+      400,
+      'DSH_LARK_SESSION_STREAM_UPDATE_MS',
+    ),
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),

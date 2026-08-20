@@ -53,6 +53,11 @@
 DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 ```
 
+`web` adapter 另有显式投影路径：飞书 `/session` 确认 → `SessionProjectionStore` 独占保存
+`scope + workspace → sessionId + cursor` → `session.history` 初始/重连补齐 → `/api/events.mux`
+实时事件 → transcript 卡与 bot-owned 实时卡。DSH append-only session log 始终是唯一真源；
+TUI/WebUI 的 active session 不参与 binding 决策。
+
 ```
 ┌──────────────────────────────────────────┐
 │  guardian/（可选 · 独立于 dsh 的进程）      │
@@ -232,6 +237,22 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    按限额投影并在上传前再次做常见模式、已知环境敏感值和
    home path 脱敏；终端 `doctor` 的真实 adapter 探测保持独立，聊天命令不会启动第二套 runtime。
 
+13. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
+    独占 binding、历史待确认水位/已确认交付 cursor、当前 turn 来源、近期消息映射和飞书 prompt
+    `rpcId`；仅为崩溃后续写同一流式卡保存该卡未终态正文，不复制完整 transcript。
+    `/session` 只列当前 canonical workspace 的非 subagent 元数据；确认 nonce 固化 operator、scope、
+    workspace，并在披露标题/ID/更新时间/回填量/替换或迁移后才发送历史。私聊授权用户可绑定，
+    member 仅 owner，共享 group/topic 与跨 scope 迁移仅管理员。history/live/reconnect 共用按 seq
+    串行投影管线；独占 claim 后先以 pending history 阻塞 live，历史交付成功才提交 cursor，失败在
+    启动/重连按原持久水位重试，水位后的事件再 catch-up；新卡用包含 binding generation/目标的稳定
+    Feishu `uuid` 幂等创建，业务错误或缺 message ID 不提交 cursor。
+    assistant chunk 节流更新同一 bot-owned 卡，
+    重启复用持久卡 ID/正文，失败追加。
+    WebUI/TUI open/resume/activity 不自动修改 binding，也不广播。TUI 兼容保持单仓库单包：唯一根
+    `dsh-plugin.json` 声明 v0.15 host facet 与 optional fallback；公开可选 seam 缺失即 no-op，资源
+    绑定插件 lifecycle。facet 为 `trusted-in-process`、不是沙箱；项目保持 AGPL-3.0，生态 listing
+    不等于认证、安全审查、背书或许可证豁免。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |
@@ -239,6 +260,7 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/bridge/` | 飞书通道接入（消息、卡片、媒体） |
 | `src/onboard/` | 首次扫码创建 / 绑定 PersonalAgent 应用 |
 | `src/session/` | 会话路由、上下文记忆、持久化 |
+| `src/tui/` | dsh-TUI Host Descriptor 五态 admission 与可选 lifecycle seam |
 | `src/workspace/` | 项目工作区管理 |
 | `src/adapters/` | agent 后端适配器（sdk 默认 / acp 审批 / headless legacy / web 单写者） |
 | `src/card/` | 流式过程卡（schema 2.0 原生折叠面板 + 顶层兼容快照 + legacy renderer）、审批 / 问答 / 计划决策卡状态与渲染；最终回答由正常 run-flow / guardian 分别单独发送 |
@@ -254,3 +276,4 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |
+| `docs/conformance/` | TUI local/remote Host Descriptor 与发布 artifact conformance evidence |

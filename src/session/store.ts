@@ -291,6 +291,23 @@ export class SessionStore {
     this.schedulePersist();
   }
 
+  /** Remove stale compatibility bindings while retaining transcript/metrics. */
+  clearSessionElsewhere(sessionId: string, keepScope: string, keepCwd: string): void {
+    let changed = false;
+    for (const [scopeId, workspaces] of Object.entries(this.data.workspaces)) {
+      for (const [cwd, state] of Object.entries(workspaces)) {
+        if (scopeId === keepScope && cwd === keepCwd) continue;
+        if (state.record.sessionId !== sessionId) continue;
+        state.record = { ...state.record, sessionId: undefined };
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.rebuildSessionIndex();
+      this.schedulePersist();
+    }
+  }
+
   async flush(): Promise<void> {
     await this.pendingArchive;
     await this.saving;

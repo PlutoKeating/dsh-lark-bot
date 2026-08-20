@@ -284,8 +284,19 @@
 - `DSH_LARK_ADAPTER=web`：驱动本地 dsh web agent（默认 `http://127.0.0.1:3080`，
   `DSH_LARK_WEB_URL` 可改），`session.prompt` 发起回合、`/api/events.mux` WebSocket 消费
   事件；网页端成为唯一写者，bot 只读 mux 事件并转发到飞书卡片。
-- `web-watcher`（`src/adapters/dsh/web-watcher.ts`）：进程内事件订阅，把网页端回合完成
-  推送到飞书（`DSH_LARK_WEB_PUSH=1` 默认开启；`0` 关闭），并按聊天映射自动切换 scope。
+- `SessionProjectionBridge`（`src/session/projection-bridge.ts`）：仅在用户通过 `/session` 明确确认后，
+  将当前 canonical workspace 的一个非 subagent DSH session 独占绑定到当前飞书 scope。禁止
+  follow-active、latest-activity-wins、WebUI/TUI resume 自动切换和全 scope 广播。
+- 绑定前选择器不显示正文；确认卡必须披露 session 标题/ID、workspace、更新时间、回填数量、scope、
+  替换或跨 scope 迁移。确认事务必须匹配披露时 owner，变化即重新确认；迁移后清除旧 scope 的兼容
+  session mapping。私聊授权用户可操作，member 仅 owner，共享 group/topic 与跨 scope 迁移仅管理员。
+- DSH session log 是唯一 transcript 真源。绑定后 history/live/catch-up 按单调 seq 投影；独占 claim
+  与历史确认 cursor 分离，pending history 阻塞 live，cursor 仅在交付成功后原子持久化，失败由重启/
+  重连补齐；新投影卡使用稳定 transport idempotency identity，保证崩溃恢复不重不乱。飞书 prompt 用
+  可信 rpcId/message identity 与持久 turn 来源抑制回显。
+- 历史以数量/字节双限 transcript 卡回填，仅 user/assistant；实时 assistant 使用独立 bot-owned 卡节流
+  原位更新，未终态卡可跨重启继续更新，失败追加；tool/thinking 默认不展开，不编辑用户本人消息，
+  不猜测 WebUI/TUI 来源。
 - **自愈 v2**（`src/session/heal.ts`）：仅对真正损坏的会话日志归档（seq gap 类），
   id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。
 

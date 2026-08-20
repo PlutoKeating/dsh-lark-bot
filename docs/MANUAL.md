@@ -92,6 +92,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/doctor` | 管理员生成脱敏诊断 Markdown 文件并上传到原聊天/话题 |
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务状态、查看 checkpoint、确认后重试中断/失败任务 |
 | `/resume` | 查看最近上下文 |
+| `/session`、`/session bind <sessionId>`、`/session current` | 浏览当前 workspace 的 DSH session，经披露确认后显式绑定 / 查看当前绑定（仅 `web` adapter） |
 | `/stop` | 终止当前任务 |
 | `/timeout [N\|off\|default]` | 查看或设置运行超时 |
 | `/concurrency [N\|default]` | 查看或设置当前 scope 的并行任务数 |
@@ -395,7 +396,11 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent base URL |
-| `DSH_LARK_WEB_PUSH` | `true` | `web` 适配器：网页端回合完成推送飞书 + 自动切换会话映射（`0` 关闭） |
+| `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式确认的 DSH session 历史/实时投影；不会自动跟随 WebUI/TUI |
+| `DSH_LARK_SESSION_BACKFILL_MESSAGES` | `20` | 确认绑定后最多回填的人类消息数 |
+| `DSH_LARK_SESSION_BACKFILL_BYTES` | `65536` | 单次 transcript 回填 UTF-8 字节上限 |
+| `DSH_LARK_SESSION_STREAM_UPDATE_MS` | `800` | 同一 assistant 投影卡最小更新间隔（ms） |
+| `DSH_LARK_WEB_PUSH` | 未设置 | 已弃用别名；仅在新投影开关缺失时读取，不再表示自动切换 |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | 无白名单时拒绝私聊 |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | 过期消息拒绝窗口 |
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时（持续无活动事件才终止） |

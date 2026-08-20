@@ -4,6 +4,7 @@ import type { AgentAdapter } from './adapters/types.js';
 import type { BridgeEngine } from './cli/commands/run.js';
 import { startBridgeEngine } from './cli/commands/run.js';
 import { loadRuntimeEnv, type RuntimeEnv } from './config/env.js';
+import { attachOptionalTuiSeams } from './tui/optional-seams.js';
 
 /** Cordis plugin name; stable across releases (referenced by the bundle patch). */
 export const name = 'dsh-lark-bot';
@@ -24,8 +25,12 @@ export interface Config {
   tenant?: string;
   /** Default workspace for new sessions (env `DSH_LARK_WORKSPACE`). */
   workspace?: string;
-  /** Agent backend mode: `sdk` (default) / `acp` / `headless`. */
-  adapter?: 'sdk' | 'acp' | 'headless';
+  /** Agent backend mode: `sdk` (default) / `acp` / `headless` / `web`. */
+  adapter?: 'sdk' | 'acp' | 'headless' | 'web';
+  /** Local DSH Web host used for single-writer session projection. */
+  webUrl?: string;
+  /** Explicit session projection switch (web mode only; default true). */
+  sessionProjection?: boolean;
   /** Default model (env `DSH_LARK_MODEL`). */
   model?: string;
   /** Set to true (or env `DSH_LARK_DISABLED=1`) to keep the bridge stopped. */
@@ -58,6 +63,7 @@ export interface LarkBridgeStatus {
 export class LarkBridgeService extends Service {
   private engine: BridgeEngine | undefined;
   private startPromise: Promise<BridgeEngine> | undefined;
+  private stopPromise: Promise<void> | undefined;
 
   constructor(ctx: Context) {
     super(ctx, 'larkBridge');
@@ -100,24 +106,30 @@ export class LarkBridgeService extends Service {
   }
 
   async stop(): Promise<void> {
-    const engine = this.engine;
-    this.engine = undefined;
-    if (this.startPromise) {
-      const pending = this.startPromise;
-      this.startPromise = undefined;
-      try {
-        await pending;
-      } catch {
-        // The engine failed to start; nothing to stop.
-        return;
+    if (this.stopPromise) return this.stopPromise;
+    const stopping = (async () => {
+      let engine = this.engine;
+      if (this.startPromise) {
+        try {
+          engine = await this.startPromise;
+        } catch {
+          // The engine failed to start; nothing to stop.
+          return;
+        }
       }
-    }
-    await engine?.stop();
+      if (this.engine === engine) this.engine = undefined;
+      await engine?.stop();
+    })();
+    this.stopPromise = stopping.finally(() => {
+      this.stopPromise = undefined;
+    });
+    return this.stopPromise;
   }
 }
 
 export function apply(ctx: Context, config: Config = {}, deps: PluginDeps = {}) {
   const service = new LarkBridgeService(ctx);
+  const detachTui = attachOptionalTuiSeams(ctx);
   const disabled = config.disabled === true || process.env.DSH_LARK_DISABLED === '1';
   ctx.logger.info(
     `[dsh-lark-bot] bundle loaded; bridge engine ${disabled ? 'disabled (DSH_LARK_DISABLED=1)' : 'will start in-process'}`,
@@ -138,8 +150,9 @@ export function apply(ctx: Context, config: Config = {}, deps: PluginDeps = {}) 
   }
   // Cordis uses the plugin's returned disposer to run cleanup when the fiber
   // unloads (profile stop / reload / `dsh plugin remove`).
-  return (): void => {
-    void service.stop();
+  return async (): Promise<void> => {
+    detachTui();
+    await service.stop();
   };
 }
 
@@ -151,6 +164,10 @@ function envForConfig(config: Config, base: NodeJS.ProcessEnv): RuntimeEnv {
   if (config.appSecret) env.DSH_LARK_APP_SECRET = config.appSecret;
   if (config.workspace) env.DSH_LARK_WORKSPACE = config.workspace;
   if (config.adapter) env.DSH_LARK_ADAPTER = config.adapter;
+  if (config.webUrl) env.DSH_LARK_WEB_URL = config.webUrl;
+  if (config.sessionProjection !== undefined) {
+    env.DSH_LARK_SESSION_PROJECTION = config.sessionProjection ? '1' : '0';
+  }
   if (config.model) env.DSH_LARK_MODEL = config.model;
   return loadRuntimeEnv(env);
 }

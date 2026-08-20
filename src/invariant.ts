@@ -26,9 +26,10 @@ export const name = 'dsh-lark-bot-invariant';
 export const inject = ['invariants'];
 
 /**
- * No runtime invariant: the bridge's chat→agent bindings are process-local
- * ephemera keyed by host-owned ids; every durable relation they touch is
- * owned by the host session/approval packages.
+ * The projection store owns and checks its durable one-session→one-scope
+ * invariant at load and every atomic mutation. No additional host-wide
+ * relation is exposed through this companion; registration reserves package
+ * ownership so diagnostics can still attribute failures correctly.
  */
 const install: InvariantInstaller = () => {};
 
