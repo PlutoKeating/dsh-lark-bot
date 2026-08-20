@@ -78,13 +78,17 @@ interface CardElement {
   columns?: unknown[];
   actions?: unknown[];
   value?: Record<string, unknown>;
+  behaviors?: Array<{ type?: string; value?: Record<string, unknown> }>;
 }
 
 /** Walk the schema-2.0 card tree and collect every button element. */
 function collectButtons(elements: unknown[]): Array<{ value?: Record<string, unknown> }> {
   const buttons: Array<{ value?: Record<string, unknown> }> = [];
   for (const element of elements as CardElement[]) {
-    if (element?.tag === 'button') buttons.push(element as never);
+    if (element?.tag === 'button') {
+      const value = element.behaviors?.find((behavior) => behavior.type === 'callback')?.value;
+      buttons.push(value === undefined ? {} : { value });
+    }
     if (element?.tag === 'column_set' && Array.isArray(element.columns)) {
       for (const column of element.columns as CardElement[]) {
         if (Array.isArray(column?.elements)) buttons.push(...collectButtons(column.elements));

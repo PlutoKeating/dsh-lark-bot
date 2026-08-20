@@ -507,6 +507,13 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         event.action.value && typeof event.action.value === 'object'
           ? (event.action.value as Record<string, unknown>)
           : undefined;
+      const command = typeof value?.cmd === 'string' ? value.cmd : undefined;
+      log.info('card-action', 'received', {
+        chatId: event.chatId,
+        messageId: event.messageId,
+        operatorId: event.operator?.openId,
+        command,
+      });
       const threadId = cardActionThreadId(event.raw);
       const currentScope = isolatedScope({
         chatId: event.chatId,
@@ -604,7 +611,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       if (value?.cmd === 'approve' && typeof value.id === 'string' && deps.approvals) {
         const outcome = value.outcome === 'allow' ? 'allowed-once' : 'rejected';
         const settled = deps.approvals.resolve(scope, value.id, outcome);
-        if (!settled) return;
+        if (!settled) {
+          log.warn('card-action', 'stale', { kind: 'approval', scope, messageId: event.messageId });
+          return {
+            toast: {
+              type: 'error',
+              content: '此审批卡已失效，请使用最新卡片 / This approval card is stale; use the latest card',
+            },
+          };
+        }
         const allowed = outcome === 'allowed-once';
         void settleActionCard(
           channel,
@@ -634,7 +649,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             question.options,
           );
           const settled = deps.questions.resolve(scope, value.id, answer);
-          if (!settled) return;
+          if (!settled) {
+            log.warn('card-action', 'stale', { kind: 'question', scope, messageId: event.messageId });
+            return {
+              toast: {
+                type: 'error',
+                content: '此问答卡已失效，请使用最新卡片 / This question card is stale; use the latest card',
+              },
+            };
+          }
           void settleActionCard(
             channel,
             event.chatId,
@@ -648,7 +671,13 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             toast: { type: 'success', content: '回答已提交 / Answer submitted' },
           };
         }
-        return;
+        log.warn('card-action', 'stale', { kind: 'question', scope, messageId: event.messageId });
+        return {
+          toast: {
+            type: 'error',
+            content: '此问答卡已失效，请使用最新卡片 / This question card is stale; use the latest card',
+          },
+        };
       }
       if (value?.cmd === 'plan-submit' && typeof value.id === 'string' && deps.plans) {
         const decision = value.decision === 'approved' ? 'approved' : 'revise';
@@ -660,7 +689,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           decision,
           ...(feedback ? { feedback } : {}),
         });
-        if (!settled) return;
+        if (!settled) {
+          log.warn('card-action', 'stale', { kind: 'plan', scope, messageId: event.messageId });
+          return {
+            toast: {
+              type: 'error',
+              content: '此计划卡已失效，请使用最新卡片 / This plan card is stale; use the latest card',
+            },
+          };
+        }
         const approved = decision === 'approved';
         void settleActionCard(
           channel,

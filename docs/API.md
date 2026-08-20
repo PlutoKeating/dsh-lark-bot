@@ -612,12 +612,18 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/bot/questions.ts`：`QuestionRegistry`，`/ask` / `lark_ask_user` 问答卡注册、card messageId 反向索引与答案结算；runtime 问题携带 sessionId，完成/失败只清理所属 session 或单个 id。
 - `src/bot/plan-approvals.ts`：`PlanApprovalRegistry`，计划门禁按 immutable scope + session 注册、决策与精确取消。
 
-计划、审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`cardAction` 成功结算
+计划、审批与问答卡均为内联 schema 2.0 卡片，不依赖 `card_id` 更新。`localizedCard` 会把业务层
+button `value` 统一编码成 V2 `behaviors:[{type:'callback',value}]`；表单按钮同时保留
+`form_action_type:'submit'`。首次 PersonalAgent 扫码注册
+通过 `RegisterAppOptions.addons.callbacks.items=['card.action.trigger']` 请求卡片回调能力；已有应用仍需在
+开放平台启用回调并重新发布。`cardAction` 收到事件后记录 chat/message/operator/cmd（不记录 feedback
+等表单正文）；成功结算
 对应 registry 后返回原生 toast、发送终态 Markdown 确认，并通过
 `LarkChannel.recallMessage(messageId)` 撤回原卡；确认消息回复原 `messageId` 并保留话题上下文。
 toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effort 异步收尾，失败只写
 `plan-confirm-failed` / `plan-recall-failed` / `approval-confirm-failed` / `approval-recall-failed` / `question-confirm-failed` /
-`question-recall-failed` 日志，不改变已结算的审批结果或答案（issue #48）。
+`question-recall-failed` 日志，不改变已结算的审批结果或答案（issue #48）。找不到 registry 项时返回
+双语 stale error toast 并写 `card-action/stale`，不再返回 `undefined`。
 
 问答卡 `sendCard` 返回 messageId 后调用 `QuestionRegistry.bindMessage(scope,id,messageId)`；普通消息的
 `replyToMessageId` 命中 pending 卡时，bridge 在命令/任务队列之前把非空 text/post 正文作为字符串答案。
@@ -630,6 +636,9 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
+`NotifyServer` 在鉴权和参数校验通过后立即开始 chunked JSON 响应，并每 30 秒写入 JSON 允许的空白；
+最终才写入结果对象。该保活同时覆盖 `/ask`、`/plan`、`/approval`，避免 Node/Undici 默认 300 秒
+headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch failed`。
 
 `src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；单次卡片 update 失败不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过

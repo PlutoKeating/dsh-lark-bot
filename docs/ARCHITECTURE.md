@@ -147,9 +147,15 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    旧 generation 完整清理后才启动新配置；模型、并行数与默认提醒通过 `updateSafeSettings` 热更新，
    只影响后续任务/提醒而不终止 active run。settings provider 缺失时回退 composition config。scope
    自己的 `/concurrency` / `/notifications` 覆盖仍优先。
-   计划、审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
+   所有 Card JSON 2.0 按钮由 `localizedCard` 统一输出 `behaviors.callback`，表单提交按钮另保留
+   `form_action_type=submit`。扫码注册通过 PersonalAgent `addons.callbacks` 显式申请
+   `card.action.trigger`；仅建立 WebSocket
+   连接不能证明卡片回调已启用。计划、审批与问答 action 入站时记录不含表单正文的结构化审计日志，
+   先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
    完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
-   失败只记录结构化日志，不能阻塞 agent 继续运行。
+   失败只记录结构化日志，不能阻塞 agent 继续运行；registry 已结算或不存在时返回明确 stale toast，
+   不允许静默空响应。本地 `/ask`、`/plan`、`/approval` 等待响应以合法 JSON 前导空白定期保活，
+   避免 Node/Undici 的 300 秒 headers/body inactivity timeout 取消仍在等待用户的卡片。
    **任务执行模式**由 `ExecutionModeStore` 在 profile 的 `execution-modes.json` 以 0600 原子写入，按 immutable scope 保存 `quick|balanced|deep`。`/mode`/`/effort` 与卡片回调写入时复检当前 scope/操作者，`/status` 读取有效值。队列开始新 run 时取一次快照，并由 `run-flow` 注入统一模式前置指令，因此 SDK、ACP、Web 行为一致；运行中的任务不被切换打断，安全、工具权限与计划门禁也不因模式降低。
 5. **bot UI 国际化 seam**：`src/card/i18n.ts` 把中文与英文 variant 组合为同一 Card JSON 2.0
    payload（`config.locales/use_custom_translation` + 每个文本组件的 `i18n_content.zh_cn/en_us`），并在出站前校验两种语言的 button

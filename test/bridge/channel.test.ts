@@ -547,6 +547,26 @@ describe('startChannel', () => {
     expect(planResponse).toEqual({
       toast: { type: 'info', content: '已要求继续规划 / Continue planning requested' },
     });
+
+    const stalePlanResponse = await (fake.handlers.cardAction as (event: unknown) => Promise<unknown>)({
+      chatId: 'chat-1',
+      messageId: 'plan-card-message',
+      operator: { openId: 'user-1' },
+      action: {
+        value: {
+          cmd: 'plan-submit',
+          id: pendingPlan.id,
+          decision: 'approved',
+          scope: 'chat-1',
+        },
+      },
+    });
+    expect(stalePlanResponse).toEqual({
+      toast: {
+        type: 'error',
+        content: '此计划卡已失效，请使用最新卡片 / This plan card is stale; use the latest card',
+      },
+    });
   });
 
   it('uses a non-mention text reply to the exact topic question card as its answer', async () => {

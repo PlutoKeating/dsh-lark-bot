@@ -11,5 +11,6 @@ describe('renderPlanApprovalCard', () => {
     expect(content).toContain('"decision":"approved","scope":"chat:member:u1"');
     expect(content).toContain('"decision":"revise","scope":"chat:member:u1"');
     expect(content).toContain('"form_action_type":"submit"');
+    expect(content).toContain('"behaviors":[{"type":"callback","value":{"cmd":"plan-submit"');
   });
 });

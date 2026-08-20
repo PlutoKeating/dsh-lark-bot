@@ -99,7 +99,7 @@ export class NotifyServer {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const respond = (status: number, body: Record<string, unknown>): void => {
-      res.writeHead(status, { 'content-type': 'application/json' });
+      if (!res.headersSent) res.writeHead(status, { 'content-type': 'application/json' });
       res.end(`${JSON.stringify(body)}\n`);
     };
     try {
@@ -122,12 +122,17 @@ export class NotifyServer {
           respond(400, { ok: false, error: 'sessionId and question are required' });
           return;
         }
-        const result = await this.deps.ask(payload);
-        if (!result.ok) {
-          respond(404, { ok: false, ...(result.error === undefined ? {} : { error: result.error }) });
-          return;
+        const stopKeepAlive = startJsonKeepAlive(res);
+        try {
+          const result = await this.deps.ask(payload);
+          if (!result.ok) {
+            respond(404, { ok: false, ...(result.error === undefined ? {} : { error: result.error }) });
+            return;
+          }
+          respond(200, { ok: true, ...(result.answer === undefined ? {} : { answer: result.answer }) });
+        } finally {
+          stopKeepAlive();
         }
-        respond(200, { ok: true, ...(result.answer === undefined ? {} : { answer: result.answer }) });
         return;
       }
       if (req.url === '/plan') {
@@ -152,9 +157,11 @@ export class NotifyServer {
         };
         res.once('close', onResponseClose);
         let result: PlanResult;
+        const stopKeepAlive = startJsonKeepAlive(res);
         try {
           result = await this.deps.plan(payload, controller.signal);
         } finally {
+          stopKeepAlive();
           req.off('aborted', abort);
           res.off('close', onResponseClose);
         }
@@ -191,9 +198,11 @@ export class NotifyServer {
         };
         res.once('close', onResponseClose);
         let result: ApprovalResult;
+        const stopKeepAlive = startJsonKeepAlive(res);
         try {
           result = await this.deps.approval(payload, controller.signal);
         } finally {
+          stopKeepAlive();
           req.off('aborted', abort);
           res.off('close', onResponseClose);
         }
@@ -258,6 +267,24 @@ export class NotifyServer {
       respond(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   }
+}
+
+const JSON_KEEP_ALIVE_MS = 30_000;
+
+/**
+ * Node's built-in fetch aborts a response that produces no headers/body data
+ * for 300 seconds. Human card decisions can legitimately take longer, so
+ * start the JSON response immediately and stream insignificant whitespace
+ * until the final object is available. JSON parsers accept this prefix.
+ */
+function startJsonKeepAlive(res: ServerResponse): () => void {
+  res.writeHead(200, { 'content-type': 'application/json' });
+  res.write(' ');
+  const timer = setInterval(() => {
+    if (!res.destroyed && !res.writableEnded) res.write(' ');
+  }, JSON_KEEP_ALIVE_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
