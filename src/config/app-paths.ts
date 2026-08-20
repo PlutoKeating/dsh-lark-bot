@@ -22,6 +22,7 @@ export interface AppPaths {
   notificationPreferencesFile: (profile: string) => string;
   replyPoliciesFile: (profile: string) => string;
   sessionCatalogFile: (profile: string) => string;
+  sessionProjectionsFile: (profile: string) => string;
   archivesDir: (profile: string) => string;
   workspacesFile: (profile: string) => string;
   mediaDir: (profile: string) => string;
@@ -59,6 +60,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     notificationPreferencesFile: (profile) => profilePath(profile, 'notification-preferences.json'),
     replyPoliciesFile: (profile) => profilePath(profile, 'reply-policies.json'),
     sessionCatalogFile: (profile) => profilePath(profile, 'sessions.json.catalog.json'),
+    sessionProjectionsFile: (profile) => profilePath(profile, 'session-projections.json'),
     archivesDir: (profile) => profilePath(profile, 'archives'),
     workspacesFile: (profile) => profilePath(profile, 'workspaces.json'),
     mediaDir: (profile) => profilePath(profile, 'media'),

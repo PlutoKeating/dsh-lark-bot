@@ -57,6 +57,7 @@ interface WebRunOptions {
   cwd: string | undefined;
   model: string | undefined;
   stopRequested: { value: boolean };
+  origin: AgentRunOptions['origin'];
 }
 
 interface WebRunHandle {
@@ -126,7 +127,6 @@ function createWebRun(adapter: WebDshAdapter, options: WebRunOptions): WebRunHan
           }
           const ev = frame.event as { type?: string; seq?: number };
           if (ev?.type === 'turn/end') {
-            adapter.lastTurnEndSeq.set(sessionId, ev.seq ?? 0);
             finish();
           }
         } else if (frame.type === 'stream/error') {
@@ -145,11 +145,13 @@ function createWebRun(adapter: WebDshAdapter, options: WebRunOptions): WebRunHan
       ws.addEventListener('close', () => finish(), { once: true });
 
       // Send the user message; the web agent already holds the full history.
+      const promptRpcId = randomUUID();
+      await adapter.recordPromptCorrelation(sessionId, promptRpcId, options.origin);
       const promptResult = (await adapter.rpc('session.prompt', {
         sessionId,
         mode: 'queue',
         content: [{ type: 'text', text: extractUserText(options.prompt) }],
-      })) as { result?: { ok: boolean; error?: { message?: string } } };
+      }, promptRpcId)) as { result?: { ok: boolean; error?: { message?: string } } };
       if (!promptResult?.result?.ok) {
         throw new Error(promptResult?.result?.error?.message ?? 'web session.prompt failed');
       }
@@ -232,24 +234,42 @@ export class WebDshAdapter implements AgentAdapter {
   readonly id = 'dsh-web';
   readonly displayName = 'DeepSeek Harness (Web GUI)';
 
-  /** Last turn/end seq handled per session by bridge runs (watcher dedupe). */
-  readonly lastTurnEndSeq = new Map<string, number>();
-
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly sockets = new Set<WebSocket>();
   private disposed = false;
+  private promptObserver: ((input: {
+    sessionId: string;
+    rpcId: string;
+    origin: NonNullable<AgentRunOptions['origin']>;
+  }) => Promise<void>) | undefined;
 
   constructor(options: WebAdapterOptions) {
     this.baseUrl = (options.baseUrl ?? 'http://127.0.0.1:3080').replace(/\/+$/, '');
     this.model = options.model;
   }
 
-  async rpc<T = unknown>(method: string, payload: unknown): Promise<T> {
+  setPromptObserver(observer: ((input: {
+    sessionId: string;
+    rpcId: string;
+    origin: NonNullable<AgentRunOptions['origin']>;
+  }) => Promise<void>) | undefined): void {
+    this.promptObserver = observer;
+  }
+
+  async recordPromptCorrelation(
+    sessionId: string,
+    rpcId: string,
+    origin: AgentRunOptions['origin'],
+  ): Promise<void> {
+    if (origin) await this.promptObserver?.({ sessionId, rpcId, origin });
+  }
+
+  async rpc<T = unknown>(method: string, payload: unknown, rpcId = randomUUID()): Promise<T> {
     const response = await fetch(`${this.baseUrl}/api/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'client-request', rpcId: randomUUID(), method, payload }),
+      body: JSON.stringify({ type: 'client-request', rpcId, method, payload }),
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`web RPC ${method} failed: HTTP ${response.status}`);
@@ -260,6 +280,7 @@ export class WebDshAdapter implements AgentAdapter {
     const url = `${this.baseUrl.replace(/^http/, 'ws')}/api/events.mux`;
     const socket = new WebSocket(url);
     this.sockets.add(socket);
+    socket.addEventListener('close', () => this.sockets.delete(socket), { once: true });
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error('web mux websocket open timed out')),
@@ -318,6 +339,7 @@ export class WebDshAdapter implements AgentAdapter {
       cwd,
       model: options.model ?? this.model,
       stopRequested: { value: false },
+      origin: options.origin,
     });
     return {
       runId: options.runId,

@@ -105,4 +105,26 @@ describe('dsh-lark-bot bundle plugin', () => {
     const service = provided.larkBridge as LarkBridgeService;
     expect(service.status().state).toBe('stopped');
   });
+
+  it('stops an engine that finishes starting after plugin deactivation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-plugin-start-race-'));
+    tempDirs.push(root);
+    const { ctx, provided } = makeCtx();
+    const adapter = fakeAdapter();
+    let releaseConnect!: () => void;
+    const pendingConnect = new Promise<void>((resolve) => { releaseConnect = resolve; });
+    const channel = { ...fakeChannel(), connect: vi.fn(() => pendingConnect) };
+    const dispose = applyBridgePlugin(
+      ctx as never,
+      { profile: 'default', home: root, appId: 'cli_test', appSecret: 'secret', tenant: 'feishu' },
+      { env: {}, adapter, createChannel: vi.fn(() => channel) as never },
+    );
+    const service = provided.larkBridge as LarkBridgeService;
+    await vi.waitFor(() => expect(channel.connect).toHaveBeenCalledOnce());
+    dispose();
+    releaseConnect();
+    await vi.waitFor(() => expect(channel.disconnect).toHaveBeenCalledOnce());
+    expect(service.status().state).toBe('stopped');
+    expect(adapter.dispose).toHaveBeenCalledOnce();
+  });
 });

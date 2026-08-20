@@ -47,6 +47,13 @@ import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/b
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
 import type { ReplyPolicyStore } from '../bot/reply-policy-store.js';
+import type { SessionProjectionStore } from '../session/projection-store.js';
+import type { SessionProjectionSource } from '../session/projection-protocol.js';
+import {
+  SessionProjectionBridge,
+  type SessionProjectionLimits,
+} from '../session/projection-bridge.js';
+import { SessionProjectionController } from '../commands/session-projection.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -108,6 +115,9 @@ export interface StartChannelDeps {
   createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
+  sessionProjectionStore?: SessionProjectionStore;
+  sessionProjectionSource?: SessionProjectionSource;
+  sessionProjectionLimits?: SessionProjectionLimits;
 }
 
 export interface BridgeChannel {
@@ -151,6 +161,31 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
 
   const streaming = adaptLarkChannel(channel);
   const commandChannel: CommandChannel = streaming;
+  const sessionProjectionBridge = deps.sessionProjectionStore && deps.sessionProjectionSource && deps.scopeDirectory
+    ? new SessionProjectionBridge({
+        source: deps.sessionProjectionSource,
+        store: deps.sessionProjectionStore,
+        channel: commandChannel,
+        limits: deps.sessionProjectionLimits ?? {
+          backfillMessages: 20,
+          backfillBytes: 64 * 1024,
+          historyPageMessages: 100,
+          streamUpdateMs: 800,
+          reconnectMs: 5_000,
+        },
+      })
+    : undefined;
+  const sessionProjection = sessionProjectionBridge && deps.sessionProjectionStore && deps.scopeDirectory
+    ? new SessionProjectionController({
+        bridge: sessionProjectionBridge,
+        store: deps.sessionProjectionStore,
+        sessions: deps.sessions,
+        scopes: deps.scopeDirectory,
+        access: deps.accessManager,
+        channel: commandChannel,
+      })
+    : undefined;
+  sessionProjection?.rehydrateSessionMappings();
   const reconnectNotifier = new ReconnectNotifier(
     commandChannel,
     deps.scopeDirectory,
@@ -354,6 +389,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         ? { setDefaultModelPreference: deps.setDefaultModelPreference }
         : {}),
       senderId: msg.senderId,
+      ...(sessionProjection ? { sessionProjection } : {}),
     };
 
     const handled = botSender ? false : await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
@@ -515,6 +551,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
             ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
             ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
+            ...(sessionProjection ? { sessionProjection } : {}),
             models: deps.models,
             dshConfig: deps.dshConfig,
             ...(deps.resolveDefaultModel
@@ -640,6 +677,15 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         }
         return;
       }
+      if (value?.cmd === 'session-projection' && sessionProjection) {
+        return sessionProjection.handleAction({
+          value,
+          operatorId: event.operator?.openId,
+          chatId: event.chatId,
+          threadId,
+          currentScope: scope,
+        });
+      }
     },
     reconnecting: () => {
       log.warn('channel', 'reconnecting', {});
@@ -659,6 +705,11 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   });
 
   await channel.connect();
+  if (sessionProjectionBridge) {
+    void sessionProjectionBridge.start().catch((error) => {
+      log.fail('session-projection', error, { step: 'start' });
+    });
+  }
   if (groupPoller) {
     groupPoller.start();
     if (deps.accessManager.snapshot().allowedUsers.length === 0) {
@@ -672,6 +723,8 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     channel,
     disconnect: async () => {
       await groupPoller?.stop();
+      sessionProjection?.close();
+      await sessionProjectionBridge?.close();
       await channel.disconnect();
     },
   };

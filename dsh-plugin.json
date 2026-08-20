@@ -1,0 +1,44 @@
+{
+  "$schema": "https://dsh.community/schemas/dsh-plugin-0.15.json",
+  "manifestVersion": "0.15",
+  "id": "io.github.plutokeating.dsh-lark-bot",
+  "name": "dsh-lark-bot",
+  "version": "0.15.9",
+  "facets": {
+    "host": {
+      "entry": "dist/plugin.js",
+      "apiVersion": "v1alpha1"
+    }
+  },
+  "requires": {
+    "contracts": [
+      {
+        "apiVersion": "presentation.dsh/v1alpha1",
+        "kind": "UserInteraction",
+        "optional": true,
+        "fallback": "Continue to use Feishu/Lark commands and interactive cards; session projection remains available without a TUI Presentation."
+      }
+    ]
+  },
+  "permissions": [],
+  "contributes": {
+    "commands": []
+  },
+  "subscriptions": [],
+  "license": "AGPL-3.0",
+  "source": {
+    "repository": "https://github.com/PlutoKeating/dsh-lark-bot"
+  },
+  "compat": {
+    "hosts": [
+      "dsh-tui"
+    ]
+  },
+  "overrides": [
+    {
+      "target": "cordis.patch.yml",
+      "kind": "patch",
+      "description": "Transactional DSH profile bundle patch used by the existing in-process bridge plugin."
+    }
+  ]
+}

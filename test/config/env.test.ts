@@ -19,6 +19,10 @@ describe('loadRuntimeEnv', () => {
     expect(env.groupNoAt).toBe(false);
     expect(env.groupPollMs).toBe(3_000);
     expect(env.botHandoffMax).toBe(6);
+    expect(env.sessionProjectionEnabled).toBe(true);
+    expect(env.sessionBackfillMessages).toBe(20);
+    expect(env.sessionBackfillBytes).toBe(64 * 1024);
+    expect(env.sessionStreamUpdateMs).toBe(800);
     expect(env.heartbeatMs).toBe(5_000);
     expect(env.guardianDisabled).toBe(false);
     expect(env.guardianProfile).toBe('dsh-lark');
@@ -92,6 +96,23 @@ describe('loadRuntimeEnv', () => {
     expect(loadRuntimeEnv({ DSH_LARK_BOT_HANDOFF_MAX: '8' }).botHandoffMax).toBe(8);
     expect(() => loadRuntimeEnv({ DSH_LARK_BOT_HANDOFF_MAX: '1' })).toThrow(
       /DSH_LARK_BOT_HANDOFF_MAX/,
+    );
+  });
+
+  it('parses session projection limits and honors the deprecated web-push disable alias', () => {
+    const env = loadRuntimeEnv({
+      DSH_LARK_SESSION_PROJECTION: '1',
+      DSH_LARK_SESSION_BACKFILL_MESSAGES: '12',
+      DSH_LARK_SESSION_BACKFILL_BYTES: '8192',
+      DSH_LARK_SESSION_STREAM_UPDATE_MS: '1200',
+    });
+    expect(env.sessionProjectionEnabled).toBe(true);
+    expect(env.sessionBackfillMessages).toBe(12);
+    expect(env.sessionBackfillBytes).toBe(8192);
+    expect(env.sessionStreamUpdateMs).toBe(1200);
+    expect(loadRuntimeEnv({ DSH_LARK_WEB_PUSH: '0' }).sessionProjectionEnabled).toBe(false);
+    expect(() => loadRuntimeEnv({ DSH_LARK_SESSION_STREAM_UPDATE_MS: '399' })).toThrow(
+      /DSH_LARK_SESSION_STREAM_UPDATE_MS/,
     );
   });
 });

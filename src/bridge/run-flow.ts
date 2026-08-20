@@ -206,6 +206,16 @@ async function runAttempt(
     model: input.model,
     images: input.images,
     stopGraceMs: input.stopGraceMs,
+    ...(input.replyTo
+      ? {
+          origin: {
+            source: 'feishu' as const,
+            messageId: input.replyTo,
+            scope: input.scope,
+            workspaceCwd,
+          },
+        }
+      : {}),
     ...(input.approvals
       ? {
           onApprovalRequest: approvalHandlerFor({

@@ -99,6 +99,12 @@ export class ScopeDirectory {
     return Object.keys(this.data.entries);
   }
 
+  /** Detached routing identity for authorization-sensitive card actions. */
+  entry(scope: string): ScopeEntry | undefined {
+    const value = this.data.entries[scope];
+    return value ? structuredClone(value) : undefined;
+  }
+
   /** Most recently active destination, used for narrowly scoped service notices. */
   recentDestination(): {
     scope: string;

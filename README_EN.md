@@ -109,6 +109,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/doctor` | Generate and upload a redacted diagnostic bundle (admin; downloadable and forwardable) |
 | `/jobs [list\|show <message-id>\|retry <message-id>]` | Reconcile queued/running/completed/failed/interrupted jobs and explicitly retry after review |
 | `/resume` | Show the session's recent context |
+| `/session`, `/session bind <sessionId>`, `/session current` | Browse sessions in the current canonical workspace, explicitly confirm disclosure/binding, or inspect the binding (`web` adapter) |
 | `/stop` | Stop the current task |
 | `/timeout [N\|off\|default]` | View or set the current session run timeout |
 | `/concurrency [N\|default]` | View or set the concurrent-run limit for this scope (default 2) |
@@ -137,11 +138,23 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
 
+**Message-level DSH session sync (`web` adapter)**: `/session` lists metadata only for non-subagent sessions
+in the current canonical workspace—never message bodies. The confirmation card freezes the title, ID,
+workspace, update time, backfill count, current scope, replacement, and exclusive-migration target. Only a
+confirmed action sends a count- and byte-bounded transcript card and durably binds the session. Authorized DM
+users may bind; a member scope is owner-only; shared group/topic scopes and cross-scope exclusive migration are
+profile-admin-only. WebUI or dsh-TUI open/resume/activity **never** changes a Feishu binding or broadcasts to
+known scopes. Once bound, the DSH `session/event` log is the sole source: external user messages become clearly
+labelled bot-owned mirrors, assistant chunks throttle-update one card, and the final message finalizes it in
+place; update failure appends a marked increment. A durable seq cursor catches up after reconnect/restart, while
+message IDs, event seqs and prompt `rpcId` suppress Feishu echo. Tool/thinking events stay hidden by default.
+`session-projections.json` (0600) stores routing/cursor/message mappings only—not a second transcript.
+
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
 Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists runs for the current workspace; `/new` stops only that workspace, while `/stop` interrupts all runs in the scope.
 
-**Session status card**: `/status` shows the workspace, effective model, session, active runs, version,
+**Session status card**: `/status` shows the workspace, effective model, session, explicit projection binding/cursor, active runs, version,
 context occupancy, cumulative input/output/cache tokens, and pending approvals/questions/plans. **Refresh**
 updates the same card in place. Values are shown only when the adapter or model catalog reports them: ACP can
 report real context `used / size` and cumulative usage, while SDK reports per-model-call token/cache usage.
@@ -395,7 +408,11 @@ Core environment variables:
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | Default model |
 | `DSH_LARK_MAX_TOKENS` | unset | Per-request output token cap for SDK agents |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` adapter: base URL of the local dsh web agent |
-| `DSH_LARK_WEB_PUSH` | `true` | `web` adapter: push web-GUI turn completions to Feishu and auto-switch the chat mapping (`0` disables) |
+| `DSH_LARK_SESSION_PROJECTION` | `true` | `web` adapter: enable history/live message projection after explicit user binding; never auto-switches (`0` disables) |
+| `DSH_LARK_SESSION_BACKFILL_MESSAGES` | `20` | Maximum human-facing messages in a confirmed history backfill |
+| `DSH_LARK_SESSION_BACKFILL_BYTES` | `65536` | Maximum UTF-8 bytes disclosed by one transcript card |
+| `DSH_LARK_SESSION_STREAM_UPDATE_MS` | `800` | Minimum update interval for one assistant projection card (minimum 400ms) |
+| `DSH_LARK_WEB_PUSH` | unset | Deprecated compatibility alias, read as `DSH_LARK_SESSION_PROJECTION` only when the new switch is absent |
 | `DSH_LARK_ACCESS_DEFAULT_DENY` | `false` | Reject private chats when no allowlist is configured |
 | `DSH_LARK_EVENT_FRESHNESS_MS` | `600000` | Stale-message rejection window (0 disables) |
 | `DSH_LARK_GROUP_NO_AT` | `false` | Process allowlisted live no-@ messages and poll registered group history; requires `im:message.group_msg` and a non-empty `allowed_users` list |

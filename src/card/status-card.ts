@@ -8,6 +8,7 @@ export interface StatusCardInput {
   cwd: string;
   model: string;
   sessionId: string | undefined;
+  projection?: { sessionId: string; lastProjectedSeq: number };
   activeRunIds: string[];
   version: string;
   isolation: string;
@@ -67,6 +68,11 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
     `📁 **cwd**：\`${input.cwd}\``,
     `🤖 **model**：\`${input.model}\``,
     `🔗 **session**：\`${input.sessionId ?? (zh ? '暂无' : 'Unavailable')}\``,
+    ...(input.projection
+      ? [zh
+          ? `📡 **显式投影绑定**：\`${input.projection.sessionId}\` · cursor \`${input.projection.lastProjectedSeq}\``
+          : `📡 **Explicit projection binding**: \`${input.projection.sessionId}\` · cursor \`${input.projection.lastProjectedSeq}\``]
+      : [zh ? '📴 **显式投影绑定**：未绑定' : '📴 **Explicit projection binding**: unbound']),
     zh ? `🏃 **运行状态**：${runs}` : `🏃 **Runs**: ${runs}`,
     `🔒 **isolation**：\`${input.isolation}\``,
     zh ? `🛡️ **工具权限**：\`${input.permissionPolicy ?? 'ask'}\`` : `🛡️ **Tool permission**: \`${input.permissionPolicy ?? 'ask'}\``,

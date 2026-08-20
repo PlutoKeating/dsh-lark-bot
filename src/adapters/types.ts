@@ -50,6 +50,13 @@ export interface AgentRunOptions {
   model: string | undefined;
   images: readonly string[] | undefined;
   stopGraceMs: number | undefined;
+  /** Trusted inbound transport identity used for event-log echo suppression. */
+  origin?: {
+    source: 'feishu';
+    messageId: string;
+    scope: string;
+    workspaceCwd: string;
+  };
   /** ACP approval channel: invoked when the agent requests a one-shot permission. */
   onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
 }

@@ -5,7 +5,8 @@ const MAX_LOG_BYTES = 64 * 1024;
 const SENSITIVE_ENV_KEY = /(secret|token|password|api[_-]?key|credential)/i;
 const SAFE_LOG_CATEGORIES = new Set([
   'approval-card', 'approvals', 'archive', 'channel', 'cli', 'fleet', 'group-poller',
-  'job-ledger', 'notify', 'plan-card', 'run-flow', 'session', 'wizard',
+  'job-ledger', 'notify', 'plan-card', 'run-flow', 'session', 'session-projection',
+  'tui-compat', 'wizard',
 ]);
 const SAFE_LOG_EVENTS = new Set([
   'cancel-confirm-failed', 'cancel-recall-failed', 'card-send-failed',
@@ -15,7 +16,8 @@ const SAFE_LOG_EVENTS = new Set([
   'identity-unavailable', 'legacy-card-failed', 'native-card-fallback',
   'no-allowed-users', 'pruned', 'reconnected', 'reconnecting', 'resume-fallback',
   'server-started', 'settled-pending', 'stale-message-dropped', 'started',
-  'web-watcher-started',
+  'mux-connected', 'mux-error', 'optional-seams-attached', 'optional-seams-unavailable',
+  'status-cleanup-failed',
 ]);
 const SAFE_LOG_NUMBER_FIELDS = new Set([
   'count', 'durationMs', 'events', 'outputLength', 'pollIntervalMs', 'restarts',
@@ -54,6 +56,8 @@ export interface DiagnosticBundleInput {
     allowedChats: number;
     admins: number;
     groupNoAt: boolean;
+    sessionProjectionEnabled?: boolean;
+    projectionBindings?: number;
   };
   request: DiagnosticRequestSnapshot;
   service?: {
@@ -114,6 +118,8 @@ export function createDiagnosticBundle(input: DiagnosticBundleInput): Diagnostic
     `- credentials configured: \`${input.config.credentialsConfigured ? 'yes' : 'no'}\``,
     `- allowed users/chats/admins: \`${input.config.allowedUsers}/${input.config.allowedChats}/${input.config.admins}\``,
     `- group no-at: \`${input.config.groupNoAt ? 'enabled' : 'disabled'}\``,
+    `- explicit session projection: \`${input.config.sessionProjectionEnabled ? 'enabled' : 'disabled'}\``,
+    `- durable projection bindings: \`${input.config.projectionBindings ?? 0}\``,
     '',
     '## Current request scope',
     '',
