@@ -138,6 +138,15 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
+   dsh Web 的通用 bridge 设置走官方 settings 扩展契约：Host `src/plugin.ts` 以
+   `@deepseek-ai/dsh-settings` 注册 `dsh-lark-bot` namespace 与 Schemastery schema，先把
+   `ConfigStore` 中扫码绑定后实际生效的 profile 合入 composition base；`appSecret` 使用
+   `role('secret')`，wire describe 不返回值。包内 `src/client/` 构建为 loader 的 lazy-CJS
+   `dist/client.js`，通过 `dsh.client` 注入官方 `settings.plugin.item`，因此无需改动 dsh Web。
+   scope watcher 将凭据/区域/workspace/adapter 等连接配置串行执行 `service.stop → service.start`，
+   旧 generation 完整清理后才启动新配置；模型、并行数与默认提醒通过 `updateSafeSettings` 热更新，
+   只影响后续任务/提醒而不终止 active run。settings provider 缺失时回退 composition config。scope
+   自己的 `/concurrency` / `/notifications` 覆盖仍优先。
    计划、审批与问答 action 先结算 registry 中的业务结果，再以“原生 toast + 终态确认消息 + 撤回原内联卡片”
    完成 UI 收尾；toast 立即返回，确认消息保持原话题上下文，确认/撤回均为 best-effort 异步任务，
    失败只记录结构化日志，不能阻塞 agent 继续运行。
@@ -188,8 +197,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    隔离下可显式指定同一 chat 内目标 scope（跨 chat fail closed）；持久写成功后才回执，失败回滚。
    deny 返回 rejected 并显式通知。策略不参与 `lark_request_plan_approval`，所以自动放行逐工具审批
    也不能跳过关键任务计划门禁；legacy headless 因无工具回调不在保证范围。
-   `NotificationPreferenceStore`（`<profile>/notification-preferences.json`，0600）按 immutable scope
-   保存默认关闭的事件/目标/@/审批延迟；`NotificationDispatcher` 只在 durable job 终态落盘后发送
+   `NotificationPreferenceStore`（`<profile>/notification-preferences.json`，0600，schema 2）按 immutable scope
+   保存事件/目标/@/审批延迟或相对 Web default 的显式关闭；无 override 时继承 profile 的
+   `notificationDefault`。`NotificationDispatcher` 只在 durable job 终态落盘后发送
    完成/失败提醒，并为 SDK/Web `/approval` 与 ACP permission 创建一次性 timer，结算即清除。
    当前目标允许普通用户 opt-in；跨会话仅管理员且目标必须已登记。发送失败不污染任务终态。
    `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600）按 scope 保存默认关闭的合并窗口、每批任务
@@ -237,6 +247,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    消息正文/transcript/凭据标识和值；日志只来自当前进程内 logger ring，不读取共享宿主 stdout，
    按限额投影并在上传前再次做常见模式、已知环境敏感值和
    home path 脱敏；终端 `doctor` 的真实 adapter 探测保持独立，聊天命令不会启动第二套 runtime。
+13. **dsh Web 可视化配置（issue #36）**：浏览器卡片集中呈现应用、workspace、模型、并行数、
+    adapter 与提醒默认值，并逐项标注重连/下一任务生效；诊断区直接检查脱敏 settings snapshot，
+    `/status` / `/doctor` 保留为运行态降级路径，不建立新的高权限 RPC。远程 settings scope 为只读时禁用保存。secret 永不进入 Host→Web 响应，配置
+    提交由官方 revision fence/持久 provider 负责，bridge lifecycle reload 失败只记结构化告警且不并发
+    启动第二 generation。
 
 13. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
     独占 binding、历史待确认水位/已确认交付 cursor、当前 turn 来源、近期消息映射和飞书 prompt
@@ -270,6 +285,7 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏 `run` |
 | `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
+| `src/client/` | dsh Web 插件设置卡与诊断快捷入口（动态 `./client` browser half） |
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载、文本注入与出站文件边界校验 |

@@ -1,7 +1,7 @@
 {
   "name": "dsh-lark-bot",
   "version": "0.15.9",
-  "description": "把 DeepSeek Harness (dsh) 装进飞书/Lark 的 bot，扫码即用：流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。| Bridge DeepSeek Harness (dsh) into Feishu / Lark, scan-to-connect: streaming cards, project workspaces, parallel tasks, multi-role agents, safety-net guardian.",
+  "description": "把 DeepSeek Harness (dsh) 装进飞书/Lark 的 bot，扫码即用：dsh Web 可视化设置、流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。| Bridge DeepSeek Harness into Feishu/Lark with visual dsh Web settings, streaming cards, workspaces, parallel tasks, roles and a safety-net guardian.",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "bin": {
@@ -16,6 +16,7 @@
       "types": "./dist/plugin.d.ts",
       "import": "./dist/plugin.js"
     },
+    "./client": "./dist/client.js",
     "./invariant": {
       "types": "./dist/invariant.d.ts",
       "import": "./dist/invariant.js"
@@ -52,6 +53,12 @@
     "LICENSE"
   ],
   "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
@@ -105,7 +112,7 @@
   "scripts": {
     "dev": "tsup --watch",
     "start": "node bin/dsh-lark-bot.mjs start",
-    "build": "tsup",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
     "check:publish-bundle": "node scripts/check-publish-bundle.mjs",
     "check:tui-admission": "node scripts/check-tui-admission.mjs",
     "check:tui-tty": "node scripts/check-tui-tty.mjs",
@@ -144,7 +151,8 @@
     "dsh-plugin",
     "feishu-plugin",
     "lark-integration",
-    "remote-coding"
+    "remote-coding",
+    "dsh-web-settings"
   ],
   "license": "AGPL-3.0",
   "engines": {
@@ -154,6 +162,8 @@
     "@agentclientprotocol/sdk": "0.25.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "3.18.1",
     "@larksuite/channel": "^0.4.1",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",
@@ -164,9 +174,15 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.8",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "@types/qrcode-terminal": "^0.12.2",
+    "@types/react": "18.3.28",
+    "react": "18.3.1",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

@@ -16,7 +16,7 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
   }
   const tokens = args.trim().split(/\s+/).filter(Boolean);
   if (tokens.length === 0 || tokens[0] === 'show') {
-    const value = store.get(ctx.scope);
+    const value = store.resolve(ctx.scope, ctx.defaultNotificationPreference);
     if (!value) {
       await reply(ctx, '当前 scope 的主动提醒：**关闭**（默认）。用 `/notifications on` 开启。', 'Proactive notifications for this scope: **off** (default). Use `/notifications on` to enable them.');
       return;
@@ -25,8 +25,13 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
     return;
   }
   if (tokens[0] === 'off') {
-    await store.set(ctx.scope, undefined);
+    await store.set(ctx.scope, false);
     await reply(ctx, '已关闭当前 scope 的主动提醒。', 'Disabled proactive notifications for this scope.');
+    return;
+  }
+  if (tokens[0] === 'default') {
+    await store.set(ctx.scope, undefined);
+    await reply(ctx, '已恢复 Web 设置中的默认提醒策略。', 'Restored the notification default from Web settings.');
     return;
   }
   if (tokens[0] !== 'on') {
@@ -82,7 +87,7 @@ function describe(value: NotificationPreference, zh: boolean): string {
 
 async function usage(ctx: CommandContext): Promise<void> {
   await reply(ctx,
-    '用法：`/notifications [show|off|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
-    'Usage: `/notifications [show|off|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
+    '用法：`/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
+    'Usage: `/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
   );
 }

@@ -12,15 +12,15 @@ export interface NotificationPreference {
 }
 
 interface NotificationPreferenceData {
-  schemaVersion: 1;
-  scopes: Record<string, NotificationPreference>;
+  schemaVersion: 2;
+  scopes: Record<string, NotificationPreference | false>;
 }
 
 const EVENTS = new Set<NotificationEvent>(['completed', 'failed', 'approval']);
 
 /** Opt-in notification preferences keyed by immutable bridge scope. */
 export class NotificationPreferenceStore {
-  private data: NotificationPreferenceData = { schemaVersion: 1, scopes: {} };
+  private data: NotificationPreferenceData = { schemaVersion: 2, scopes: {} };
   private saving: Promise<void> = Promise.resolve();
 
   constructor(private readonly path: string) {}
@@ -28,35 +28,50 @@ export class NotificationPreferenceStore {
   async load(): Promise<void> {
     try {
       const parsed = JSON.parse(await readFile(this.path, 'utf8')) as Partial<NotificationPreferenceData>;
-      this.data = {
-        schemaVersion: 1,
-        scopes: Object.fromEntries(Object.entries(parsed.scopes ?? {}).flatMap(([scope, value]) => {
-          const normalized = normalizePreference(value);
-          return normalized ? [[scope, normalized]] : [];
-        })),
-      };
+      const scopes: Record<string, NotificationPreference | false> = {};
+      for (const [scope, value] of Object.entries(parsed.scopes ?? {})) {
+        if (value === false) {
+          scopes[scope] = false;
+          continue;
+        }
+        const normalized = normalizePreference(value);
+        if (normalized) scopes[scope] = normalized;
+      }
+      this.data = { schemaVersion: 2, scopes };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      this.data = { schemaVersion: 1, scopes: {} };
+      this.data = { schemaVersion: 2, scopes: {} };
     }
   }
 
   get(scope: string): NotificationPreference | undefined {
     const value = this.data.scopes[scope];
-    return value ? { ...value, events: [...value.events], mentionUserIds: [...value.mentionUserIds] } : undefined;
+    if (value === undefined || value === false) return undefined;
+    return { ...value, events: [...value.events], mentionUserIds: [...value.mentionUserIds] };
   }
 
-  async set(scope: string, preference: NotificationPreference | undefined): Promise<void> {
-    const normalized = preference === undefined ? undefined : normalizePreference(preference);
-    if (preference !== undefined && !normalized) throw new Error('invalid notification preference');
+  resolve(scope: string, fallback: NotificationPreference | undefined): NotificationPreference | undefined {
+    const value = this.data.scopes[scope];
+    if (value === false) return undefined;
+    return this.get(scope) ?? fallback;
+  }
+
+  async set(scope: string, preference: NotificationPreference | false | undefined): Promise<void> {
+    const normalized = preference === undefined || preference === false
+      ? preference
+      : normalizePreference(preference);
+    if (preference !== undefined && preference !== false && !normalized) {
+      throw new Error('invalid notification preference');
+    }
     const persist = this.saving.then(async () => {
       const previous = this.data.scopes[scope];
-      if (normalized) this.data.scopes[scope] = normalized;
+      if (normalized === false) this.data.scopes[scope] = false;
+      else if (normalized) this.data.scopes[scope] = normalized;
       else delete this.data.scopes[scope];
       try {
         await writeFileAtomic(this.path, `${JSON.stringify(this.data, null, 2)}\n`, { mode: 0o600 });
       } catch (error) {
-        if (previous) this.data.scopes[scope] = previous;
+        if (previous !== undefined) this.data.scopes[scope] = previous;
         else delete this.data.scopes[scope];
         log.fail('notification-preferences', error, { step: 'persist', scope });
         throw error;

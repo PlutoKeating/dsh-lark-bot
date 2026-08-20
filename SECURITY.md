@@ -118,6 +118,9 @@
 
 - 本地配置 `~/.dsh-lark/config.json` 以 `0600` 权限写入。
 - 飞书凭据明文保存在本机配置文件；日志与卡片不输出真实密钥。
+- dsh Web 设置页把 App Secret 声明为 Schemastery `role('secret')`：Host→browser 的 resolved/base/user
+  层均脱敏，只允许 write payload 单向进入官方 settings provider；设置卡不读取、预填或比较旧密钥。
+  Web 提交触发的 bridge reload 串行等待旧 generation 完整停止，避免新旧凭据实例同时连接。
 - 卡片语言由飞书/Lark 客户端根据 Card JSON 2.0 的 `zh_cn` / `en_us` variant 本地选择；bridge
   不读取、不推断也不持久化成员 locale。无法 per-viewer 选择的 Markdown/toast 直接并列中英文。
 - 多机器人 registry `~/.dsh-lark/fleet.json` 只保存实例/profile 名与 bot open_id/name；共享

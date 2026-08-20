@@ -56,6 +56,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 3. Install / Uninstall — 如何安装、升级、禁用、彻底移除（`安装与卸载 / Install & Uninstall`）
 4. Quick start — 最小配置 + 可复现示例（`快速开始 / Quick Start`）
 5. Configuration — 配置项、默认值、环境变量、敏感项（`配置 / Configuration`）
+   - dsh Web 插件卡必须同时更新 Host settings schema、`./client` browser half、secret redaction、
+     effect timing 与诊断入口；新字段同步 RuntimeEnv、`.env.example`、bundle patch 和发布包 exports。
 6. Permissions & data — 访问哪些文件 / 网络 / 凭据 / 用户数据（`权限与数据 / Permissions & Data`）
 7. Troubleshooting — 常见错误、日志位置、回滚方式（`排障 / Troubleshooting`）
 8. Development — 如何构建、测试、贡献（`开发 / Development`）

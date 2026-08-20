@@ -106,7 +106,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/role remove <id>` | 删除角色（管理员） |
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
-| `/notifications [show\|off\|on …]` | 查看、关闭或开启当前 scope 的主动提醒 |
+| `/notifications [show\|off\|default\|on …]` | 查看、关闭、恢复 Web 默认或开启当前 scope 的主动提醒 |
 | `/replies [show\|default\|set …]` | 查看或由 profile 管理员、当前群主/群管理员修改当前 scope 的回复流量策略 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
@@ -139,6 +139,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/safemode help` | 查看上述命令帮助 |
 
 ### 模型 / Provider / 凭据管理
+
+常用 bridge 设置位于本机 dsh Web 的 **Settings → Plugins → Plugin configuration → dsh-lark-bot**。Host 半侧注册 `dsh-lark-bot` settings namespace，浏览器半侧由 npm 包的 `./client` 动态加载。页面展示实际 profile（包括扫码绑定）的 App ID、workspace 和模型，而不是只展示启动环境；App Secret 使用 secret role，任何 Web read 都会脱敏。
+
+一次保存可修改服务区域、凭据、workspace、模型、并行数、adapter 与默认提醒。连接类配置会等待旧 generation 完整停止后再启动新 generation，避免双实例；模型/并行数/提醒热更新并从下一任务或提醒开始生效，不会中断 active run。快速诊断可先在页面直接检查脱敏配置，再复制 `/status` 或 `/doctor` 获取运行态详情。Web settings 不可用时，飞书命令和环境变量继续是兼容降级。
 
 模型与 provider 的配置直接读写 dsh 官方配置存储（`~/.dsh/settings.yaml` 与
 `~/.dsh/.credentials.yaml`，与 dsh Web **Settings → Models** 页面同一协议），改动在下一个
@@ -414,6 +418,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时（持续无活动事件才终止） |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | 优雅退出宽限期 |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行） |
+| `DSH_LARK_NOTIFICATION_DEFAULT` | `off` | 未设置 scope 覆盖时的提醒默认值：`off` / `completed` / `all` |
 | `DSH_LARK_BOT_HANDOFF_MAX` | `6` | 同 chat 连续可信 bot @ 交接上限（最小 2；真人消息重置） |
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope + workspace 保留的消息条数（0=全部保留） |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope + workspace 最多保留的归档数（0=不清理） |

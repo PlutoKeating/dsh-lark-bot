@@ -124,7 +124,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/role set <id>`、`/role list` | 绑定 / 查看多角色 Agent |
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list` | 归档并上传 / 重发或由管理员转发 / 查看记录 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
-| `/notifications [show\|off\|on …]` | 配置当前 scope 主动提醒（默认关闭） |
+| `/notifications [show\|off\|default\|on …]` | 配置当前 scope 主动提醒，或恢复 Web 默认值 |
 | `/replies [show\|default\|set …]` | 配置回复合并、频率、批量上限与近似去重（profile 管理员或当前群管理员可修改） |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 选择当前会话任务强度；下一轮生效 |
@@ -150,6 +150,10 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
 无法使用终端时，管理员可在飞书私聊发送 `/doctor`，取得版本、非敏感配置摘要、当前运行状态和
 有限最近日志组成的脱敏文件；它不代替终端命令的 adapter 实际握手探测。
+
+### 不用环境变量：在 dsh Web 中设置
+
+打开本机 dsh Web 的 **Settings → Plugins → Plugin configuration → dsh-lark-bot**。这里可修改 App ID/Secret、默认项目文件夹、模型、每会话并行数、adapter 和默认提醒。Secret 只写不回显；连接类字段保存后自动重连，模型/并行数/提醒从下一任务或提醒热生效且不中断当前任务。页面底部可直接检查常见配置问题，也可复制 `/status`（Bot 没反应）或 `/doctor`（任务失败）到飞书会话深入诊断。远程浏览器为只读时，请回到运行 dsh 的本机 Web 操作。
 
 默认 backend 为官方 `@deepseek-ai/dsh-sdk-client`（`DSH_LARK_ADAPTER=sdk`）：首次启动会自动在
 `~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +

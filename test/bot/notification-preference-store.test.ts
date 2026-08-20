@@ -20,8 +20,15 @@ describe('NotificationPreferenceStore', () => {
     await reloaded.load();
     expect(reloaded.get('chat-a')).toEqual({ target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 60_000 });
     expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const fallback = { events: ['failed'] as const, mentionUserIds: [], approvalReminderMs: 60_000 };
+    await reloaded.set('chat-a', false);
+    expect(reloaded.resolve('chat-a', { ...fallback, events: [...fallback.events] })).toBeUndefined();
+    const disabled = new NotificationPreferenceStore(path);
+    await disabled.load();
+    expect(disabled.resolve('chat-a', { ...fallback, events: [...fallback.events] })).toBeUndefined();
     await reloaded.set('chat-a', undefined);
     expect(reloaded.get('chat-a')).toBeUndefined();
+    expect(reloaded.resolve('chat-a', { ...fallback, events: [...fallback.events] })).toEqual(fallback);
   });
 
   it('rolls back the in-memory value when durable persistence fails', async () => {

@@ -1,9 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { Service } from '@deepseek-ai/cordis';
+import Schema from '@deepseek-ai/schemastery';
+import {
+  settingsNamespace,
+} from '@deepseek-ai/dsh-settings';
 import type { AgentAdapter } from './adapters/types.js';
 import type { BridgeEngine } from './cli/commands/run.js';
 import { startBridgeEngine } from './cli/commands/run.js';
 import { loadRuntimeEnv, type RuntimeEnv } from './config/env.js';
+import { resolveAppPaths } from './config/app-paths.js';
+import { ConfigStore } from './config/profile-store.js';
 import { attachOptionalTuiSeams } from './tui/optional-seams.js';
 
 /** Cordis plugin name; stable across releases (referenced by the bundle patch). */
@@ -22,7 +28,7 @@ export interface Config {
   /** Feishu/Lark app secret (env `DSH_LARK_APP_SECRET`). */
   appSecret?: string;
   /** `feishu` or `lark` (env `DSH_LARK_TENANT`). */
-  tenant?: string;
+  tenant?: 'feishu' | 'lark';
   /** Default workspace for new sessions (env `DSH_LARK_WORKSPACE`). */
   workspace?: string;
   /** Agent backend mode: `sdk` (default) / `acp` / `headless` / `web`. */
@@ -33,9 +39,53 @@ export interface Config {
   sessionProjection?: boolean;
   /** Default model (env `DSH_LARK_MODEL`). */
   model?: string;
+  /** Max agent runs accepted concurrently in one scope. */
+  scopeConcurrency?: number;
+  /** Default proactive reminders for scopes without their own preference. */
+  notificationDefault?: 'off' | 'completed' | 'all';
   /** Set to true (or env `DSH_LARK_DISABLED=1`) to keep the bridge stopped. */
   disabled?: boolean;
 }
+
+export const DSH_LARK_SETTINGS_NAMESPACE = settingsNamespace('dsh-lark-bot');
+
+/**
+ * Cordis configuration schema. dsh Web discovers this through the registered
+ * settings namespace; the secret role guarantees App Secret is write-only on
+ * every redacted browser response.
+ */
+export const Config = Schema.object({
+  profile: Schema.string()
+    .description('机器人配置名称；通常保持 default / Bot profile name; usually keep default'),
+  home: Schema.string()
+    .description('本地数据目录；修改后自动重连 / Local state directory; reconnects after saving'),
+  tenant: Schema.union(['feishu', 'lark'])
+    .description('服务区域：中国大陆选飞书，海外选 Lark / Region: Feishu for China, Lark elsewhere'),
+  appId: Schema.string()
+    .description('飞书/Lark 应用 ID，例如 cli_xxx；保存后自动重连 / App ID; reconnects after saving'),
+  appSecret: Schema.string()
+    .role('secret')
+    .description('应用密钥；只写不回显，保存后自动重连 / App Secret; write-only and reconnects after saving'),
+  workspace: Schema.string()
+    .description('新会话默认打开的项目文件夹 / Default project folder for new sessions'),
+  adapter: Schema.union(['sdk', 'acp', 'headless', 'web'])
+    .description('运行方式；推荐 sdk，保存后自动重连 / Runtime mode; sdk is recommended'),
+  webUrl: Schema.string()
+    .description('仅 web 模式使用的本机 dsh Web 地址 / Local dsh Web address used only in web mode'),
+  sessionProjection: Schema.boolean()
+    .description('web 模式下同步 dsh 会话到飞书 / Mirror dsh sessions to Feishu in web mode'),
+  model: Schema.string()
+    .description('新任务默认使用的模型，例如 deepseek-v4-flash / Default model for new tasks'),
+  scopeConcurrency: Schema.number()
+    .step(1)
+    .min(1)
+    .max(32)
+    .description('每个会话同时运行的任务数，建议 1–4 / Parallel tasks per session; 1–4 recommended'),
+  notificationDefault: Schema.union(['off', 'completed', 'all'])
+    .description('未单独设置会话时的提醒：关闭、仅完成/失败、全部 / Default proactive reminders'),
+  disabled: Schema.boolean()
+    .description('暂停机器人；保存后立即停止 / Pause the bot immediately'),
+}) as unknown as Schema<Config>;
 
 /** Test-only dependency overrides; production rows configure through Config/env. */
 export interface PluginDeps {
@@ -105,6 +155,15 @@ export class LarkBridgeService extends Service {
     return this.startPromise;
   }
 
+  updateSafeSettings(config: Config, deps: PluginDeps = {}): void {
+    const env = envForConfig(config, deps.env ?? process.env);
+    this.engine?.updateSafeSettings({
+      model: env.model,
+      scopeConcurrency: env.scopeConcurrency,
+      notificationDefault: env.notificationDefault,
+    });
+  }
+
   async stop(): Promise<void> {
     if (this.stopPromise) return this.stopPromise;
     const stopping = (async () => {
@@ -130,30 +189,131 @@ export class LarkBridgeService extends Service {
 export function apply(ctx: Context, config: Config = {}, deps: PluginDeps = {}) {
   const service = new LarkBridgeService(ctx);
   const detachTui = attachOptionalTuiSeams(ctx);
-  const disabled = config.disabled === true || process.env.DSH_LARK_DISABLED === '1';
-  ctx.logger.info(
-    `[dsh-lark-bot] bundle loaded; bridge engine ${disabled ? 'disabled (DSH_LARK_DISABLED=1)' : 'will start in-process'}`,
-  );
-  if (!disabled) {
-    void service
-      .start(config, deps)
-      .then((engine) => {
-        ctx.logger.info(
-          `[dsh-lark-bot] bridge engine running (profile=${engine.profile}, home=${engine.home})`,
-        );
+  let source = () => config;
+  let appliedConfig: Config | undefined;
+  let revision = 0;
+  let disposed = false;
+  let reconcileQueue = Promise.resolve();
+  const baseConfig = hydrateSettingsBase(config, deps.env ?? process.env);
+
+  const reconcile = (): void => {
+    const desired = source();
+    if (appliedConfig && sameConfig(desired, appliedConfig)) return;
+    const ticket = ++revision;
+    reconcileQueue = reconcileQueue
+      .catch(() => undefined)
+      .then(async () => {
+        if (disposed || ticket !== revision) return;
+        if (appliedConfig && sameRestartConfig(desired, appliedConfig)) {
+          service.updateSafeSettings(desired, deps);
+          appliedConfig = desired;
+          return;
+        }
+        await service.stop();
+        if (disposed || ticket !== revision) return;
+        if (!isDisabled(desired)) {
+          const engine = await service.start(desired, deps);
+          ctx.logger.info(
+            `[dsh-lark-bot] bridge engine running (profile=${engine.profile}, home=${engine.home})`,
+          );
+        }
+        appliedConfig = desired;
       })
       .catch((error: unknown) => {
         ctx.logger.warn(
-          `[dsh-lark-bot] bridge engine failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[dsh-lark-bot] Web settings reload failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       });
-  }
+  };
+
+  void baseConfig.then((base) => {
+    if (disposed) return;
+    source = () => base;
+    reconcile();
+  }).catch((error: unknown) => {
+    ctx.logger.warn(
+      `[dsh-lark-bot] failed to hydrate Web settings: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    if (!disposed) reconcile();
+  });
+
+  ctx.inject(['settings'], async (settingsContext) => {
+    const base = await baseConfig;
+    if (disposed) return;
+    const scope = settingsContext.settings.register(
+      DSH_LARK_SETTINGS_NAMESPACE,
+      Config,
+      { base, applies: 'live' },
+    );
+    source = () => scope.get();
+    reconcile();
+    const unwatch = scope.watch(() => { reconcile(); });
+    settingsContext.effect(() => () => {
+      unwatch();
+      if (disposed) return;
+      source = () => base;
+      reconcile();
+    });
+  });
+
+  const disabled = isDisabled(config);
+  ctx.logger.info(
+    `[dsh-lark-bot] bundle loaded; bridge engine ${disabled ? 'disabled (DSH_LARK_DISABLED=1)' : 'will start in-process'}`,
+  );
   // Cordis uses the plugin's returned disposer to run cleanup when the fiber
   // unloads (profile stop / reload / `dsh plugin remove`).
   return async (): Promise<void> => {
+    disposed = true;
+    revision += 1;
     detachTui();
+    await reconcileQueue;
     await service.stop();
   };
+}
+
+async function hydrateSettingsBase(config: Config, baseEnv: NodeJS.ProcessEnv): Promise<Config> {
+  const runtime = envForConfig(config, baseEnv);
+  const store = new ConfigStore(resolveAppPaths(runtime.home).configFile);
+  await store.load();
+  const profile = store.getProfile(config.profile ?? 'default');
+  if (!profile) return config;
+  const explicitBinding = Boolean(config.appId && config.appSecret);
+  const hydrated: Config = {
+    ...config,
+    tenant: explicitBinding ? (config.tenant ?? profile.tenant) : profile.tenant,
+    appId: config.appId ?? profile.accounts.appId,
+    appSecret: config.appSecret ?? profile.accounts.appSecret,
+  };
+  const workspace = explicitBinding
+    ? (config.workspace ?? profile.workspaces.default)
+    : (profile.workspaces.default ?? config.workspace);
+  const model = explicitBinding
+    ? (config.model ?? profile.preferences.model)
+    : (profile.preferences.model ?? config.model);
+  if (workspace !== undefined) hydrated.workspace = workspace;
+  if (model !== undefined) hydrated.model = model;
+  return hydrated;
+}
+
+function isDisabled(config: Config): boolean {
+  return config.disabled === true || process.env.DSH_LARK_DISABLED === '1';
+}
+
+function sameConfig(left: Config, right: Config): boolean {
+  const keys: Array<keyof Config> = [
+    'profile', 'home', 'appId', 'appSecret', 'tenant', 'workspace', 'adapter',
+    'webUrl', 'sessionProjection', 'model', 'scopeConcurrency',
+    'notificationDefault', 'disabled',
+  ];
+  return keys.every((key) => left[key] === right[key]);
+}
+
+function sameRestartConfig(left: Config, right: Config): boolean {
+  const keys: Array<keyof Config> = [
+    'profile', 'home', 'appId', 'appSecret', 'tenant', 'workspace', 'adapter',
+    'webUrl', 'sessionProjection', 'disabled',
+  ];
+  return keys.every((key) => left[key] === right[key]);
 }
 
 function envForConfig(config: Config, base: NodeJS.ProcessEnv): RuntimeEnv {
@@ -169,5 +329,11 @@ function envForConfig(config: Config, base: NodeJS.ProcessEnv): RuntimeEnv {
     env.DSH_LARK_SESSION_PROJECTION = config.sessionProjection ? '1' : '0';
   }
   if (config.model) env.DSH_LARK_MODEL = config.model;
+  if (config.scopeConcurrency !== undefined) {
+    env.DSH_LARK_SCOPE_CONCURRENCY = String(config.scopeConcurrency);
+  }
+  if (config.notificationDefault) {
+    env.DSH_LARK_NOTIFICATION_DEFAULT = config.notificationDefault;
+  }
   return loadRuntimeEnv(env);
 }

@@ -235,6 +235,8 @@ describe('command router', () => {
     await tryHandleCommand('/notifications on chat-b events=failed mentions=none remind=3', admin);
     expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', { target: 'chat-b', events: ['failed'], mentionUserIds: [], approvalReminderMs: 180_000 });
     await tryHandleCommand('/notifications off', admin);
+    expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', false);
+    await tryHandleCommand('/notifications default', admin);
     expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', undefined);
   });
 
