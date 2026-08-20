@@ -159,12 +159,14 @@
 
 ### 4.8.1 主动通知偏好（issue #33）
 
-- 默认关闭；`/notifications on` 按当前 immutable scope 显式开启，事件可选任务完成、失败与审批等待，
-  可配置 @ open_id 和审批等待 N 分钟后的一次性提醒；`show` 查看、`off` 关闭，`/status` 可见。
+- Web profile 默认关闭；管理员可在 dsh Web 为无 scope 覆盖的会话设置 `completed` 或 `all`。
+  `/notifications on` 按当前 immutable scope 显式覆盖，事件可选任务完成、失败与审批等待，可配置
+  @ open_id 和审批等待 N 分钟后的一次性提醒；`show` 查看、`off` 显式关闭、`default` 恢复 Web
+  默认，`/status` 可见。
 - 普通用户只能把提醒发到当前 scope；管理员可选择 `ScopeDirectory` 已登记的 scope/chat。偏好以
   0600 atomic write 持久化，写失败回滚，重启不丢。
 - 完成/失败只在 durable job 终态落盘后发送一次；SDK/Web 与 ACP 工具审批均启动/取消 reminder。
-  通知失败不改变任务终态；未显式开启时不产生额外消息。
+  通知失败不改变任务终态；Web 默认与 scope 覆盖均为关闭时不产生额外消息。
 
 ### 4.8.2 回复流量控制与近似去重（issue #34）
 
@@ -318,6 +320,18 @@
   上一版本；重复执行幂等（已最新时跳过）。
 - **离线 / 安全**：`--force` 离线时按当前版本重装；非交互环境不带 `--yes` 安全中止；
   `DSH_LARK_UPGRADE_REGISTRY` 支持镜像 registry。
+
+### 4.13 dsh Web 可视化配置（issue #36）
+
+- 在官方 **Settings → Plugins → Plugin configuration** 提供 dsh-lark-bot 卡片，不要求 fork/rebuild
+  Web；Host/browser 两半随同一个 npm 包交付，并以 `dsh-lark-bot` settings namespace 配对。
+- 可查看/修改实际生效的服务区域、App ID、write-only App Secret、默认 workspace、默认模型、
+  per-scope 并行默认值、adapter 与主动提醒默认值；扫码 profile 必须正确成为初始值。
+- 每项使用中文说明和示例并标注生效时机。保存经官方 durable settings/revision fence 后，连接类
+  字段串行停止旧 generation 并自动重连；模型、并行数和提醒安全热更新到后续任务/提醒，不得中断
+  active run、出现双实例或把 secret 返回浏览器/日志。
+- Bot 无响应与任务失败可在页面直接检查脱敏配置状态，并提供 `/status`、`/doctor` 深入诊断快捷入口；远程只读浏览器明确提示本机修改，
+  settings seam 缺失时继续支持飞书命令与环境变量降级。
 
 ---
 

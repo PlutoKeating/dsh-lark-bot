@@ -45,7 +45,7 @@ import type { BotHandoffGuard } from '../bot/handoff-guard.js';
 import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
-import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
+import type { NotificationPreference, NotificationPreferenceStore } from '../bot/notification-preference-store.js';
 import type { ReplyPolicyStore } from '../bot/reply-policy-store.js';
 import type { SessionProjectionStore } from '../session/projection-store.js';
 import type { SessionProjectionSource } from '../session/projection-protocol.js';
@@ -86,6 +86,7 @@ export interface StartChannelDeps {
   densityStore?: DensityStore;
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
+  defaultNotificationPreference?: NotificationPreference;
   replyPolicies?: ReplyPolicyStore;
   executionModes?: ExecutionModeStore;
   models: ModelStore;
@@ -363,6 +364,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       densityStore: deps.densityStore,
       ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
       ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
+      ...(deps.defaultNotificationPreference
+        ? { defaultNotificationPreference: deps.defaultNotificationPreference }
+        : {}),
       ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
       ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
       models: deps.models,
@@ -553,6 +557,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             ...(deps.plans ? { plans: deps.plans } : {}),
             ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
             ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
+            ...(deps.defaultNotificationPreference
+              ? { defaultNotificationPreference: deps.defaultNotificationPreference }
+              : {}),
             ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
             ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
             ...(sessionProjection ? { sessionProjection } : {}),

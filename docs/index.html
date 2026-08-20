@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dsh-lark-bot：把 DeepSeek Harness 装进飞书 / Lark（扫码即用）</title>
-  <meta name="description" content="把 DeepSeek Harness (dsh) 装进飞书 / Lark 的开源桥接插件：扫码 30 秒绑定，手机即可指挥本机 coding agent。支持快速/平衡/深度执行模式、流式卡片、并行任务、多角色 Agent 与安全网守护。">
+  <meta name="description" content="把 DeepSeek Harness (dsh) 装进飞书 / Lark 的开源桥接插件：扫码 30 秒绑定，手机即可指挥本机 coding agent。支持 dsh Web 可视化设置、快速/平衡/深度执行模式、流式卡片、并行任务、多角色 Agent 与安全网守护。">
   <meta name="keywords" content="deepseek harness 连接飞书,deepseek harness 飞书,deepseek 飞书机器人,deepseek harness 扫码,dsh 飞书,dsh-lark-bot,飞书 接入 deepseek,deepseek harness 插件,飞书 手机远程 coding agent">
   <meta name="author" content="PlutoKeating">
   <link rel="canonical" href="https://dsh-lark-bot.arr2018.dpdns.org/">
@@ -32,7 +32,7 @@
       "https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot",
       "https://dshbase.com/zh/plugins/dsh-lark-bot"
     ],
-    "description": "把 DeepSeek Harness (dsh) 接入飞书 / Lark 的开源桥接插件：扫码即用，在飞书私聊、群聊、话题里指挥本机 coding agent，支持流式卡片、项目工作区、并行任务、多角色 Agent、跨会话通知与安全网守护。",
+    "description": "把 DeepSeek Harness (dsh) 接入飞书 / Lark 的开源桥接插件：扫码即用，在飞书私聊、群聊、话题里指挥本机 coding agent，支持 dsh Web 可视化设置、流式卡片、项目工作区、并行任务、多角色 Agent、跨会话通知与安全网守护。",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
     "author": { "@type": "Person", "name": "PlutoKeating", "url": "https://github.com/PlutoKeating" },
     "featureList": [
@@ -41,6 +41,7 @@
       "并行多任务：同一群聊同时跑多个任务，会话隔离",
       "会话归档与保留策略：会话列表不会越积越多",
       "跨会话主动通知并 @ 人：任务完成主动找你",
+      "dsh Web 可视化设置：无需记忆环境变量",
       "对话内管理模型 / Provider / 密钥：全程不离开飞书",
       "按会话切换快速 / 平衡 / 深度执行模式：下一轮生效"
     ]
@@ -69,7 +70,7 @@
       {
         "@type": "Question",
         "name": "dsh-lark-bot 和其他 DeepSeek Harness 飞书插件有什么区别？",
-        "acceptedAnswer": { "@type": "Answer", "text": "dsh-lark-bot 是功能最全的九项组合：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、对话内模型 / 密钥管理与关键任务计划门禁，且为标准 dsh profile bundle。" }
+        "acceptedAnswer": { "@type": "Answer", "text": "dsh-lark-bot 是功能最全的十一项组合：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式与关键任务计划门禁，且为标准 dsh profile bundle。" }
       },
       {
         "@type": "Question",
@@ -131,7 +132,7 @@
 
   <div class="note">⚠️ 官方渠道声明：唯一官方仓库是 <a href="https://github.com/PlutoKeating/dsh-lark-bot">github.com/PlutoKeating/dsh-lark-bot</a>；唯一官方 npm 包是 <code>dsh-lark-bot</code> / <code>dsh-feishu-bot</code>（维护者 <code>plutokeating</code>）。本项目从不提供 .exe 或“下载即运行”的安装包，任何此类第三方分发均为假冒 / 恶意来源。</div>
 
-  <h2>核心能力（九项组合全网独有）</h2>
+  <h2>核心能力（十一项组合全网独有）</h2>
   <ul class="features">
     <li><strong>安全网守护</strong>：dsh 进程崩溃后机器人仍会在飞书回复你，可进入仅核心安全模式并在对话里发控制信号把它重启——唯一“出故障时用户不会失联”的项目。</li>
     <li><strong>多角色 Agent</strong>：/role 切换或指派 PM / 开发 / 文档等角色，每个角色有持久化的人设、模型偏好与规则。一个机器人，一整个团队。</li>
@@ -140,6 +141,7 @@
     <li><strong>崩溃后任务可对账</strong>：消息先持久落盘再入队，重启恢复排队项；中断任务可用 /jobs 查看 checkpoint 并显式重试。</li>
     <li><strong>会话归档与清理</strong>：/archive、/retention 管理旧任务与自动保留策略，会话列表不会越积越多。</li>
     <li><strong>跨会话主动通知 + @人</strong>：Agent 在 A 群跑完任务，可主动发消息到 B 群或私聊并 @ 你。</li>
+    <li><strong>dsh Web 可视化设置</strong>：在官方 Settings → Plugins 页面查看和修改应用、workspace、模型、并行数与提醒；密钥只写不回显，并内置诊断快捷入口。</li>
     <li><strong>对话内管理模型和密钥</strong>：/model、/providers、/key 直接在聊天里查看、切换供应商、热更新密钥，全程不离开飞书。</li>
     <li><strong>快速 / 平衡 / 深度执行模式</strong>：发送 <code>/mode</code> 用双语卡片按会话选择任务强度，简单问答更快、复杂重构更谨慎；下一轮生效且不打断当前任务。</li>
     <li><strong>关键任务计划门禁</strong>：先发送完整计划，再由卡片批准执行或带意见继续规划，原任务自动续跑。</li>
@@ -149,7 +151,7 @@
   <details><summary>DeepSeek Harness 怎么接入飞书？</summary><p>见上方安装步骤：一条命令安装 + 扫码绑定，全程不需要公网服务器、域名或内网穿透。</p></details>
   <details><summary>需要公网 IP 或服务器吗？</summary><p>不需要。飞书通道使用 WebSocket 长连接（出站），NAT 后面也能用，代码始终只在本机运行，飞书只传输消息。</p></details>
   <details><summary>dsh 崩溃了怎么办？</summary><p>默认安装的安全网守护会接管飞书通道，发 /safemode 进入仅核心安全模式自愈，/safemode exit 恢复完整 profile。</p></details>
-  <details><summary>和其他飞书插件有什么区别？</summary><p>功能最全：安全网守护、多角色、多机器人可信交接、并行任务、持久任务对账、会话归档、跨会话通知、对话内模型 / 密钥管理与计划门禁九项组合为一，标准 dsh profile bundle 一条命令安装。</p></details>
+  <details><summary>和其他飞书插件有什么区别？</summary><p>功能最全：安全网守护、多角色、多机器人可信交接、并行任务、持久任务对账、会话归档、跨会话通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式与计划门禁十一项组合为一，标准 dsh profile bundle 一条命令安装。</p></details>
   <details><summary>能用手机远程用吗？</summary><p>可以。飞书手机 App 扫码绑定后，随时给机器人发消息指挥本机 agent，任务完成还会主动推送并 @ 你。</p></details>
   <details><summary>怎么确认下载的是正版？</summary><p>只从 github.com/PlutoKeating/dsh-lark-bot 与 npm（dsh-lark-bot / dsh-feishu-bot）获取；凡提供 exe 的渠道均为假冒。</p></details>
 

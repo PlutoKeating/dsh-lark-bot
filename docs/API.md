@@ -36,6 +36,8 @@ export interface RuntimeEnv {
   groupNoAt: boolean;
   groupPollMs: number;
   botHandoffMax: number;
+  scopeConcurrency: number;
+  notificationDefault: 'off' | 'completed' | 'all';
   heartbeatMs: number;
   guardianDisabled: boolean;
   guardianProfile: string;
@@ -75,6 +77,8 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   默认 `300000`。
 - `DSH_LARK_STOP_GRACE_MS`：SIGTERM 后等待优雅退出再 SIGKILL 的宽限期，默认 `5000`。
 - `DSH_LARK_SCOPE_CONCURRENCY`：每个 scope 允许的并行 run 数，默认 `2`（`1` 为严格串行）。
+- `DSH_LARK_NOTIFICATION_DEFAULT`：无 scope 覆盖时的提醒策略，`off`（默认）/
+  `completed`（完成+失败）/ `all`（完成+失败+审批）。
 - `DSH_LARK_RETENTION_MSGS`：每个 scope + workspace 保留的对话条数，默认 `40`（`0` 表示不裁剪）。
 - `DSH_LARK_ARCHIVE_MAX`：每个 scope + workspace 最多保留的归档数，默认 `50`（`0` 关闭清理）。
 - `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`：归档最大保留天数，默认 `90`（`0` 关闭按龄清理）。
@@ -175,6 +179,21 @@ export interface ProfileConfig {
 `ConfigStore` 负责读写 `~/.dsh-lark/config.json` 与 active profile；App Secret 以文件权限 `0600`
 写入。扫码绑定得到的 `operatorOpenId` 会自动加入 `allowedUsers` 与 `admins`。
 
+### 2.2 dsh Web settings contract
+
+`src/plugin.ts` 导出同名 `interface Config` 与 Schemastery `const Config`，并注册 namespace
+`dsh-lark-bot`。composition base 会读取实际 `ConfigStore` profile，因此扫码绑定的 App ID、workspace、
+模型可见；`appSecret` 标记 `role('secret')`，任何 redacted describe 都只公开 secret path、不公开值。
+
+包导出 `./client → dist/client.js`，`package.json#dsh.client` 声明 `platform=web` 并注入
+`@deepseek-ai/dsh-client-ui-settings-plugins`。browser half 以同一 namespace key 注册
+`settings.plugin.item`；写操作只通过 `SettingsScope.set/unset`（带 revision fence），remote/memory
+只读 scope 禁用保存。Host watcher 只对凭据、区域、workspace、adapter 等连接字段串行 reload bridge
+generation；模型、并行数和提醒默认值调用 engine `updateSafeSettings`，从下一任务/提醒生效且不停止
+active run。settings seam 不存在时插件继续使用 Cordis/env/profile composition。诊断按钮直接检查
+脱敏 browser snapshot 的连接、App ID、workspace、model 与只读状态；`/status`、`/doctor` 保留为运行态
+降级路径，没有新增浏览器特权 RPC。
+
 `src/bot/run-policy.ts` 提供内存级 `RunPolicyStore`，按 scope 覆盖运行超时：
 
 ```ts
@@ -207,10 +226,11 @@ scope resolver：私聊始终用 chat ID；group 共用 chat ID；topic 使用 `
 `/approval` 回调和 ACP `onApprovalRequest` 入口于创建卡片前执行。`deny` 返回标准 rejected
 outcome 并发送明确双语提示；计划门禁保持独立，不受该 store 影响。
 
-`src/bot/notification-preference-store.ts` 提供默认关闭的 `NotificationPreferenceStore`
-（`<profile>/notification-preferences.json`，0600），按 immutable scope 保存目标、
+`src/bot/notification-preference-store.ts` 提供 `NotificationPreferenceStore`（schema 2，
+`<profile>/notification-preferences.json`，0600），按 immutable scope 保存目标、
 `completed|failed|approval` 事件、mention open_id 与审批提醒延迟。更新为 awaited atomic write，
-失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒；SDK/Web 与 ACP
+并用 `false` 保存相对 Web profile default 的显式关闭；缺项继承 `notificationDefault`，`undefined`
+重置为继承。失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒；SDK/Web 与 ACP
 审批卡创建后启动单次 timer，结算/取消即清除。发送失败只记日志，不改变 job/approval outcome。
 
 `src/bot/reply-policy-store.ts` 提供 `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600），
@@ -715,7 +735,7 @@ export interface Logger {
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
 飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
-`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|on …]`、`/replies [show|default|set …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
+`/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|default|on …]`、`/replies [show|default|set …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
 `/mode [quick|balanced|deep]`（兼容 `/effort`）、
 `/model use|default|reset|add|remove`、`/providers`、
@@ -779,7 +799,8 @@ worktree、该 scope 归档目录和实例日志；runtime 提交的 cwd 只用�
 topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(chatId)` 用于跨会话出站；
 `/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
 `/notifications on [current|scope|chatId] [events=…] [mentions=…] [remind=N]` 为当前 scope
-显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或关闭。
+显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或显式关闭，
+`default` 删除 scope override 并恢复 Web profile default。
 `/replies set merge=N batch=N interval=N dedupe=N` 由 profile 管理员或当前群的群主/群管理员配置当前 scope 的最终回答合并、每批任务
 上限、批次最小发送间隔与同发送者近似去重窗口；`show` 对所有成员开放，`default` 恢复兼容默认。
 

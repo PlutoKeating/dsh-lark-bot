@@ -1,18 +1,28 @@
 import type { ScopeDirectory } from '../bridge/scope-directory.js';
 import type { SendOptions } from '../bridge/send-options.js';
 import { bilingualMarkdown } from '../card/i18n.js';
-import type { NotificationEvent, NotificationPreferenceStore } from '../bot/notification-preference-store.js';
+import type { NotificationEvent, NotificationPreference, NotificationPreferenceStore } from '../bot/notification-preference-store.js';
 import { log } from '../core/logger.js';
 
 export class NotificationDispatcher {
+  private defaultPreference: NotificationPreference | undefined;
+
   constructor(private readonly deps: {
     preferences: NotificationPreferenceStore;
+    defaultPreference?: NotificationPreference;
     scopeDirectory: ScopeDirectory;
     send(chatId: string, markdown: string, options?: SendOptions): Promise<void>;
-  }) {}
+  }) {
+    this.defaultPreference = clonePreference(deps.defaultPreference);
+  }
+
+  /** Update the profile fallback without interrupting active bridge runs. */
+  setDefaultPreference(preference: NotificationPreference | undefined): void {
+    this.defaultPreference = clonePreference(preference);
+  }
 
   async notify(scope: string, event: NotificationEvent, detail?: string): Promise<boolean> {
-    const preference = this.deps.preferences.get(scope);
+    const preference = this.deps.preferences.resolve(scope, this.defaultPreference);
     if (!preference?.events.includes(event)) return false;
     const destination = preference.target
       ? this.deps.scopeDirectory.resolve(preference.target) ?? this.deps.scopeDirectory.resolveChat(preference.target)
@@ -45,10 +55,16 @@ export class NotificationDispatcher {
   }
 
   scheduleApprovalReminder(scope: string, toolName: string): () => void {
-    const preference = this.deps.preferences.get(scope);
+    const preference = this.deps.preferences.resolve(scope, this.defaultPreference);
     if (!preference?.events.includes('approval')) return () => undefined;
     const timer = setTimeout(() => { void this.notify(scope, 'approval', `tool \`${toolName}\``); }, preference.approvalReminderMs);
     timer.unref?.();
     return () => clearTimeout(timer);
   }
+}
+
+function clonePreference(preference: NotificationPreference | undefined): NotificationPreference | undefined {
+  return preference
+    ? { ...preference, events: [...preference.events], mentionUserIds: [...preference.mentionUserIds] }
+    : undefined;
 }

@@ -19,6 +19,7 @@ describe('loadRuntimeEnv', () => {
     expect(env.groupNoAt).toBe(false);
     expect(env.groupPollMs).toBe(3_000);
     expect(env.botHandoffMax).toBe(6);
+    expect(env.notificationDefault).toBe('off');
     expect(env.sessionProjectionEnabled).toBe(true);
     expect(env.sessionBackfillMessages).toBe(20);
     expect(env.sessionBackfillBytes).toBe(64 * 1024);
@@ -30,6 +31,18 @@ describe('loadRuntimeEnv', () => {
     expect(env.guardianPollMs).toBe(2_000);
     expect(env.guardianStaleMs).toBe(15_000);
     expect(env.guardianEngineDeadMs).toBe(120_000);
+  });
+
+  it('parses Web settings defaults for concurrency and notifications', () => {
+    const env = loadRuntimeEnv({
+      DSH_LARK_SCOPE_CONCURRENCY: '4',
+      DSH_LARK_NOTIFICATION_DEFAULT: 'completed',
+    });
+    expect(env.scopeConcurrency).toBe(4);
+    expect(env.notificationDefault).toBe('completed');
+    expect(() => loadRuntimeEnv({ DSH_LARK_NOTIFICATION_DEFAULT: 'sometimes' })).toThrow(
+      /DSH_LARK_NOTIFICATION_DEFAULT/,
+    );
   });
 
   it('parses explicit command args and tenant', () => {

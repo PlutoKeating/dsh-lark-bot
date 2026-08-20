@@ -4,6 +4,7 @@ import { resolveDshRuntime } from './dsh-runtime.js';
 
 export type LarkTenant = 'feishu' | 'lark';
 export type AdapterMode = 'sdk' | 'acp' | 'headless' | 'web';
+export type NotificationDefault = 'off' | 'completed' | 'all';
 
 export interface RuntimeEnv {
   home: string;
@@ -39,6 +40,8 @@ export interface RuntimeEnv {
   botHandoffMax: number;
   /** Max agent runs allowed concurrently per scope (default 2). */
   scopeConcurrency: number;
+  /** Default proactive notification policy for scopes without an override. */
+  notificationDefault: NotificationDefault;
   /** Live messages kept per scope + workspace before overflow is archived (default 40). */
   retentionMsgs: number;
   /** Max archives retained per scope + workspace before pruning (default 50, 0 disables). */
@@ -143,6 +146,16 @@ function parseAdapterMode(value: string | undefined): AdapterMode {
   const mode = nonEmpty(value) ?? 'sdk';
   if (mode !== 'sdk' && mode !== 'acp' && mode !== 'headless' && mode !== 'web') {
     throw new Error(`DSH_LARK_ADAPTER must be "sdk", "acp", "headless" or "web", got "${mode}"`);
+  }
+  return mode;
+}
+
+function parseNotificationDefault(value: string | undefined): NotificationDefault {
+  const mode = nonEmpty(value) ?? 'off';
+  if (mode !== 'off' && mode !== 'completed' && mode !== 'all') {
+    throw new Error(
+      `DSH_LARK_NOTIFICATION_DEFAULT must be "off", "completed" or "all", got "${mode}"`,
+    );
   }
   return mode;
 }
@@ -291,6 +304,7 @@ export function loadRuntimeEnv(
       DEFAULTS.scopeConcurrency,
       'DSH_LARK_SCOPE_CONCURRENCY',
     ),
+    notificationDefault: parseNotificationDefault(source.DSH_LARK_NOTIFICATION_DEFAULT),
     retentionMsgs: parsePositiveInt(
       source.DSH_LARK_RETENTION_MSGS,
       DEFAULTS.retentionMsgs,

@@ -53,7 +53,7 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 - A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
-**Nine exclusive capabilities**:
+**Eleven exclusive capabilities**:
 
 - 🆘 **Guardian safety net — "always reachable"**: Feishu still replies after dsh crashes; `/safemode` enters core-only safe mode to locate the problem and restart directly.
 - 👥 **Multi-role agents — "one bot, a whole team"**: switch or assign PM / dev / docs roles with `/role`; each role has its own persona, model preference and rules.
@@ -63,7 +63,9 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 - 🧭 **Plan before action — "review it before it moves"**: receive the complete plan first, then approve execution or add feedback and request another planning pass without restarting the task.
 - 🗂 **Session archival & cleanup — "your session list never rots"**: archive old tasks with `/archive` and configure auto-retention with `/retention`.
 - 📣 **Cross-session proactive notifications + @mentions — "it comes to you when done"**: after a task in chat A finishes, push a report to chat B / DMs and @mention you.
+- ⚙️ **Visual dsh Web settings — "no environment variables to memorize"**: edit the app, workspace, model, concurrency and reminders from the official Plugins settings page, with diagnostic shortcuts.
 - 🔑 **In-chat model & key management — "never leave Feishu"**: `/providers` `/provider` `/key` to view, switch vendors and hot-update keys.
+- 🎚️ **Quick / balanced / deep modes — "pick the right task intensity"**: `/mode` persists per scope and applies on the next turn without interrupting active work.
 
 ## Quick Start
 
@@ -121,7 +123,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/role remove <id>` | Remove a role (admin) |
 | `/notify <scope\|chatId> <text>` | Push a cross-session notification (admin) |
 | `/notify list` | List scopes known to the bridge |
-| `/notifications [show\|off\|on …]` | Configure completion / failure / approval-wait reminders for this scope (off by default) |
+| `/notifications [show\|off\|default\|on …]` | Configure scope reminders or restore the dsh Web default |
 | `/replies [show\|default\|set …]` | Configure reply batching, send intervals, batch limits, and near-deduplication (profile admins or current-group admins can write) |
 | `/retention [N\|default]` | View or set the live message retention window (overflow is archived) |
 | `/archive [note]`, `/archive send <id> [scope\|chatId]`, `/archive list [N]`, `/archive clean` | Archive and upload / resend here or to another session (admin) / list / clean |
@@ -216,7 +218,7 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Outbound mentions & cross-session notify**: `/notify <scope|chatId> <text>` pushes a report to another session (admin); the agent also gets a built-in `lark_notify` dsh tool (wired into both SDK and ACP runtime profiles) to push messages to other groups/topics and @mention members after a task finishes. The callback runs on 127.0.0.1 with a random per-boot token — nothing is exposed to the public network.
 
-**Configurable proactive reminders**: off by default. Any user can run `/notifications on current` for the current scope to opt into completion, failure, and one-time approval-wait reminders (10 minutes by default, mentioning the caller). `events=`, `mentions=`, and `remind=` customize the policy; admins may route it to another registered `scope|chatId`. Preferences are atomically persisted across restarts, visible in `/status`, and disabled with `/notifications off`.
+**Configurable proactive reminders**: the dsh Web profile default is off, and can be changed to completed/failed or all events. Any user can run `/notifications on current` for a scope override with one-time approval-wait reminders (10 minutes by default, mentioning the caller). `events=`, `mentions=`, and `remind=` customize it; admins may route to another registered `scope|chatId`. Preferences are atomically persisted and visible in `/status`; `/notifications off` is an explicit scope opt-out and `/notifications default` restores the Web default.
 
 **Reply flow control**: immediate one-answer-per-task delivery remains the default. A profile admin or the current group owner/manager can run `/replies set merge=5 batch=3 interval=10 dedupe=60` for the current scope to group answers for 5 seconds, include at most 3 tasks per grouped message, wait at least 10 seconds between batches, and suppress near-identical tasks from the same sender and workspace for 60 seconds. While the bridge process remains alive, overflow stays queued and is not discarded because of the batch cap. `/replies` and `/status` show the effective policy; `/replies default` restores compatibility mode.
 
@@ -390,6 +392,10 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 ## Configuration
 
+### Visual settings in dsh Web (recommended)
+
+Open local dsh Web and go to **Settings → Plugins → Plugin configuration → dsh-lark-bot**. The package ships its own browser half, so no fork or Web rebuild is required. The card edits the effective Feishu/Lark region, App ID and write-only App Secret, default workspace, model, per-session concurrency, adapter, and notification default. Credential, region, workspace and adapter changes safely reload the bridge generation; model, concurrency and reminder defaults hot-apply to subsequent work without interrupting an active run. The diagnostics panel directly checks common Web configuration failures, with `/status` and `/doctor` copy actions retained for deeper runtime diagnosis in bot chat. Remote read-only browsers are told to make changes from local Web; Feishu commands and environment variables remain the fallback when the settings service is unavailable.
+
 - Local config: `~/.dsh-lark/config.json`
 - The state root can be overridden with `DSH_LARK_HOME`
 - Environment variables use the `DSH_LARK_*` prefix
@@ -427,6 +433,7 @@ Core environment variables:
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | Idle timeout for a single run: stops only after the run has been silent for this long |
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | Grace period after SIGTERM before SIGKILL |
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | Concurrent runs per scope (1 = strictly serial) |
+| `DSH_LARK_NOTIFICATION_DEFAULT` | `off` | Proactive default for scopes without an override: `off`, `completed`, or `all` |
 | `DSH_LARK_RETENTION_MSGS` | `40` | Messages kept per scope + workspace (0 keeps everything) |
 | `DSH_LARK_ARCHIVE_MAX` | `50` | Max archives kept per scope + workspace (0 disables pruning) |
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | Max archive age in days (0 disables pruning) |

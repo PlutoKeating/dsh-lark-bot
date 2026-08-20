@@ -51,7 +51,7 @@
 - 流式过程卡以飞书原生折叠面板实时展示思考、工具调用与结果，完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-**九项全网独有组合**：
+**十一项全网独有组合**：
 
 - 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。
 - 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
@@ -60,7 +60,9 @@
 - 🧾 **崩溃后可对账——“发出去了不是石沉大海”**：消息先写持久任务账本再入队；重启恢复排队项，中断任务保留 checkpoint 并由 `/jobs` 显式重试。
 - 🗂 **会话归档与清理——“会话列表不会烂掉”**：`/archive` 归档旧任务、`/retention` 配置自动保留策略。
 - 📣 **跨会话主动通知 + @人——“活干完了它会来找你”**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
+- ⚙️ **dsh Web 可视化设置——“不用背环境变量”**：在官方 Settings → Plugins 页面点选应用、工作目录、模型、并行数与提醒，并可直达诊断。
 - 🔑 **对话内管理模型和密钥——“不用离开飞书”**：`/providers` `/provider` `/key` 直接查看、切换供应商、热更新密钥。
+- 🎚️ **快速 / 平衡 / 深度模式——“任务强度一键选”**：`/mode` 按 scope 持久选择，下一轮生效且不打断当前任务。
 - 🧭 **关键任务先拍板——“计划看清再动手”**：完整计划先单独发出，再用卡片批准执行或附意见继续规划，原任务自动续跑。
 
 ## 30 秒上手
@@ -124,7 +126,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 生成
 | `/role remove <id>` | 删除角色（管理员）|
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员）|
 | `/notify list` | 查看 bridge 已注册的 scope|
-| `/notifications [show\|off\|on …]` | 配置当前 scope 的完成 / 失败 / 审批等待提醒（默认关闭）|
+| `/notifications [show\|off\|default\|on …]` | 配置当前 scope 的完成 / 失败 / 审批提醒，或恢复 Web 默认值|
 | `/replies [show\|default\|set …]` | 配置当前 scope 的回复合并、发送间隔、批量上限与近似去重（profile 管理员或当前群管理员可修改）|
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档）|
 | `/archive [note]`、`/archive send <id> [scope\|chatId]`、`/archive list [N]`、`/archive clean` | 归档并发送 / 重发到当前或指定会话（跨会话仅管理员）/ 查看 / 清理|
@@ -213,7 +215,7 @@ guardian 仍只救援其配置的主实例。
 
 **出站 @ 提及与跨会话通知**：`/notify <scope|chatId> <text>` 可向其他会话推送汇报（管理员）；agent 侧内置 `lark_notify` dsh 工具（SDK / ACP runtime 均可装配），任务完成后主动向其他群 / 话题发消息并 @ 成员。回调走 127.0.0.1 本地端口 + 随机 token，不暴露公网。
 
-**可配置主动提醒**：默认关闭、不刷屏。普通用户可用 `/notifications on current` 为当前 scope 开启任务完成、失败和审批等待提醒，默认 @ 自己并在审批等待 10 分钟后只提醒一次；可用 `events=`、`mentions=`、`remind=` 调整。管理员还可把目标设为已登记的其他 `scope|chatId`。偏好原子持久化到 profile，重启不丢，并在 `/status` 显示；`/notifications off` 一键关闭。
+**可配置主动提醒**：Web 设置默认关闭、不刷屏，也可为未单独设置的会话选择“完成与失败”或“全部”。普通用户可用 `/notifications on current` 覆盖当前 scope，默认 @ 自己并在审批等待 10 分钟后只提醒一次；可用 `events=`、`mentions=`、`remind=` 调整。管理员还可把目标设为已登记的其他 `scope|chatId`。偏好原子持久化到 profile，重启不丢，并在 `/status` 显示；`/notifications off` 显式关闭，`/notifications default` 恢复 Web 默认值。
 
 **回复流量控制**：默认保持即时逐条回复。profile 管理员或当前群的群主/群管理员可用 `/replies set merge=5 batch=3 interval=10 dedupe=60` 为当前 scope 开启 5 秒合并窗口、每条合并最多 3 个任务、两批至少间隔 10 秒，并在 60 秒内抑制同一发送者在同 workspace 的近似重复任务；超出批量上限的答案在 bridge 进程存活期间继续排队，不会因批量上限被丢弃。`/replies` 与 `/status` 显示有效策略，`/replies default` 恢复默认。
 
@@ -367,7 +369,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、对话内模型 / 密钥管理与关键任务计划门禁九项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
+**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式与关键任务计划门禁十一项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -409,6 +411,15 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   `allowBuilds: { protobufjs: true }` 后重试。
 
 ## 配置
+
+### dsh Web 可视化设置（推荐）
+
+打开本机 dsh Web，进入 **Settings → Plugins → Plugin configuration → dsh-lark-bot**。页面可直接查看和修改服务区域、App ID、App Secret、默认项目文件夹、默认模型、每会话并行任务数、adapter 与默认提醒策略：
+
+- App Secret 标记为 secret，只能写入，Web 响应、卡片和日志都不会回显；扫码绑定后实际生效的 profile 会作为页面初始值，App ID 不会错误显示为空。
+- 点击“保存设置”后，凭据、区域、工作目录和 adapter 会安全停止旧 generation 后自动重连；模型、并行数和提醒会热更新到下一任务/提醒，不中断正在执行的任务，页面逐项标明时机。
+- “快速诊断”可在本页直接检查设置连接、App ID、工作目录、模型和远程只读状态；需要运行态详情时可继续复制 `/status` 或 `/doctor` 到飞书会话。
+- 浏览器半侧由本包的 `./client` 动态加载并注册到官方插件配置页，不需要 fork 或重建 dsh Web。没有 Web 设置服务时，现有飞书命令和下列环境变量仍可使用。
 
 - 本地配置：`~/.dsh-lark/config.json`
 - 状态根目录可用 `DSH_LARK_HOME` 覆盖
@@ -452,6 +463,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_RUN_TIMEOUT_MS` | `300000` | 单次运行空闲超时：持续无活动事件才终止（活跃任务不会被误杀）|
 | `DSH_LARK_STOP_GRACE_MS` | `5000` | SIGTERM 后等待优雅退出再 SIGKILL 的宽限期|
 | `DSH_LARK_SCOPE_CONCURRENCY` | `2` | 每个 scope 的并行任务数（1=严格串行）|
+| `DSH_LARK_NOTIFICATION_DEFAULT` | `off` | 未设置 scope 覆盖时的主动提醒：`off` / `completed`（完成+失败）/ `all`（含审批）|
 | `DSH_LARK_RETENTION_MSGS` | `40` | 每个 scope + workspace 保留的消息条数（0=全部保留）|
 | `DSH_LARK_ARCHIVE_MAX` | `50` | 每个 scope + workspace 最多保留的归档数（0=不清理）|
 | `DSH_LARK_ARCHIVE_MAX_AGE_DAYS` | `90` | 归档最大保留天数（0=不清理）|
@@ -716,7 +728,7 @@ pnpm publish:dual
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）；v0.15.1 更新说明 — 📨 已备妥，待人工粘贴
 - 平台数据刷新（v0.14.0 → v0.15.1）— ✅ 已恢复提交（2026-08-17）：awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 跟进](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh 说明备妥
 
-**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方九项清单）：
+**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方十一项清单）：
 
 - awesome-dsh-plugins 榜单行同步（仓库描述 → 最新）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交（维护方已确认，等待渲染周期同步）
 - dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交

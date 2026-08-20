@@ -9,7 +9,7 @@ describe('NotificationDispatcher', () => {
   it('routes enabled events with mentions and ignores disabled events', async () => {
     const directory = new ScopeDirectory(':memory:');
     directory.register('chat-b:thread-b', 'chat-b', 'thread-b', 'topic', 'message-b');
-    const preferences = { get: () => ({ target: 'chat-b:thread-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 60_000 }) } as unknown as NotificationPreferenceStore;
+    const preferences = { resolve: () => ({ target: 'chat-b:thread-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 60_000 }) } as unknown as NotificationPreferenceStore;
     const send = vi.fn().mockResolvedValue(undefined);
     const dispatcher = new NotificationDispatcher({ preferences, scopeDirectory: directory, send });
     await expect(dispatcher.notify('chat-a', 'failed')).resolves.toBe(false);
@@ -21,7 +21,7 @@ describe('NotificationDispatcher', () => {
     vi.useFakeTimers();
     const directory = new ScopeDirectory(':memory:');
     directory.register('chat-a', 'chat-a', undefined);
-    const preferences = { get: () => ({ events: ['approval'], mentionUserIds: [], approvalReminderMs: 1_000 }) } as unknown as NotificationPreferenceStore;
+    const preferences = { resolve: () => ({ events: ['approval'], mentionUserIds: [], approvalReminderMs: 1_000 }) } as unknown as NotificationPreferenceStore;
     const send = vi.fn().mockResolvedValue(undefined);
     const dispatcher = new NotificationDispatcher({ preferences, scopeDirectory: directory, send });
     dispatcher.scheduleApprovalReminder('chat-a', 'bash');

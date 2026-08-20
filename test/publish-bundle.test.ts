@@ -20,6 +20,8 @@ const DIST_FILES = [
   'plugin.js',
   'plugin.d.ts',
   'plugin.js.map',
+  'client.js',
+  'client.js.map',
   'invariant.js',
   'invariant.d.ts',
   'invariant.js.map',
@@ -77,6 +79,7 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
     exports: {
       '.': { types: './dist/index.d.ts', import: './dist/index.js' },
       './plugin': { types: './dist/plugin.d.ts', import: './dist/plugin.js' },
+      './client': './dist/client.js',
       './invariant': { types: './dist/invariant.d.ts', import: './dist/invariant.js' },
       './notify': { types: './dist/notify.d.ts', import: './dist/notify.js' },
       './ask': { types: './dist/ask.d.ts', import: './dist/ask.js' },
@@ -85,7 +88,10 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
       './file': { types: './dist/file.d.ts', import: './dist/file.js' },
     },
     files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
-    dsh: { bundle: { patch: './cordis.patch.yml' } },
+    dsh: {
+      bundle: { patch: './cordis.patch.yml' },
+      client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-ui-settings-plugins'] },
+    },
     scripts: { build: 'tsup' },
     devDependencies: { typescript: '^5.6.3' },
   };
@@ -96,7 +102,12 @@ async function makeFakeRoot(distFiles: readonly string[] = DIST_FILES, name = 'd
   tempRoots.push(root);
   await mkdir(join(root, 'dist'), { recursive: true });
   await Promise.all([
-    ...distFiles.map((file) => writeFile(join(root, 'dist', file), 'export const fixture = true;\n')),
+    ...distFiles.map((file) => writeFile(
+      join(root, 'dist', file),
+      file === 'client.js'
+        ? 'window.__ModuleLoader__.load({ id: "dsh-lark-bot", factory: () => ({}) });\n'
+        : 'export const fixture = true;\n',
+    )),
     writeFile(join(root, 'README.md'), '# fixture\n'),
     writeFile(join(root, 'README_EN.md'), '# fixture-en\n'),
     writeFile(join(root, 'SECURITY.md'), 'security\n'),
@@ -167,5 +178,8 @@ describe('publish bundle', () => {
     // The plugin id stays dsh-lark-bot for the aliased package.
     expect(patch).toContain('- id: dsh-lark-bot');
     expect(patch).not.toContain("name: 'dsh-lark-bot/plugin'");
+    const client = await readFile(join(dir, 'dist', 'client.js'), 'utf8');
+    expect(client).toContain('id: "dsh-feishu-bot"');
+    expect(client).not.toContain('id: "dsh-lark-bot"');
   });
 });

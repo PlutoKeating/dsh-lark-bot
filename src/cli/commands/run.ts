@@ -19,7 +19,10 @@ import { RunPolicyStore } from '../../bot/run-policy.js';
 import { IsolationStore } from '../../bot/isolation-store.js';
 import { PlanApprovalRegistry } from '../../bot/plan-approvals.js';
 import { PermissionPolicyStore } from '../../bot/permission-policy-store.js';
-import { NotificationPreferenceStore } from '../../bot/notification-preference-store.js';
+import {
+  NotificationPreferenceStore,
+  type NotificationPreference,
+} from '../../bot/notification-preference-store.js';
 import { ReplyPolicyStore } from '../../bot/reply-policy-store.js';
 import { ExecutionModeStore } from '../../bot/execution-mode-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
@@ -88,7 +91,15 @@ export interface BridgeEngine {
   readonly profile: string;
   readonly home: string;
   status(): BridgeEngineStatus;
+  /** Apply settings that are safe for subsequent work without stopping active runs. */
+  updateSafeSettings(settings: BridgeEngineSafeSettings): void;
   stop(): Promise<void>;
+}
+
+export interface BridgeEngineSafeSettings {
+  model: string;
+  scopeConcurrency: number;
+  notificationDefault: RuntimeEnv['notificationDefault'];
 }
 
 export interface BridgeEngineOptions {
@@ -291,10 +302,17 @@ export async function startBridgeEngine(
   const models = new ModelStore();
   const wizardStore = new WizardStore();
   const dshConfig = new DshProviderManager({ env: process.env });
+  let defaultModel = env.model;
+  let liveSettingsModel: string | undefined;
+  let defaultScopeConcurrency = env.scopeConcurrency;
+  let defaultNotificationPreference = notificationPreferenceFor(env.notificationDefault);
   let streaming: StreamingChannel | undefined;
   let larkChannel: LarkChannel | undefined;
   const notificationDispatcher = new NotificationDispatcher({
     preferences: notificationPreferences,
+    ...(defaultNotificationPreference
+      ? { defaultPreference: { ...defaultNotificationPreference, events: [...defaultNotificationPreference.events] } }
+      : {}),
     scopeDirectory,
     send: async (chatId, markdown, options) => {
       if (!streaming) throw new Error('bridge channel is not ready');
@@ -448,9 +466,10 @@ export async function startBridgeEngine(
         const resolvedModel =
           models.get(scope) ??
           role?.model ??
+          liveSettingsModel ??
           activeProfile.preferences.model ??
           (dshDefault ? `${dshDefault.provider}/${dshDefault.model}` : undefined) ??
-          env.model;
+          defaultModel;
         let modelRoute: Awaited<ReturnType<DshProviderManager['resolveModelRoute']>>;
         if (resolvedModel) {
           try {
@@ -515,7 +534,7 @@ export async function startBridgeEngine(
           ...(scopeOwner ? { scopeOwner } : {}),
           ...(collaborationPeers.length > 0 ? { collaborationPeers } : {}),
           runTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
-          maxConcurrency: concurrencyStore.get(scope) ?? env.scopeConcurrency,
+          maxConcurrency: concurrencyStore.get(scope) ?? defaultScopeConcurrency,
           retention: retentionStore.get(scope) ?? env.retentionMsgs,
           images: prepared.flatMap(({ attachments }) => attachments.imagePaths),
           ...(modelRoute?.provider === undefined
@@ -562,7 +581,7 @@ export async function startBridgeEngine(
         }
       }
     },
-    (scope) => concurrencyStore.get(scope) ?? env.scopeConcurrency,
+    (scope) => concurrencyStore.get(scope) ?? defaultScopeConcurrency,
   );
 
   const channelInput: Parameters<typeof startChannel>[0] = {
@@ -575,7 +594,7 @@ export async function startBridgeEngine(
     activeRuns,
     runPolicies,
     concurrencyStore,
-    defaultScopeConcurrency: env.scopeConcurrency,
+    defaultScopeConcurrency,
     retentionStore,
     roleStore,
     isolationStore,
@@ -587,6 +606,9 @@ export async function startBridgeEngine(
     approvals,
     permissionPolicies,
     notificationPreferences,
+    ...(defaultNotificationPreference
+      ? { defaultNotificationPreference: { ...defaultNotificationPreference, events: [...defaultNotificationPreference.events] } }
+      : {}),
     replyPolicies,
     executionModes,
     questions,
@@ -596,15 +618,14 @@ export async function startBridgeEngine(
     wizardStore,
     dshConfig,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
-    defaultModel: activeProfile.preferences.model ?? env.model,
+    defaultModel: effectiveProfileModel(liveSettingsModel, activeProfile.preferences.model, defaultModel),
     resolveDefaultModel: async (scope: string) => {
-      const higherPriority =
-        roleStore.roleForScope(scope)?.model ?? activeProfile.preferences.model;
+      const higherPriority = roleStore.roleForScope(scope)?.model ?? liveSettingsModel ?? activeProfile.preferences.model;
       if (higherPriority) return higherPriority;
       const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
       return dshDefault
         ? `${dshDefault.provider}/${dshDefault.model}`
-        : env.model;
+        : defaultModel;
     },
     setDefaultModelPreference: async (model: string) => {
       await configStore.saveProfile(profileName, {
@@ -764,6 +785,24 @@ export async function startBridgeEngine(
       workspace: defaultWorkspace,
       notifyUrl: notifyServer.url,
     }),
+    updateSafeSettings: (settings) => {
+      defaultModel = settings.model;
+      liveSettingsModel = settings.model;
+      defaultScopeConcurrency = settings.scopeConcurrency;
+      defaultNotificationPreference = notificationPreferenceFor(settings.notificationDefault);
+      notificationDispatcher.setDefaultPreference(defaultNotificationPreference);
+      channelInput.defaultScopeConcurrency = defaultScopeConcurrency;
+      channelInput.defaultModel = effectiveProfileModel(
+        liveSettingsModel,
+        activeProfile.preferences.model,
+        defaultModel,
+      );
+      if (defaultNotificationPreference) {
+        channelInput.defaultNotificationPreference = defaultNotificationPreference;
+      } else {
+        delete channelInput.defaultNotificationPreference;
+      }
+    },
     stop: async () => {
       if (stopped) return;
       stopped = true;
@@ -786,6 +825,28 @@ export async function startBridgeEngine(
         jobs.flush(),
       ]);
     },
+  };
+}
+
+/** Web's live composition layer overrides the profile snapshot captured at boot. */
+export function effectiveProfileModel(
+  liveSettingsModel: string | undefined,
+  profileModel: string | undefined,
+  environmentModel: string,
+): string {
+  return liveSettingsModel ?? profileModel ?? environmentModel;
+}
+
+function notificationPreferenceFor(
+  value: RuntimeEnv['notificationDefault'],
+): NotificationPreference | undefined {
+  if (value === 'off') return undefined;
+  return {
+    events: value === 'all'
+      ? ['completed', 'failed', 'approval']
+      : ['completed', 'failed'],
+    mentionUserIds: [],
+    approvalReminderMs: 10 * 60_000,
   };
 }
 

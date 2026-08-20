@@ -134,6 +134,11 @@
   同类零活动错误后也会丢弃存储的 session 绑定，下一次安全任务从新会话开始。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
+- **执行模式 done（issue #35）**：`quick|balanced|deep` 按 immutable scope 0600 持久化，
+  `/mode`/`/effort`、双语卡片、`/status` 与 SDK/ACP/Web 统一 prompt seam 已交付。
+- **dsh Web 可视化设置 done（issue #36）**：Host 注册实际 profile-backed settings namespace，
+  包内 `./client` 在官方 Plugins 配置页渲染应用、workspace、模型、并行数、adapter 与提醒；
+  App Secret write-only，保存串行 reload，诊断快捷入口和命令/env 降级齐备。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

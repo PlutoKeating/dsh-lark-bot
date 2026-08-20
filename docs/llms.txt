@@ -4,7 +4,7 @@
 
 ## 一句话介绍
 
-dsh-lark-bot 让 DeepSeek Harness（dsh）成为飞书里的成员：在私聊、群聊、话题里指挥本机 coding agent，支持按会话切换快速/平衡/深度执行模式、按每位读者客户端语言显示中文 / English 的 Card JSON 2.0 流式卡片、项目工作区、并行任务、崩溃后持久对账、多角色 Agent、跨会话主动通知、对话内模型/密钥管理，以及独立于 dsh 进程的安全网守护（dsh 崩溃后飞书仍可回复并自助重启）。
+dsh-lark-bot 让 DeepSeek Harness（dsh）成为飞书里的成员：在私聊、群聊、话题里指挥本机 coding agent，支持按会话切换快速/平衡/深度执行模式、dsh Web 可视化配置、按每位读者客户端语言显示中文 / English 的 Card JSON 2.0 流式卡片、项目工作区、并行任务、崩溃后持久对账、多角色 Agent、跨会话主动通知、对话内模型/密钥管理，以及独立于 dsh 进程的安全网守护（dsh 崩溃后飞书仍可回复并自助重启）。
 
 ## 关键信息
 
@@ -20,7 +20,7 @@ dsh-lark-bot 让 DeepSeek Harness（dsh）成为飞书里的成员：在私聊�
 
 ## 与同类方案的区别
 
-功能最全组合：安全网守护（dsh 崩溃后飞书仍叫得应）、多角色 Agent、并行多任务、持久任务账本与 `/jobs` 对账、会话归档与保留策略、跨会话主动通知并 @ 人、对话内模型/Provider/密钥管理。标准 dsh profile bundle，`dsh plugin add` 可直接安装。
+功能最全十一项组合：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务账本与 `/jobs` 对账、会话归档与保留策略、跨会话主动通知并 @ 人、dsh Web 可视化设置、对话内模型/Provider/密钥管理、快速/平衡/深度执行模式、关键任务计划门禁。标准 dsh profile bundle，`dsh plugin add` 可直接安装。
 
 ## 生态收录
 

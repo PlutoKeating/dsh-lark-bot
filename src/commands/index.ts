@@ -3,7 +3,10 @@ import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
 import type { PermissionPolicy, PermissionPolicyStore } from '../bot/permission-policy-store.js';
-import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
+import type {
+  NotificationPreference,
+  NotificationPreferenceStore,
+} from '../bot/notification-preference-store.js';
 import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
@@ -114,6 +117,7 @@ export interface CommandContext {
   densityStore: DensityStore | undefined;
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
+  defaultNotificationPreference?: NotificationPreference;
   replyPolicies?: ReplyPolicyStore;
   executionModes?: ExecutionModeStore;
   models: ModelStore;
@@ -439,6 +443,7 @@ export type StatusContext = Pick<
   | 'plans'
   | 'permissionPolicies'
   | 'notificationPreferences'
+  | 'defaultNotificationPreference'
   | 'replyPolicies'
   | 'executionModes'
   | 'models'
@@ -489,7 +494,10 @@ export async function statusCardInputFor(
     for (const owner of pendingOwners) count += registry.pendingCount(ctx.scope, owner);
     return count;
   };
-  const notificationPreference = ctx.notificationPreferences?.get(ctx.scope);
+  const notificationPreference = ctx.notificationPreferences?.resolve(
+    ctx.scope,
+    ctx.defaultNotificationPreference,
+  );
   const replyPolicy = ctx.replyPolicies?.get(ctx.scope);
   const projection = ctx.sessionProjection?.current(ctx.scope, cwd);
   return {

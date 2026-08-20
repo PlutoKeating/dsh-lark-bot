@@ -29,8 +29,9 @@
 - ACP rc.7 可持久化并转发 PNG/JPEG/WebP/GIF 图片；initialize 通过
   `promptCapabilities.image` 声明当前模型路由是否接受图片。
 - max-token 结束不再必然终止 session；SDK/ACP 调用方必须按协议终态而不是错误文本猜测。
-- DeepSeek reasoning effort 新增 `low`；插件可注册 settings card。它们分别是 #35 与 #36
-  的上游复用入口，本次兼容升级不抢先实现两个产品需求。
+- DeepSeek reasoning effort 新增 `low`；插件可注册 settings card。它们分别成为后续 #35 与 #36
+  的上游复用入口：#35 已交付 scope 执行模式，#36 已在 rc.8 settings 契约上交付 Host/browser
+  两半的 dsh Web 插件配置卡；本段仍只陈述当时 rc.7 兼容升级的范围。
 
 ### 社区复现
 
