@@ -27,6 +27,8 @@ export interface NotifyDestination {
 export interface NotifyServerDeps {
   token: string;
   port?: number;
+  /** Test override for the JSON-whitespace heartbeat used by human waits. */
+  longPollHeartbeatMs?: number;
   /** Resolve a scope/chat target to a concrete chat destination. */
   resolve: (message: NotifyMessage) => NotifyDestination | undefined;
   /** Send the outbound message (mentions supported). */
@@ -35,7 +37,7 @@ export interface NotifyServerDeps {
     payload: { text: string; mentions?: MentionTarget[] },
   ) => Promise<void>;
   /** Optional handler for the `lark_ask_user` question-card channel. */
-  ask?: (payload: AskPayload) => Promise<AskResult>;
+  ask?: (payload: AskPayload, signal?: AbortSignal) => Promise<AskResult>;
   /** Optional handler for the `lark_request_plan_approval` channel. */
   plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
   /** Optional handler for dsh rc.8 one-shot tool approval requests. */
@@ -98,9 +100,59 @@ export class NotifyServer {
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let heartbeat: NodeJS.Timeout | undefined;
+    const stopHeartbeat = (): void => {
+      if (heartbeat === undefined) return;
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    };
+    const beginHumanWait = (): void => {
+      if (res.headersSent || res.destroyed || res.writableEnded) return;
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      });
+      res.flushHeaders();
+      const intervalMs = this.deps.longPollHeartbeatMs ?? 30_000;
+      heartbeat = setInterval(() => {
+        if (res.destroyed || res.writableEnded) {
+          stopHeartbeat();
+          return;
+        }
+        // JSON permits leading whitespace. A newline keeps both Undici's
+        // response-body watchdog and intermediaries active while a human
+        // decides, without changing the eventual response object.
+        res.write('\n');
+      }, intervalMs);
+      heartbeat.unref();
+      res.once('close', stopHeartbeat);
+    };
     const respond = (status: number, body: Record<string, unknown>): void => {
-      res.writeHead(status, { 'content-type': 'application/json' });
+      stopHeartbeat();
+      res.off('close', stopHeartbeat);
+      if (res.destroyed || res.writableEnded) return;
+      if (!res.headersSent) {
+        res.writeHead(status, { 'content-type': 'application/json' });
+      }
       res.end(`${JSON.stringify(body)}\n`);
+    };
+    const waitForHuman = async <T>(
+      handler: (signal: AbortSignal) => Promise<T>,
+    ): Promise<T> => {
+      const controller = new AbortController();
+      const abort = (): void => controller.abort();
+      req.once('aborted', abort);
+      const onResponseClose = (): void => {
+        if (!res.writableEnded) abort();
+      };
+      res.once('close', onResponseClose);
+      try {
+        beginHumanWait();
+        return await handler(controller.signal);
+      } finally {
+        req.off('aborted', abort);
+        res.off('close', onResponseClose);
+      }
     };
     try {
       const body = await readBody(req);
@@ -122,7 +174,7 @@ export class NotifyServer {
           respond(400, { ok: false, error: 'sessionId and question are required' });
           return;
         }
-        const result = await this.deps.ask(payload);
+        const result = await waitForHuman((signal) => this.deps.ask!(payload, signal));
         if (!result.ok) {
           respond(404, { ok: false, ...(result.error === undefined ? {} : { error: result.error }) });
           return;
@@ -144,20 +196,9 @@ export class NotifyServer {
           respond(400, { ok: false, error: 'sessionId and plan are required' });
           return;
         }
-        const controller = new AbortController();
-        const abort = (): void => controller.abort();
-        req.once('aborted', abort);
-        const onResponseClose = (): void => {
-          if (!res.writableEnded) abort();
-        };
-        res.once('close', onResponseClose);
-        let result: PlanResult;
-        try {
-          result = await this.deps.plan(payload, controller.signal);
-        } finally {
-          req.off('aborted', abort);
-          res.off('close', onResponseClose);
-        }
+        const result: PlanResult = await waitForHuman((signal) =>
+          this.deps.plan!(payload, signal)
+        );
         if (!result.ok) {
           respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
           return;
@@ -183,20 +224,9 @@ export class NotifyServer {
           respond(400, { ok: false, error: 'sessionId and toolName are required' });
           return;
         }
-        const controller = new AbortController();
-        const abort = (): void => controller.abort();
-        req.once('aborted', abort);
-        const onResponseClose = (): void => {
-          if (!res.writableEnded) abort();
-        };
-        res.once('close', onResponseClose);
-        let result: ApprovalResult;
-        try {
-          result = await this.deps.approval(payload, controller.signal);
-        } finally {
-          req.off('aborted', abort);
-          res.off('close', onResponseClose);
-        }
+        const result: ApprovalResult = await waitForHuman((signal) =>
+          this.deps.approval!(payload, signal)
+        );
         if (!result.ok || !result.outcome) {
           respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
           return;

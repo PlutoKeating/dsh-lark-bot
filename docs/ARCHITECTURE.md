@@ -182,6 +182,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
    `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
+   `/ask`、`/plan`、`/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
+   JSON 合法空白心跳；这同时避开 Node/Undici 默认 300 秒 headers/body idle timeout。连接真正断开时
+   AbortSignal 仍精确取消该 session/id 的 pending 项，而不会靠 agent 重试生成重复卡。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。

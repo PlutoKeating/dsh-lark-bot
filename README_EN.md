@@ -492,7 +492,9 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
   the reply anchor that places later agent question cards back in the original topic.
 - **Local callback**: `lark_notify`, `lark_send_file`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
-  random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
+  random 127.0.0.1 port with a per-boot token (loopback only). Human-wait callbacks send response headers immediately
+  and JSON-whitespace heartbeats while pending, so Node's default five-minute HTTP idle boundary cannot cancel a
+  legitimate approval wait. Plan text and its decision card are sent to the
   current Feishu / Lark conversation. Approval reasons/arguments are visible to members of a shared group.
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).

@@ -153,6 +153,7 @@ describe('NotifyServer', () => {
     await expect(response.json()).resolves.toEqual({ ok: true, answer: 'use A' });
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', question: 'Which plan?' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -225,6 +226,109 @@ describe('NotifyServer', () => {
     });
   });
 
+  it('sends plan response headers before the human decision is available', async () => {
+    let resolvePlan: ((value: { ok: true; decision: 'approved' }) => void) | undefined;
+    const plan = vi.fn(() => new Promise<{ ok: true; decision: 'approved' }>((resolve) => {
+      resolvePlan = resolve;
+    }));
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+
+    const request = fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        plan: 'Wait for approval',
+      }),
+    });
+    await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
+    const first = await Promise.race([
+      request.then(() => 'headers' as const),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500)),
+    ]);
+
+    resolvePlan?.({ ok: true, decision: 'approved' });
+    const response = await request;
+    expect(first).toBe('headers');
+    await expect(response.json()).resolves.toEqual({ ok: true, decision: 'approved' });
+  });
+
+  it('streams JSON-compatible heartbeats while a human callback is pending', async () => {
+    let resolveAsk: ((value: { ok: true; answer: string }) => void) | undefined;
+    const ask = vi.fn(() => new Promise<{ ok: true; answer: string }>((resolve) => {
+      resolveAsk = resolve;
+    }));
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      ask,
+      longPollHeartbeatMs: 10,
+    });
+    servers.push(server);
+    await server.start();
+
+    const response = await fetch(server.askUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        question: 'Still waiting?',
+      }),
+    });
+    const reader = response.body!.getReader();
+    const first = await Promise.race([
+      reader.read(),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error('heartbeat not received')), 500);
+      }),
+    ]);
+    expect(new TextDecoder().decode(first.value)).toBe('\n');
+
+    resolveAsk?.({ ok: true, answer: 'yes' });
+    let remainder = '';
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      remainder += new TextDecoder().decode(chunk.value);
+    }
+    expect(JSON.parse(remainder) as unknown).toEqual({ ok: true, answer: 'yes' });
+  });
+
+  it('returns post-flush human callback failures in the JSON body', async () => {
+    const plan = vi.fn().mockResolvedValue({ ok: false, error: 'plan cancelled' });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+
+    const response = await fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        plan: 'Cancelled plan',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: false, error: 'plan cancelled' });
+  });
+
   it('propagates a disconnected plan request as an abort signal', async () => {
     let observedAbort = false;
     const plan = vi.fn(async (_payload, signal?: AbortSignal) => {
@@ -257,9 +361,11 @@ describe('NotifyServer', () => {
       signal: controller.signal,
     });
     await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
+    const response = await request;
+    const body = response.json();
     controller.abort();
 
-    await expect(request).rejects.toThrow();
+    await expect(body).rejects.toThrow();
     await vi.waitFor(() => expect(observedAbort).toBe(true));
   });
 
