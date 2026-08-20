@@ -186,6 +186,12 @@ DeepSeek Harness (dsh) ──▶ DeepSeek V4 Pro / Flash
    保存默认关闭的事件/目标/@/审批延迟；`NotificationDispatcher` 只在 durable job 终态落盘后发送
    完成/失败提醒，并为 SDK/Web `/approval` 与 ACP permission 创建一次性 timer，结算即清除。
    当前目标允许普通用户 opt-in；跨会话仅管理员且目标必须已登记。发送失败不污染任务终态。
+   `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600）按 scope 保存默认关闭的合并窗口、每批任务
+   上限、批次间隔与近似去重窗口；profile 管理员或当前群的群主/群管理员可用 `/replies` 修改，
+   群角色由 Feishu/Lark chat API 实时校验并失败关闭，`/status` 可见。入站近似去重复用 durable
+   `JobLedger` 的同 sender + scope + workspace 近期记录；出站 `ReplyDispatcher` 位于 run-flow 最终回答
+   seam，默认透传，启用后合并同 scope 答案并把超限项留队按间隔继续交付。交互卡、错误与中断提示
+   不经该队列，避免阻塞人机决策。
 9. **唯一运行时、可选 OS 托管（issue #23）**：不做「独立 bridge 服务 vs dsh 插件」双路径。产品形态收敛为
    dsh profile bundle：`dsh-lark-bot setup --profile <name>`（内部自动处理 pnpm 构建策略并
    执行标准 `dsh plugin add`）→ `dsh --profile <name>` → 首次扫码。CLI 仅保留 `setup` /

@@ -52,6 +52,8 @@ export interface JobCounts {
   interrupted: number;
 }
 
+export type JobAdmission = 'inserted' | 'message-id-duplicate' | 'content-duplicate';
+
 interface JobLedgerData {
   schemaVersion: 1;
   records: Record<string, JobRecord>;
@@ -124,6 +126,42 @@ export class JobLedger {
       inserted = true;
     });
     return inserted;
+  }
+
+  async enqueueWithDeduplication(
+    message: DurableQueuedMessage,
+    windowMs: number,
+  ): Promise<JobAdmission> {
+    const now = this.now();
+    let outcome: JobAdmission = 'inserted';
+    await this.commit(() => {
+      if (this.data.records[message.messageId]) {
+        outcome = 'message-id-duplicate';
+        return;
+      }
+      const cutoff = now - Math.max(0, windowMs);
+      const duplicate = windowMs > 0 && Object.values(this.data.records).some((record) =>
+        record.receivedAt >= cutoff && sameTaskIdentity(record.message, message) &&
+        nearDuplicate(record.message.content, message.content));
+      if (duplicate) {
+        outcome = 'content-duplicate';
+        return;
+      }
+      this.data.records[message.messageId] = queuedRecord(message, now);
+    });
+    return outcome;
+  }
+
+  hasRecentDuplicate(message: DurableQueuedMessage, windowMs: number): boolean {
+    if (windowMs <= 0) return false;
+    const cutoff = this.now() - windowMs;
+    return Object.values(this.data.records).some((record) =>
+      record.receivedAt >= cutoff &&
+      record.message.messageId !== message.messageId &&
+      record.message.scope === message.scope &&
+      record.message.workspaceCwd === message.workspaceCwd &&
+      sameTaskIdentity(record.message, message) &&
+      nearDuplicate(record.message.content, message.content));
   }
 
   queued(): JobRecord[] {
@@ -304,6 +342,55 @@ export class JobLedger {
       .sort(([, a], [, b]) => b.updatedAt - a.updatedAt);
     for (const [id] of terminal.slice(this.maxTerminalRecords)) delete this.data.records[id];
   }
+}
+
+function queuedRecord(message: DurableQueuedMessage, now: number): JobRecord {
+  return {
+    message: structuredClone(message),
+    state: 'queued', attempts: 1, receivedAt: now, updatedAt: now,
+    checkpoint: { stage: 'queued' },
+  };
+}
+
+function sameTaskIdentity(left: DurableQueuedMessage, right: DurableQueuedMessage): boolean {
+  return left.scope === right.scope && left.workspaceCwd === right.workspaceCwd &&
+    left.senderId === right.senderId && left.rawContentType === right.rawContentType &&
+    JSON.stringify(left.resources) === JSON.stringify(right.resources);
+}
+
+function nearDuplicate(left: string, right: string): boolean {
+  const a = normalizeForDuplicate(left);
+  const b = normalizeForDuplicate(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length < 12 || b.length < 12) return false;
+  const aPairs = bigrams(a);
+  const bPairs = bigrams(b);
+  let overlap = 0;
+  const remaining = new Map(bPairs);
+  for (const [pair, count] of aPairs) {
+    const available = remaining.get(pair) ?? 0;
+    const shared = Math.min(count, available);
+    overlap += shared;
+    if (shared > 0) remaining.set(pair, available - shared);
+  }
+  const total = [...aPairs.values()].reduce((sum, count) => sum + count, 0) +
+    [...bPairs.values()].reduce((sum, count) => sum + count, 0);
+  return total > 0 && (2 * overlap) / total >= 0.92;
+}
+
+function normalizeForDuplicate(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase().replaceAll(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function bigrams(value: string): Map<string, number> {
+  const chars = [...value];
+  const result = new Map<string, number>();
+  for (let index = 0; index < chars.length - 1; index += 1) {
+    const pair = `${chars[index]}${chars[index + 1]}`;
+    result.set(pair, (result.get(pair) ?? 0) + 1);
+  }
+  return result;
 }
 
 function parseLedger(raw: string): JobLedgerData {

@@ -46,6 +46,7 @@ import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { NotificationPreferenceStore } from '../bot/notification-preference-store.js';
+import type { ReplyPolicyStore } from '../bot/reply-policy-store.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -77,6 +78,7 @@ export interface StartChannelDeps {
   densityStore?: DensityStore;
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
+  replyPolicies?: ReplyPolicyStore;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -310,12 +312,21 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       archiveMaxAgeDays: deps.archiveMaxAgeDays,
       defaultRunTimeoutMs: deps.defaultRunTimeoutMs,
       accessManager: deps.accessManager,
+      isChatAdministrator: async (chatId: string, userId: string) => {
+        const response = await channel.rawClient.im.v1.chat.get({
+          params: { user_id_type: 'open_id' },
+          path: { chat_id: chatId },
+        });
+        const chat = response.data;
+        return chat?.owner_id === userId || chat?.user_manager_id_list?.includes(userId) === true;
+      },
       approvals: deps.approvals,
       questions: deps.questions,
       ...(deps.plans ? { plans: deps.plans } : {}),
       densityStore: deps.densityStore,
       ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
       ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
+      ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
       models: deps.models,
       wizardStore: deps.wizardStore,
       dshConfig: deps.dshConfig,
@@ -382,9 +393,28 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           }
         : { ...msg, workspaceCwd };
       if (deps.jobs) {
+        const durableMessage = durableMessageFor(queuedMessage, scope);
+        const dedupeWindowMs = deps.replyPolicies?.get(scope).dedupeWindowMs ?? 0;
         let inserted: boolean;
         try {
-          inserted = await deps.jobs.enqueue(durableMessageFor(queuedMessage, scope));
+          if (dedupeWindowMs > 0) {
+            const admission = await deps.jobs.enqueueWithDeduplication(durableMessage, dedupeWindowMs);
+            if (admission === 'message-id-duplicate') return;
+            if (admission === 'content-duplicate') {
+              await commandChannel.sendMarkdown(
+                msg.chatId,
+                bilingualMarkdown(
+                  `↩️ 检测到 ${String(dedupeWindowMs / 1_000)} 秒内同一发送者的近似重复任务，本次未重复执行。`,
+                  `↩️ Detected a near-duplicate task from the same sender within ${String(dedupeWindowMs / 1_000)} seconds; it was not run again.`,
+                ),
+                { replyTo: msg.messageId, ...(msg.threadId ? { threadId: msg.threadId } : {}) },
+              );
+              return;
+            }
+            inserted = true;
+          } else {
+            inserted = await deps.jobs.enqueue(durableMessage);
+          }
         } catch (error) {
           log.fail('job-ledger', error, { step: 'enqueue', messageId: msg.messageId, scope });
           await commandChannel.sendMarkdown(
@@ -484,6 +514,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
             ...(deps.plans ? { plans: deps.plans } : {}),
             ...(deps.permissionPolicies ? { permissionPolicies: deps.permissionPolicies } : {}),
             ...(deps.notificationPreferences ? { notificationPreferences: deps.notificationPreferences } : {}),
+            ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
             models: deps.models,
             dshConfig: deps.dshConfig,
             ...(deps.resolveDefaultModel

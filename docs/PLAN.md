@@ -61,6 +61,7 @@
 - [x] 多机器人实例与 @ 交接（独立 profile/service/凭据/上下文 + 可信 peer + 跨进程回合上限，issue #25）
 - [x] 出站 @ 提及与跨会话通知（`SendOptions.mentions` + `ScopeDirectory` + `lark_notify` 工具）
 - [x] opt-in 任务完成 / 失败 / 审批等待提醒（持久通知偏好 + `/status`，issue #33）
+- [x] per-scope 回复合并/频率/批量限制与同发送者近似任务去重（`/replies` + `/status`，issue #34）
 - [x] agent 结果文件与归档直接回传（`lark_send_file` + `/archive send <id> [scope|chatId]`，issue #31）
 - [x] dsh profile bundle（`dsh.bundle.patch` + `./plugin` / `./invariant` 导出 + `dsh plugin add` 实测）
 - [x] 空闲超时看门狗（持续无活动事件才终止，活跃任务不被误杀）

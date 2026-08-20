@@ -165,7 +165,18 @@
 - 完成/失败只在 durable job 终态落盘后发送一次；SDK/Web 与 ACP 工具审批均启动/取消 reminder。
   通知失败不改变任务终态；未显式开启时不产生额外消息。
 
-### 4.8.2 结果文件直接回传（outbound files，issue #31）
+### 4.8.2 回复流量控制与近似去重（issue #34）
+
+- 默认保持即时逐条回复；profile 管理员或当前群的群主/群管理员通过 `/replies set merge=N batch=N interval=N dedupe=N` 按 immutable
+  scope 配置，所有成员可查看，`default` 恢复默认，`/status` 展示有效值。
+- 最终回答在合并窗口内聚合；每条消息最多包含配置数量的任务答案，超出部分在 bridge 进程存活期间
+  保留内存队列并遵守批次最小间隔，不因批量上限丢弃答案。单任务兼容原 reply/thread anchor；
+  合并任务保留 thread 并标出各原 messageId。
+- messageId 继续由 durable ledger 精确幂等；启用近似去重后，仅比较同发送者、同 scope + workspace、
+  配置时间窗内的规范化正文，短文本只做规范化精确匹配，高相似长文本明确提示后不执行。
+- 策略以 0600 atomic write 持久化，失败回滚且不报成功，重启不丢。
+
+### 4.8.3 结果文件直接回传（outbound files，issue #31）
 
 - SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
   固定为原 chat/thread，不允许模型指定其他会话。
@@ -175,7 +186,7 @@
 - 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
   channel 二进制上传能力发送。
 
-### 4.8.3 多机器人实例与交接（multi-bot handoff，issue #25）
+### 4.8.4 多机器人实例与交接（multi-bot handoff，issue #25）
 
 - `bot add|list|status|remove` 管理独立 bridge profile、dsh profile、PersonalAgent 身份和用户服务；
   每个实例的模型、provider、凭据、session、scope、worktree 与 archive 相互隔离。
@@ -189,7 +200,7 @@
 - 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
   消费同一个 Web agent 广播流而把 session 事件写入错误实例。
 
-### 4.8.4 scope 工具权限策略（issue #30）
+### 4.8.5 scope 工具权限策略（issue #30）
 
 - `/permission ask|allow|deny [scope]` 按隔离 scope 管理逐工具审批策略；查询开放，修改仅管理员；
   管理员可指定当前 chat 内的 member/topic scope，跨 chat 目标拒绝。

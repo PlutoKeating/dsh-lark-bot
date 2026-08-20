@@ -20,6 +20,7 @@ export interface AppPaths {
   jobsFile: (profile: string) => string;
   permissionPoliciesFile: (profile: string) => string;
   notificationPreferencesFile: (profile: string) => string;
+  replyPoliciesFile: (profile: string) => string;
   sessionCatalogFile: (profile: string) => string;
   archivesDir: (profile: string) => string;
   workspacesFile: (profile: string) => string;
@@ -56,6 +57,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     jobsFile: (profile) => profilePath(profile, 'jobs.json'),
     permissionPoliciesFile: (profile) => profilePath(profile, 'permission-policies.json'),
     notificationPreferencesFile: (profile) => profilePath(profile, 'notification-preferences.json'),
+    replyPoliciesFile: (profile) => profilePath(profile, 'reply-policies.json'),
     sessionCatalogFile: (profile) => profilePath(profile, 'sessions.json.catalog.json'),
     archivesDir: (profile) => profilePath(profile, 'archives'),
     workspacesFile: (profile) => profilePath(profile, 'workspaces.json'),

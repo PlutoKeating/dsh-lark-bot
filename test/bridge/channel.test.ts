@@ -35,6 +35,7 @@ function makeChannel(): {
   sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }>;
   updatedCards: Array<{ messageId: string; card: object }>;
   recalled: string[];
+  chatGet: ReturnType<typeof vi.fn>;
   createChannel: (options?: LarkChannelOptions) => LarkChannel;
   createOptions: Record<string, unknown> | undefined;
 } {
@@ -42,8 +43,10 @@ function makeChannel(): {
   const sent: Array<{ chatId: string; input: unknown; options: SendOptions | undefined }> = [];
   const recalled: string[] = [];
   const updatedCards: Array<{ messageId: string; card: object }> = [];
+  const chatGet = vi.fn().mockResolvedValue({ data: {} });
 
   const channel = {
+    rawClient: { im: { v1: { chat: { get: chatGet } } } },
     on(next: Handlers) {
       Object.assign(handlers, next);
     },
@@ -71,6 +74,7 @@ function makeChannel(): {
     sent,
     updatedCards,
     recalled,
+    chatGet,
     get createOptions() {
       return createOptions;
     },
@@ -115,6 +119,50 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('authorizes reply policy changes from the current Feishu group manager list', async () => {
+    const fake = makeChannel();
+    fake.chatGet.mockResolvedValue({
+      data: { owner_id: 'ou_owner', user_manager_id_list: ['ou_manager'] },
+    });
+    const replyPolicies = {
+      get: () => ({ mergeWindowMs: 0, maxBatchSize: 1, minIntervalMs: 0, dedupeWindowMs: 0 }),
+      isConfigured: () => false,
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-group-admin-home') }),
+      defaultModel: 'deepseek-v4-flash',
+      accessManager: { isAdmin: () => false } as never,
+      pending: { push: vi.fn(), size: vi.fn().mockReturnValue(0), isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false) } as never,
+      replyPolicies: replyPolicies as never,
+      defaultWorkspace: '/tmp/project', createChannel: fake.createChannel,
+    });
+
+    await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
+      messageId: 'manager-command', chatType: 'group', chatMode: 'group',
+      senderId: 'ou_manager', mentionedBot: true, content: '/replies set merge=5',
+    }));
+
+    expect(fake.chatGet).toHaveBeenCalledWith({
+      params: { user_id_type: 'open_id' },
+      path: { chat_id: 'chat-1' },
+    });
+    expect(replyPolicies.set).toHaveBeenCalledWith('chat-1', {
+      mergeWindowMs: 5_000,
+      maxBatchSize: 1,
+      minIntervalMs: 0,
+      dedupeWindowMs: 0,
+    });
+  });
+
   it('accepts only trusted bot @ handoffs, bypasses slash commands and enforces the shared guard', async () => {
     const fake = makeChannel();
     const pending = {
@@ -1206,7 +1254,7 @@ describe('startChannel', () => {
     expect(pending.push).not.toHaveBeenCalled();
   });
 
-  it('persists an accepted message before enqueue and deduplicates a replayed event', async () => {
+  it('persists an accepted message before enqueue and deduplicates replayed or near-identical events', async () => {
     const fake = makeChannel();
     const pending = {
       push: vi.fn(), size: vi.fn().mockReturnValue(0),
@@ -1227,18 +1275,21 @@ describe('startChannel', () => {
       defaultModel: 'deepseek-v4-flash',
       accessManager: new AccessManager(new ConfigStore(':memory:'), 'default'),
       pending: pending as never, jobs, defaultWorkspace: '/tmp/project',
+      replyPolicies: { get: () => ({ mergeWindowMs: 0, maxBatchSize: 1, minIntervalMs: 0, dedupeWindowMs: 60_000 }) } as never,
       createChannel: fake.createChannel,
     });
 
     const handle = fake.handlers.message as (msg: NormalizedMessage) => Promise<void>;
-    await handle(message({ messageId: 'durable-message', content: 'do durable work' }));
-    await handle(message({ messageId: 'durable-message', content: 'do durable work' }));
+    await handle(message({ messageId: 'durable-message', content: 'Please review the checkout failure and propose a safe fix.' }));
+    await handle(message({ messageId: 'durable-message', content: 'Please review the checkout failure and propose a safe fix.' }));
+    await handle(message({ messageId: 'near-duplicate', content: 'Please review the checkout failure, and propose a safe fix!' }));
 
     expect(jobs.queued()).toHaveLength(1);
     expect(jobs.queued()[0]?.message).toMatchObject({
       messageId: 'durable-message', scope: 'chat-1', workspaceCwd: '/tmp/project',
     });
     expect(pending.push).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(fake.sent.at(-1)?.input)).toContain('近似重复任务');
   });
 
   it('fails closed with a visible receipt when durable enqueue cannot be persisted', async () => {

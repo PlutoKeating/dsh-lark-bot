@@ -25,6 +25,35 @@ function message(messageId: string, overrides: Partial<DurableQueuedMessage> = {
 }
 
 describe('JobLedger', () => {
+  it('detects only recent near-duplicates from the same sender, scope and workspace', async () => {
+    let now = 1_000;
+    const ledger = new JobLedger(':memory:', { now: () => now });
+    const original = message('m1');
+    original.senderId = 'user-a';
+    original.content = 'Please review the checkout failure and propose a safe fix.';
+    await ledger.enqueue(original);
+
+    now = 2_000;
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm2', content: 'Please review the checkout failure, and propose a safe fix!' }, 60_000)).toBe(true);
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm3', senderId: 'user-b' }, 60_000)).toBe(false);
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm4', workspaceCwd: '/repo-b' }, 60_000)).toBe(false);
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm-files', resources: [{ fileKey: 'different' }] }, 60_000)).toBe(false);
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm5', content: 'Please implement the checkout fix now.' }, 60_000)).toBe(false);
+    now = 70_000;
+    expect(ledger.hasRecentDuplicate({ ...original, messageId: 'm6' }, 60_000)).toBe(false);
+  });
+
+  it('atomically admits only one of two concurrent near-duplicates', async () => {
+    const ledger = new JobLedger(':memory:');
+    const first = message('m1', { content: 'Please review the checkout failure and propose a safe fix.' });
+    const second = message('m2', { content: 'Please review the checkout failure, and propose a safe fix!' });
+    const outcomes = await Promise.all([
+      ledger.enqueueWithDeduplication(first, 60_000),
+      ledger.enqueueWithDeduplication(second, 60_000),
+    ]);
+    expect(outcomes.sort()).toEqual(['content-duplicate', 'inserted']);
+    expect(ledger.queued()).toHaveLength(1);
+  });
   it('durably enqueues before exposing a queued record and deduplicates message ids', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-job-ledger-'));
     const path = join(dir, 'jobs.json');

@@ -1,5 +1,6 @@
 import type { SessionMetrics } from '../session/store.js';
 import type { NotificationPreference } from '../bot/notification-preference-store.js';
+import type { ReplyPolicy } from '../bot/reply-policy-store.js';
 import { localizedCard, type CardLocale } from './i18n.js';
 
 export interface StatusCardInput {
@@ -12,6 +13,8 @@ export interface StatusCardInput {
   isolation: string;
   permissionPolicy?: 'ask' | 'allow' | 'deny';
   notificationPreference?: NotificationPreference;
+  replyPolicy?: ReplyPolicy;
+  replyPolicyConfigured?: boolean;
   role: string | undefined;
   metrics: SessionMetrics | undefined;
   pending: {
@@ -72,6 +75,11 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
           ? `🔔 **主动提醒**：\`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\`（审批 ${String(input.notificationPreference.approvalReminderMs / 60_000)} 分钟）`
           : `🔔 **Notifications**: \`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\` (approval ${String(input.notificationPreference.approvalReminderMs / 60_000)} min)`]
       : [zh ? '🔕 **主动提醒**：关闭' : '🔕 **Notifications**: off']),
+    ...(input.replyPolicy
+      ? [zh
+          ? `📨 **回复策略**：${input.replyPolicyConfigured ? '自定义' : '默认'} · 合并 ${String(input.replyPolicy.mergeWindowMs / 1_000)} 秒 · 每批 ${String(input.replyPolicy.maxBatchSize)} · 间隔 ${String(input.replyPolicy.minIntervalMs / 1_000)} 秒 · 去重 ${String(input.replyPolicy.dedupeWindowMs / 1_000)} 秒`
+          : `📨 **Reply policy**: ${input.replyPolicyConfigured ? 'custom' : 'default'} · merge ${String(input.replyPolicy.mergeWindowMs / 1_000)}s · batch ${String(input.replyPolicy.maxBatchSize)} · interval ${String(input.replyPolicy.minIntervalMs / 1_000)}s · dedupe ${String(input.replyPolicy.dedupeWindowMs / 1_000)}s`]
+      : []),
     ...(input.role ? [`🎭 **role**：${input.role}`] : []),
     `🔖 **version**：\`${input.version}\``,
     '',
