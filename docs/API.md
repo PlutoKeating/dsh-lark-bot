@@ -589,10 +589,11 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   variant 只翻译 bot 固定文案，agent 回答、推理、工具参数/结果、用户问题与 option 原文不改写。
 
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
-  reasoning、工具调用与结果位于 schema 2.0 `collapsible_panel`，运行时展开、结束后默认收起；
-  detailed 含工具输入输出与 token usage。面板外的 notation 过程快照持续保留最新推理尾部、最近
-  工具与结果；若平台拒绝 `collapsible_panel`，run-flow / guardian 会重试无该组件的 legacy 流式卡。
-  `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。
+  schema 2.0 `collapsible_panel` 只展示阶段、耗时、工具名与状态，运行时展开、结束后默认收起；
+  detailed 可展示更多工具项与 token usage，但原始 reasoning、工具输入输出、草稿正文、adapter 错误和
+  delivery 错误不得进入任一卡片密度、`config.summary` 或兼容快照。若平台拒绝
+  `collapsible_panel`，run-flow / guardian 会重试具有相同隐私边界的 legacy 流式卡。正常卡片正文
+  不承载最终回答；仅当独立最终消息发送失败时，才把原本就面向用户的完整最终回答回填卡片。
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示

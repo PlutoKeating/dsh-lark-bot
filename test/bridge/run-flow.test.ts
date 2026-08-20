@@ -1079,7 +1079,8 @@ describe('runAgentBatch', () => {
       body?: { elements?: Array<{ content?: string }> };
     };
     const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
-    expect(lastText).toContain('upstream provider failed mid-task');
+    expect(lastText).toContain('Agent 运行失败');
+    expect(lastText).not.toContain('upstream provider failed mid-task');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
   });
 

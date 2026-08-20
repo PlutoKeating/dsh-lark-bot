@@ -512,7 +512,7 @@ describe('GuardianService', () => {
     );
 
     expect(JSON.stringify(harness.streamed.at(-1))).toContain('最终回答发送失败');
-    expect(JSON.stringify(harness.streamed.at(-1))).toContain('final reply rejected');
+    expect(JSON.stringify(harness.streamed.at(-1))).not.toContain('final reply rejected');
     expect(JSON.stringify(harness.streamed.at(-1))).toContain('fake answer');
   });
 

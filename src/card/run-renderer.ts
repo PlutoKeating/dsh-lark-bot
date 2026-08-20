@@ -48,20 +48,16 @@ function summaryText(state: RunState, locale: CardLocale): string {
 function fallbackSummaryText(state: RunState, locale: CardLocale): string {
   const zh = locale === 'zh_cn';
   const parts = [summaryText(state, locale)];
-  if (state.reasoning.content) parts.push(`${zh ? '思考' : 'Reasoning'}：${state.reasoning.content.slice(-240)}`);
   const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-4);
   if (tools.length > 0) {
     parts.push(
       `${zh ? '工具' : 'Tools'}：${tools
-        .map((block) => {
-          const output = block.tool.output?.trim();
-          return `${block.tool.name}(${block.tool.status})${output ? `=${output.slice(0, 80)}` : ''}`;
-        })
+        .map((block) => `${block.tool.name}(${block.tool.status})`)
         .join('、')}`,
     );
   }
-  if (state.errorMsg) parts.push(`${zh ? '错误' : 'Error'}：${state.errorMsg}`);
-  if (state.finalDeliveryError) parts.push(`${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`);
+  if (state.terminal === 'error') parts.push(zh ? '详情见本机日志' : 'See local logs for details');
+  if (state.finalDeliveryError) parts.push(zh ? '最终回答发送失败' : 'Final answer delivery failed');
   return parts.join(' · ').slice(0, 500);
 }
 
@@ -79,13 +75,6 @@ function toolBlock(tool: ToolEntry): object {
   return markdown(`${icon} **${tool.name}**`);
 }
 
-function reasoningPreview(content: string, limit: number, locale: CardLocale): string {
-  if (content.length <= limit) return content;
-  const headLength = Math.floor(limit / 2);
-  const tailLength = limit - headLength;
-  return `${content.slice(0, headLength)}\n\n…\n\n_${locale === 'zh_cn' ? '最新进展' : 'Latest progress'}_\n${content.slice(-tailLength)}`;
-}
-
 function hasAnswer(state: RunState): boolean {
   return state.blocks.some((block) => block.kind === 'text' && block.content.trim() !== '');
 }
@@ -93,33 +82,17 @@ function hasAnswer(state: RunState): boolean {
 function processElements(state: RunState, detailed: boolean, compact: boolean, locale: CardLocale): object[] {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
-  if (state.reasoning.content) {
-    elements.push(
-      markdown(
-        `🧠 **${zh ? '推理' : 'Reasoning'}**\n${reasoningPreview(state.reasoning.content, detailed ? 2000 : compact ? 240 : 500, locale)}`,
-      ),
-    );
-  }
-  for (const block of state.blocks) {
-    if (block.kind !== 'tool') continue;
+  const tools = state.blocks.filter((block) => block.kind === 'tool');
+  const visibleTools = detailed ? tools : tools.slice(compact ? -3 : -8);
+  for (const block of visibleTools) {
     const tool = block.tool;
-    if (compact) {
-      elements.push(toolBlock(tool));
-      continue;
-    }
-    const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
-    const lines = [`${icon} **${tool.name}**`];
-    if (detailed && tool.input !== undefined && tool.input !== '') {
-      lines.push(`${zh ? '输入' : 'Input'}：\`\`\`\n${safeJsonPreview(tool.input)}\n\`\`\``);
-    }
-    if (tool.output) lines.push(`${zh ? '输出' : 'Output'}：${tool.output.slice(0, detailed ? 500 : 200)}`);
-    elements.push(markdown(lines.join('\n')));
+    elements.push(toolBlock(tool));
   }
   if (elements.length === 0) {
     elements.push(
       noteMd(state.terminal === 'running'
-        ? zh ? '_等待推理或工具事件…_' : '_Waiting for reasoning or tool events…_'
-        : zh ? '_没有可展示的推理或工具事件_' : '_No reasoning or tool events to display_'),
+        ? zh ? '_正在处理请求…_' : '_Processing the request…_'
+        : zh ? '_执行过程已结束_' : '_Execution finished_'),
     );
   }
   return elements;
@@ -130,7 +103,7 @@ function thinkingPanel(state: RunState, detailed: boolean, compact: boolean, loc
     tag: 'collapsible_panel',
     expanded: state.terminal === 'running',
     header: {
-      title: { tag: 'plain_text', content: `🧠 ${locale === 'zh_cn' ? '思考过程' : 'Process'} · ${summaryText(state, locale)}` },
+      title: { tag: 'plain_text', content: `⚙️ ${locale === 'zh_cn' ? '执行过程' : 'Execution'} · ${summaryText(state, locale)}` },
       icon: { tag: 'standard_icon', token: 'down-small-ccm_outlined' },
       icon_position: 'right',
       icon_expanded_angle: -180,
@@ -142,21 +115,27 @@ function thinkingPanel(state: RunState, detailed: boolean, compact: boolean, loc
 
 function compatibilityProcessSnapshot(state: RunState, locale: CardLocale): object {
   const zh = locale === 'zh_cn';
-  const lines = [zh ? '_过程快照（兼容显示）_' : '_Process snapshot (compatibility view)_'];
-  if (state.reasoning.content) {
-    lines.push(`🧠 ${state.reasoning.content.slice(-300)}`);
-  }
+  const lines = [zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_'];
   const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-3);
   for (const block of tools) {
-    const output = block.tool.output?.trim();
-    lines.push(
-      `🧰 ${block.tool.name} · ${block.tool.status}${output ? `：${output.slice(-160)}` : ''}`,
-    );
+    lines.push(`🧰 ${block.tool.name} · ${block.tool.status}`);
   }
   if (lines.length === 1) lines.push(state.terminal === 'running'
-    ? zh ? '正在等待过程事件…' : 'Waiting for process events…'
-    : zh ? '无过程事件' : 'No process events');
+    ? zh ? '正在处理请求…' : 'Processing the request…'
+    : zh ? '执行过程已结束' : 'Execution finished');
   return noteMd(lines.join('\n'));
+}
+
+function runFailureLine(locale: CardLocale): object {
+  return noteMd(locale === 'zh_cn'
+    ? '⚠️ Agent 运行失败。可重试；底层详情仅保留在本机日志中。'
+    : '⚠️ The agent run failed. Retry it or inspect the local logs for details.');
+}
+
+function finalDeliveryFailureLine(locale: CardLocale): object {
+  return noteMd(locale === 'zh_cn'
+    ? '⚠️ 最终回答发送失败，已尝试在本卡片中显示。'
+    : '⚠️ Final-answer delivery failed; the answer is shown in this card when available.');
 }
 
 function finalDeliveryFallback(state: RunState, locale: CardLocale): object | undefined {
@@ -191,8 +170,8 @@ function renderStandard(state: RunState, now: number, locale: CardLocale): objec
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   } else if (
     state.terminal === 'done' &&
     !hasAnswer(state)
@@ -203,7 +182,7 @@ function renderStandard(state: RunState, now: number, locale: CardLocale): objec
     if (usage) elements.push(noteMd(usage));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -231,8 +210,11 @@ function renderCompact(state: RunState, now: number, locale: CardLocale): object
   elements.push(noteMd(summaryText(state, locale)));
   elements.push(thinkingPanel(state, false, true, locale));
   elements.push(compatibilityProcessSnapshot(state, locale));
+  if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
+  }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -266,15 +248,15 @@ function renderDetailed(state: RunState, now: number, locale: CardLocale): objec
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   } else if (state.terminal === 'done') {
     const usage = usageLine(state);
     if (usage) elements.push(noteMd(usage));
     if (!hasAnswer(state)) elements.push(noteMd(zh ? '_（未返回内容）_' : '_(No content returned)_'));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -292,15 +274,6 @@ function renderDetailed(state: RunState, now: number, locale: CardLocale): objec
     },
     body: { elements },
   };
-}
-
-function safeJsonPreview(value: unknown): string {
-  if (typeof value === 'string') return value.slice(0, 300);
-  try {
-    return JSON.stringify(value).slice(0, 300);
-  } catch {
-    return String(value).slice(0, 300);
-  }
 }
 
 /** Render the run card at the requested density (compact / standard / detailed). */
@@ -337,23 +310,17 @@ function renderLegacyVariant(state: RunState, now: number, locale: CardLocale): 
   if (owner) elements.push(owner);
   elements.push(compatibilityProcessSnapshot(state, locale));
   if (state.terminal === 'running') {
-    const liveText = state.blocks
-      .filter((block) => block.kind === 'text')
-      .map((block) => block.content)
-      .join('')
-      .slice(-1000);
-    if (liveText) elements.push(markdown(liveText));
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
     elements.push(stopButton(state.actionScope, locale));
   } else if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);

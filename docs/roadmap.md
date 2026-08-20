@@ -100,10 +100,11 @@
   Markdown 消息发送，再用 schema 2.0 form card 收集批准 / 继续规划与可选反馈；工具阻塞等待并在
   决策后续接同一 agent turn；pre-execute 强制阻断未批准的 mutating/execute 调用，run/callback
   结束按 session 精确取消并撤回卡片，等待期间只暂停所属 run 的 idle watchdog。
-- **P21 done（issue #19）**：运行卡使用飞书 Card JSON 2.0 `collapsible_panel` 实时展示推理、工具
-  调用与结果，运行中展开、完成后默认收起；最终回答作为独立 Markdown 消息发送并继承原 reply/thread
-  路由。面板外的兼容快照保留最新推理与最近工具结果，平台拒绝折叠组件时自动重试 legacy 流式卡；
-  最终消息发送失败会把完整回答回填过程卡，同时 exchange 仍持久化。
+- **P21 done（issue #19，issue #66 安全收敛）**：运行卡使用飞书 Card JSON 2.0
+  `collapsible_panel` 实时展示阶段、耗时、工具名与状态，运行中展开、完成后默认收起；原始推理、
+  工具输入输出、草稿正文和底层错误均不发送到飞书。最终回答作为独立 Markdown 消息发送并继承原
+  reply/thread 路由；平台拒绝折叠组件时自动重试同样脱敏的 legacy 流式卡。最终消息发送失败会把
+  完整回答回填过程卡，同时 exchange 仍持久化。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
 - **P23 done**：问答卡绑定发送后的 messageId；用户可直接回复卡片输入自由文本，单选/多选也接受
