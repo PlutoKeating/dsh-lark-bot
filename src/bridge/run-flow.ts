@@ -16,6 +16,7 @@ import {
   type RunState,
 } from '../card/run-state.js';
 import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
+import { renderSessionRecoveryCard } from '../card/session-recovery-card.js';
 import { bilingualMarkdown } from '../card/i18n.js';
 import { renderApprovalCard } from '../card/approval-card.js';
 import { renderQuestionCard } from '../card/question-card.js';
@@ -249,6 +250,7 @@ async function runAttempt(
   let timedOut = false;
   let assistantOutput = '';
   let sawActivity = false;
+  let resumeFailure: string | undefined;
   let activeSessionId = sessionId;
   let activeModel = modelRoute(input.provider, input.model);
   const density = input.densityStore?.get(input.scope) ?? 'standard';
@@ -300,6 +302,17 @@ async function runAttempt(
             log.warn('run-flow', 'card-update-failed', { scope: input.scope, error });
           }
         };
+        const showResumeRecovery = async (error: unknown): Promise<void> => {
+          resumeFailure = errorMessage(error);
+          try {
+            await controller.update(renderSessionRecoveryCard());
+          } catch (updateError) {
+            log.warn('run-flow', 'resume-recovery-card-failed', {
+              scope: input.scope,
+              error: updateError,
+            });
+          }
+        };
         let timeoutTimer: NodeJS.Timeout | undefined;
         let armTimeout: (() => void) | undefined;
         const ticker = setInterval(() => {
@@ -312,6 +325,15 @@ async function runAttempt(
         const consume = async (): Promise<void> => {
           for await (const event of run.events) {
             if (timedOut) return;
+            if (
+              resuming &&
+              !sawActivity &&
+              event.type === 'error' &&
+              event.terminationReason === 'failed'
+            ) {
+              await showResumeRecovery(event.message);
+              return;
+            }
             state = applyEvent(state, event, stopRequested);
             state = { ...state, lastActivityMs: Date.now() };
             // Self-heal: a broken-session error must not destroy the log. Only
@@ -415,6 +437,17 @@ async function runAttempt(
             await safeUpdate();
           }
         };
+        const consumeWithResumeRecovery = async (): Promise<void> => {
+          try {
+            await consume();
+          } catch (error) {
+            if (resuming && !sawActivity) {
+              await showResumeRecovery(error);
+              return;
+            }
+            throw error;
+          }
+        };
 
         // Idle watchdog: armed once, then re-armed on every agent event (and
         // after a human decision card is answered). Only a run that goes silent for
@@ -473,10 +506,12 @@ async function runAttempt(
 
         try {
           if (timeoutPromise) {
-            await Promise.race([consume(), timeoutPromise]);
+            await Promise.race([consumeWithResumeRecovery(), timeoutPromise]);
           } else {
-            await consume();
+            await consumeWithResumeRecovery();
           }
+
+          if (resumeFailure !== undefined) return;
 
           state = timedOut
             ? markIdleTimeout(state, timeoutMs / 60_000)
@@ -537,6 +572,9 @@ async function runAttempt(
           }
         }
       }
+    }
+    if (resumeFailure !== undefined) {
+      throw new Error(resumeFailure);
     }
     // SDK adapters surface session-level failures (e.g. a resume rejected by
     // dsh's persistence layer with "id collision") as an error EVENT rather
