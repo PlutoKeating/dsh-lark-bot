@@ -1,6 +1,6 @@
-import { realpathSync } from 'node:fs';
+import { lstatSync, realpathSync } from 'node:fs';
 import { isIP } from 'node:net';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 const REDACTED = '[redacted]';
 
@@ -21,11 +21,30 @@ export function redactSecrets(text: string): string {
   return result;
 }
 
-function resolveReal(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
+function resolveReal(path: string): string | undefined {
+  let cursor = resolve(path);
+  const missingParts: string[] = [];
+
+  while (true) {
+    try {
+      return resolve(realpathSync(cursor), ...missingParts.reverse());
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return undefined;
+
+      // A broken symlink also reports ENOENT from realpath. Fail closed instead
+      // of treating the symlink name as an ordinary missing path segment.
+      try {
+        lstatSync(cursor);
+        return undefined;
+      } catch (lstatError) {
+        if ((lstatError as NodeJS.ErrnoException).code !== 'ENOENT') return undefined;
+      }
+
+      const parent = dirname(cursor);
+      if (parent === cursor) return undefined;
+      missingParts.push(basename(cursor));
+      cursor = parent;
+    }
   }
 }
 
@@ -36,6 +55,7 @@ function resolveReal(path: string): string {
 export function isPathWithin(root: string, candidate: string): boolean {
   const rootReal = resolveReal(root);
   const candidateReal = resolveReal(candidate);
+  if (rootReal === undefined || candidateReal === undefined) return false;
   const rel = relative(rootReal, candidateReal);
   return (
     rel === '' ||

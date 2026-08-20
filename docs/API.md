@@ -642,7 +642,8 @@ agent 错误不会发送不完整的最终回答。
 `src/config/security.ts` 提供：
 
 - `redactSecrets(text)`：Bearer / `sk-` / `api_key=` 正则脱敏。
-- `isPathWithin(root, candidate)`：realpath containment（拒绝符号链接逃逸）。
+- `isPathWithin(root, candidate)`：从最深已存在祖先开始做 realpath containment；因此可接受同一目录
+  的平台路径别名和未创建后代，同时拒绝已存在或未存在目标下的符号链接逃逸。
 - `truncateUtf8Safe(text, maxBytes)`：UTF-8 安全字节截断。
 - `isEventFresh(timestampMs, windowMs, now?)`：过期事件拒绝。
 - `isSafeHttpUrl(url)`：SSRF 防护（拒绝环回 / 私网 / 链路本地 / CGNAT / IPv6 ULA）。

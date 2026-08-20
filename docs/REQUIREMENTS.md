@@ -184,7 +184,8 @@
 - SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
   固定为原 chat/thread，不允许模型指定其他会话。
 - bridge 只读取当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档和实例日志中的
-  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。拒绝 symlink 越界、目录、不安全
+  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。路径包含检查必须统一平台路径
+  别名，并从最深已存在祖先解析尚未创建的后代。拒绝 symlink 越界、目录、不安全
   文件名与默认超过 20 MiB 的文件，失败作为结构化工具结果返回。
 - 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
   channel 二进制上传能力发送。

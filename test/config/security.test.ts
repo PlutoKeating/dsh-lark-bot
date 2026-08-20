@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -43,15 +43,25 @@ describe('isPathWithin', () => {
     expect(isPathWithin(root, join(root, '..', 'outside'))).toBe(false);
   });
 
+  it('accepts a missing descendant through an alias of the same root', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'dsh-sec-alias-'));
+    tempDirs.push(parent);
+    const root = join(parent, 'root');
+    const alias = join(parent, 'root-alias');
+    await mkdir(root);
+    await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    expect(isPathWithin(root, join(alias, 'a', 'b'))).toBe(true);
+  });
+
   it('rejects symlink escapes when the target exists', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-sec-link-'));
     const outside = await mkdtemp(join(tmpdir(), 'dsh-sec-out-'));
     tempDirs.push(root, outside);
     await writeFile(join(outside, 'secret.txt'), 'secret');
     const link = join(root, 'escape');
-    const { symlink } = await import('node:fs/promises');
     await symlink(outside, link);
     expect(isPathWithin(root, join(link, 'secret.txt'))).toBe(false);
+    expect(isPathWithin(root, join(link, 'missing.txt'))).toBe(false);
   });
 });
 
