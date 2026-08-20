@@ -16,8 +16,14 @@ if (process.platform === 'win32') {
 }
 
 const self = fileURLToPath(import.meta.url);
-const command = `${shellQuote(process.execPath)} ${shellQuote(self)} --child`;
-const result = spawnSync('/usr/bin/script', ['-qec', command, '/dev/null'], {
+const scriptArgs = process.platform === 'darwin'
+  ? ['-q', '-e', '/dev/null', process.execPath, self, '--child']
+  : [
+      '-qec',
+      `${shellQuote(process.execPath)} ${shellQuote(self)} --child`,
+      '/dev/null',
+    ];
+const result = spawnSync('/usr/bin/script', scriptArgs, {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe'],
 });
