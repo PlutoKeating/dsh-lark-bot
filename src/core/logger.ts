@@ -52,11 +52,17 @@ export interface Logger {
   warn(category: string, event: string, fields?: LogFields): void;
   error(category: string, event: string, fields?: LogFields): void;
   fail(category: string, error: unknown, fields?: LogFields): void;
+  /** Return the newest already-redacted structured entries from this process. */
+  recent(limit?: number): string[];
 }
 
-export function createLogger(output: Writable = process.stderr): Logger {
+export function createLogger(output: Writable = process.stderr, capacity = 200): Logger {
+  const recent: string[] = [];
   const write = (level: LogLevel, category: string, event: string, fields: LogFields): void => {
-    output.write(`${serializeMessage(level, category, event, fields)}\n`);
+    const line = serializeMessage(level, category, event, fields);
+    recent.push(line);
+    if (recent.length > Math.max(0, capacity)) recent.splice(0, recent.length - capacity);
+    output.write(`${line}\n`);
   };
 
   return {
@@ -67,6 +73,7 @@ export function createLogger(output: Writable = process.stderr): Logger {
       const message = error instanceof Error ? error.message : String(error);
       write('error', category, 'fail', { message, ...fields });
     },
+    recent: (limit = capacity) => recent.slice(-Math.max(0, limit)),
   };
 }
 

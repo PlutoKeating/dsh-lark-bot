@@ -133,6 +133,19 @@ export async function assemblePackage({ root, name, githubScope, dir }) {
   const distDest = join(dest, 'dist');
   await mkdir(distDest, { recursive: true });
   await copyDirRecursive(join(root, 'dist'), distDest);
+  const clientPath = join(distDest, 'client.js');
+  if (publishedManifest.dsh?.client && existsSync(clientPath)) {
+    const client = await readFile(clientPath, 'utf8');
+    const marker = 'window.__ModuleLoader__.load({ id: "dsh-lark-bot"';
+    if (!client.includes(marker)) {
+      throw new Error('[publish-bundle] dist/client.js is missing the expected module-loader id marker');
+    }
+    await writeFile(
+      clientPath,
+      client.replace(marker, `window.__ModuleLoader__.load({ id: ${JSON.stringify(packageName)}`),
+      'utf8',
+    );
+  }
   await Promise.all([
     copyFile(join(root, 'README.md'), join(dest, 'README.md')),
     copyFile(join(root, 'README_EN.md'), join(dest, 'README_EN.md')),

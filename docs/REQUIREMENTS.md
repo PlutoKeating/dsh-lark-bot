@@ -52,33 +52,60 @@
 ### 4.1 桥接（bridge）
 - 通过飞书/Lark **WebSocket 长连接**（`@larksuite/channel` + PersonalAgent 应用）收发消息，免公网服务器、免域名、免内网穿透。
 - 私聊直接发消息、群聊 `@bot`、话题 / thread、文档评论均可触发。
-- **流式卡片**：文本与工具调用实时更新在同一张卡片上。
-- **COT 过程消息**：可选先发过程消息再发最终答案。
+- **流式过程卡**：thinking、工具调用与结果实时更新在 Card JSON 2.0 原生折叠面板中；面板内同时
+  保留开头与最新推理，面板外持续更新兼容快照。平台拒绝折叠组件时自动回退 legacy 流式卡。
+- **最终回答**：正常完成后作为独立 Markdown 消息发送，继承 reply/thread 路由；过程卡失败不能
+  阻断最终投递，最终消息发送失败时把回答正文回填卡片且不丢失会话记录。
 - 图片 / 文件：下载到本地后交给 agent 处理。
 
 > 状态说明：私聊、群聊 `@bot`、话题（topic）已实现；**文档评论**与**富文本回复**为规划中能力，
 > 当前版本未实现。
 
 ### 4.2 会话管理（session）
-- 每个 chat / topic / thread / 文档评论 → 独立 session，互不串扰。
+- 私聊始终独立；群聊默认按 topic/thread 隔离。管理员可用
+  `/isolation group|topic|member` 切换整群共享、话题独立或成员独立，策略按 chat 持久化；
+  切换不迁移或删除旧 scope，会话可在切回后继续，旧运行的停止 / 审批 / 问答动作仍可达。
+  成员任务卡按入队 scope 显示发送者 open_id，不受排队期间的策略切换影响。
 - 排队合并：连续消息合并处理；运行中的消息排队到下一轮。
-- 中断命令：`/new`、`/cd`、`/ws use`、`/stop` 可打断当前任务。
-- 会话续跑 `/resume`、状态查询 `/status`。
-- **会话 / 任务归档**（0.6.0）：`/archive [note]` 把完整会话导出为 Markdown + JSONL（归档目录
-  为独立 Git 仓库，每次归档单独 commit）；`/retention [N|default]` 调整每 scope 保留窗口，
-  超窗消息自动归档；`/archive list` 查看、`/archive clean` 按保留策略清理
+- 消息可靠性（issue #28）：普通 agent 消息必须以 messageId 幂等、先原子写 profile 级任务账本再
+  进入内存队列；启动自动重放 queued，遗留 running 标记 interrupted 并保留安全 checkpoint，
+  不自动重跑可能已有外部副作用的任务。`/jobs` 按 scope + workspace 对账/显式重试，`/status` 与
+  重连提示显示统计。保证仅覆盖 bridge 已接收并落盘的事件，不宣称恢复平台从未投递的消息。
+- 中断命令：`/new` 只打断并清空当前 workspace 的任务；`/stop` 仍可打断 scope 内任务。
+  `/cd`、`/ws use` 切换前中断旧 workspace 的 active run，但其 native session、transcript、指标与归档保留。
+- 会话续跑 `/resume`；`/status` 以可原位刷新的卡片展示工作区、有效模型、session、active runs、
+  版本、真实 context used/limit/percentage、累计 input/output/cache token 与待审批/提问/计划数。
+  上游不可得字段必须显示“暂无”，不得估算；pending 只统计当前 workspace 的 session/run，成员 scope 状态卡只允许 owner 刷新。
+- 管理员可在飞书使用 `/doctor` 生成可下载诊断文件：版本/平台、非敏感配置计数、当前 workspace
+  运行与账本摘要、服务状态、当前 bridge 进程内有界最近结构化事件（不读取共享 dsh 宿主 stdout）；
+  不含凭据、消息正文或 transcript，内存生成、
+  上传前再次脱敏，失败明确回执。
+- **会话 / 任务归档**（0.6.0，issue #31 增强）：`/archive [note]` 把完整会话导出为 Markdown + JSONL
+  并直接上传当前聊天（归档目录为独立 Git 仓库，每次归档单独 commit）；上传失败保留本地文件，
+  `/archive send <id> [scope|chatId]` 可按当前 scope + workspace 重发，管理员可转发到已登记会话。
+  `/retention [N|default]` 调整每 scope + workspace 保留窗口，
+  超窗消息自动归档；`/archive list` 查看、`/archive clean` 只按当前 workspace 的保留策略清理
   （`DSH_LARK_ARCHIVE_MAX` / `DSH_LARK_ARCHIVE_MAX_AGE_DAYS`）。
 
 ### 4.3 项目工作区管理（workspace，核心差异化）
-- `/cd <path>` 切换工作目录；`/ws save/use/list/remove` 管理命名工作区。
-- **git worktree / 分支隔离**：每个会话绑定独立工作区，互不串改。
+- `/cd <path>` 切换工作目录；`/ws save/use/list/remove` 管理命名工作区；同一 scope 按 canonical cwd
+  保存独立 session，A → B → A 会恢复 A 的 native session 与上下文。
+- **git worktree / 分支隔离**：worktree 由 scope + 项目路径共同派生，不同项目互不串改；旧 scope-only
+  worktree 先核验 owning repo 并把会话、旧 retention 归档归回真实项目，匹配时 Git 原位迁移，
+  不匹配时保留旧树并另建新树。
 - **项目级规则注入**：每项目注入 AGENTS.md / dsh preset / cordis.yml。
 - **上下文持久化**：append-only session log，支持 fork / resume / 回放。
+- **自然问答续接**：等待问答卡期间可提交表单或直接回复卡片；回复按 card messageId、topic 与 member owner 精确路由，单选/多选也接受自由文本补充，答案到达后原 agent turn 自动继续。
 - 多项目导航卡片。
 
 ### 4.4 审批与安全（approval & security）
 - 用户白名单 + 访问控制（`/invite user/admin/group`）。
-- 逐操作审批（卡片按钮回调 / 命令式确认兜底）。
+- 逐操作审批（issue #24）：默认 SDK / Web 以 `tools/pre-execute` 强制门禁 + dsh rc.8 `approval/request` answerer，ACP 通过
+  `session/request_permission`；统一提供“允许执行一次 / 拒绝”卡，展示执行内容和理由。等待暂停
+  所属 run 的 idle watchdog，无固定截止；拒绝作为工具结果返回 agent 而非终止整个任务。
+- 关键任务计划门禁（issue #18）：完整计划先作为普通消息发出，再用带可选文字意见的卡片批准执行
+  或继续规划；决定回写原 agent turn，等待期间按 session 暂停 idle watchdog；当前 turn 未批准时
+  runtime pre-execute 策略拒绝写入、删除、移动、命令执行与 `run_code`。
 - 沙箱隔离（dsh 自带 sandbox capability，含 landlock）。
 - 空闲超时看门狗 `/timeout`（agent 持续 N 分钟无输出 / 无活动事件自动终止；活跃的流式任务
   不会被误杀）。
@@ -87,6 +114,8 @@
 - 异步任务队列（0.6.0）：同一 scope 默认 2 个 run 并行（`/concurrency` /
   `DSH_LARK_SCOPE_CONCURRENCY` 调整，1 为严格串行），消息批量合并后以独立 run 推进，
   互不阻塞事件回调；并行 run 使用独立 dsh session 与 runId，`/status` / `/stop` 覆盖全部。
+- 持久任务 receipt（issue #28）：`jobs.json` 以 0600 原子快照保存最小消息/routing/workspace 与
+  queued/running/terminal 状态，checkpoint 不含隐藏推理或工具参数；终态最多保留 500 条。
 - 定时任务 / 依赖编排（dsh 自带 workflow capability）：规划中，依赖上游能力接入。
 
 > 状态说明：**scope 内并行 run 与异步任务队列已实现（0.6.0）**；定时任务 / workflow 编排
@@ -100,6 +129,7 @@
 - `/provider add|update|remove <id>`：管理 `deepseek-official` 与自定义 pi-ai provider
   （协议白名单 `openai-completions` / `openai-responses` / `anthropic-messages`）。
 - `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
+- `/mode [quick|balanced|deep]`（兼容 `/effort`）：通过大白话双语卡片或文字命令选择当前 scope 的执行强度；默认 balanced，按 scope 持久化，`/status` 展示。每个 run 启动时固化模式，切换只影响下一轮，不中断已有任务或上下文；任何模式都不得降低权限与计划审批要求。
 - `/key set|remove|list <引用名>`：读写 `~/.dsh/.credentials.yaml`。
 - 实现约束：与 dsh Web **Settings → Models** 同一存储协议（`~/.dsh/settings.yaml` +
   `~/.dsh/.credentials.yaml`，`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、凭据文件
@@ -121,11 +151,66 @@
 
 - 出站契约 `SendOptions { replyTo?, mentions?, threadId? }`：`mentions` 以
   `MentionTarget { userId, name? }` 表达，桥接层自动拼接 `<at>` 提及标记。
-- `ScopeDirectory`（`<profile>/scopes.json`）持久化 scope → chat/thread 映射；
+- `ScopeDirectory`（`<profile>/scopes.json`）持久化 scope → chat/thread/最近入站 messageId 映射；
   `/notify <scope|chatId> <text>`（管理员）与 `/notify list`。
 - agent 侧 `lark_notify` dsh 工具（SDK / ACP runtime 自动装配）：`text` / `scope` /
   `chat_id` / `mention_user_ids`；经 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token
   回调 bridge（仅回环，不监听公网，token 不落盘）。
+
+### 4.8.1 主动通知偏好（issue #33）
+
+- Web profile 默认关闭；管理员可在 dsh Web 为无 scope 覆盖的会话设置 `completed` 或 `all`。
+  `/notifications on` 按当前 immutable scope 显式覆盖，事件可选任务完成、失败与审批等待，可配置
+  @ open_id 和审批等待 N 分钟后的一次性提醒；`show` 查看、`off` 显式关闭、`default` 恢复 Web
+  默认，`/status` 可见。
+- 普通用户只能把提醒发到当前 scope；管理员可选择 `ScopeDirectory` 已登记的 scope/chat。偏好以
+  0600 atomic write 持久化，写失败回滚，重启不丢。
+- 完成/失败只在 durable job 终态落盘后发送一次；SDK/Web 与 ACP 工具审批均启动/取消 reminder。
+  通知失败不改变任务终态；Web 默认与 scope 覆盖均为关闭时不产生额外消息。
+
+### 4.8.2 回复流量控制与近似去重（issue #34）
+
+- 默认保持即时逐条回复；profile 管理员或当前群的群主/群管理员通过 `/replies set merge=N batch=N interval=N dedupe=N` 按 immutable
+  scope 配置，所有成员可查看，`default` 恢复默认，`/status` 展示有效值。
+- 最终回答在合并窗口内聚合；每条消息最多包含配置数量的任务答案，超出部分在 bridge 进程存活期间
+  保留内存队列并遵守批次最小间隔，不因批量上限丢弃答案。单任务兼容原 reply/thread anchor；
+  合并任务保留 thread 并标出各原 messageId。
+- messageId 继续由 durable ledger 精确幂等；启用近似去重后，仅比较同发送者、同 scope + workspace、
+  配置时间窗内的规范化正文，短文本只做规范化精确匹配，高相似长文本明确提示后不执行。
+- 策略以 0600 atomic write 持久化，失败回滚且不报成功，重启不丢。
+
+### 4.8.3 结果文件直接回传（outbound files，issue #31）
+
+- SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
+  固定为原 chat/thread，不允许模型指定其他会话。
+- bridge 只读取当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档和实例日志中的
+  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。拒绝 symlink 越界、目录、不安全
+  文件名与默认超过 20 MiB 的文件，失败作为结构化工具结果返回。
+- 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
+  channel 二进制上传能力发送。
+
+### 4.8.4 多机器人实例与交接（multi-bot handoff，issue #25）
+
+- `bot add|list|status|remove` 管理独立 bridge profile、dsh profile、PersonalAgent 身份和用户服务；
+  每个实例的模型、provider、凭据、session、scope、worktree 与 archive 相互隔离。
+- 只有已登记启用 peer 的 bot 事件且真实 @ 当前 bot 时才接受交接；peer 身份由飞书 `open_id`
+  精确匹配，不信任消息正文伪造。运行 prompt 只暴露登记 peer 的准确 mention 身份。
+- 同 chat 连续 bot 回合由跨进程共享计数器限制（默认 6），按 messageId 去重；任何新鲜真人消息
+  重置计数，超过上限只提示一次并停止继续调度。
+- `fleet.json` / `handoffs.json` 使用 owner-only 持久化与可回收 lease 锁，不存密钥；每个实例
+  使用独立 DSH_HOME 隔离 provider/model catalog/credentials/runtime profiles；删除实例保留其
+  session/worktree/archive 数据以便恢复。额外实例不扩大 guardian 的单主实例救援边界。
+- 附加实例只允许 `sdk` / `acp` / legacy `headless`；创建与启动均拒绝 `web`，避免多个 watcher
+  消费同一个 Web agent 广播流而把 session 事件写入错误实例。
+
+### 4.8.5 scope 工具权限策略（issue #30）
+
+- `/permission ask|allow|deny [scope]` 按隔离 scope 管理逐工具审批策略；查询开放，修改仅管理员；
+  管理员可指定当前 chat 内的 member/topic scope，跨 chat 目标拒绝。
+- 默认 `ask`；`allow` 自动返回一次性允许，`deny` 自动返回拒绝并向原聊天/话题明确说明。
+- 策略以 0600 文件持久化，写成功后才确认，失败回滚；重启不丢，并在 `/status` 展示当前有效值。
+- SDK/Web `/approval` 与 ACP 原生 permission 共用同一策略语义；计划审批仍独立强制执行。
+- legacy headless 不具备工具回调，不纳入策略执行保证。
 
 ### 4.9 dsh profile bundle（唯一安装-部署-使用路径）
 
@@ -139,12 +224,20 @@
 - `./invariant`：向宿主 `invariants` 注册表登记包归属（与官方 dsh-lark-channel 同契约）。
 - `./notify`：`lark_notify` 工具插件，作为标准工具行装配到 host profile；执行时读取
   `DSH_LARK_NOTIFY_URL` / `DSH_LARK_NOTIFY_TOKEN`。
+- `./file`：`lark_send_file` 工具插件，作为标准工具行装配到 host / SDK / ACP profile；读取
+  `DSH_LARK_FILE_URL` / `DSH_LARK_NOTIFY_TOKEN`。
+- `./approval`：rc.8 `approval/request` 的 terminal answerer；host 与默认 SDK profile 自动装配，
+  读取 `DSH_LARK_APPROVAL_URL` / `DSH_LARK_NOTIFY_TOKEN`，ACP 不重复装配。
 - `peerDependencies`：`@deepseek-ai/cordis: ^4.0.1`。
-- 形态关系（0.7.0 定稿）：**dsh profile bundle 即产品形态**——`dsh-lark-bot/plugin` 在 dsh
+- 形态关系：**dsh profile bundle 即唯一运行时形态**——`dsh-lark-bot/plugin` 在 dsh
   进程内运行完整桥接引擎，`lark_notify` 为标准工具行；CLI 仅提供 `setup`（唯一安装命令）/
-  `doctor` / 隐藏 `run`，并额外提供 `guardian run|install|uninstall|status`（安全网守护）。
-  独立后台服务路径已移除，不再存在双安装路径；唯一进程级例外是默认安装的安全网守护
-  （见 4.10）。
+  `doctor` / 隐藏 `run`，并额外提供 guardian 与可选 `service` 生命周期命令。`service install`
+  不恢复旧的独立 bridge engine，只把同一标准 dsh profile 注册为登录自启、异常自动重启的
+  systemd user / LaunchAgent / Windows 计划任务（Linux fallback 为 XDG supervisor）；支持
+  status/logs/restart/stop/start/uninstall。POSIX 环境快照和元数据为 0600，Windows 环境快照使用
+  owner-only ACL；生命周期操作按 profile 加锁，启动前拒绝与现有前台 profile 并存。stop / uninstall
+  持久化期望停止状态，guardian 不会擅自拉起；guardian / upgrade 优先复用受管服务防双实例；
+  睡眠期间不可收消息，恢复重连后向最近活跃会话提示。
 
 ### 4.10 安全网守护（safety-net guardian，issue #6）
 
@@ -171,15 +264,16 @@
   `dsh-base` + `dsh-sdk-jsonrpc-server`，无第三方插件、不挂载 bridge 回调工具），失败回退
   headless profile。
 - **受限对话自愈（实时可见）**：安全模式下普通消息优先经 SDK 流式引擎执行——复用正常模式的
-  `RunState` / `renderCard` / `streamCard`，实时展示思考、工具调用（含 web search）、打字机式
-  文字与 token 用量，并支持原生 `session(id)` 续跑；SDK 不可用时回退
+  `RunState` / `renderCard` / `streamCard`，以原生折叠面板实时展示思考、工具调用（含 web search）
+  与 token 用量并单独发送最终回答；支持原生 `session(id)` 续跑；SDK 不可用时回退
   `dsh --profile <safe> "<prompt>"` 逐条对话（每 scope 最近 30 条上下文自动拼接，近似记忆），
   任务期间卡片仍实时显示“正在思考 / 已运行 Ns / 无响应 Ns”。任一模式都有空闲超时
   （`DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS`，默认 10 分钟：任务持续无活动事件才调用 `run.stop()`
   并渲染超时卡，活跃任务不会被误杀）、
   `/safemode stop` 与卡片 ⏹ 按钮可终止；同一 scope 同时只允许一个安全任务，忙碌时新消息立即
   回执；“/safemode plugins”执行 `dsh plugin --profile <name> list` 展示清单。
-- **可退出、可回退**：`/safemode exit` 以 detached 方式重启完整 profile，短暂延迟后断开飞书
+- **可退出、可回退**：`/safemode exit` 优先复用已安装的正常引擎 service，未安装时才 detached
+  重启完整 profile；期望停止状态会阻止重启并让 guardian 留在安全模式。成功后短暂延迟、断开飞书
   连接并交还通道；守护状态持久化在 `~/.dsh-lark/guardian.json`（0600），重启不丢
   `profileSeenUp` / `mode`；全程不删除用户已有会话 / 工作区数据。
 - **安全约束**：守护进程只读本地状态与进程命令行（`ps`），不读内存；控制命令默认拒绝未授权
@@ -193,8 +287,19 @@
 - `DSH_LARK_ADAPTER=web`：驱动本地 dsh web agent（默认 `http://127.0.0.1:3080`，
   `DSH_LARK_WEB_URL` 可改），`session.prompt` 发起回合、`/api/events.mux` WebSocket 消费
   事件；网页端成为唯一写者，bot 只读 mux 事件并转发到飞书卡片。
-- `web-watcher`（`src/adapters/dsh/web-watcher.ts`）：进程内事件订阅，把网页端回合完成
-  推送到飞书（`DSH_LARK_WEB_PUSH=1` 默认开启；`0` 关闭），并按聊天映射自动切换 scope。
+- `SessionProjectionBridge`（`src/session/projection-bridge.ts`）：仅在用户通过 `/session` 明确确认后，
+  将当前 canonical workspace 的一个非 subagent DSH session 独占绑定到当前飞书 scope。禁止
+  follow-active、latest-activity-wins、WebUI/TUI resume 自动切换和全 scope 广播。
+- 绑定前选择器不显示正文；确认卡必须披露 session 标题/ID、workspace、更新时间、回填数量、scope、
+  替换或跨 scope 迁移。确认事务必须匹配披露时 owner，变化即重新确认；迁移后清除旧 scope 的兼容
+  session mapping。私聊授权用户可操作，member 仅 owner，共享 group/topic 与跨 scope 迁移仅管理员。
+- DSH session log 是唯一 transcript 真源。绑定后 history/live/catch-up 按单调 seq 投影；独占 claim
+  与历史确认 cursor 分离，pending history 阻塞 live，cursor 仅在交付成功后原子持久化，失败由重启/
+  重连补齐；新投影卡使用稳定 transport idempotency identity，保证崩溃恢复不重不乱。飞书 prompt 用
+  可信 rpcId/message identity 与持久 turn 来源抑制回显。
+- 历史以数量/字节双限 transcript 卡回填，仅 user/assistant；实时 assistant 使用独立 bot-owned 卡节流
+  原位更新，未终态卡可跨重启继续更新，失败追加；tool/thinking 默认不展开，不编辑用户本人消息，
+  不猜测 WebUI/TUI 来源。
 - **自愈 v2**（`src/session/heal.ts`）：仅对真正损坏的会话日志归档（seq gap 类），
   id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。
 
@@ -207,13 +312,26 @@
 - **一行命令**：`npx dsh-lark-bot@latest upgrade --profile <name> --yes`（旧版本无 upgrade
   命令，经 npx 拉取最新版执行，实现对任意旧用户的一行彻底更新）。
 - **覆盖范围**：包本体（`dsh plugin add <name>@<latest>`）+ guardian（幂等重装并重启服务）+
-  runtime profile（dsh-lark-sdk / dsh-lark-acp own-package 链接修复）+ 升级后 `doctor` 验证。
+  runtime profile（dsh-lark-sdk / dsh-lark-acp own-package 链接修复 + 陈旧 SDK/ACP 依赖
+  即时重装）+ 升级后 `doctor` 验证。
 - **运行中实例安全**：默认不中断运行中 dsh profile（只提示重启命令，配置 / 会话 / 凭据不受
   影响）；`--restart` 可选自动重启 guardian 与受管 profile。
 - **可回滚 / 可重入**：每次变更记录 `~/.dsh-lark/upgrade-state.json`，`--rollback` 精确回滚到
   上一版本；重复执行幂等（已最新时跳过）。
 - **离线 / 安全**：`--force` 离线时按当前版本重装；非交互环境不带 `--yes` 安全中止；
   `DSH_LARK_UPGRADE_REGISTRY` 支持镜像 registry。
+
+### 4.13 dsh Web 可视化配置（issue #36）
+
+- 在官方 **Settings → Plugins → Plugin configuration** 提供 dsh-lark-bot 卡片，不要求 fork/rebuild
+  Web；Host/browser 两半随同一个 npm 包交付，并以 `dsh-lark-bot` settings namespace 配对。
+- 可查看/修改实际生效的服务区域、App ID、write-only App Secret、默认 workspace、默认模型、
+  per-scope 并行默认值、adapter 与主动提醒默认值；扫码 profile 必须正确成为初始值。
+- 每项使用中文说明和示例并标注生效时机。保存经官方 durable settings/revision fence 后，连接类
+  字段串行停止旧 generation 并自动重连；模型、并行数和提醒安全热更新到后续任务/提醒，不得中断
+  active run、出现双实例或把 secret 返回浏览器/日志。
+- Bot 无响应与任务失败可在页面直接检查脱敏配置状态，并提供 `/status`、`/doctor` 深入诊断快捷入口；远程只读浏览器明确提示本机修改，
+  settings seam 缺失时继续支持飞书命令与环境变量降级。
 
 ---
 
@@ -222,9 +340,9 @@
 | 类别 | 约束 |
 | :--- | :--- |
 | **协议** | AGPLv3.0（官方原文，见根目录 `LICENSE`） |
-| **语言** | 中英双语，先中文后英文 |
+| **语言** | bot 固定 UI 中英双语：Card JSON 2.0 按每位读者客户端语言显示，Markdown/toast 降级先中文后英文；agent/用户/工具内容保持原文 |
 | **运行时** | Node.js ≥ 22.19（`package.json` engines） |
-| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client（`@deepseek-ai/dsh-sdk-client`），ACP 审批可选，headless legacy |
+| **后端 agent** | DeepSeek Harness（`dsh`），默认官方 SDK client + rc.8 approval answerer，ACP 协议原生审批可选，headless legacy |
 | **关键词** | README / 介绍 / tags 含 `dsh`、`deepseek`、`deepseek harness`、`feishu`、`lark`、`bridge`、`bot` |
 | **tags** | `typescript`、`chatbot`、`lark`、`feishu`、`deepseek`、`deepseek-harness`、`dsh-plugin`、`messaging`、`bot`、`bridge`、`dsh` |
 | **目录结构** | 参考克隆仓库统一放 `reference/`（不提交，仅跟踪 `reference/.gitignore` 与 `reference/README.md` 两个元文件） |
@@ -243,7 +361,7 @@
 3. **工作区管理是核心差异化**——会话绑定 git worktree + 项目规则注入 + 上下文持久化。
 4. **注意**：dsh 与 claude/codex 接口不同（官方提供 SDK client / ACP server / headless 三种接入形态，
    后者是常驻交互式 REPL），所以「换 dsh」不是 1:1 替换，需重写 agent adapter 层。当前实现：
-   **默认 SDK client**（原生 session + 流式 thinking/text）、**ACP 审批模式**、**headless legacy**，
+   **默认 SDK client**（原生 session + 流式 thinking/text + approval answerer）、**ACP 协议原生审批模式**、**headless legacy**，
    三者都收敛到同一 `AgentEvent` 契约，飞书层无需感知差异。
 
 ---

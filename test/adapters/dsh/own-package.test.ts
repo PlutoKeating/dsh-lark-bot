@@ -6,7 +6,11 @@ import {
   findOwnPackageRoot,
   ownPackageInfo,
 } from '../../../src/adapters/dsh/own-package.js';
-import { isSdkProfileReady } from '../../../src/adapters/dsh/sdk-runtime.js';
+import {
+  isSdkProfileReady,
+  SDK_SERVER_PACKAGE,
+  SDK_SERVER_VERSION,
+} from '../../../src/adapters/dsh/sdk-runtime.js';
 import { sdkProfileRoot } from '../../../src/adapters/dsh/sdk-runtime.js';
 
 const tempDirs: string[] = [];
@@ -75,6 +79,10 @@ describe('runtime profile package link readiness', () => {
     await mkdir(join(nodeModules, '@deepseek-ai', 'dsh-sdk-jsonrpc-server'), {
       recursive: true,
     });
+    await writeFile(
+      join(nodeModules, SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+    );
 
     expect(isSdkProfileReady(profileRoot)).toBe(true);
   });
@@ -101,6 +109,10 @@ describe('runtime profile package link readiness', () => {
     await mkdir(join(nodeModules, '@deepseek-ai', 'dsh-sdk-jsonrpc-server'), {
       recursive: true,
     });
+    await writeFile(
+      join(nodeModules, SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+    );
 
     expect(isSdkProfileReady(profileRoot)).toBe(false);
   });

@@ -5,7 +5,15 @@ export type AgentEvent =
   | { type: 'thinking'; delta: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; id: string; output: string; isError: boolean }
-  | { type: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number }
+  | {
+      type: 'usage';
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      costUsd?: number;
+    }
+  | { type: 'context_usage'; usedTokens: number; contextWindow: number }
   | { type: 'done'; sessionId: string | undefined; terminationReason: 'normal' | 'interrupted' | 'timeout' }
   | { type: 'error'; message: string; terminationReason: 'failed' | 'interrupted' | 'timeout' };
 
@@ -19,13 +27,17 @@ export interface ApprovalOption {
 
 export interface ApprovalRequest {
   id: string;
+  /** Runtime tool-call identity shown for audit; card action uses the unique id above. */
+  callId?: string;
   sessionId: string | undefined;
   toolName: string;
   reason: string | undefined;
+  /** Exact arguments already presented for this tool call, when available. */
+  toolInput?: unknown;
   options: readonly ApprovalOption[];
 }
 
-export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled';
+export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
 
 export interface AgentRunOptions {
   runId: string;
@@ -38,6 +50,13 @@ export interface AgentRunOptions {
   model: string | undefined;
   images: readonly string[] | undefined;
   stopGraceMs: number | undefined;
+  /** Trusted inbound transport identity used for event-log echo suppression. */
+  origin?: {
+    source: 'feishu';
+    messageId: string;
+    scope: string;
+    workspaceCwd: string;
+  };
   /** ACP approval channel: invoked when the agent requests a one-shot permission. */
   onApprovalRequest?: (request: ApprovalRequest) => Promise<ApprovalOutcome>;
 }

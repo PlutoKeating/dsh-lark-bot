@@ -38,6 +38,9 @@ export function discoverDshBin(
 
   const candidates = [
     join(dshHome, 'profiles', 'node_modules', DS_HARNESS_RELATIVE),
+    // Multi-bot instances use an isolated DSH_HOME for settings, credentials
+    // and runtime profiles while reusing the user's canonical dsh CLI.
+    join(home, '.dsh', 'profiles', 'node_modules', DS_HARNESS_RELATIVE),
     join(home, '.npm', '_npx', 'node_modules', DS_HARNESS_RELATIVE),
     join(home, '.cache', 'pnpm', 'dlx', 'node_modules', DS_HARNESS_RELATIVE),
     join(home, '.local', 'share', 'pnpm', 'node_modules', DS_HARNESS_RELATIVE),

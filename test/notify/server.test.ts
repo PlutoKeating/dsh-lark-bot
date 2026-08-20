@@ -30,6 +30,25 @@ async function startServer(deps: {
 }
 
 describe('NotifyServer', () => {
+  it('serves authenticated file uploads and validates required fields', async () => {
+    const file = vi.fn().mockResolvedValue({ ok: true, fileName: 'report.md', size: 6 });
+    const server = new NotifyServer({ token: 'test-token', resolve: () => undefined, send: vi.fn(), file });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.fileUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 's1', path: 'report.md' }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, fileName: 'report.md', size: 6 });
+    expect(file).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's1', path: 'report.md' }));
+    const bad = await fetch(server.fileUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'wrong', sessionId: 's1', path: 'report.md' }),
+    });
+    expect(bad.status).toBe(401);
+  });
+
   it('sends messages with mentions to a resolved scope', async () => {
     const directory = new ScopeDirectory(':memory:');
     directory.register('chat-a', 'oc_group', undefined);
@@ -173,5 +192,113 @@ describe('NotifyServer', () => {
       body: JSON.stringify({ token: 'test-token', sessionId: 's', question: 'Q' }),
     });
     expect(response.status).toBe(404);
+  });
+
+  it('serves authenticated plan decisions', async () => {
+    const plan = vi.fn().mockResolvedValue({
+      ok: true,
+      decision: 'revise',
+      feedback: 'keep it read-only',
+    });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token',
+        sessionId: 'session-1',
+        plan: '1. inspect\n2. change',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      decision: 'revise',
+      feedback: 'keep it read-only',
+    });
+  });
+
+  it('propagates a disconnected plan request as an abort signal', async () => {
+    let observedAbort = false;
+    const plan = vi.fn(async (_payload, signal?: AbortSignal) => {
+      await new Promise<void>((resolve) => {
+        if (signal?.aborted) {
+          observedAbort = true;
+          resolve();
+          return;
+        }
+        signal?.addEventListener('abort', () => {
+          observedAbort = true;
+          resolve();
+        }, { once: true });
+      });
+      return { ok: false, error: 'cancelled' };
+    });
+    const server = new NotifyServer({
+      token: 'test-token',
+      resolve: () => undefined,
+      send: vi.fn(),
+      plan,
+    });
+    servers.push(server);
+    await server.start();
+    const controller = new AbortController();
+    const request = fetch(server.planUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 'session-1', plan: 'Plan' }),
+      signal: controller.signal,
+    });
+    await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(request).rejects.toThrow();
+    await vi.waitFor(() => expect(observedAbort).toBe(true));
+  });
+
+  it('serves authenticated one-shot approval outcomes', async () => {
+    const approval = vi.fn().mockResolvedValue({ ok: true, outcome: 'rejected' });
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.approvalUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token', sessionId: 'session-1', toolName: 'bash',
+        callId: 'call-1', reason: 'run tests',
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    expect(approval).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', toolName: 'bash' }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('rejects invalid approval callbacks before invoking the handler', async () => {
+    const approval = vi.fn();
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+    const response = await fetch(server.approvalUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'wrong', sessionId: 's', toolName: 'bash' }),
+    });
+    expect(response.status).toBe(401);
+    expect(approval).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,8 @@ export interface ScopeEntry {
   scope: string;
   chatId: string;
   threadId: string | undefined;
+  /** Latest inbound message that can anchor an outbound reply in this scope. */
+  messageId?: string;
   chatMode?: 'p2p' | 'group' | 'topic';
   lastSeenAt: string;
 }
@@ -45,13 +47,16 @@ export class ScopeDirectory {
     chatId: string,
     threadId: string | undefined,
     chatMode?: 'p2p' | 'group' | 'topic',
+    messageId?: string,
   ): void {
     const existing = this.data.entries[scope];
     const resolvedChatMode = chatMode ?? existing?.chatMode;
+    const anchorMessageId = messageId ?? existing?.messageId;
     this.data.entries[scope] = {
       scope,
       chatId,
       threadId: threadId ?? existing?.threadId,
+      ...(anchorMessageId ? { messageId: anchorMessageId } : {}),
       ...(resolvedChatMode ? { chatMode: resolvedChatMode } : {}),
       lastSeenAt: new Date().toISOString(),
     };
@@ -59,21 +64,64 @@ export class ScopeDirectory {
   }
 
   /** Resolve a scope key to its chat destination. */
-  resolve(scope: string): { chatId: string; threadId: string | undefined } | undefined {
+  resolve(scope: string): {
+    chatId: string;
+    threadId: string | undefined;
+    messageId?: string;
+  } | undefined {
     const entry = this.data.entries[scope];
     if (!entry) return undefined;
-    return { chatId: entry.chatId, threadId: entry.threadId };
+    return {
+      chatId: entry.chatId,
+      threadId: entry.threadId,
+      ...(entry.messageId ? { messageId: entry.messageId } : {}),
+    };
   }
 
   /** Direct chat lookup by chatId (also matches topic scopes by prefix). */
-  resolveChat(chatId: string): { chatId: string; threadId: string | undefined } | undefined {
+  resolveChat(chatId: string): {
+    chatId: string;
+    threadId: string | undefined;
+    messageId?: string;
+  } | undefined {
     if (this.data.entries[chatId]) return this.resolve(chatId);
     const entry = Object.values(this.data.entries).find((item) => item.chatId === chatId);
-    return entry ? { chatId: entry.chatId, threadId: entry.threadId } : undefined;
+    return entry
+      ? {
+          chatId: entry.chatId,
+          threadId: entry.threadId,
+          ...(entry.messageId ? { messageId: entry.messageId } : {}),
+        }
+      : undefined;
   }
 
   knownScopes(): string[] {
     return Object.keys(this.data.entries);
+  }
+
+  /** Detached routing identity for authorization-sensitive card actions. */
+  entry(scope: string): ScopeEntry | undefined {
+    const value = this.data.entries[scope];
+    return value ? structuredClone(value) : undefined;
+  }
+
+  /** Most recently active destination, used for narrowly scoped service notices. */
+  recentDestination(): {
+    scope: string;
+    chatId: string;
+    threadId: string | undefined;
+    messageId?: string;
+  } | undefined {
+    const entry = Object.values(this.data.entries).sort(
+      (left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt),
+    )[0];
+    if (!entry) return undefined;
+    return {
+      scope: entry.scope,
+      chatId: entry.chatId,
+      threadId: entry.threadId,
+      ...(entry.messageId ? { messageId: entry.messageId } : {}),
+    };
   }
 
   /** Unique chats observed by the bridge, including their persisted mode. */

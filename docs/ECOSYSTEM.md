@@ -28,15 +28,24 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   `dsh.bundle.patch` → `./cordis.patch.yml`，支持 `dsh plugin --profile <name> add
   dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
   bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
-  与 `lark-notify`（标准工具行）。
-- `./plugin`、`./invariant`、`./notify`、`./ask` 四个子路径导出随包发布：`plugin` 为 bundle
+  与 `lark-notify`、`lark-file`、`lark-plan-approval`、`lark-approval-answerer`（标准插件行）。
+- `./plugin`、`./invariant`、`./notify`、`./file`、`./ask`、`./plan`、`./approval` 七个子路径导出随包发布：`plugin` 为 bundle
   行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
-  dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`ask` 为
-  `lark_ask_user` 问答卡工具插件，SDK / ACP runtime profile 自动装配。
-- `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.6 依赖链一致）。
+  dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`file` 为当前 session 定向的
+  `lark_send_file` 结果文件插件，`ask` 为
+  `lark_ask_user` 问答卡工具插件，`plan` 为 `lark_request_plan_approval` 计划门禁，`approval`
+  为 rc.8 `approval/request` terminal answerer；SDK / ACP runtime profile 自动装配四个工具，
+  SDK 与宿主 bundle 装配 approval（ACP 使用原生 permission 回调）；plan 插件还通过宿主
+  `tools/pre-execute` 在当前 turn 批准前阻断 mutating/execute/`run_code` 调用。
+- `peerDependencies` 声明 `@deepseek-ai/cordis: ^4.0.1`（与 dsh 0.1.0-rc.8 依赖链一致）；
+  不直接声明 `dsh-tools`，工具通过宿主 registry 注册以保持单实例。
 - pnpm ≥ 10 对依赖构建脚本（protobufjs）默认拒绝：`dsh plugin add` 若报
   `ERR_PNPM_IGNORED_BUILDS`，按官方 publish 指引在 profile 的 `pnpm-workspace.yaml` 加入
   `allowBuilds: { protobufjs: true }` 后重试（与官方 dsh-lark-channel 行为一致）。
+- 多机器人仍遵循同一 bundle 形态：`bot add` 为每个实例建立独立 dsh profile、DSH_HOME 与用户服务，
+  共享的 `fleet.json` / `handoffs.json` 只承担可信身份发现和有界交接协调，不承载密钥或 agent
+  session。附加实例限定 SDK/ACP/headless，拒绝无法隔离广播 session 的共享 Web mux。发版自检至少
+  覆盖一个额外实例的 `bot status`，并逐个 profile 运行升级/doctor。
 
 ## 3. README 规范 · README Specification
 
@@ -47,6 +56,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 3. Install / Uninstall — 如何安装、升级、禁用、彻底移除（`安装与卸载 / Install & Uninstall`）
 4. Quick start — 最小配置 + 可复现示例（`快速开始 / Quick Start`）
 5. Configuration — 配置项、默认值、环境变量、敏感项（`配置 / Configuration`）
+   - dsh Web 插件卡必须同时更新 Host settings schema、`./client` browser half、secret redaction、
+     effect timing 与诊断入口；新字段同步 RuntimeEnv、`.env.example`、bundle patch 和发布包 exports。
 6. Permissions & data — 访问哪些文件 / 网络 / 凭据 / 用户数据（`权限与数据 / Permissions & Data`）
 7. Troubleshooting — 常见错误、日志位置、回滚方式（`排障 / Troubleshooting`）
 8. Development — 如何构建、测试、贡献（`开发 / Development`）
@@ -79,6 +90,8 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 - 发版前执行 `pnpm release:check`（`ci:local` + 上游一致性检查）与本机
   `dsh --profile <name>`（重启完整 profile）+ `dsh-lark-bot doctor` 实机回归；
   安装安全网守护时另跑 `dsh-lark-bot guardian status` 确认守护待机。
+  安装正常后台托管时再跑 `dsh-lark-bot service status --profile <name>`，并核对
+  `service/<profile>.env` / metadata 为 0600、日志可由 `service logs` 读取。
 
 ## 5. 风险披露 · Risk Disclosure
 
@@ -115,11 +128,25 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 ## 9. 交付清单 · Delivery Checklist
 
+### dsh-TUI v0.15 admission
+
+- 兼容保持当前仓库、当前 npm 包和 AGPL-3.0，不建立 companion 包，不 patch dsh-TUI 私有源码。
+- 根目录只能有一个 `dsh-plugin.json`；host facet 指向实际发布的 `dist/plugin.js`，静态声明 contracts、
+  permissions、subscriptions、commands 与 optional fallback，并携带最终 artifact SHA-256。
+- `pnpm check:tui-admission` 校验 manifest、发布 artifact、lock dependency closure 及 local/remote Host
+  Descriptor；`pnpm check:tui-tty` 使用真实 PTY。五态 negotiation 优先级为 unknown > rejected >
+  waiting > degraded > compatible；local/remote/container 不改变判断规则。
+- host facet 为 `trusted-in-process` 而非沙箱；可选 TUI seam 缺失必须 no-op，所有资源随 lifecycle
+  清理。DSH history/event 仍是同步真源，不使用 messages.observe、session-switch 或 storage.local
+  保存 binding/cursor/transcript。
+- 未来收录请求必须醒目标明 AGPLv3，并说明 listing 不改变许可证，也不代表兼容认证、安全审查或
+  官方背书；维护方明确确认前不得声称获得许可证豁免或生态认证。
+
 P1 代码完成后，实现工程师在提交前逐项确认：
 
 - [x] `package.json` 合法、name 非空、入口明确、依赖显式、license 字段 = AGPL-3.0
 - [x] README 九章节均已填实（无遗留 `🚧` 占位）
-- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.6，2026-08-15）
+- [x] 「兼容性」章节声明了 dsh 版本 / commit + 验证日期（dsh 0.1.0-rc.8，2026-08-20）
 - [x] 「权限与数据」章节完整披露风险
 - [x] `pnpm typecheck` 通过（L3）
 - [x] 至少完成一次最小任务的运行实测并记录环境（L4：SDK / ACP runtime 握手 + 真实任务流式，

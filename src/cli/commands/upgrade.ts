@@ -316,18 +316,20 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     const runtimeStates: RuntimeProfileState[] = await repair({
       dshHome,
       env: process.env,
+      provider: env.provider,
+      model: env.model,
     });
     for (const state of runtimeStates) {
       if (!state.existed) continue;
       if (state.ok) {
         write(
           out,
-          `runtime profile ${state.profile}: ${state.repaired ? 'own-package 链接已修复' : '就绪'}。\n`,
+          `runtime profile ${state.profile}: ${state.repaired ? '运行时依赖与链接已修复' : '就绪'}。\n`,
         );
       } else {
         write(
           out,
-          `runtime profile ${state.profile}: 需要重新预置（下次启动会自动自愈；也可运行 dsh-lark-bot doctor 检查）。\n`,
+          `runtime profile ${state.profile}: 重新预置失败（下次启动仍会自动重试；请运行 dsh-lark-bot doctor 检查）。\n`,
         );
       }
     }

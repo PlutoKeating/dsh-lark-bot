@@ -4,6 +4,7 @@ import { resolveDshRuntime } from './dsh-runtime.js';
 
 export type LarkTenant = 'feishu' | 'lark';
 export type AdapterMode = 'sdk' | 'acp' | 'headless' | 'web';
+export type NotificationDefault = 'off' | 'completed' | 'all';
 
 export interface RuntimeEnv {
   home: string;
@@ -18,8 +19,14 @@ export interface RuntimeEnv {
   adapterMode: AdapterMode;
   /** Base URL of the local dsh web agent used by the `web` adapter (default http://127.0.0.1:3080). */
   webBaseUrl: string;
-  /** Push web-GUI turn completions to Feishu in `web` adapter mode (default true; DSH_LARK_WEB_PUSH=0 disables). */
-  webPush: boolean;
+  /** Enable explicit DSH session history/live projection in `web` mode. */
+  sessionProjectionEnabled: boolean;
+  /** Human-facing messages included in a confirmed session transcript backfill. */
+  sessionBackfillMessages: number;
+  /** Maximum UTF-8 bytes disclosed by one confirmed transcript backfill. */
+  sessionBackfillBytes: number;
+  /** Minimum interval between updates of one projected assistant card. */
+  sessionStreamUpdateMs: number;
   provider: string;
   model: string;
   maxTokens: number | undefined;
@@ -29,11 +36,15 @@ export interface RuntimeEnv {
   groupNoAt: boolean;
   /** Poll interval for group no-at history reads (minimum 1000ms). */
   groupPollMs: number;
+  /** Maximum consecutive bot @ handoffs observed by one instance before it stops. */
+  botHandoffMax: number;
   /** Max agent runs allowed concurrently per scope (default 2). */
   scopeConcurrency: number;
-  /** Live messages kept per scope before overflow is archived (default 40). */
+  /** Default proactive notification policy for scopes without an override. */
+  notificationDefault: NotificationDefault;
+  /** Live messages kept per scope + workspace before overflow is archived (default 40). */
   retentionMsgs: number;
-  /** Max archives retained per scope before pruning (default 50, 0 disables). */
+  /** Max archives retained per scope + workspace before pruning (default 50, 0 disables). */
   archiveMax: number;
   /** Archives older than this many days are pruned (default 90, 0 disables). */
   archiveMaxAgeDays: number;
@@ -71,6 +82,7 @@ const DEFAULTS = {
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
   groupPollMs: 3_000,
+  botHandoffMax: 6,
   scopeConcurrency: 2,
   retentionMsgs: 40,
   archiveMax: 50,
@@ -83,6 +95,9 @@ const DEFAULTS = {
   guardianBridgeProfile: 'default',
   upgradeNotify: false,
   upgradeCheckIntervalMs: 6 * 60 * 60_000,
+  sessionBackfillMessages: 20,
+  sessionBackfillBytes: 64 * 1024,
+  sessionStreamUpdateMs: 800,
 };
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -131,6 +146,16 @@ function parseAdapterMode(value: string | undefined): AdapterMode {
   const mode = nonEmpty(value) ?? 'sdk';
   if (mode !== 'sdk' && mode !== 'acp' && mode !== 'headless' && mode !== 'web') {
     throw new Error(`DSH_LARK_ADAPTER must be "sdk", "acp", "headless" or "web", got "${mode}"`);
+  }
+  return mode;
+}
+
+function parseNotificationDefault(value: string | undefined): NotificationDefault {
+  const mode = nonEmpty(value) ?? 'off';
+  if (mode !== 'off' && mode !== 'completed' && mode !== 'all') {
+    throw new Error(
+      `DSH_LARK_NOTIFICATION_DEFAULT must be "off", "completed" or "all", got "${mode}"`,
+    );
   }
   return mode;
 }
@@ -236,7 +261,26 @@ export function loadRuntimeEnv(
     dshExplicit,
     adapterMode: parseAdapterMode(source.DSH_LARK_ADAPTER),
     webBaseUrl: nonEmpty(source.DSH_LARK_WEB_URL) ?? 'http://127.0.0.1:3080',
-    webPush: parseBoolean(source.DSH_LARK_WEB_PUSH, true),
+    sessionProjectionEnabled: parseBoolean(
+      source.DSH_LARK_SESSION_PROJECTION ?? source.DSH_LARK_WEB_PUSH,
+      true,
+    ),
+    sessionBackfillMessages: parseMinOneInt(
+      source.DSH_LARK_SESSION_BACKFILL_MESSAGES,
+      DEFAULTS.sessionBackfillMessages,
+      'DSH_LARK_SESSION_BACKFILL_MESSAGES',
+    ),
+    sessionBackfillBytes: parseMinOneInt(
+      source.DSH_LARK_SESSION_BACKFILL_BYTES,
+      DEFAULTS.sessionBackfillBytes,
+      'DSH_LARK_SESSION_BACKFILL_BYTES',
+    ),
+    sessionStreamUpdateMs: parseIntAtLeast(
+      source.DSH_LARK_SESSION_STREAM_UPDATE_MS,
+      DEFAULTS.sessionStreamUpdateMs,
+      400,
+      'DSH_LARK_SESSION_STREAM_UPDATE_MS',
+    ),
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
@@ -249,11 +293,18 @@ export function loadRuntimeEnv(
       1_000,
       'DSH_LARK_GROUP_POLL_MS',
     ),
+    botHandoffMax: parseIntAtLeast(
+      source.DSH_LARK_BOT_HANDOFF_MAX,
+      DEFAULTS.botHandoffMax,
+      2,
+      'DSH_LARK_BOT_HANDOFF_MAX',
+    ),
     scopeConcurrency: parseMinOneInt(
       source.DSH_LARK_SCOPE_CONCURRENCY,
       DEFAULTS.scopeConcurrency,
       'DSH_LARK_SCOPE_CONCURRENCY',
     ),
+    notificationDefault: parseNotificationDefault(source.DSH_LARK_NOTIFICATION_DEFAULT),
     retentionMsgs: parsePositiveInt(
       source.DSH_LARK_RETENTION_MSGS,
       DEFAULTS.retentionMsgs,

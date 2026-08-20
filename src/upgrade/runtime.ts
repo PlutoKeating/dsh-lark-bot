@@ -3,27 +3,30 @@
  *
  * The SDK / ACP runtime profiles (`dsh-lark-sdk` / `dsh-lark-acp`) link this
  * package in via `node_modules/<name> -> <package root>` so their patch rows
- * (`dsh-lark-bot/plugin`, `lark-notify`, `lark-ask`) resolve. After a package
+ * (`dsh-lark-bot/plugin`, `lark-notify`, `lark-ask`, `lark-plan-approval`) resolve. After a package
  * upgrade the link still points at the OLD package root; the readiness checks
- * (`isSdkProfileReady` / `isAcpProfileReady`) treat that as not-ready and the
+ * (`isSdkManagedProfileCurrent` / `isAcpManagedProfileCurrent`) treat that as
+ * not-ready and the
  * next boot re-provisions the profile. This module performs the targeted
- * fix — re-link the own package to the running root — so upgraded profiles
- * stay ready immediately, and reports profiles that need a full re-provision.
+ * fix — re-link the own package and idempotently re-provision stale upstream
+ * runtime packages — so upgraded profiles stay ready immediately.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ownPackageInfo } from '../adapters/dsh/own-package.js';
 import {
   DEFAULT_SDK_PROFILE,
-  isSdkProfileReady,
+  ensureSdkProfile,
+  isSdkManagedProfileCurrent,
   sdkProfileRoot,
 } from '../adapters/dsh/sdk-runtime.js';
 import {
   DEFAULT_ACP_PROFILE,
   acpProfileRoot,
-  isAcpProfileReady,
+  ensureAcpProfile,
+  isAcpManagedProfileCurrent,
 } from '../adapters/dsh/acp-runtime.js';
 
 export interface RuntimeProfileState {
@@ -43,6 +46,12 @@ export interface RepairRuntimeOptions {
   env?: NodeJS.ProcessEnv;
   /** Injectable link replacement (tests). */
   relinkFn?: (linkPath: string, target: string) => Promise<void>;
+  /** Current route used when regenerating the managed ACP overlay. */
+  provider?: string;
+  model?: string;
+  /** Injectable managed-profile provisioners (tests). */
+  ensureSdkFn?: typeof ensureSdkProfile;
+  ensureAcpFn?: typeof ensureAcpProfile;
 }
 
 async function defaultRelink(linkPath: string, target: string): Promise<void> {
@@ -51,28 +60,57 @@ async function defaultRelink(linkPath: string, target: string): Promise<void> {
   await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
 }
 
+function existingAcpRoute(profileRoot: string): { provider: string; model: string } | undefined {
+  try {
+    const patch = readFileSync(join(profileRoot, 'cordis.patch.yml'), 'utf8');
+    const provider = patch.match(/^\s*provider:\s*(\S+)\s*$/m)?.[1];
+    const model = patch.match(/^\s*model:\s*(\S+)\s*$/m)?.[1];
+    return provider && model ? { provider, model } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function repairRuntimeProfiles(
   options: RepairRuntimeOptions,
 ): Promise<RuntimeProfileState[]> {
   const own = ownPackageInfo();
   const env = options.env ?? process.env;
   const relink = options.relinkFn ?? defaultRelink;
+  const managedEnv = { ...env, DSH_HOME: options.dshHome };
+  const ensureSdk = options.ensureSdkFn ?? ensureSdkProfile;
+  const ensureAcp = options.ensureAcpFn ?? ensureAcpProfile;
   const results: RuntimeProfileState[] = [];
+  const sdkRoot = sdkProfileRoot(options.dshHome, DEFAULT_SDK_PROFILE, managedEnv);
+  const acpRoot = acpProfileRoot(options.dshHome, DEFAULT_ACP_PROFILE, managedEnv);
+  const preservedAcpRoute = existingAcpRoute(acpRoot);
+  const acpRoute = {
+    provider: preservedAcpRoute?.provider ?? options.provider ?? 'deepseek-official',
+    model: preservedAcpRoute?.model ?? options.model ?? 'deepseek-v4-flash',
+  };
 
   const targets = [
     {
       profile: DEFAULT_SDK_PROFILE as 'dsh-lark-sdk',
-      root: sdkProfileRoot(options.dshHome, DEFAULT_SDK_PROFILE, env),
-      isReady: isSdkProfileReady,
+      root: sdkRoot,
+      isReady: isSdkManagedProfileCurrent,
+      ensure: () => ensureSdk({ home: options.dshHome, env: managedEnv }),
     },
     {
       profile: DEFAULT_ACP_PROFILE as 'dsh-lark-acp',
-      root: acpProfileRoot(options.dshHome, DEFAULT_ACP_PROFILE, env),
-      isReady: isAcpProfileReady,
+      root: acpRoot,
+      isReady: (root: string) =>
+        isAcpManagedProfileCurrent(root, acpRoute.provider, acpRoute.model),
+      ensure: () => ensureAcp({
+        home: options.dshHome,
+        env: managedEnv,
+        provider: acpRoute.provider,
+        model: acpRoute.model,
+      }),
     },
   ];
 
-  for (const { profile, root, isReady } of targets) {
+  for (const { profile, root, isReady, ensure } of targets) {
     const existed = existsSync(join(root, 'package.json'));
     if (!existed) {
       // Never provisioned yet — nothing to repair.
@@ -90,12 +128,14 @@ export async function repairRuntimeProfiles(
       results.push({ profile, existed: true, repaired: false, ok: false });
       continue;
     }
-    results.push({
-      profile,
-      existed: true,
-      repaired: true,
-      ok: isReady(root),
-    });
+    if (!isReady(root)) {
+      const provisioned = await ensure();
+      if (!provisioned.ok) {
+        results.push({ profile, existed: true, repaired: true, ok: false });
+        continue;
+      }
+    }
+    results.push({ profile, existed: true, repaired: true, ok: isReady(root) });
   }
 
   return results;

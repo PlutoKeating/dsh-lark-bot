@@ -15,8 +15,10 @@ import {
   renderWizardConfirmStepCard,
   renderWizardOptionsCard,
   renderWizardTextStepCard,
+  configEnglish,
   type WizardOption,
 } from '../card/config-cards.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 
 export type ConfigWizardFlowId =
   | 'provider-add'
@@ -40,11 +42,17 @@ export interface ConfigWizardContext {
   wizards: WizardStore;
   /** Bot fallback model (profile preference / env default). */
   defaultModel: string;
+  /** Effective default after role/profile/dsh/env precedence, excluding scope override. */
+  resolveDefaultModel?: () => Promise<string | undefined>;
   /** Persist the admin default into the bridge profile preferences. */
   setDefaultModelPreference?: (model: string) => Promise<void>;
 }
 
 type StepAnswer = string | string[] | undefined;
+
+async function sendWizardMarkdown(ctx: ConfigWizardContext, markdown: string): Promise<void> {
+  await ctx.channel.sendMarkdown(ctx.chatId, bilingualMarkdown(markdown, configEnglish(markdown)));
+}
 
 export interface WizardFlowStep {
   key: string;
@@ -695,7 +703,7 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
   const flow = FLOWS[state.flow as ConfigWizardFlowId];
   if (!flow) {
     ctx.wizards.clear(ctx.scope);
-    await ctx.channel.sendMarkdown(ctx.chatId, '⚠️ 未知的向导流程，已取消。');
+    await sendWizardMarkdown(ctx, '⚠️ 未知的向导流程，已取消。');
     return;
   }
   const steps = await flow.steps(ctx);
@@ -727,8 +735,8 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
       }
     }
     const labels = options.map((option) => `\`${option.label}\``).join('、');
-    await ctx.channel.sendMarkdown(
-      ctx.chatId,
+    await sendWizardMarkdown(
+      ctx,
       `【${flow.title}】${step.question}\n\n${labels}\n\n（当前环境不支持交互卡片，请用文字命令完成该操作）`,
     );
     return;
@@ -754,8 +762,8 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
       });
     }
   }
-  await ctx.channel.sendMarkdown(
-    ctx.chatId,
+  await sendWizardMarkdown(
+    ctx,
     `【${flow.title}】${step.question}\n\n（当前环境不支持交互卡片，请用文字命令完成该操作）`,
   );
 }
@@ -763,21 +771,21 @@ async function renderCurrentStep(ctx: ConfigWizardContext, state: WizardState): 
 async function finalize(ctx: ConfigWizardContext, state: WizardState, flow: WizardFlow): Promise<void> {
   if (flow.requireAdmin && !ctx.accessManager.isAdmin(ctx.senderId)) {
     ctx.wizards.clear(ctx.scope);
-    await ctx.channel.sendMarkdown(ctx.chatId, '仅管理员可执行该操作，向导已取消。');
+    await sendWizardMarkdown(ctx, '仅管理员可执行该操作，向导已取消。');
     return;
   }
   try {
     const text = await flow.execute(ctx, state.data);
     ctx.wizards.clear(ctx.scope);
-    await ctx.channel.sendMarkdown(ctx.chatId, text);
+    await sendWizardMarkdown(ctx, text);
     if (flow.requireAdmin && ctx.channel.sendCard) {
       try {
         await showConfigHub(ctx);
       } catch (error) {
         // The write already succeeded; a hub refresh failure must not surface
         // as a failed operation.
-        await ctx.channel.sendMarkdown(
-          ctx.chatId,
+        await sendWizardMarkdown(
+          ctx,
           `（管理卡片刷新失败：${error instanceof Error ? error.message : String(error)}）`,
         );
       }
@@ -785,7 +793,7 @@ async function finalize(ctx: ConfigWizardContext, state: WizardState, flow: Wiza
   } catch (error) {
     ctx.wizards.clear(ctx.scope);
     const message = error instanceof Error ? error.message : String(error);
-    await ctx.channel.sendMarkdown(ctx.chatId, `⚠️ 操作失败：${message}`);
+    await sendWizardMarkdown(ctx, `⚠️ 操作失败：${message}`);
   }
 }
 
@@ -793,7 +801,7 @@ export async function beginWizard(ctx: ConfigWizardContext, flowId: ConfigWizard
   const flow = FLOWS[flowId];
   if (!flow) return;
   if (flow.requireAdmin && !ctx.accessManager.isAdmin(ctx.senderId)) {
-    await ctx.channel.sendMarkdown(ctx.chatId, '仅管理员可执行该操作。');
+    await sendWizardMarkdown(ctx, '仅管理员可执行该操作。');
     return;
   }
   ctx.wizards.begin(ctx.scope, flowId);
@@ -819,13 +827,13 @@ async function storeAnswerAndAdvance(
       answer = step.parse(rawAnswer ?? '', state.data);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await ctx.channel.sendMarkdown(ctx.chatId, `⚠️ ${message}，请重新填写：`);
+      await sendWizardMarkdown(ctx, `⚠️ ${message}，请重新填写：`);
       await renderCurrentStep(ctx, state);
       return;
     }
   }
   if (answer === undefined && !step.optional) {
-    await ctx.channel.sendMarkdown(ctx.chatId, '⚠️ 该项不能为空，请重新填写：');
+    await sendWizardMarkdown(ctx, '⚠️ 该项不能为空，请重新填写：');
     await renderCurrentStep(ctx, state);
     return;
   }
@@ -845,7 +853,7 @@ async function storeAnswerAndAdvance(
           }),
         );
       } else {
-        await ctx.channel.sendMarkdown(ctx.chatId, `【确认】\n\n${summary}`);
+        await sendWizardMarkdown(ctx, `【确认】\n\n${summary}`);
       }
       return;
     }
@@ -865,15 +873,15 @@ export async function handleWizardCardAction(
   const step = typeof value.step === 'number' ? value.step : Number(value.step);
   const state = ctx.wizards.get(ctx.scope);
   if (!state || state.flow !== flowId || state.step !== step) {
-    await ctx.channel.sendMarkdown(
-      ctx.chatId,
+    await sendWizardMarkdown(
+      ctx,
       '⚠️ 该向导已失效或已过期（30 分钟无操作自动取消），请重新发起。',
     );
     return;
   }
   if (value.cancel !== undefined) {
     ctx.wizards.clear(ctx.scope);
-    await ctx.channel.sendMarkdown(ctx.chatId, '已取消。');
+    await sendWizardMarkdown(ctx, '已取消。');
     return;
   }
   if (value.confirm !== undefined) {
@@ -887,7 +895,7 @@ export async function handleWizardCardAction(
     const index = Number(value.choose);
     const option = options?.[index];
     if (!option) {
-      await ctx.channel.sendMarkdown(ctx.chatId, '⚠️ 选项已失效，请重新选择。');
+      await sendWizardMarkdown(ctx, '⚠️ 选项已失效，请重新选择。');
       await renderCurrentStep(ctx, state);
       return;
     }
@@ -903,12 +911,19 @@ export async function handleWizardCardAction(
 export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
   const providers = await ctx.dshConfig.listProviders();
   const defaultSelection = await ctx.dshConfig.defaultModelSelection();
-  const currentModel = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
+  const currentModel =
+    ctx.models.get(ctx.scope) ??
+    (await ctx.resolveDefaultModel?.()) ??
+    ctx.defaultModel;
+  const currentRoute = await ctx.dshConfig.resolveModelRoute(currentModel);
+  const currentSelection = currentRoute
+    ? `${currentRoute.provider}/${currentRoute.model}`
+    : currentModel;
   if (ctx.channel.sendCard) {
     try {
       await ctx.channel.sendCard(
         ctx.chatId,
-        renderConfigHubCard({ providers, defaultSelection, currentModel }),
+        renderConfigHubCard({ providers, defaultSelection, currentModel, currentSelection }),
       );
       return;
     } catch (error) {
@@ -921,8 +936,8 @@ export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
     const models = provider.models.map((model) => model.id).join(', ') || '(无)';
     return `- **${provider.id}**（${provider.displayName}）· ${provider.credentialReady ? '凭据就绪' : '凭据缺失'}：${models}`;
   });
-  await ctx.channel.sendMarkdown(
-    ctx.chatId,
+  await sendWizardMarkdown(
+    ctx,
     ['**Provider / 模型 / 凭据管理**', '', ...lines, '', '当前环境不支持交互卡片，请用 `/provider` `/model` `/key` 文字命令。'].join('\n'),
   );
 }
@@ -931,12 +946,42 @@ export async function showConfigHub(ctx: ConfigWizardContext): Promise<void> {
 export async function handleConfigHubAction(
   action: string,
   ctx: ConfigWizardContext,
+  value: Record<string, unknown> = {},
 ): Promise<void> {
   switch (action) {
     case 'refresh':
       await showConfigHub(ctx);
       return;
     case 'dismiss':
+      return;
+    case 'model-use-direct': {
+      const provider = typeof value.provider === 'string' ? value.provider : '';
+      const model = typeof value.model === 'string' ? value.model : '';
+      const selection = provider ? `${provider}/${model}` : model;
+      const route = await ctx.dshConfig.resolveModelRoute(selection);
+      if (!route) {
+        await sendWizardMarkdown(ctx, '⚠️ 该模型已不可用，请刷新后重试。');
+        return;
+      }
+      const qualified = `${route.provider}/${route.model}`;
+      ctx.models.set(ctx.scope, qualified);
+      await sendWizardMarkdown(
+        ctx,
+        `已热切换当前会话模型：\`${qualified}\`（下一轮消息生效，上下文保留）。`,
+      );
+      await showConfigHub(ctx);
+      return;
+    }
+    case 'model-reset':
+      ctx.models.clear(ctx.scope);
+      {
+        const restored = (await ctx.resolveDefaultModel?.()) ?? ctx.defaultModel;
+      await sendWizardMarkdown(
+        ctx,
+          `已恢复默认模型：\`${restored}\`（下一轮消息生效，上下文保留）。`,
+      );
+      }
+      await showConfigHub(ctx);
       return;
     case 'provider-add':
     case 'provider-update':
@@ -950,6 +995,6 @@ export async function handleConfigHubAction(
       await beginWizard(ctx, action as ConfigWizardFlowId);
       return;
     default:
-      await ctx.channel.sendMarkdown(ctx.chatId, '未知操作。');
+      await sendWizardMarkdown(ctx, '未知操作。');
   }
 }

@@ -10,19 +10,26 @@
 
 - 任何安装形态（含 v0.7.0 前的遗留形态、旧版本、`npx` 引导）都能可靠、可回滚地升级到最新；
 - 升级不丢配置 / 会话 / 凭据；运行中实例不被无提示打断（或提供明确、可接受的生效路径）；
-- 版本信息处处一致：profile 包 / runtime profile 链接 / guardian 服务单元 / npm / 兼容矩阵。
+- 版本信息处处一致：profile 包 / runtime profile 链接及 SDK/ACP 依赖 / guardian 服务单元 / npm / 兼容矩阵。
 
 ## 2. 组件与路径总览 · Components
 
 | 组件 Component | 路径 Path | 说明 Notes |
 | :--- | :--- | :--- |
 | 包本体 Package | `~/.dsh/profiles/<profile>/node_modules/dsh-lark-bot` | pnpm 安装（vendor tgz 或 npm），`dsh plugin add <name>@<version>` 更新 |
-| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接一致性修复 |
+| runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接、上游依赖及 managed overlay 精确一致性，重写 ACP overlay 时保留当前 provider/model route |
 | guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向 CLI 入口；**必须指向稳定路径**（见 §5） |
+| 正常引擎服务 | `~/.dsh-lark/service/<profile>.json|env|intent.json` + OS 用户服务 | 可选；稳定 CLI runner 启动同一 dsh profile；env 在 POSIX 为 0600、Windows 为 owner-only ACL；intent 记录显式 stop/uninstall |
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
 | 升级状态 | `~/.dsh-lark/upgrade-state.json` | `--rollback` 的版本快照 |
+| 多机器人 fleet | `~/.dsh-lark/fleet.json` | 每个实例指向独立 dsh profile 与 `bots/<name>/dsh` DSH_HOME；升级状态与重启仍按 profile 管理 |
 | 兼容矩阵 | `docs/COMPATIBILITY.md` | 版本 pin 与上游一致性的单一事实来源 |
+| 会话/worktree/archive schema | `<bridge-profile>/sessions.json` + `worktrees/` + `archives/` | 首次启动从旧 worktree 的 Git registry 核验 owning repo，把 schema 1 会话与旧 retention archive header 归回真实项目；owner 匹配时原位迁移，不匹配时保留旧树并另建 hashed worktree |
+
+> dsh rc.8 的“不兼容 SQLite schema 17”只涉及上游 opt-in
+> `@deepseek-ai/dsh-session-persistence-sqlite`，托管 SDK/ACP profile 使用 JSONL。upgrade 不打开或改写
+> 用户自定义 SQLite 数据库；自定义 SQLite profile 必须保留 rc.7 runtime 或自行导出后新建 schema 17。
 
 ## 3. 版本探测 · Version probing（#14 修复后的语义）
 
@@ -45,9 +52,18 @@
 2. `resolveTarget`：`--rollback` → `--package <name>@<version>` → npm latest；
 3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
-5. runtime profile 链接修复（sdk/acp own-package）；
-6. `doctor` 升级后验证；
-7. 记录 `upgrade-state.json`（支持 `--rollback`）。
+5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
+   包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；
+6. 新版 bridge 首次启动时迁移 workspace session schema；若存在旧版 scope-only Git worktree，先从
+   Git registry 解析 owning repo；先以逐文件原子、半完成可重试的幂等流程把旧 execution-cwd
+   retention archive header 归回该项目并生成 migration commit，全部成功后才提交 session schema 2。
+   请求 base 匹配 owner 时原位移动到 path-hash
+   目录；不匹配或不可验证时保留旧树，并为当前 base 新建独立树，避免错误迁移或覆盖 dirty state；
+7. 带 `--restart` 时先探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
+   重启（显式 upgrade 操作可覆盖先前 stop intent），未安装才回退旧的 detached process 重启，
+   避免重复 dsh 实例；
+8. `doctor` 升级后验证；
+9. 记录 `upgrade-state.json`（支持 `--rollback`）。
 
 ## 5. 生效机制与关键修复 · Activation & hardening
 
@@ -56,11 +72,16 @@
   `~/.dsh/profiles/<profile>/node_modules/<name>/dist/cli.js`（稳定路径），仅在 profile 内
   无包时回退到当前运行包；`doctor` 会检测单元内容并警告 npx 缓存路径。
 - 包更新后，**运行中的 dsh 进程仍执行旧代码**：默认只提示重启命令（不中断会话），
-  `--restart` 自动重启 guardian 服务与受管 profile；重启 dsh 会中断其中的会话（当前无热重载，
+  `--restart` 自动重启 guardian 服务与受管 profile；若安装了 `service`，优先走 OS 服务重启；
+  重启 dsh 会中断其中的会话（当前无热重载，
   cordis hmr 被禁用）。
 - **待生效标记**：升级记录 `pendingRestart`（运行中实例且未 `--restart` 时为 true），
   `doctor` 会提示「上次升级待重启生效」；重启后再次 upgrade / 手动清理即不再提示。
 - 换包后的首次启动较慢（pnpm 校验 / 构建策略，实测 ~30–90s），属已知现象，等待即可。
+- **多机器人实例**：`upgrade --profile <name>` 只升级指定 dsh profile，不会隐式中断或批量重启
+  其他实例。管理员应从 `bot list` 取得每个实例的 dsh profile 与 dsh home，逐个以
+  `DSH_HOME=<dsh-home> dsh-lark-bot upgrade --profile <dsh-profile> --yes` 执行 upgrade/doctor；
+  `--restart` 也只作用于该 profile 对应的用户服务。
 
 ## 6. 已知边界与风险清单 · Known boundaries
 
@@ -75,6 +96,9 @@
 | 回滚 | `upgrade-state.json` + `--rollback` | 已支持 |
 | 运行中实例待生效 | `pendingRestart` 记录 + doctor 提示 | 已实现 |
 | runtime 链接漂移 | doctor 检测 sdk/acp 链接版本与已装版本不一致 | 已实现 |
+| runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写 | 已实现 + 单测覆盖 |
+| schema 1 workspace/worktree/archive | 从旧树核验 owning repo并归属 session/retention archive；owner 匹配时原位移动，不匹配时保留旧树并为当前项目另建 | 已实现 + 单测覆盖 owner match/mismatch/archive rebind |
+| 多机器人版本漂移 | 每个实例是独立 dsh profile，单次 upgrade 不做 fleet-wide mutation | `bot list` 后逐 profile 升级并 doctor |
 
 ### 6.1 npx 引导回归矩阵 · Bootstrap regression matrix
 
@@ -120,5 +144,6 @@ cordis hmr 与 SDK runtime 的连接保持），属于架构演进方向，不�
 - [x] `/version` 命令 + 桥接周期检测（日志 / 可选飞书通知，按版本去重）
 - [x] `npx` 引导回归矩阵（镜像 / 离线 / 指定版本 / 回滚 / 406 / Windows 单测覆盖）
 - [x] 运行中实例：`pendingRestart` 记录 + doctor 提示 + `--restart` / `--rollback`
-- [x] 版本 pin 一致性：guardian 单元路径、runtime 链接漂移（doctor 检测）+ upgrade 修复
+- [x] 版本 pin / runtime 一致性：guardian 单元路径、runtime 链接与上游依赖、managed overlay
+  精确内容（ACP 保留 provider/model route）均由 upgrade 检测并修复
 - [x] 最小重启窗口 + 安全网兜底 + 回滚；热重载分析落盘（架构演进方向，边界明确）

@@ -93,7 +93,7 @@
 ## 7. 落地建议 · Implementation Plan
 
 1. fork `lark-coding-agent-bridge`（MIT），复用其飞书层与 adapter 抽象。
-2. 新增 dsh adapter：**默认 SDK client**（路线 A），**ACP 审批模式**（路线 B），headless legacy
+2. 新增 dsh adapter：**默认 SDK client + rc.8 approval answerer**（路线 A），**ACP 协议原生审批模式**（路线 B），headless legacy
    （路线 C）——三路线已全部实现并验证（2026-08-14）。
 3. 工作区管理做增量：先 git worktree 隔离 + 项目级规则注入，再逐步加调度、沙箱。
 4. dsh 是 day-1 preview，SDK / ACP 接口会变——**dsh adapter 与 bridge 核心保持隔离**，

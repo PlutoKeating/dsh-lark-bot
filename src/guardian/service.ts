@@ -25,15 +25,17 @@ import { parseCardDensity } from '../card/density.js';
 import {
   finalizeIfRunning,
   initialState,
+  markFinalDeliveryFailed,
   markIdleTimeout,
   markInterrupted,
   reduce,
   type RunState,
 } from '../card/run-state.js';
-import { renderCard } from '../card/run-renderer.js';
+import { renderCard, renderLegacyCard } from '../card/run-renderer.js';
 import { resolveAppPaths, type AppPaths } from '../config/app-paths.js';
 import { discoverDshBin, resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
+import { restartInstalledProfileService } from '../service/integration.js';
 import { ConfigStore, type ProfileConfig } from '../config/profile-store.js';
 import { isEventFresh } from '../config/security.js';
 import { log } from '../core/logger.js';
@@ -41,6 +43,7 @@ import {
   parseGuardianCommand,
   safemodeHelpText,
 } from './control.js';
+import { bilingualMarkdown } from '../card/i18n.js';
 import type { GuardianControlKind } from './control.js';
 import {
   isHeartbeatFresh,
@@ -110,6 +113,7 @@ export interface GuardianServiceOptions {
   adapter?: AgentAdapter;
   findProcess?: (dshProfile: string) => Promise<ProfileProcess | undefined>;
   spawnDetachedFn?: typeof spawnDetached;
+  restartManagedServiceFn?: typeof restartInstalledProfileService;
   probeSafeProfileFn?: (
     input: {
       bin: string;
@@ -205,6 +209,7 @@ export class GuardianService {
       | 'adapter'
       | 'findProcess'
       | 'spawnDetachedFn'
+      | 'restartManagedServiceFn'
       | 'probeSafeProfileFn'
       | 'ensureSdkProfile'
       | 'runPluginList'
@@ -258,6 +263,7 @@ export class GuardianService {
         adapter: options.adapter,
         findProcess: options.findProcess,
         spawnDetachedFn: options.spawnDetachedFn,
+        restartManagedServiceFn: options.restartManagedServiceFn,
         probeSafeProfileFn: options.probeSafeProfileFn,
         ensureSdkProfile: options.ensureSdkProfile,
         runPluginList: options.runPluginList,
@@ -469,21 +475,17 @@ export class GuardianService {
               this.state.dshProfile,
             );
             if (stillDown === undefined) {
-              const spawn = this.options.spawnDetachedFn ?? spawnDetached;
-              const spawned: DetachedSpawn = spawn('node', [
-                bin,
-                '--profile',
-                this.state.dshProfile,
-              ]);
-              if (spawned.pid !== undefined) {
-                this.state.relaunchedPid = spawned.pid;
+              const relaunched = await this.relaunchFullProfile(bin);
+              if (relaunched.started) {
+                this.state.relaunchedPid = relaunched.pid;
                 this.lastRelaunchAt = now;
                 this.relaunchPending = true;
                 this.relaunchStartedAt = now;
                 relaunchedNow = true;
                 await this.save();
                 this.log().info('guardian', 'bridge-relaunched', {
-                  pid: spawned.pid,
+                  ...(relaunched.pid ? { pid: relaunched.pid } : {}),
+                  managedService: relaunched.managedService,
                   dshProfile: this.state.dshProfile,
                 });
               }
@@ -575,6 +577,39 @@ export class GuardianService {
     }
   }
 
+  private async relaunchFullProfile(bin: string): Promise<{
+    started: boolean;
+    pid: number | undefined;
+    managedService: boolean;
+    suppressed: boolean;
+    serviceInstalled: boolean;
+  }> {
+    const managed = await (
+      this.options.restartManagedServiceFn ?? restartInstalledProfileService
+    )(this.state.dshProfile, {
+      ...(this.options.env ? { env: this.options.env } : {}),
+      home: this.options.home,
+    });
+    if (managed.installed || managed.suppressed) {
+      return {
+        started: managed.restarted,
+        pid: undefined,
+        managedService: true,
+        suppressed: managed.suppressed === true,
+        serviceInstalled: managed.installed,
+      };
+    }
+    const spawn = this.options.spawnDetachedFn ?? spawnDetached;
+    const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
+    return {
+      started: spawned.pid !== undefined,
+      pid: spawned.pid,
+      managedService: false,
+      suppressed: false,
+      serviceInstalled: false,
+    };
+  }
+
   private async reloadConfig(): Promise<ProfileConfig | undefined> {
     await this.loadContext();
     return this.config;
@@ -615,7 +650,7 @@ export class GuardianService {
     try {
       await this.channel.send(
         chatId,
-        { markdown },
+        { markdown: bilingualMarkdown(markdown, guardianEnglish(markdown)) },
         replyTo ? { replyTo } : undefined,
       );
     } catch (error) {
@@ -852,10 +887,21 @@ export class GuardianService {
       );
       return;
     }
-    const spawn = this.options.spawnDetachedFn ?? spawnDetached;
-    const spawned: DetachedSpawn = spawn('node', [bin, '--profile', this.state.dshProfile]);
-    if (spawned.pid !== undefined) {
-      this.state.relaunchedPid = spawned.pid;
+    const relaunched = await this.relaunchFullProfile(bin);
+    if (!relaunched.started) {
+      await this.sendMarkdown(
+        msg.chatId,
+        relaunched.suppressed
+          ? relaunched.serviceInstalled
+            ? '完整 profile 已被 `service stop` 标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service start`，再重试 `/safemode exit`。'
+            : '完整 profile 的后台服务已卸载并标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service install`，再重试 `/safemode exit`。'
+          : '完整 profile 重启失败；仍保持安全模式，请检查 `service status` / `service logs` 后重试。',
+        msg.messageId,
+      );
+      return;
+    }
+    if (relaunched.started) {
+      this.state.relaunchedPid = relaunched.pid;
       // Give the relaunched profile the same readiness grace and cooldown as
       // an automatic relaunch: no immediate double spawn, no channel takeover
       // while it boots.
@@ -937,12 +983,17 @@ export class GuardianService {
     });
 
     try {
-      await this.streamCard(
-        msg.chatId,
-        renderCard(state, density, Date.now()),
-        async (controller) => {
+      let cardRenderer: typeof renderCard = renderCard;
+      const produceCard = async (controller: CardStreamController): Promise<void> => {
+          const safeUpdate = async (): Promise<void> => {
+            try {
+              await controller.update(cardRenderer(state, density, Date.now()));
+            } catch (error) {
+              this.log().warn('guardian-safe', 'card-update-failed', { runId, scope, error });
+            }
+          };
           const ticker = setInterval(() => {
-            void controller.update(renderCard(state, density, Date.now())).catch(() => {
+            void controller.update(cardRenderer(state, density, Date.now())).catch(() => {
               // Best-effort heartbeat; the event loop below owns the final
               // state transition.
             });
@@ -972,7 +1023,7 @@ export class GuardianService {
                 // Every agent event counts as activity: restart the idle
                 // window so a long but responsive task is never cut short.
                 armTimeout?.();
-                await controller.update(renderCard(state, density, Date.now()));
+                await safeUpdate();
               }
             };
             // Idle watchdog: only a task that goes silent for the configured
@@ -1004,14 +1055,76 @@ export class GuardianService {
             if (!timedOut && state.terminal === 'running') {
               state = finalizeIfRunning(state);
             }
-            await controller.update(renderCard(state, density, Date.now()));
+            await safeUpdate();
+            const answer = finalText ?? assistantOutput.trim();
+            if (state.terminal === 'done' && answer) {
+              try {
+                if (!this.channel) throw new Error('guardian channel is not ready');
+                await this.channel.send(msg.chatId, { markdown: answer }, { replyTo: msg.messageId });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                this.log().fail('guardian-safe', error, {
+                  runId,
+                  scope,
+                  step: 'final-answer',
+                });
+                state = markFinalDeliveryFailed(state, message, answer);
+                await safeUpdate();
+              }
+            }
           } finally {
             clearInterval(ticker);
             if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           }
-        },
-        { replyTo: msg.messageId },
-      );
+      };
+      let producerStarted = false;
+      let producerCompleted = false;
+      const streamWith = async (): Promise<void> => {
+        await this.streamCard(
+          msg.chatId,
+          cardRenderer(state, density, Date.now()),
+          async (controller) => {
+            producerStarted = true;
+            await produceCard(controller);
+            producerCompleted = true;
+          },
+          { replyTo: msg.messageId },
+        );
+      };
+      try {
+        await streamWith();
+      } catch (error) {
+        if (producerStarted && !producerCompleted) throw error;
+        if (producerCompleted) {
+          this.log().warn('guardian-safe', 'card-stream-finalize-failed', {
+            runId,
+            scope,
+            error,
+          });
+        } else {
+          this.log().warn('guardian-safe', 'native-card-fallback', { runId, scope, error });
+        }
+        if (!producerStarted) {
+          cardRenderer = renderLegacyCard;
+          try {
+            await streamWith();
+          } catch (fallbackError) {
+            this.log().warn('guardian-safe', 'legacy-card-failed', {
+              runId,
+              scope,
+              error: fallbackError,
+            });
+            if (producerStarted && !producerCompleted) throw fallbackError;
+            if (!producerStarted) {
+              await produceCard({
+                update: async () => {},
+                messageId: '',
+                current: cardRenderer(state, density, Date.now()),
+              });
+            }
+          }
+        }
+      }
     } catch (error) {
       this.log().fail('guardian-safe', error, { runId, scope });
       state = markInterrupted(state);
@@ -1193,6 +1306,58 @@ export class GuardianService {
       this.log().fail('guardian-safe', error);
     }
   }
+}
+
+function guardianEnglish(markdown: string): string {
+  if (markdown.includes('/safemode — enter core-only safe mode')) return markdown;
+  const replacements: ReadonlyArray<readonly [string, string]> = [
+    ['dsh 未在运行，守护进程已接管飞书通道。', 'dsh is not running; the guardian has taken over the Feishu/Lark channel.'],
+    ['发送 `/safemode` 进入仅核心安全模式（dsh 主核心 + 官方 headless，不加载任何第三方插件），', 'Send `/safemode` to enter core-only safe mode (dsh core + official headless, without third-party plugins),'],
+    ['或发送 `/safemode status` 查看状态。', 'or send `/safemode status` to view status.'],
+    ['已在安全模式中。发送普通消息与 dsh 核心对话；`/safemode exit` 退出。', 'Already in safe mode. Send a normal message to the dsh core; use `/safemode exit` to leave.'],
+    ['正在进入安全模式：仅挂载 dsh 主核心（`dsh-base` + `dsh-headless`），不加载任何第三方插件…', 'Entering safe mode with only the dsh core (`dsh-base` + `dsh-headless`) and no third-party plugins…'],
+    ['未找到本机 dsh 安装，无法进入安全模式。请先确认 `dsh` 可用。', 'The local dsh installation was not found. Confirm that `dsh` is available before entering safe mode.'],
+    ['安全模式就绪检查失败（dsh 核心无法解析）：', 'Safe-mode readiness check failed (the dsh core could not be resolved):'],
+    ['安全模式引擎不可用：SDK runtime 未就绪且 headless 也无法启动。', 'The safe-mode engine is unavailable: the SDK runtime is not ready and headless could not start.'],
+    ['请检查本机 dsh 安装与 pnpm 可用性后重试。', 'Check the local dsh installation and pnpm, then try again.'],
+    ['安全模式已就绪：dsh 主核心运行中，第三方插件未加载。', 'Safe mode is ready: the dsh core is running without third-party plugins.'],
+    ['现在可以直接对话进行自愈（定位 / 修复 / 禁用损坏插件），例如：', 'You can now chat directly to diagnose, repair, or disable a broken plugin, for example:'],
+    ['修复完成后发送 `/safemode exit` 重启完整 profile。', 'After repair, send `/safemode exit` to restart the full profile.'],
+    ['进入安全模式失败', 'Failed to enter safe mode'],
+    ['未找到本机 dsh 安装，无法列出插件。', 'The local dsh installation was not found, so plugins cannot be listed.'],
+    ['已安装的插件（依赖清单）', 'installed plugins (dependency list)'],
+    ['当前不在安全模式，无需退出。', 'Safe mode is not active, so there is nothing to exit.'],
+    ['未找到本机 dsh 安装，无法重启完整 profile。', 'The local dsh installation was not found, so the full profile cannot restart.'],
+    ['完整 profile 已被 `service stop` 标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service start`，再重试 `/safemode exit`。', 'The full profile is intentionally stopped by `service stop`; safe mode remains active. Run `dsh-lark-bot service start`, then retry `/safemode exit`.'],
+    ['完整 profile 的后台服务已卸载并标记为期望停止；仍保持安全模式。请先在终端执行 `dsh-lark-bot service install`，再重试 `/safemode exit`。', 'The full-profile service is uninstalled and intentionally stopped; safe mode remains active. Run `dsh-lark-bot service install`, then retry `/safemode exit`.'],
+    ['完整 profile 重启失败；仍保持安全模式，请检查 `service status` / `service logs` 后重试。', 'The full profile failed to restart; safe mode remains active. Check `service status` / `service logs`, then retry.'],
+    ['正在退出安全模式并重启完整 profile', 'Leaving safe mode and restarting the full profile'],
+    ['守护进程将断开飞书连接并把通道交还给 dsh 桥接引擎。', 'The guardian will disconnect and hand the channel back to the dsh bridge.'],
+    ['安全模式未就绪，请先发送 `/safemode`。', 'Safe mode is not ready. Send `/safemode` first.'],
+    ['（安全模式）上一条任务仍在处理中，已运行 ', '(Safe mode) The previous task is still running for '],
+    ['。发送 `/safemode stop` 或点击卡片 ⏹ 按钮可终止。', '. Send `/safemode stop` or click the ⏹ card button to stop it.'],
+    ['安全模式任务失败', 'Safe-mode task failed'],
+    ['当前没有正在运行的安全模式任务。', 'No safe-mode task is running.'],
+    ['已请求终止当前任务，正在停止 dsh 进程…', 'Requested termination of the current task; stopping the dsh process…'],
+    ['模式：', 'Mode: '],
+    ['安全 profile：', 'Safe profile: '],
+    ['dsh 是否在线：', 'dsh online: '],
+    ['心跳龄：', 'Heartbeat age: '],
+    ['飞书通道：', 'Feishu/Lark channel: '],
+    ['安全引擎：', 'Safe engine: '],
+    ['安全模式运行中任务：', 'Running safe-mode tasks: '],
+    ['守护 pid：', 'Guardian pid: '],
+    ['已观察过 dsh 运行：', 'dsh has been observed running: '],
+    [': 是', ': yes'],
+    [': 否', ': no'],
+    [': 无', ': none'],
+    [': 未连接', ': disconnected'],
+    [': 未就绪', ': not ready'],
+    [': 未发现', ': not found'],
+  ];
+  let translated = markdown;
+  for (const [zh, en] of replacements) translated = translated.replaceAll(zh, en);
+  return translated;
 }
 
 function buildSafePrompt(

@@ -49,9 +49,13 @@ export interface InstallResult {
  * `~/.npm/_npx/<hash>/...`, which breaks the moment the npm cache is cleaned
  * (issue #15). Falls back to the currently running package.
  */
-export function resolveGuardianCliEntry(dshProfile: string, root: string): string {
+export function resolveGuardianCliEntry(
+  dshProfile: string,
+  root: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const profileEntry = join(
-    resolveDshHome(root, process.env),
+    resolveDshHome(root, env),
     'profiles',
     dshProfile,
     'node_modules',

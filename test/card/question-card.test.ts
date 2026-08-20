@@ -29,12 +29,26 @@ describe('question cards', () => {
       id: 'q-2',
       kind: 'text',
       question: 'Why?',
+      actionScope: 'chat:member:u1',
     });
     const content = JSON.stringify(card);
     expect(content).toContain('"tag":"form"');
     expect(content).toContain('"form_action_type":"submit"');
     expect(content).toContain('"cmd":"question-submit","id":"q-2"');
+    expect(content).toContain('"scope":"chat:member:u1"');
     expect(content).not.toContain('"tag":"action"');
+  });
+
+  it('tells users that replying to the card accepts free-form answers', () => {
+    const card = renderQuestionCard({
+      id: 'q-reply',
+      kind: 'single',
+      question: 'Choose',
+      options: ['A', 'B'],
+    });
+    const content = JSON.stringify(card);
+    expect(content).toContain('直接回复本卡片');
+    expect(content).toContain('补充说明');
   });
 
   it('extracts single-choice answers back to labels', () => {

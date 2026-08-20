@@ -10,8 +10,12 @@ import type {
 } from '../../src/adapters/types.js';
 import { ActiveRuns } from '../../src/bot/active-runs.js';
 import { ApprovalRegistry } from '../../src/bot/approvals.js';
+import type { PermissionPolicyStore } from '../../src/bot/permission-policy-store.js';
+import { PlanApprovalRegistry } from '../../src/bot/plan-approvals.js';
+import { QuestionRegistry } from '../../src/bot/questions.js';
 import {
   approvalHandlerFor,
+  questionHandlerFor,
   runAgentBatch,
 } from '../../src/bridge/run-flow.js';
 import type { StreamingChannel } from '../../src/bridge/types.js';
@@ -74,6 +78,370 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it.each([
+    ['quick', 'Answer directly with only the necessary investigation'],
+    ['balanced', 'Balance speed with reasonable investigation and verification'],
+    ['deep', 'Investigate thoroughly and verify assumptions and results'],
+  ] as const)('applies the %s execution mode to the next adapter run', async (executionMode, instruction) => {
+    let prompt = '';
+    const adapter = fakeAdapter([
+      { type: 'done', sessionId: 'session-mode', terminationReason: 'normal' },
+    ]);
+    const originalRun = adapter.run.bind(adapter);
+    adapter.run = (options) => {
+      prompt = options.prompt;
+      return originalRun(options);
+    };
+
+    await runAgentBatch({
+      scope: 'chat-mode', chatId: 'chat-mode', messages: ['handle this'], executionMode,
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+    });
+
+    expect(prompt).toContain(`[Execution mode: ${executionMode}]`);
+    expect(prompt).toContain(instruction);
+    expect(prompt).toContain('Do not bypass safety, permission, or plan-approval requirements');
+  });
+
+  it('reports durable stage checkpoints and a terminal outcome without storing hidden content', async () => {
+    const checkpoints: Array<Record<string, unknown>> = [];
+    const outcome = await runAgentBatch({
+      scope: 'chat-ledger', chatId: 'chat-ledger', messages: ['do work'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-ledger', cwd: '/tmp/project', model: 'm' },
+        { type: 'thinking', delta: 'private chain content' },
+        { type: 'tool_use', id: 'tool-1', name: 'bash', input: { command: 'secret' } },
+        { type: 'tool_result', id: 'tool-1', output: 'done', isError: false },
+        { type: 'final_text', content: 'complete' },
+        { type: 'done', sessionId: 'session-ledger', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+      onCheckpoint: async (checkpoint) => { checkpoints.push(checkpoint); },
+    });
+
+    expect(outcome).toBe('completed');
+    expect(checkpoints.map((entry) => [entry.stage, entry.detail])).toEqual([
+      ['starting', undefined], ['thinking', undefined], ['tool', 'bash'],
+      ['responding', undefined], ['finalizing', undefined],
+    ]);
+    expect(JSON.stringify(checkpoints)).not.toContain('private chain content');
+    expect(JSON.stringify(checkpoints)).not.toContain('secret');
+  });
+
+  it('does not abandon a live run when checkpoint persistence is temporarily unavailable', async () => {
+    const activeRuns = new ActiveRuns();
+    const outcome = await runAgentBatch({
+      scope: 'chat-ledger-failure', chatId: 'chat-ledger-failure', messages: ['continue'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-ledger', cwd: '/tmp/project', model: 'm' },
+        { type: 'final_text', content: 'complete' },
+        { type: 'done', sessionId: 'session-ledger', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns, channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+      onCheckpoint: vi.fn().mockRejectedValue(new Error('disk unavailable')),
+    });
+
+    expect(outcome).toBe('completed');
+    expect(activeRuns.count('chat-ledger-failure')).toBe(0);
+  });
+
+  it('resumes each workspace independently across A to B to A switches', async () => {
+    const sessions = new SessionStore(':memory:');
+    const workspaces = new WorkspaceStore(':memory:');
+    const observed: Array<{ cwd: string; sessionId: string | undefined }> = [];
+    const adapter: AgentAdapter = {
+      id: 'workspace-test',
+      displayName: 'workspace test',
+      resumeCapable: true,
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(options): AgentRun {
+        const cwd = options.cwd ?? '';
+        observed.push({ cwd, sessionId: options.sessionId });
+        const id = options.sessionId ?? (cwd.endsWith('a') ? 'session-a' : 'session-b');
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield { type: 'system' as const, sessionId: id, cwd, model: undefined };
+            yield { type: 'final_text' as const, content: `done ${cwd}` };
+            yield { type: 'done' as const, sessionId: id, terminationReason: 'normal' as const };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const shared = {
+      scope: 'chat-workspaces', chatId: 'chat-workspaces', adapter, sessions, workspaces,
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/a',
+    };
+
+    await runAgentBatch({ ...shared, messages: ['a1'], workspaceCwd: '/tmp/a' });
+    await runAgentBatch({ ...shared, messages: ['b1'], workspaceCwd: '/tmp/b' });
+    await runAgentBatch({ ...shared, messages: ['a2'], workspaceCwd: '/tmp/a' });
+
+    expect(observed).toEqual([
+      { cwd: '/tmp/a', sessionId: undefined },
+      { cwd: '/tmp/b', sessionId: undefined },
+      { cwd: '/tmp/a', sessionId: 'session-a' },
+    ]);
+    expect(sessions.resumeFor('chat-workspaces', '/tmp/b')).toBe('session-b');
+    expect(sessions.historyFor('chat-workspaces', '/tmp/a')).toHaveLength(4);
+    expect(sessions.historyFor('chat-workspaces', '/tmp/b')).toHaveLength(2);
+  });
+
+  it('includes exact trusted peer identities and handoff instructions in the agent prompt', async () => {
+    let prompt = '';
+    const adapter = fakeAdapter([
+      { type: 'done', sessionId: 'session-peer', terminationReason: 'normal' },
+    ]);
+    const originalRun = adapter.run.bind(adapter);
+    adapter.run = (options) => {
+      prompt = options.prompt;
+      return originalRun(options);
+    };
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-peers', chatId: 'chat-peers', messages: ['handoff after completion'],
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: fake.channel, defaultWorkspace: '/tmp/project',
+      collaborationPeers: [
+        { name: 'reviewer', openId: 'ou_reviewer_bot', displayName: 'Reviewer Bot' },
+      ],
+    });
+    expect(prompt).toContain('reviewer (Reviewer Bot): open_id=ou_reviewer_bot');
+    expect(prompt).toContain('mention_user_ids');
+    expect(prompt).toContain('Never guess an identity');
+  });
+
+  it('pauses the idle watchdog for a native-session callback approval', async () => {
+    const approvals = new ApprovalRegistry();
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const adapter: AgentAdapter = {
+      id: 'dsh', displayName: 'dsh',
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(): AgentRun {
+        return {
+          runId: 'run-callback', stop, waitForExit: async () => true,
+          events: (async function* () {
+            yield { type: 'system', sessionId: 'native-session', cwd: '/tmp/project', model: 'm' } as AgentEvent;
+            const pending = approvals.register('chat-callback-timeout', {
+              id: 'approval-callback', sessionId: 'native-session', toolName: 'bash',
+              reason: 'test', options: [],
+            }, 'native-session');
+            setTimeout(() => approvals.resolve(
+              'chat-callback-timeout', 'approval-callback', 'allowed-once',
+            ), 60);
+            await pending;
+            yield { type: 'done', sessionId: 'native-session', terminationReason: 'normal' } as AgentEvent;
+          })(),
+        };
+      },
+    };
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-callback-timeout', chatId: 'chat-callback-timeout', messages: ['run'],
+      adapter, sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), approvals, channel: fake.channel,
+      defaultWorkspace: '/tmp/project', runTimeoutMs: 20,
+    });
+    expect(stop).not.toHaveBeenCalled();
+    expect(approvals.pendingCount('chat-callback-timeout')).toBe(0);
+  });
+
+  it('does not cancel another concurrent run approval when this run completes', async () => {
+    const approvals = new ApprovalRegistry();
+    const approvalA = approvals.register('chat-concurrent-approval', {
+      id: 'approval-a', sessionId: 'session-a', toolName: 'bash', reason: 'A', options: [],
+    }, 'run-a');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-concurrent-approval',
+      chatId: 'chat-concurrent-approval',
+      messages: ['run B'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' },
+        { type: 'done', sessionId: 'session-b', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      approvals,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(approvals.pendingCount('chat-concurrent-approval', 'run-a')).toBe(1);
+    approvals.resolve('chat-concurrent-approval', 'approval-a', 'allowed-once');
+    await expect(approvalA).resolves.toBe('allowed-once');
+  });
+
+  it('does not cancel another concurrent session question when this run completes', async () => {
+    const questions = new QuestionRegistry();
+    const questionA = questions.register(
+      'chat-concurrent-question',
+      { kind: 'text', question: 'A?' },
+      'session-a',
+    );
+    questions.bindMessage('chat-concurrent-question', questionA.id, 'card-a');
+    const fake = makeChannel();
+
+    await runAgentBatch({
+      scope: 'chat-concurrent-question',
+      chatId: 'chat-concurrent-question',
+      messages: ['run B'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' },
+        { type: 'done', sessionId: 'session-b', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      questions,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(questions.pendingForMessage('card-a')?.id).toBe(questionA.id);
+    questions.resolve('chat-concurrent-question', questionA.id, 'A answer');
+    await expect(questionA.promise).resolves.toBe('A answer');
+  });
+
+  it('sends the final answer as a separate markdown message with reply routing', async () => {
+    const sent: Array<{ markdown: string; options: unknown }> = [];
+    const fake = makeChannel();
+    fake.channel.sendMarkdown = async (_chatId, markdown, options) => {
+      sent.push({ markdown, options });
+    };
+    await runAgentBatch({
+      scope: 'chat-final',
+      chatId: 'chat-final',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'thinking', delta: 'reasoning detail' },
+        { type: 'final_text', content: '**Final answer**' },
+        { type: 'done', sessionId: 's-final', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      replyTo: 'om_source',
+    });
+    expect(sent).toEqual([{ markdown: '**Final answer**', options: { replyTo: 'om_source' } }]);
+    expect(JSON.stringify(fake.updates.at(-1))).not.toContain('**Final answer**');
+  });
+
+  it('routes a final answer through the configured reply dispatcher seam', async () => {
+    const fake = makeChannel();
+    const deliverFinalReply = vi.fn().mockResolvedValue(undefined);
+    await runAgentBatch({
+      scope: 'chat-batched', chatId: 'chat-batched', messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'batched answer' },
+        { type: 'done', sessionId: 's-batched', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: fake.channel, defaultWorkspace: '/tmp/project',
+      replyTo: 'm-source', deliverFinalReply,
+    });
+    expect(deliverFinalReply).toHaveBeenCalledOnce();
+    expect(deliverFinalReply).toHaveBeenCalledWith('chat-batched', 'chat-batched', 'batched answer', { replyTo: 'm-source' });
+  });
+
+  it('marks final delivery failure on the process card while preserving the exchange', async () => {
+    const sessions = new SessionStore(':memory:');
+    const fake = makeChannel();
+    fake.channel.sendMarkdown = async () => {
+      throw new Error('message rejected');
+    };
+    await runAgentBatch({
+      scope: 'chat-final-fail',
+      chatId: 'chat-final-fail',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'durable answer' },
+        { type: 'done', sessionId: 's-final', terminationReason: 'normal' },
+      ]),
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(JSON.stringify(fake.updates.at(-1))).toContain('最终回答发送失败');
+    expect(JSON.stringify(fake.updates.at(-1))).toContain('durable answer');
+    expect(sessions.historyFor('chat-final-fail', '/tmp/project')).toContainEqual({
+      role: 'assistant',
+      content: 'durable answer',
+    });
+  });
+
+  it('delivers the final answer even when process-card updates fail', async () => {
+    const messages: string[] = [];
+    const channel: StreamingChannel = {
+      sendMarkdown: async (_chatId, markdown) => { messages.push(markdown); },
+      streamCard: async (_chatId, _initial, producer) => {
+        await producer({ update: async () => { throw new Error('card update rejected'); } });
+      },
+    };
+    await runAgentBatch({
+      scope: 'chat-card-update-fail',
+      chatId: 'chat-card-update-fail',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'final_text', content: 'answer survives' },
+        { type: 'done', sessionId: 's1', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(messages).toEqual(['answer survives']);
+  });
+
+  it('retries with the legacy process card when collapsible delivery is rejected', async () => {
+    const messages: string[] = [];
+    const initialCards: object[] = [];
+    let attempts = 0;
+    const channel: StreamingChannel = {
+      sendMarkdown: async (_chatId, markdown) => { messages.push(markdown); },
+      streamCard: async (_chatId, initial, producer) => {
+        attempts += 1;
+        initialCards.push(initial);
+        if (attempts === 1) throw new Error('collapsible_panel unsupported');
+        await producer({ update: async () => {} });
+      },
+    };
+    await runAgentBatch({
+      scope: 'chat-legacy-card',
+      chatId: 'chat-legacy-card',
+      messages: ['answer me'],
+      adapter: fakeAdapter([
+        { type: 'thinking', delta: 'latest thought' },
+        { type: 'final_text', content: 'legacy answer' },
+        { type: 'done', sessionId: 's1', terminationReason: 'normal' },
+      ]),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel,
+      defaultWorkspace: '/tmp/project',
+    });
+    expect(attempts).toBe(2);
+    expect(JSON.stringify(initialCards[0])).toContain('collapsible_panel');
+    expect(JSON.stringify(initialCards[1])).not.toContain('collapsible_panel');
+    expect(messages).toEqual(['legacy answer']);
+  });
+
   it('streams agent events into a card and clears the active run', async () => {
     const events: AgentEvent[] = [
       { type: 'system', sessionId: 'session-1', cwd: '/tmp/project', model: undefined },
@@ -100,6 +468,127 @@ describe('runAgentBatch', () => {
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
     expect(activeRuns.get('chat-a')).toBeUndefined();
     expect(fake.updates.length).toBeGreaterThan(2);
+  });
+
+  it('records real usage and context events for the current scope session', async () => {
+    const sessions = new SessionStore(':memory:');
+    await runAgentBatch({
+      scope: 'chat-metrics',
+      chatId: 'chat-metrics',
+      messages: ['measure this'],
+      adapter: fakeAdapter([
+        { type: 'system', sessionId: 'session-metrics', cwd: '/tmp/project', model: 'm' },
+        {
+          type: 'usage',
+          inputTokens: 10,
+          outputTokens: 4,
+          cacheReadTokens: 20,
+          cacheWriteTokens: 2,
+        },
+        { type: 'context_usage', usedTokens: 36, contextWindow: 128 },
+        { type: 'done', sessionId: 'session-metrics', terminationReason: 'normal' },
+      ]),
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(sessions.metricsFor('chat-metrics', '/tmp/project', {
+      sessionId: 'session-metrics',
+      model: 'm',
+    })).toEqual({
+      inputTokens: 10,
+      outputTokens: 4,
+      cacheReadTokens: 20,
+      cacheWriteTokens: 2,
+      contextUsedTokens: 36,
+      contextWindow: 128,
+    });
+  });
+
+  it('does not attribute an interleaved run context snapshot to the current session', async () => {
+    let releaseAContext!: () => void;
+    let releaseAFinish!: () => void;
+    let releaseBFinish!: () => void;
+    let markASystemReady!: () => void;
+    let markAContextReady!: () => void;
+    let markBContextReady!: () => void;
+    const aContextGate = new Promise<void>((resolve) => { releaseAContext = resolve; });
+    const aFinishGate = new Promise<void>((resolve) => { releaseAFinish = resolve; });
+    const bFinishGate = new Promise<void>((resolve) => { releaseBFinish = resolve; });
+    const aSystemReady = new Promise<void>((resolve) => { markASystemReady = resolve; });
+    const aContextReady = new Promise<void>((resolve) => { markAContextReady = resolve; });
+    const bContextReady = new Promise<void>((resolve) => { markBContextReady = resolve; });
+    let runNumber = 0;
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() { return true; },
+      async checkAvailability() { return { ok: true, error: undefined, version: 'test' }; },
+      run(options): AgentRun {
+        runNumber += 1;
+        const current = runNumber;
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            if (current === 1) {
+              yield { type: 'system', sessionId: 'session-a', cwd: '/tmp/project', model: 'm' };
+              markASystemReady();
+              await aContextGate;
+              yield { type: 'context_usage', usedTokens: 80, contextWindow: 100 };
+              markAContextReady();
+              await aFinishGate;
+              yield { type: 'done', sessionId: 'session-a', terminationReason: 'normal' };
+              return;
+            }
+            yield { type: 'system', sessionId: 'session-b', cwd: '/tmp/project', model: 'm' };
+            yield { type: 'context_usage', usedTokens: 20, contextWindow: 100 };
+            markBContextReady();
+            await bFinishGate;
+            yield { type: 'done', sessionId: 'session-b', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    const activeRuns = new ActiveRuns();
+    const shared = {
+      scope: 'chat-concurrent',
+      chatId: 'chat-concurrent',
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns,
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+      provider: 'gateway',
+      model: 'm',
+    };
+
+    const runA = runAgentBatch({ ...shared, messages: ['run a'] });
+    await aSystemReady;
+    const runB = runAgentBatch({ ...shared, messages: ['run b'] });
+    await bContextReady;
+    releaseAContext();
+    await aContextReady;
+
+    expect(sessions.resumeFor('chat-concurrent', '/tmp/project')).toBe('session-b');
+    expect(sessions.metricsFor('chat-concurrent', '/tmp/project', {
+      sessionId: 'session-b',
+      model: 'gateway/m',
+    })).toEqual({ contextUsedTokens: 20, contextWindow: 100 });
+    expect(sessions.metricsFor('chat-concurrent', '/tmp/project', {
+      sessionId: 'session-a',
+      model: 'gateway/m',
+    })).toEqual({ contextUsedTokens: 80, contextWindow: 100 });
+
+    releaseAFinish();
+    releaseBFinish();
+    await Promise.all([runA, runB]);
   });
 
   it('marks the card idle-timeout and stops the run after the wall-clock deadline', async () => {
@@ -158,6 +647,100 @@ describe('runAgentBatch', () => {
     const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
     expect(lastText).toContain('无响应');
     expect(activeRuns.get('chat-timeout')).toBeUndefined();
+  });
+
+  it('pauses the idle watchdog while a plan decision is pending', async () => {
+    let release: (() => void) | undefined;
+    const stopped = new Promise<void>((resolve) => { release = resolve; });
+    const stop = vi.fn(async () => { release?.(); });
+    const plans = new PlanApprovalRegistry();
+    const gate = plans.register('chat-plan', 'session-plan');
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      isAvailable: async () => true,
+      checkAvailability: async () => ({ ok: true, error: undefined, version: 'test' }),
+      run: () => ({
+        runId: 'run-plan',
+        events: (async function* () {
+          yield {
+            type: 'system',
+            sessionId: 'session-plan',
+            cwd: '/tmp/project',
+            model: undefined,
+          };
+          yield { type: 'text', delta: 'planning' };
+          await stopped;
+        })(),
+        stop,
+        waitForExit: async () => true,
+      }),
+    };
+    setTimeout(() => {
+      plans.resolve('chat-plan', gate.id, { decision: 'approved' });
+    }, 35);
+    const started = Date.now();
+    const fake = makeChannel();
+    await runAgentBatch({
+      scope: 'chat-plan',
+      chatId: 'chat-plan',
+      messages: ['large task'],
+      adapter,
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      plans,
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 10,
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('does not cancel or inherit another concurrent session plan gate', async () => {
+    const plans = new PlanApprovalRegistry();
+    const otherGate = plans.register('chat-plan', 'session-a');
+    const stop = vi.fn(async () => undefined);
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      isAvailable: async () => true,
+      checkAvailability: async () => ({ ok: true, error: undefined, version: 'test' }),
+      run: () => ({
+        runId: 'run-b',
+        events: (async function* () {
+          yield {
+            type: 'system',
+            sessionId: 'session-b',
+            cwd: '/tmp/project',
+            model: undefined,
+          };
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        })(),
+        stop,
+        waitForExit: async () => true,
+      }),
+    };
+
+    await runAgentBatch({
+      scope: 'chat-plan',
+      chatId: 'chat-plan',
+      messages: ['second task'],
+      adapter,
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      plans,
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+      runTimeoutMs: 10,
+    });
+
+    expect(stop).toHaveBeenCalledOnce();
+    expect(plans.pendingCount('chat-plan', 'session-a')).toBe(1);
+    plans.resolve('chat-plan', otherGate.id, { decision: 'approved' });
+    await expect(otherGate.promise).resolves.toEqual({ decision: 'approved' });
   });
 
   it('keeps a run alive while events keep arriving and only stops after idle', async () => {
@@ -344,8 +927,8 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.sessionId).toBeUndefined();
     // The fresh-session attempt replays the transcript.
     expect(calls[1]?.prompt).toContain('my name is Bob');
-    // No failure message was surfaced to the user.
-    expect(fake.messages).toHaveLength(0);
+    // Only the recovered final answer is sent; no failure message is surfaced.
+    expect(fake.messages).toEqual(['recovered']);
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },
@@ -425,8 +1008,8 @@ describe('runAgentBatch', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]?.sessionId).toBe('session-1');
     expect(calls[1]?.sessionId).toBeUndefined();
-    // No hard failure message was surfaced to the user.
-    expect(fake.messages).toHaveLength(0);
+    // Only the recovered final answer is sent; no hard failure is surfaced.
+    expect(fake.messages).toEqual(['recovered via error event']);
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },
@@ -512,6 +1095,7 @@ describe('runAgentBatch', () => {
 
     const sessions = new SessionStore(':memory:');
     sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.recordUsage('chat-a', '/tmp/project', { inputTokens: 12, outputTokens: 4 });
     sessions.set('chat-a', 'session-1', '/tmp/project');
     const fake = makeChannel();
     const adapter = fakeAdapter([
@@ -542,6 +1126,13 @@ describe('runAgentBatch', () => {
     expect(archives.length).toBeGreaterThan(0);
     // The scope mapping was reset and the user was told where it went.
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
+    expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
+      { role: 'user', content: 'my name is Bob' },
+      { role: 'assistant', content: 'Nice to meet you.' },
+      { role: 'user', content: 'new message' },
+      { role: 'assistant', content: 'working…' },
+    ]);
+    expect(sessions.metricsFor('chat-a', '/tmp/project')).toEqual({ inputTokens: 12, outputTokens: 4 });
     const text = fake.messages.join('\n');
     expect(text).toContain('已归档并重置');
     expect(text).toContain('_archived-sessions');
@@ -818,14 +1409,37 @@ describe('runAgentBatch', () => {
 });
 
 describe('approvalHandlerFor', () => {
+  it('auto-allows or rejects without a card according to the persisted scope policy', async () => {
+    const sendCard = vi.fn();
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const request = {
+      id: 'call-1', sessionId: 's1', toolName: 'bash', reason: 'test', options: [],
+    };
+    const allow = approvalHandlerFor({
+      approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown }, chatId: 'chat-a', scope: 'chat-a',
+      permissionPolicies: { get: () => 'allow' } as unknown as PermissionPolicyStore,
+    });
+    await expect(allow(request)).resolves.toBe('allowed-once');
+    const deny = approvalHandlerFor({
+      approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown }, chatId: 'chat-a', scope: 'chat-a',
+      permissionPolicies: { get: () => 'deny' } as unknown as PermissionPolicyStore,
+    });
+    await expect(deny(request)).resolves.toBe('rejected');
+    expect(sendCard).not.toHaveBeenCalled();
+    expect(sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('deny'), undefined);
+  });
+
   it('renders an approval card and resolves through the registry', async () => {
     const approvals = new ApprovalRegistry();
     const sendCard = vi.fn().mockResolvedValue(undefined);
+    const cancelReminder = vi.fn();
+    const onApprovalWaiting = vi.fn(() => cancelReminder);
     const handler = approvalHandlerFor({
       approvals,
       channel: { sendCard },
       chatId: 'chat-a',
       scope: 'chat-a',
+      onApprovalWaiting,
     });
     const outcome = handler({
       id: 'call-1',
@@ -834,9 +1448,46 @@ describe('approvalHandlerFor', () => {
       reason: 'run tests',
       options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
     });
-    expect(sendCard).toHaveBeenCalledWith('chat-a', expect.objectContaining({ schema: '2.0' }));
-    expect(approvals.resolve('chat-a', 'call-1', 'allowed-once')).toBe(true);
+    expect(sendCard).toHaveBeenCalledWith(
+      'chat-a', expect.objectContaining({ schema: '2.0' }), undefined,
+    );
+    const id = /"cmd":"approve","id":"([^"]+)"/u.exec(
+      JSON.stringify(sendCard.mock.calls[0]?.[1]),
+    )?.[1];
+    expect(id).toBeTruthy();
+    expect(approvals.resolve('chat-a', id!, 'allowed-once')).toBe(true);
     await expect(outcome).resolves.toBe('allowed-once');
+    expect(onApprovalWaiting).toHaveBeenCalledWith('chat-a', 'bash');
+    expect(cancelReminder).toHaveBeenCalledOnce();
+  });
+
+  it('keeps identical upstream call ids distinct across concurrent sessions', async () => {
+    const approvals = new ApprovalRegistry();
+    const cards: object[] = [];
+    const sendCard = vi.fn(async (_chatId: string, card: object) => {
+      cards.push(card);
+      return undefined;
+    });
+    const first = approvalHandlerFor({
+      approvals, channel: { sendCard }, chatId: 'chat-a', scope: 'chat-a', ownerSessionId: 'run-a',
+    })({
+      id: 'same-call', sessionId: 's-a', toolName: 'bash', reason: 'A',
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }],
+    });
+    const second = approvalHandlerFor({
+      approvals, channel: { sendCard }, chatId: 'chat-a', scope: 'chat-a', ownerSessionId: 'run-b',
+    })({
+      id: 'same-call', sessionId: 's-b', toolName: 'bash', reason: 'B',
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }],
+    });
+    const ids = cards.map((card) => /"cmd":"approve","id":"([^"]+)"/u.exec(JSON.stringify(card))?.[1]);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBeTruthy();
+    expect(ids[0]).not.toBe(ids[1]);
+    approvals.resolve('chat-a', ids[0]!, 'allowed-once');
+    approvals.resolve('chat-a', ids[1]!, 'rejected');
+    await expect(first).resolves.toBe('allowed-once');
+    await expect(second).resolves.toBe('rejected');
   });
 
   it('fails closed when no registry or card channel exists', async () => {
@@ -855,5 +1506,50 @@ describe('approvalHandlerFor', () => {
         options: [],
       }),
     ).resolves.toBe('cancelled');
+  });
+});
+
+describe('questionHandlerFor', () => {
+  it('binds the sent card message id so a text reply can resolve the exact question', async () => {
+    const questions = new QuestionRegistry();
+    const sendCard = vi.fn().mockResolvedValue('question-card-message');
+    const handler = questionHandlerFor({
+      questions,
+      channel: { sendCard },
+      chatId: 'chat-a',
+      scope: 'chat-a',
+      sendOptions: { replyTo: 'om-source', threadId: 'thread-a' },
+    });
+
+    const answer = handler({ id: '', kind: 'text', question: 'Why?' });
+    await vi.waitFor(() => {
+      expect(questions.pendingForMessage('question-card-message')).toBeDefined();
+    });
+    const pending = questions.pendingForMessage('question-card-message');
+    expect(pending?.input.question).toBe('Why?');
+    expect(sendCard).toHaveBeenCalledWith(
+      'chat-a',
+      expect.any(Object),
+      { replyTo: 'om-source', threadId: 'thread-a' },
+    );
+    expect(questions.resolve('chat-a', pending!.id, 'Because')).toBe(true);
+    await expect(answer).resolves.toBe('Because');
+  });
+
+  it('cancels only its own question when sending its card fails', async () => {
+    const questions = new QuestionRegistry();
+    const other = questions.register('chat-a', { kind: 'text', question: 'Other?' });
+    questions.bindMessage('chat-a', other.id, 'other-card');
+    const handler = questionHandlerFor({
+      questions,
+      channel: { sendCard: vi.fn().mockRejectedValue(new Error('send failed')) },
+      chatId: 'chat-a',
+      scope: 'chat-a',
+    });
+
+    await expect(handler({ id: '', kind: 'text', question: 'Why?' })).resolves.toBeUndefined();
+    expect(questions.pendingForMessage('other-card')?.id).toBe(other.id);
+    questions.resolve('chat-a', other.id, 'answer');
+    await expect(other.promise).resolves.toBe('answer');
   });
 });

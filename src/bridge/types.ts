@@ -7,7 +7,8 @@ export interface CardStreamController {
 }
 
 export interface StreamingChannel extends CommandChannel {
-  sendCard?(chatId: string, card: object, options?: SendOptions): Promise<void>;
+  sendCard?(chatId: string, card: object, options?: SendOptions): Promise<string | undefined>;
+  recallMessage?(messageId: string): Promise<void>;
   streamCard(
     chatId: string,
     initial: object,

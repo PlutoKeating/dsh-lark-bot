@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Upstream upgrade radar: compares the pinned DeepSeek Harness versions with
-// the npm `latest` (stable) dist-tag and reports any newer stable release.
+// Upstream upgrade radar: reports npm latest/next independently and compares
+// the exact pin with the highest published version. DSH prerelease package
+// dist-tags are not synchronized, so `latest` alone is not authoritative.
 //
 // Usage:
 //   node scripts/check-dsh-upstream.mjs            # informational (exit 0)
@@ -18,7 +19,7 @@ const PACKAGES = [
 ];
 
 function assertNoDrift() {
-  const mismatch = PACKAGES.some(([name, pinned]) => {
+  let mismatch = PACKAGES.some(([name, pinned]) => {
     if (name === '@deepseek-ai/dsh-sdk-client' && pinned !== compat.packageSdkClient) {
       console.error(
         `drift: dsh-compat.ts sdkClient=${pinned} but package.json pins ${compat.packageSdkClient}`,
@@ -27,10 +28,31 @@ function assertNoDrift() {
     }
     return false;
   });
+  if (compat.packageDshTools !== undefined) {
+    console.error(
+      'drift: package.json must not directly depend on @deepseek-ai/dsh-tools; raw host-registry tools avoid a second Symbol realm',
+    );
+    mismatch = true;
+  }
+  if (
+    !Array.isArray(compat.workshopDshVersions) ||
+    !compat.workshopDshVersions.includes(compat.harness)
+  ) {
+    console.error(
+      `drift: dshWorkshop.compatibility.dshVersions does not include ${compat.harness}`,
+    );
+    mismatch = true;
+  }
+  if (compat.staleCoreLockEntries.length > 0) {
+    console.error(
+      `drift: lockfile mixes stale core packages into the ${compat.harness} graph: ${compat.staleCoreLockEntries.join(', ')}`,
+    );
+    mismatch = true;
+  }
   if (mismatch) process.exit(1);
 }
 
-async function latestStable(name) {
+async function registryVersions(name) {
   const response = await fetch(`https://registry.npmjs.org/${name}`, {
     headers: { accept: 'application/json' },
   });
@@ -40,6 +62,7 @@ async function latestStable(name) {
   const document = await response.json();
   return {
     latest: document['dist-tags']?.latest,
+    next: document['dist-tags']?.next,
     highest: Object.keys(document.versions ?? {}).reduce((best, version) =>
       compareVersions(version, best) > 0 ? version : best,
     ),
@@ -71,10 +94,10 @@ function compareVersions(a, b) {
 async function main() {
   assertNoDrift();
   console.log(`compat matrix verified at ${compat.verifiedAt} (node ${compat.node})`);
-  console.log('package                    pinned           npm latest       highest published');
+  console.log('package                    pinned           npm latest       npm next         highest published');
   let newer = false;
   for (const [name, pinned] of PACKAGES) {
-    const { latest, highest } = await latestStable(name);
+    const { latest, next, highest } = await registryVersions(name);
     const upgrade = highest !== undefined && compareVersions(highest, pinned) > 0;
     newer ||= upgrade;
     const lagNote =
@@ -82,7 +105,7 @@ async function main() {
         ? '  (npm latest lags behind pinned)'
         : '';
     console.log(
-      `${name.padEnd(26)} ${String(pinned).padEnd(15)} ${String(latest ?? '(unknown)').padEnd(16)} ${String(highest ?? '(unknown)')}${upgrade ? '  <-- newer release' : ''}${lagNote}`,
+      `${name.padEnd(26)} ${String(pinned).padEnd(15)} ${String(latest ?? '(unknown)').padEnd(16)} ${String(next ?? '(unknown)').padEnd(16)} ${String(highest ?? '(unknown)')}${upgrade ? '  <-- newer release' : ''}${lagNote}`,
     );
   }
   if (newer) {

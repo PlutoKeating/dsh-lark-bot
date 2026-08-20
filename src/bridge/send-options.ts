@@ -11,4 +11,6 @@ export interface SendOptions {
   mentions?: MentionTarget[];
   /** Keep the reply inside a topic thread (Lark only). */
   threadId?: string;
+  /** Stable transport idempotency identity for crash-safe projection sends. */
+  idempotencyKey?: string;
 }

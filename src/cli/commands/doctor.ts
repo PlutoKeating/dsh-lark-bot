@@ -14,6 +14,7 @@ import { readInstalledPackage } from '../../upgrade/detect.js';
 import { loadUpgradeState, upgradeStatePath } from '../../upgrade/state.js';
 import { compareVersions, fetchNpmLatestVersionOnce } from '../../upgrade/versions.js';
 import type { StartOptions } from '../../cli.js';
+import { ServiceManager } from '../../service/manager.js';
 
 export interface DoctorOptions extends StartOptions {
   version?: string;
@@ -102,6 +103,26 @@ export async function runDoctorChecks(
     }
   } catch {
     // Best effort.
+  }
+  try {
+    const service = new ServiceManager({
+      profile: env.guardianProfile,
+      env: process.env,
+      paths,
+      home: options.guardianRoot ?? homedir(),
+      ...(options.version ? { version: options.version } : {}),
+    });
+    if (await service.readMetadata()) {
+      const status = await service.status();
+      lines.push(
+        `service: ${status.state} (${status.platform}; autostart=${status.autostartEnabled ? 'on' : 'off'}${status.pid ? `; pid=${status.pid}` : ''})`,
+      );
+      if (!status.installed) {
+        lines.push('service: ⚠️ 元数据存在但系统服务入口缺失；请重跑 dsh-lark-bot service install');
+      }
+    }
+  } catch (error) {
+    lines.push(`service: ⚠️ 状态检查失败（${error instanceof Error ? error.message : String(error)}）`);
   }
   try {
     const state = await loadUpgradeState(upgradeStatePath(env.home));

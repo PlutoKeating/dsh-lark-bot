@@ -19,8 +19,12 @@ describe('renderCard densities', () => {
     const compact = renderCard(state, 'compact') as { body: { elements: unknown[] } };
     const standard = renderCard(state, 'standard') as { body: { elements: unknown[] } };
     const detailed = renderCard(state, 'detailed') as { body: { elements: unknown[] } };
-    expect(compact.body.elements.length).toBeLessThan(standard.body.elements.length);
-    expect(detailed.body.elements.length).toBeGreaterThanOrEqual(standard.body.elements.length);
+    const compactJson = JSON.stringify(compact);
+    const standardJson = JSON.stringify(standard);
+    const detailedJson = JSON.stringify(detailed);
+    expect(compactJson).not.toContain('tokens');
+    expect(standardJson).toContain('tokens');
+    expect(detailedJson.length).toBeGreaterThanOrEqual(standardJson.length);
   });
 
   it('keeps a running card interactive with a stop button', () => {

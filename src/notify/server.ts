@@ -4,6 +4,9 @@ import { randomBytes } from 'node:crypto';
 import { log } from '../core/logger.js';
 import type { MentionTarget } from '../bridge/types.js';
 import type { AskPayload, AskResult } from './ask-handler.js';
+import type { PlanPayload, PlanResult } from './plan-handler.js';
+import type { ApprovalPayload, ApprovalResult } from './approval-handler.js';
+import type { FilePayload, FileResult } from './file-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -33,6 +36,12 @@ export interface NotifyServerDeps {
   ) => Promise<void>;
   /** Optional handler for the `lark_ask_user` question-card channel. */
   ask?: (payload: AskPayload) => Promise<AskResult>;
+  /** Optional handler for the `lark_request_plan_approval` channel. */
+  plan?: (payload: PlanPayload, signal?: AbortSignal) => Promise<PlanResult>;
+  /** Optional handler for dsh rc.8 one-shot tool approval requests. */
+  approval?: (payload: ApprovalPayload, signal?: AbortSignal) => Promise<ApprovalResult>;
+  /** Optional handler for the `lark_send_file` channel. */
+  file?: (payload: FilePayload) => Promise<FileResult>;
 }
 
 /**
@@ -48,6 +57,9 @@ export class NotifyServer {
   private readonly deps: NotifyServerDeps;
   url: string | undefined;
   askUrl: string | undefined;
+  planUrl: string | undefined;
+  approvalUrl: string | undefined;
+  fileUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -66,6 +78,9 @@ export class NotifyServer {
         const address = server.address() as AddressInfo;
         this.url = `http://127.0.0.1:${String(address.port)}/notify`;
         this.askUrl = `http://127.0.0.1:${String(address.port)}/ask`;
+        this.planUrl = `http://127.0.0.1:${String(address.port)}/plan`;
+        this.approvalUrl = `http://127.0.0.1:${String(address.port)}/approval`;
+        this.fileUrl = `http://127.0.0.1:${String(address.port)}/file`;
         resolve();
       });
     });
@@ -113,6 +128,106 @@ export class NotifyServer {
           return;
         }
         respond(200, { ok: true, ...(result.answer === undefined ? {} : { answer: result.answer }) });
+        return;
+      }
+      if (req.url === '/plan') {
+        if (!this.deps.plan) {
+          respond(404, { ok: false, error: 'plan channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as PlanPayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.plan?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and plan are required' });
+          return;
+        }
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        req.once('aborted', abort);
+        const onResponseClose = (): void => {
+          if (!res.writableEnded) abort();
+        };
+        res.once('close', onResponseClose);
+        let result: PlanResult;
+        try {
+          result = await this.deps.plan(payload, controller.signal);
+        } finally {
+          req.off('aborted', abort);
+          res.off('close', onResponseClose);
+        }
+        if (!result.ok) {
+          respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, {
+          ok: true,
+          decision: result.decision,
+          ...(result.feedback ? { feedback: result.feedback } : {}),
+        });
+        return;
+      }
+      if (req.url === '/approval') {
+        if (!this.deps.approval) {
+          respond(404, { ok: false, error: 'approval channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as ApprovalPayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.toolName?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and toolName are required' });
+          return;
+        }
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        req.once('aborted', abort);
+        const onResponseClose = (): void => {
+          if (!res.writableEnded) abort();
+        };
+        res.once('close', onResponseClose);
+        let result: ApprovalResult;
+        try {
+          result = await this.deps.approval(payload, controller.signal);
+        } finally {
+          req.off('aborted', abort);
+          res.off('close', onResponseClose);
+        }
+        if (!result.ok || !result.outcome) {
+          respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, { ok: true, outcome: result.outcome });
+        return;
+      }
+      if (req.url === '/file') {
+        if (!this.deps.file) {
+          respond(404, { ok: false, error: 'file channel is not wired' });
+          return;
+        }
+        const payload = JSON.parse(body) as FilePayload;
+        if (payload.token !== this.token) {
+          respond(401, { ok: false, error: 'invalid token' });
+          return;
+        }
+        if (!payload.sessionId || !payload.path?.trim()) {
+          respond(400, { ok: false, error: 'sessionId and path are required' });
+          return;
+        }
+        const result = await this.deps.file(payload);
+        if (!result.ok) {
+          respond(400, { ok: false, ...(result.error ? { error: result.error } : {}) });
+          return;
+        }
+        respond(200, {
+          ok: true,
+          ...(result.fileName ? { fileName: result.fileName } : {}),
+          ...(result.size === undefined ? {} : { size: result.size }),
+        });
         return;
       }
       if (req.url !== '/notify') {

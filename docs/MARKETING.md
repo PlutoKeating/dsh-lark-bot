@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | GitHub 仓库 | `PlutoKeating/dsh-lark-bot`（2026-08-13 创建） | 飞书桥接细分头部（20 star，与竞品差距在一天内） |
 | npm 下载（月） | `dsh-lark-bot` 3,640 + `dsh-feishu-bot` 3,614 | **同类第一**；harness-lark 1,480、dsh-lark-link 343、dsh-im-hub 231 |
-| 功能组合 | 六项能力组合（Guardian / 多角色 / 并行 / 归档 / 跨会话通知 / 对话内模型密钥） | 同类最全，且为唯一「dsh 崩溃后飞书仍叫得应」方案 |
+| 功能组合 | 九项能力组合（Guardian / 多角色 / 多机器人交接 / 并行 / 持久任务对账 / 归档 / 跨会话通知 / 对话内模型密钥 / 计划门禁） | 同类最全，且为唯一「dsh 崩溃后飞书仍叫得应」方案 |
 | 目录收录 | dshfind ✅、dshbase ✅、awesome-dsh-plugins ✅、omdsh-dev ✅ | 缺失：awesome-dsh-plugin 大榜（7.2k+ star）——已提交 PR 待合并 |
 | GitHub 搜索 | 关键词「deepseek harness 飞书」GitHub 内第 1 位 | GitHub 内可见度 OK |
 
@@ -79,7 +79,7 @@
 
 - 一句话：**把 DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥本机 coding agent。**
 - 安装命令：`npx dsh-lark-bot@latest setup --profile dsh-lark`
-- 六个差异化能力：安全网守护 / 多角色 Agent / 并行多任务 / 会话归档 / 跨会话通知 / 对话内模型密钥管理
+- 九个差异化能力：安全网守护 / 多角色 Agent / 多机器人可信交接 / 并行多任务 / 持久任务对账 / 会话归档 / 跨会话通知 / 对话内模型密钥管理 / 计划门禁
 - 卖点一句话：**「唯一 dsh 崩溃后飞书里还叫得应」的桥接方案**
 - 官方渠道：GitHub `PlutoKeating/dsh-lark-bot`；npm `dsh-lark-bot` / `dsh-feishu-bot`
 - 反假冒声明：从不提供 exe；发现 `tarraencompassing61/dsh-lark-bot` 等仿冒仓库已留存证（docs/security/）
@@ -92,6 +92,7 @@
 2. `package.json`：npm 描述改中英双语，keywords 增加「飞书 / 飞书机器人 / 扫码 / deepseek harness 飞书」等中文词。
 3. `README.md`：徽章行增加 dshbase；「社区收录情况」增加 awesome-dsh-plugin（PR 待合并）与 dshbase 两行。
 4. 新增落地页 `docs/index.html`：中英双语、OG/Twitter 卡片、SoftwareApplication + FAQPage 结构化数据、FAQ 覆盖长尾问题。
+5. 产品内 bot 固定 UI 也完成双语：共享 Card JSON 2.0 按读者客户端语言显示中文 / English，Markdown/toast 降级中英并列；不翻译 agent 生成内容。
 5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（AEO/GEO：给 AI 引擎可直接读取的项目摘要）。
 6. 新增本文档 `docs/MARKETING.md`。
 7. 已向 awesome-dsh-plugin 提交收录 PR（见 §6.2 状态）。
@@ -207,7 +208,7 @@
 
 标题（A/B 任选）：
 - A：把 DeepSeek Harness 装进飞书，扫码 30 秒，手机指挥本机 Coding Agent
-- B：DeepSeek Harness 连接飞书全教程：扫码即用、崩溃也能自救，六项能力一次讲清
+- B：DeepSeek Harness 连接飞书全教程：扫码即用、崩溃也能自救，九项能力一次讲清
 
 正文：
 
@@ -226,14 +227,17 @@
 > ```
 > 首次启动终端打印二维码，飞书 App 扫码绑定 PersonalAgent 应用，私聊直接发消息，群聊/话题里 @bot。
 >
-> **六个差异化能力**
+> **九个差异化能力**
 > 1. 安全网守护：dsh 进程崩溃后机器人仍在飞书回复，/safemode 进入仅核心安全模式自愈——唯一
 >    「出故障时用户不会失联」的方案；
 > 2. 多角色 Agent：/role 切换 PM / 开发 / 文档角色，每个角色有人设、模型偏好与规则；
-> 3. 并行多任务：同群同时跑多个任务，会话隔离不排队；
-> 4. 会话归档：/archive、/retention 自动保留策略，会话列表不烂掉；
-> 5. 跨会话主动通知：A 群跑完，主动发到 B 群并 @ 你；
-> 6. 对话内管理模型和密钥：/model、/providers、/key 全程在聊天里完成。
+> 3. 多机器人可信交接：独立机器人在同群以真实 @ 交接，连续回合有硬上限；
+> 4. 并行多任务：同群同时跑多个任务，会话隔离不排队；
+> 5. 持久任务对账：消息先落盘，崩溃后用 /jobs 查看 checkpoint 并显式重试；
+> 6. 会话归档：/archive、/retention 自动保留策略，会话列表不烂掉；
+> 7. 跨会话主动通知：A 群跑完，主动发到 B 群并 @ 你；
+> 8. 对话内管理模型和密钥：/model、/providers、/key 全程在聊天里完成；
+> 9. 计划门禁：完整计划先发出，批准后才执行关键动作。
 >
 > **安全性**
 > 数据只在本机、飞书与 DeepSeek 之间流转；密钥不写入仓库；访问白名单 /invite 可管理；
@@ -261,12 +265,15 @@
    口播：DeepSeek Harness 8 月 13 日开源，今天带你把本机 coding agent 装进飞书。
 2. **为什么（0:30–1:20）**：官方 Web UI 要坐电脑前；出门想改代码怎么办。对比其他方案：串行、崩溃失联。
 3. **安装演示（1:20–3:00）**：终端执行两条命令，打印二维码，飞书扫码绑定，第一条消息发出去。
-4. **六个能力逐个演示（3:00–7:30）**：
+4. **九个能力逐个演示（3:00–7:30）**：
    - 并行任务：同群连发两个任务同时跑；
    - 多角色：/role set pm，让 agent 换角色；
+   - 多机器人：开发 bot 完成后真实 @ 复审 bot 交接；
+   - 持久对账：模拟重启后用 /jobs 查看中断 checkpoint 并重试；
    - 跨会话通知：A 群让 agent 完成后去 B 群 @ 你；
    - 归档：/archive 后 /archive list；
    - 对话内换模型 / 密钥：/model use、/key set；
+   - 计划门禁：发完整计划，卡片批准后继续；
    - 杀手锏：kill dsh 进程 → 飞书发 /safemode → 机器人照常回复 → /safemode exit 恢复。
 5. **安全提示（7:30–8:20）**：认准官方仓库；不提供 exe；仿冒仓库警示。
 6. **结尾（8:20–9:00）**：Star/安装命令/评论区提问。
@@ -280,7 +287,7 @@
 
 回答结构：
 > 飞书桥接我推荐 dsh-lark-bot（github.com/PlutoKeating/dsh-lark-bot），是目前功能最全的飞书方案，
-> 扫码即用，安装只要两条命令……（展开六个能力，重点讲安全网守护）…… 特别提醒：官方从不提供 exe，
+> 扫码即用，安装只要两条命令……（展开九个能力，重点讲安全网守护）…… 特别提醒：官方从不提供 exe，
 > 别下任何「下载双击运行」的版本。
 
 要点：回答要带实际演示截图；知乎对 GitHub 外链放行，但避免堆链接；优先回答高浏览问题。

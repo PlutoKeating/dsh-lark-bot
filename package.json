@@ -1,7 +1,7 @@
 {
   "name": "dsh-lark-bot",
-  "version": "0.15.9",
-  "description": "把 DeepSeek Harness (dsh) 装进飞书/Lark 的 bot，扫码即用：流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。| Bridge DeepSeek Harness (dsh) into Feishu / Lark, scan-to-connect: streaming cards, project workspaces, parallel tasks, multi-role agents, safety-net guardian.",
+  "version": "0.16.0",
+  "description": "把 DeepSeek Harness (dsh) 装进飞书/Lark 的 bot，扫码即用：dsh Web 可视化设置、流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。| Bridge DeepSeek Harness into Feishu/Lark with visual dsh Web settings, streaming cards, workspaces, parallel tasks, roles and a safety-net guardian.",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "bin": {
@@ -16,6 +16,7 @@
       "types": "./dist/plugin.d.ts",
       "import": "./dist/plugin.js"
     },
+    "./client": "./dist/client.js",
     "./invariant": {
       "types": "./dist/invariant.d.ts",
       "import": "./dist/invariant.js"
@@ -27,18 +28,37 @@
     "./ask": {
       "types": "./dist/ask.d.ts",
       "import": "./dist/ask.js"
+    },
+    "./plan": {
+      "types": "./dist/plan.d.ts",
+      "import": "./dist/plan.js"
+    },
+    "./approval": {
+      "types": "./dist/approval.d.ts",
+      "import": "./dist/approval.js"
+    },
+    "./file": {
+      "types": "./dist/file.d.ts",
+      "import": "./dist/file.js"
     }
   },
   "files": [
     "dist",
     "bin",
     "cordis.patch.yml",
+    "dsh-plugin.json",
     "README.md",
     "README_EN.md",
     "SECURITY.md",
     "LICENSE"
   ],
   "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
@@ -73,7 +93,7 @@
     ],
     "compatibility": {
       "dshVersions": [
-        "0.1.0-rc.6"
+        "0.1.0-rc.8"
       ]
     },
     "capability": {
@@ -92,12 +112,14 @@
   "scripts": {
     "dev": "tsup --watch",
     "start": "node bin/dsh-lark-bot.mjs start",
-    "build": "tsup",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
     "check:publish-bundle": "node scripts/check-publish-bundle.mjs",
+    "check:tui-admission": "node scripts/check-tui-admission.mjs",
+    "check:tui-tty": "node scripts/check-tui-tty.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build && pnpm check:publish-bundle && node bin/dsh-lark-bot.mjs --version",
+    "ci:local": "git diff --check && pnpm typecheck && pnpm test && pnpm build && pnpm check:tui-admission && pnpm check:tui-tty && pnpm check:publish-bundle && node bin/dsh-lark-bot.mjs --version",
     "release:check": "pnpm ci:local && node scripts/check-dsh-upstream.mjs",
     "dsh:upstream": "node scripts/check-dsh-upstream.mjs",
     "compat:probe": "node scripts/probe-dsh-compat.mjs",
@@ -129,7 +151,8 @@
     "dsh-plugin",
     "feishu-plugin",
     "lark-integration",
-    "remote-coding"
+    "remote-coding",
+    "dsh-web-settings"
   ],
   "license": "AGPL-3.0",
   "engines": {
@@ -138,8 +161,9 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "3.18.1",
     "@larksuite/channel": "^0.4.1",
     "commander": "^12.1.0",
     "cross-spawn": "^7.0.6",
@@ -150,14 +174,37 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.8",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "@types/qrcode-terminal": "^0.12.2",
+    "@types/react": "18.3.28",
+    "react": "18.3.1",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   },
   "pnpm": {
+    "overrides": {
+      "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-attachment": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-brand": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-code-runtime": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-invariants": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-scope": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-sdk-protocol": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-subagent": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-timeout": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.8",
+      "@deepseek-ai/dsh-user-approval": "0.1.0-rc.8"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "protobufjs"

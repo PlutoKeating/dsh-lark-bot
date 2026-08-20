@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import {
   spawn as defaultSpawn,
   type ChildProcess,
@@ -47,18 +48,32 @@ function textOfContent(content: unknown): string {
   return content.text;
 }
 
+function acpImageFallback(content: unknown): string {
+  if (!isRecord(content) || content.type !== 'image') return '';
+  const mime = typeof content.mimeType === 'string' ? content.mimeType : 'unknown';
+  return `\n[ACP 返回了一张 ${mime} 图片；当前飞书桥接暂不支持图片出站，未静默丢弃。]\n`;
+}
+
 /** Translate an ACP session update into bridge events (forward-compatible). */
 export function translateAcpUpdate(notification: SessionNotification): AgentEvent[] {
   const update = notification.update;
   if (!isRecord(update)) return [];
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
-      return textOfContent(update.content)
-        ? [{ type: 'text', delta: textOfContent(update.content) }]
+      return textOfContent(update.content) || acpImageFallback(update.content)
+        ? [{ type: 'text', delta: textOfContent(update.content) || acpImageFallback(update.content) }]
         : [];
     case 'agent_thought_chunk':
       return textOfContent(update.content)
         ? [{ type: 'thinking', delta: textOfContent(update.content) }]
+        : [];
+    case 'usage_update':
+      return typeof update.used === 'number' && typeof update.size === 'number'
+        ? [{
+            type: 'context_usage',
+            usedTokens: update.used,
+            contextWindow: update.size,
+          }]
         : [];
     case 'tool_call': {
       if (typeof update.toolCallId !== 'string') return [];
@@ -80,7 +95,7 @@ function mapApprovalOutcome(
   outcome: ApprovalOutcome,
   options: RequestPermissionRequest['options'],
 ): RequestPermissionResponse {
-  if (outcome === 'cancelled') {
+  if (outcome === 'cancelled' || outcome === 'unavailable') {
     return { outcome: { outcome: 'cancelled' } };
   }
   const wanted: 'allow_once' | 'reject_once' =
@@ -90,10 +105,26 @@ function mapApprovalOutcome(
   return { outcome: { outcome: 'selected', optionId: option.optionId } };
 }
 
-function buildPromptText(prompt: string, images: readonly string[] | undefined): string {
-  return images?.length
-    ? `${prompt}\n\nImage files attached to this message:\n${images.join('\n')}`
-    : prompt;
+function imageMimeType(data: Buffer): string | undefined {
+  if (data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg';
+  if (data.subarray(0, 6).toString('ascii') === 'GIF87a' || data.subarray(0, 6).toString('ascii') === 'GIF89a') return 'image/gif';
+  if (data.subarray(0, 4).toString('ascii') === 'RIFF' && data.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  return undefined;
+}
+
+async function buildPromptBlocks(
+  prompt: string,
+  images: readonly string[] | undefined,
+): Promise<AcpContentBlock[]> {
+  const blocks: AcpContentBlock[] = [{ type: 'text', text: prompt }];
+  for (const path of images ?? []) {
+    const data = await readFile(path);
+    const mimeType = imageMimeType(data);
+    if (!mimeType) throw new Error(`ACP image input has unsupported format: ${path}`);
+    blocks.push({ type: 'image', data: data.toString('base64'), mimeType });
+  }
+  return blocks;
 }
 
 function waitForChildExit(
@@ -215,10 +246,12 @@ export class AcpDshAdapter implements AgentAdapter {
         }
         const approval: ApprovalRequest = {
           id: request.toolCall.toolCallId,
+          callId: request.toolCall.toolCallId,
           sessionId: request.sessionId,
           toolName:
             typeof request.toolCall.title === 'string' ? request.toolCall.title : 'tool',
-          reason: undefined,
+          reason: approvalReason(request),
+          toolInput: request.toolCall.rawInput,
           options: request.options.map((item) => ({
             optionId: item.optionId,
             name: item.name,
@@ -241,12 +274,16 @@ export class AcpDshAdapter implements AgentAdapter {
           NodeReadable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
         ),
       );
-      await conn.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
+      const info = await conn.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
       const created = await conn.newSession({ cwd, mcpServers: [] });
       serverSessionId = created.sessionId;
-      const blocks: AcpContentBlock[] = [
-        { type: 'text', text: buildPromptText(options.prompt, options.images) },
-      ];
+      if (
+        options.images?.length &&
+        info.agentCapabilities?.promptCapabilities?.image !== true
+      ) {
+        throw new Error('ACP runtime did not advertise image prompt support; attachment was not sent');
+      }
+      const blocks = await buildPromptBlocks(options.prompt, options.images);
       const response = await conn.prompt({ sessionId: serverSessionId, prompt: blocks });
       if (response.stopReason === 'cancelled') {
         if (!stopRequested.value) {
@@ -272,6 +309,12 @@ export class AcpDshAdapter implements AgentAdapter {
             : {}),
           ...(typeof response.usage.outputTokens === 'number'
             ? { outputTokens: response.usage.outputTokens }
+            : {}),
+          ...(typeof response.usage.cachedReadTokens === 'number'
+            ? { cacheReadTokens: response.usage.cachedReadTokens }
+            : {}),
+          ...(typeof response.usage.cachedWriteTokens === 'number'
+            ? { cacheWriteTokens: response.usage.cachedWriteTokens }
             : {}),
         };
         channel.push(usage);
@@ -335,6 +378,16 @@ export class AcpDshAdapter implements AgentAdapter {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   }
+}
+
+function approvalReason(request: RequestPermissionRequest): string {
+  const rawInput = request.toolCall.rawInput;
+  if (
+    isRecord(rawInput) && typeof rawInput.description === 'string' &&
+    rawInput.description.trim() !== ''
+  ) return rawInput.description;
+  const title = typeof request.toolCall.title === 'string' ? request.toolCall.title : 'tool';
+  return `Execute high-risk tool ${title}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {

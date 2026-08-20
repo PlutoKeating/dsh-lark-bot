@@ -6,14 +6,15 @@ export interface QuestionCardInput {
   question: string;
   options?: string[];
   placeholder?: string;
+  actionScope?: string;
 }
 
-function formElement(input: QuestionCardInput): object {
+function formElement(input: QuestionCardInput, locale: CardLocale): object {
   if (input.kind === 'text') {
     return {
       tag: 'input',
       name: 'answer',
-      placeholder: { tag: 'plain_text', content: input.placeholder ?? '请输入答案…' },
+      placeholder: { tag: 'plain_text', content: input.placeholder ?? (locale === 'zh_cn' ? '请输入答案…' : 'Enter an answer…') },
     };
   }
   const options = (input.options ?? []).map((option, index) => ({
@@ -24,14 +25,14 @@ function formElement(input: QuestionCardInput): object {
     return {
       tag: 'multi_select_static',
       name: 'answer',
-      placeholder: { tag: 'plain_text', content: '请选择（可多选）…' },
+      placeholder: { tag: 'plain_text', content: locale === 'zh_cn' ? '请选择（可多选）…' : 'Choose one or more…' },
       options,
     };
   }
   return {
     tag: 'select_static',
     name: 'answer',
-    placeholder: { tag: 'plain_text', content: '请选择…' },
+    placeholder: { tag: 'plain_text', content: locale === 'zh_cn' ? '请选择…' : 'Choose…' },
     options,
   };
 }
@@ -43,32 +44,40 @@ function formElement(input: QuestionCardInput): object {
  * interactive component lives inside a form with a submit-bound button.
  */
 export function renderQuestionCard(input: QuestionCardInput): object {
-  return {
-    schema: '2.0',
-    config: {
-      summary: { content: '问题' },
-    },
-    body: {
+  const body = (locale: CardLocale) => ({
       elements: [
         { tag: 'markdown', content: `❓ ${input.question}` },
+        {
+          tag: 'markdown',
+          content: locale === 'zh_cn'
+            ? '💬 也可以直接回复本卡片作答；选项不合适时可输入补充说明。'
+            : '💬 You can also reply directly to this card; add a free-form note if the options do not fit.',
+        },
         {
           tag: 'form',
           name: `form-${input.id}`,
           elements: [
-            formElement(input),
+            formElement(input, locale),
             {
               tag: 'button',
-              text: { tag: 'plain_text', content: '提交' },
+              text: { tag: 'plain_text', content: locale === 'zh_cn' ? '提交' : 'Submit' },
               type: 'primary',
-              value: { cmd: 'question-submit', id: input.id },
+              value: {
+                cmd: 'question-submit',
+                id: input.id,
+                ...(input.actionScope ? { scope: input.actionScope } : {}),
+              },
               form_action_type: 'submit',
               name: `btn-submit-${input.id}`,
             },
           ],
         },
       ],
-    },
-  };
+    });
+  return localizedCard({
+    zhCn: { summary: '问题', body: body('zh_cn') },
+    enUs: { summary: 'Question', body: body('en_us') },
+  });
 }
 
 /**
@@ -101,3 +110,4 @@ export function extractQuestionAnswer(
   });
   return kind === 'single' ? resolved[0] : resolved;
 }
+import { localizedCard, type CardLocale } from './i18n.js';

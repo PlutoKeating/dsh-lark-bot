@@ -7,6 +7,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
+import { profilePackageMatches } from './profile-package.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
 export const SDK_SERVER_VERSION = DSH_COMPATIBILITY.sdkServer;
@@ -29,9 +30,10 @@ export interface SdkRuntimeOptions {
   /** Profile name for the SDK runtime composition. */
   profile?: string;
   /**
-   * Mount the bridge callback tools (`lark_notify` / `lark_ask_user`) in the
-   * runtime overlay. The full bridge needs them; the guardian's core-only
-   * safe profile must not (it has no notify server). Defaults to `true`.
+   * Mount the bridge callback tools (`lark_notify`, `lark_ask_user`, and
+   * `lark_request_plan_approval`, and the one-shot approval answerer) in the runtime overlay. The full bridge needs
+   * them; the guardian's core-only safe profile must not (it has no callback
+   * server). Defaults to `true`.
    */
   bridgeTools?: boolean;
   /** Injectable installer for tests. */
@@ -95,7 +97,9 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '- id: system-prompt',
     '  config:',
     '    persona: >-',
-    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
+    bridgeTools
+      ? '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}. Before substantial or high-risk repository actions, use lark_request_plan_approval and wait for approval.'
+      : '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
     '',
     '- id: hmr',
     '  disabled: true',
@@ -112,6 +116,14 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
+      // Local result-file upload tool.
+      '- insert:',
+      '    - id: lark-file',
+      `      name: '${own.name}/file'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
       // Question-card tool: the agent asks the user for decisions / missing
       // information; the bridge shows a card and returns the answer.
       '- insert:',
@@ -121,17 +133,25 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
+      // Plan gate: send the complete plan, then wait for approve/revise.
+      '- insert:',
+      '    - id: lark-plan-approval',
+      `      name: '${own.name}/plan'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+      // Default-runtime answerer for the official dsh user-approval seam.
+      '- insert:',
+      '    - id: lark-approval-answerer',
+      `      name: '${own.name}/approval'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_APPROVAL_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
     );
   }
   return lines.join('\n');
-}
-
-function sdkServerInstalled(profileRoot: string): boolean {
-  const candidates = [
-    join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE),
-    join(profileRoot, '..', 'node_modules', SDK_SERVER_PACKAGE),
-  ];
-  return candidates.some((path) => existsSync(path));
 }
 
 export function isSdkProfileReady(profileRoot: string): boolean {
@@ -140,8 +160,19 @@ export function isSdkProfileReady(profileRoot: string): boolean {
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    sdkServerInstalled(profileRoot) &&
+    profilePackageMatches(profileRoot, SDK_SERVER_PACKAGE, SDK_SERVER_VERSION) &&
     ownPackageLinked(profileRoot, own)
+  );
+}
+
+/** Package readiness plus exact managed overlay content for this bridge version. */
+export function isSdkManagedProfileCurrent(
+  profileRoot: string,
+  options?: { bridgeTools?: boolean },
+): boolean {
+  return (
+    isSdkProfileReady(profileRoot) &&
+    readFileIfPresent(join(profileRoot, 'cordis.patch.yml')) === patchYamlFor(options)
   );
 }
 
@@ -206,7 +237,13 @@ export async function ensureSdkProfile(
 ): Promise<SdkProfileEnsureResult> {
   const profile = options.profile ?? DEFAULT_SDK_PROFILE;
   const root = sdkProfileRoot(options.home, profile, options.env);
-  if (isSdkProfileReady(root)) return { ok: true, created: false };
+  const patchOptions = options.bridgeTools === undefined
+    ? {}
+    : { bridgeTools: options.bridgeTools };
+  const expectedPatch = patchYamlFor(patchOptions);
+  if (isSdkManagedProfileCurrent(root, patchOptions)) {
+    return { ok: true, created: false };
+  }
 
   try {
     await mkdir(root, { recursive: true });
@@ -214,11 +251,7 @@ export async function ensureSdkProfile(
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
     await writeFile(
       join(root, 'cordis.patch.yml'),
-      patchYamlFor(
-        options.bridgeTools === undefined
-          ? {}
-          : { bridgeTools: options.bridgeTools },
-      ),
+      expectedPatch,
       'utf8',
     );
     const install = options.install ?? runPnpmInstall;
@@ -239,6 +272,14 @@ export async function ensureSdkProfile(
       created: false,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+function readFileIfPresent(path: string): string | undefined {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return undefined;
   }
 }
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "urn:dsh-tui:host-descriptor:0.15",
+  "hostId": "dsh-tui",
+  "hostVersion": "0.15-profile",
+  "facetApiVersions": [
+    "v1alpha1"
+  ],
+  "contracts": [
+    {
+      "apiVersion": "presentation.dsh/v1alpha1",
+      "kind": "UserInteraction",
+      "definition": {
+        "source": "dsh-std",
+        "package": "@dsh-std/presentation"
+      },
+      "permissions": []
+    }
+  ],
+  "runtime": {
+    "location": "local",
+    "generationId": "dsh-lark-local-validation",
+    "headless": false,
+    "remoteAttach": false
+  },
+  "trustLevel": "trusted-in-process",
+  "platform": {
+    "os": "linux",
+    "arch": "x64",
+    "node": ">=22.19"
+  }
+}

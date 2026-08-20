@@ -7,6 +7,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
+import { profilePackageMatches } from './profile-package.js';
 
 export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
 export const ACP_VERSION = DSH_COMPATIBILITY.acp;
@@ -82,7 +83,7 @@ export function acpPatchYaml(provider: string, model: string): string {
     '- id: system-prompt',
     '  config:',
     '    persona: >-',
-    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
+    '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}. Before substantial or high-risk repository actions, use lark_request_plan_approval and wait for approval.',
     '',
     '- id: hmr',
     '  disabled: true',
@@ -95,6 +96,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Local result-file upload tool.
+    '- insert:',
+    '    - id: lark-file',
+    `      name: '${own.name}/file'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
     // Question-card tool (same contract as the SDK runtime).
     '- insert:',
     '    - id: lark-ask',
@@ -103,15 +112,15 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Plan gate (same contract as the SDK runtime).
+    '- insert:',
+    '    - id: lark-plan-approval',
+    `      name: '${own.name}/plan'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
   ].join('\n');
-}
-
-function acpPluginInstalled(profileRoot: string): boolean {
-  const candidates = [
-    join(profileRoot, 'node_modules', ACP_PACKAGE),
-    join(profileRoot, '..', 'node_modules', ACP_PACKAGE),
-  ];
-  return candidates.some((path) => existsSync(path));
 }
 
 export function isAcpProfileReady(profileRoot: string): boolean {
@@ -120,9 +129,24 @@ export function isAcpProfileReady(profileRoot: string): boolean {
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
-    acpPluginInstalled(profileRoot) &&
+    profilePackageMatches(profileRoot, ACP_PACKAGE, ACP_VERSION) &&
     ownPackageLinked(profileRoot, own)
   );
+}
+
+/** Package readiness plus the exact managed ACP overlay for the active route. */
+export function isAcpManagedProfileCurrent(
+  profileRoot: string,
+  provider: string,
+  model: string,
+): boolean {
+  if (!isAcpProfileReady(profileRoot)) return false;
+  try {
+    return readFileSync(join(profileRoot, 'cordis.patch.yml'), 'utf8') ===
+      acpPatchYaml(provider, model);
+  } catch {
+    return false;
+  }
 }
 
 /**

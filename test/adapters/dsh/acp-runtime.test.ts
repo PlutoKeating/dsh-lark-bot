@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ACP_PACKAGE,
+  ACP_VERSION,
   DEFAULT_ACP_PROFILE,
   acpPatchYaml,
   acpProfileRoot,
   ensureAcpProfile,
+  isAcpManagedProfileCurrent,
   isAcpProfileReady,
   resolveAcpLaunch,
 } from '../../../src/adapters/dsh/acp-runtime.js';
@@ -24,7 +26,10 @@ function installPlugin(root: string) {
     const own = ownPackageInfo();
     const pluginRoot = join(root, 'node_modules', ...ACP_PACKAGE.split('/'));
     await mkdir(pluginRoot, { recursive: true });
-    await writeFile(join(pluginRoot, 'package.json'), JSON.stringify({ name: ACP_PACKAGE }));
+    await writeFile(
+      join(pluginRoot, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
+    );
     await symlink(own.root, join(root, 'node_modules', own.name), 'dir');
   };
 }
@@ -34,8 +39,14 @@ describe('resolveAcpLaunch', () => {
     const patch = acpPatchYaml('deepseek-official', 'deepseek-v4-flash');
     expect(patch).toContain("id: acp");
     expect(patch).toContain("id: lark-notify");
+    expect(patch).toContain("id: lark-file");
+    expect(patch).toContain("name: 'dsh-lark-bot/file'");
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
+    expect(patch).toContain("id: lark-plan-approval");
+    expect(patch).toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).not.toContain('id: lark-approval-answerer');
+    expect(patch).toContain('use lark_request_plan_approval');
   });
 
   it('resolves the discovered bin with the ACP profile', () => {
@@ -63,6 +74,8 @@ describe('ensureAcpProfile', () => {
     expect(result.ok).toBe(true);
     expect(result.created).toBe(true);
     expect(isAcpProfileReady(root)).toBe(true);
+    expect(isAcpManagedProfileCurrent(root, 'deepseek-official', 'deepseek-v4-flash')).toBe(true);
+    expect(isAcpManagedProfileCurrent(root, 'other-provider', 'deepseek-v4-flash')).toBe(false);
     expect(acpPatchYaml('deepseek-official', 'deepseek-v4-flash')).toContain(
       'provider: deepseek-official',
     );
@@ -98,7 +111,7 @@ describe('ensureAcpProfile', () => {
     await mkdir(join(root, 'node_modules', ...ACP_PACKAGE.split('/')), { recursive: true });
     await writeFile(
       join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
-      JSON.stringify({ name: ACP_PACKAGE }),
+      JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
     );
     await mkdir(join(root, 'node_modules', own.name), { recursive: true });
     await writeFile(
@@ -138,5 +151,21 @@ describe('ensureAcpProfile', () => {
     });
     expect(result.ok).toBe(false);
     expect(result.error).toContain('registry unreachable');
+  });
+
+  it('rejects an otherwise complete profile with a stale ACP version', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-acp-old-version-'));
+    tempDirs.push(home);
+    const root = acpProfileRoot(home, DEFAULT_ACP_PROFILE);
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, 'package.json'), '{}');
+    await writeFile(join(root, 'cordis.yml'), '[]\n');
+    await writeFile(join(root, 'cordis.patch.yml'), '[]\n');
+    await installPlugin(root)();
+    await writeFile(
+      join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.6' }),
+    );
+    expect(isAcpProfileReady(root)).toBe(false);
   });
 });

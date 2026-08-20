@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 import { apply as applyNotifyTool } from '../../src/notify/tool.js';
+import type { RawToolDefinition as ToolDefinition } from '../../src/notify/raw-tool.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -31,6 +31,7 @@ describe('lark_notify tool plugin', () => {
     expect(ctx.tools.register).toHaveBeenCalledOnce();
     const tool = registered[0];
     expect(tool?.name).toBe('lark_notify');
+    expect(tool?.parameters).toMatchObject({ type: 'object', required: ['text'] });
     if (!tool) throw new Error('tool was not registered');
     const result = await tool.execute(
       {
@@ -53,6 +54,13 @@ describe('lark_notify tool plugin', () => {
         }),
       }),
     );
+  });
+
+  it('validates raw JSON-schema tool arguments without importing dsh-tools', async () => {
+    const ctx = { tools: { register: vi.fn() } };
+    applyNotifyTool(ctx as never, { endpoint: 'http://127.0.0.1/notify', token: 't' });
+    const tool = ctx.tools.register.mock.calls[0]?.[0] as ToolDefinition;
+    await expect(tool.execute({ text: 42 }, {})).rejects.toThrow(/text must be/);
   });
 
   it('throws when the callback endpoint is not configured', async () => {

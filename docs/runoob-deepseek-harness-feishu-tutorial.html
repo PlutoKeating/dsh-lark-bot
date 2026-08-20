@@ -36,13 +36,15 @@
 
 <p><strong>基本使用</strong></p>
 <p>在飞书里给机器人发普通消息即可开始工作，常用命令：</p>
+<p>命令帮助、状态/错误提示和交互卡片内置中文 / English：同一张 Card JSON 2.0 群卡会按每位读者的客户端语言显示，普通 Markdown/toast 降级则中英并列。agent 回答和用户原文不会被自动翻译。</p>
 <table>
 <tbody>
 <tr><th>命令</th><th>作用</th></tr>
 <tr><td><code>/new</code> <code>/reset</code></td><td>开始新会话</td></tr>
-<tr><td><code>/cd &lt;path&gt;</code></td><td>切换工作目录并重置会话</td></tr>
+<tr><td><code>/cd &lt;path&gt;</code></td><td>切换到该目录的独立会话（切回可继续）</td></tr>
 <tr><td><code>/ws list</code> <code>/ws save &lt;name&gt;</code> <code>/ws use &lt;name&gt;</code></td><td>查看 / 保存 / 切换命名工作空间</td></tr>
-<tr><td><code>/status</code></td><td>查看当前状态与运行中的任务</td></tr>
+<tr><td><code>/status</code></td><td>查看可刷新状态卡、上下文/token 用量、待处理卡与任务账本</td></tr>
+<tr><td><code>/jobs [list|show &lt;消息ID&gt;|retry &lt;消息ID&gt;]</code></td><td>对账任务状态、查看 checkpoint、显式重试中断/失败任务</td></tr>
 <tr><td><code>/stop</code></td><td>终止当前任务</td></tr>
 <tr><td><code>/concurrency [N]</code></td><td>查看或设置当前 scope 并行任务数（默认 2）</td></tr>
 <tr><td><code>/role list</code> <code>/role set &lt;id&gt;</code></td><td>查看角色 / 为当前 scope 绑定角色</td></tr>
@@ -53,6 +55,7 @@
 <tr><td><code>/help</code></td><td>查看命令帮助</td></tr>
 </tbody>
 </table>
+<p>会话按 <code>scope + workspace</code> 保存；<code>/cd</code> / <code>/ws use</code> 会中断旧工作区仍在运行的任务，但不删除上下文，A → B → A 会恢复 A。只有 <code>/new</code> / <code>/reset</code> 清空当前工作区。状态 pending 与归档操作也只属于当前 workspace；Git 项目 worktree 按 scope + 项目路径分别创建，旧版 worktree 核验真实 owning repo 后，会话与旧自动归档归回该项目并迁移；若当前指针已到另一项目则保留旧树并另建新树，未提交文件不会被覆盖。</p>
 
 <p><strong>核心能力</strong></p>
 <p>1. 安全网守护：dsh 崩溃后飞书仍叫得应</p>
@@ -64,15 +67,21 @@
 <li><code>/safemode exit</code>：退出安全模式，守护重启完整 profile 并把飞书通道交还。</li>
 </ul>
 <p>全程不需要命令行，dsh 恢复后守护自动回归静默。</p>
+<h3>可选：让正常 profile 登录自启</h3>
+<p>安装完成后执行 <code>dsh-lark-bot service install --profile dsh-lark</code>，即可由 systemd user / LaunchAgent / Windows 登录计划任务托管同一个标准 dsh profile；用 <code>service status</code>、<code>service logs -f</code>、<code>service restart|stop|start|uninstall</code> 运维。它不是第二套桥接引擎，guardian 与升级流程也会优先复用该服务，避免重复启动。机器睡眠期间不能收消息，恢复网络后自动重连并提示。</p>
 <p>2. 多角色 Agent：一个机器人，一整个团队</p>
 <p>用 <code>/role save</code> 定义 PM / 开发 / 文档等角色（persona、模型偏好、工具指引、角色规则），再用 <code>/role set &lt;id&gt;</code> 绑定到当前 scope。每个角色有持久化的人设与规则。</p>
+<h3>多机器人 @ 交接：一个群，多个独立 Agent</h3>
+<p>用 <code>dsh-lark-bot bot add reviewer --model gateway/review-model</code> 增加独立 PersonalAgent 实例；每个实例有自己的模型、凭据、服务与上下文。把实例加入同一群后，只有登记为可信 peer 的 bot 通过真实 @ 才能交接任务；连续 bot 回合默认最多 6 次，真人消息会重置，避免无限互聊。<code>bot list|status|remove</code> 用于查看和移除实例；移除时保留 session/worktree/archive 数据。附加实例使用 SDK/ACP（或 legacy headless）；共享 Web agent 的广播流无法隔离 session，因此不支持 Web adapter。</p>
 <p>3. 并行多任务：不用排队</p>
 <p>同一群里可以同时跑多个任务，各自会话隔离（默认 2 个并行，<code>/concurrency</code> 可调），连续发来的多条消息会以独立 run 并行推进。</p>
-<p>4. 会话归档与清理</p>
+<p>4. 崩溃后任务可对账</p>
+<p>普通任务先写入本机 <code>jobs.json</code>（0600）再排队。进程重启后 queued 自动恢复；已经 running 的任务转为 interrupted 并保留最后安全 checkpoint，不会自动重复可能已有副作用的命令。用 <code>/jobs show</code> 核对后再 <code>/jobs retry</code>。这只保证 bridge 已经接收并落盘的消息；断网期间平台未投递的事件无法恢复。</p>
+<p>5. 会话归档与清理</p>
 <p><code>/archive</code> 归档旧任务、<code>/retention</code> 配置自动保留策略，长期使用会话列表也不会越积越多。</p>
-<p>5. 跨会话主动通知</p>
+<p>6. 跨会话主动通知</p>
 <p>Agent 在 A 群跑完任务，可以主动发消息到 B 群或私聊并 <code>@</code> 你（内置 <code>lark_notify</code> dsh 工具），而不是「你问它答」。</p>
-<p>6. 对话内管理模型和密钥</p>
+<p>7. 对话内管理模型和密钥</p>
 <p><code>/model</code>、<code>/providers</code>、<code>/provider</code>、<code>/key</code> 直接在聊天里查看、切换供应商、热更新密钥，全程不离开飞书；密钥写入 <code>~/.dsh/.credentials.yaml</code>（0600），不在聊天记录中显示。</p>
 
 <p><strong>安全性说明</strong></p>
@@ -92,7 +101,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot</code></pre>
 <p><strong>常见问题</strong></p>
 <p>扫码失败？确认本机时间准确、网络可访问飞书开放平台；已有 App ID/Secret 时可用 <code>--app-id</code> / <code>--app-secret</code> 跳过扫码。</p>
 <p>机器人静默 / 长连接失败？查看 stderr 上的 JSONL 日志（关注 <code>channel</code> 类别），SDK 会自动重连；也可先运行 <code>dsh-lark-bot doctor</code> 检查 profile 与本机 dsh 可用性。</p>
-<p>agent 无响应？发送 <code>/status</code> 查看 scope、cwd 和 active run；<code>/stop</code> 终止当前任务；持续无响应超过 <code>DSH_LARK_RUN_TIMEOUT_MS</code> 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。</p>
+<p>agent 无响应？发送 <code>/status</code> 查看 scope、cwd、模型、active run、真实 context/token 指标和待审批/提问/计划（未知值显示“暂无”，卡片可原位刷新）；<code>/stop</code> 终止当前任务；持续无响应超过 <code>DSH_LARK_RUN_TIMEOUT_MS</code> 时看门狗会自动终止（空闲超时，活跃任务不会被误杀）。</p>
+<p>高风险操作如何确认？默认 SDK 已内置逐操作门禁：执行命令、修改/删除文件等动作前会弹“允许执行一次 / 拒绝”卡，显示理由和参数。等待期间任务不会 idle timeout；拒绝后 agent 会收到结果并改用安全方案。群聊成员能看到卡片内容，敏感命令请在私聊处理。</p>
 <p>dsh 崩溃了怎么办？直接发 <code>/safemode</code>，守护会拉起仅核心安全模式，修复后 <code>/safemode exit</code> 恢复。</p>
 
 <p><strong>参考链接</strong></p>

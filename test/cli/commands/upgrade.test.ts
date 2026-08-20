@@ -156,7 +156,7 @@ describe('dsh-lark-bot upgrade', () => {
     );
     const joined = harness.out.join('');
     expect(joined).toContain('✅ 包本体已更新到 0.12.0');
-    expect(joined).toContain('runtime profile dsh-lark-sdk: own-package 链接已修复');
+    expect(joined).toContain('runtime profile dsh-lark-sdk: 运行时依赖与链接已修复');
     expect(joined).toContain('回滚命令：dsh-lark-bot upgrade --rollback');
 
     const state = await loadUpgradeState(harness.stateFile);

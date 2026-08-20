@@ -89,12 +89,23 @@ function translateAssistantMessage(data: unknown): AgentEvent[] {
     typeof usage.inputTokens === 'number' ? usage.inputTokens : undefined;
   const outputTokens =
     typeof usage.outputTokens === 'number' ? usage.outputTokens : undefined;
-  if (inputTokens === undefined && outputTokens === undefined) return [];
+  const cacheReadTokens =
+    typeof usage.cacheReadTokens === 'number' ? usage.cacheReadTokens : undefined;
+  const cacheWriteTokens =
+    typeof usage.cacheWriteTokens === 'number' ? usage.cacheWriteTokens : undefined;
+  if (
+    inputTokens === undefined &&
+    outputTokens === undefined &&
+    cacheReadTokens === undefined &&
+    cacheWriteTokens === undefined
+  ) return [];
   return [
     {
       type: 'usage',
       ...(inputTokens === undefined ? {} : { inputTokens }),
       ...(outputTokens === undefined ? {} : { outputTokens }),
+      ...(cacheReadTokens === undefined ? {} : { cacheReadTokens }),
+      ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
     },
   ];
 }
@@ -171,7 +182,8 @@ export interface SdkRunHandle {
 
 function buildPromptText(prompt: string, images: readonly string[] | undefined): string {
   return images?.length
-    ? `${prompt}\n\nImage files attached to this message:\n${images.join('\n')}`
+    ? `${prompt}\n\nImage attachments are available as local files:\n${images.join('\n')}\n` +
+      'The dsh SDK wire does not expose raw image upload yet; inspect these files with the available filesystem/image tools instead of assuming their pixels were sent to the model.'
     : prompt;
 }
 

@@ -20,6 +20,8 @@ const DIST_FILES = [
   'plugin.js',
   'plugin.d.ts',
   'plugin.js.map',
+  'client.js',
+  'client.js.map',
   'invariant.js',
   'invariant.d.ts',
   'invariant.js.map',
@@ -29,6 +31,15 @@ const DIST_FILES = [
   'ask.js',
   'ask.d.ts',
   'ask.js.map',
+  'plan.js',
+  'plan.d.ts',
+  'plan.js.map',
+  'approval.js',
+  'approval.d.ts',
+  'approval.js.map',
+  'file.js',
+  'file.d.ts',
+  'file.js.map',
 ] as const;
 
 const tempRoots: string[] = [];
@@ -49,6 +60,14 @@ const FAKE_PATCH = [
   "      name: 'dsh-lark-bot/notify'",
   '      config: {}',
   '',
+  '    - id: lark-file',
+  "      name: 'dsh-lark-bot/file'",
+  '      config: {}',
+  '',
+  '    - id: lark-approval-answerer',
+  "      name: 'dsh-lark-bot/approval'",
+  '      config: {}',
+  '',
 ].join('\n');
 
 function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
@@ -60,12 +79,19 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
     exports: {
       '.': { types: './dist/index.d.ts', import: './dist/index.js' },
       './plugin': { types: './dist/plugin.d.ts', import: './dist/plugin.js' },
+      './client': './dist/client.js',
       './invariant': { types: './dist/invariant.d.ts', import: './dist/invariant.js' },
       './notify': { types: './dist/notify.d.ts', import: './dist/notify.js' },
       './ask': { types: './dist/ask.d.ts', import: './dist/ask.js' },
+      './plan': { types: './dist/plan.d.ts', import: './dist/plan.js' },
+      './approval': { types: './dist/approval.d.ts', import: './dist/approval.js' },
+      './file': { types: './dist/file.d.ts', import: './dist/file.js' },
     },
     files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
-    dsh: { bundle: { patch: './cordis.patch.yml' } },
+    dsh: {
+      bundle: { patch: './cordis.patch.yml' },
+      client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-ui-settings-plugins'] },
+    },
     scripts: { build: 'tsup' },
     devDependencies: { typescript: '^5.6.3' },
   };
@@ -76,7 +102,12 @@ async function makeFakeRoot(distFiles: readonly string[] = DIST_FILES, name = 'd
   tempRoots.push(root);
   await mkdir(join(root, 'dist'), { recursive: true });
   await Promise.all([
-    ...distFiles.map((file) => writeFile(join(root, 'dist', file), 'export const fixture = true;\n')),
+    ...distFiles.map((file) => writeFile(
+      join(root, 'dist', file),
+      file === 'client.js'
+        ? 'window.__ModuleLoader__.load({ id: "dsh-lark-bot", factory: () => ({}) });\n'
+        : 'export const fixture = true;\n',
+    )),
     writeFile(join(root, 'README.md'), '# fixture\n'),
     writeFile(join(root, 'README_EN.md'), '# fixture-en\n'),
     writeFile(join(root, 'SECURITY.md'), 'security\n'),
@@ -106,15 +137,20 @@ describe('publish bundle', () => {
     const patch = await readFile(join(dir, 'cordis.patch.yml'), 'utf8');
     expect(patch).toContain("name: 'dsh-lark-bot/plugin'");
     expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).toContain("name: 'dsh-lark-bot/approval'");
     // The primary package ships the repository file verbatim: the published
     // patch can never drift from the tracked cordis.patch.yml.
     expect(patch).toBe(FAKE_PATCH);
   });
 
-  it('requires the ask entry that was missing from the v0.9.0 publish', async () => {
+  it('requires every bridge callback entry in the publish bundle', async () => {
     const required = collectRequiredDistFiles(manifestFor());
     expect(required).toContain('ask.js');
     expect(required).toContain('ask.d.ts');
+    expect(required).toContain('plan.js');
+    expect(required).toContain('approval.js');
+    expect(required).toContain('file.js');
+    expect(required).toContain('approval.d.ts');
   });
 
   it('fails validation and assembly when an exported artifact is missing', async () => {
@@ -142,5 +178,8 @@ describe('publish bundle', () => {
     // The plugin id stays dsh-lark-bot for the aliased package.
     expect(patch).toContain('- id: dsh-lark-bot');
     expect(patch).not.toContain("name: 'dsh-lark-bot/plugin'");
+    const client = await readFile(join(dir, 'dist', 'client.js'), 'utf8');
+    expect(client).toContain('id: "dsh-feishu-bot"');
+    expect(client).not.toContain('id: "dsh-lark-bot"');
   });
 });
