@@ -2,6 +2,11 @@ import type { FooterStatus, RunState, ToolEntry } from './run-state.js';
 import type { CardDensity } from './density.js';
 import { localizedCard, type CardLocale } from './i18n.js';
 
+// @larksuite/channel rolls over markdown at 30,000 characters to avoid
+// Feishu 230099. Trim tool history against a smaller full-card budget.
+const RUN_CARD_JSON_BUDGET = 28_000;
+const MAX_VISIBLE_TOOL_CALLS = 40;
+
 function markdown(content: string): object {
   return { tag: 'markdown', content };
 }
@@ -90,7 +95,13 @@ function hasAnswer(state: RunState): boolean {
   return state.blocks.some((block) => block.kind === 'text' && block.content.trim() !== '');
 }
 
-function processElements(state: RunState, detailed: boolean, compact: boolean, locale: CardLocale): object[] {
+function processElements(
+  state: RunState,
+  detailed: boolean,
+  compact: boolean,
+  locale: CardLocale,
+  maxTools: number,
+): object[] {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   if (state.reasoning.content) {
@@ -100,8 +111,17 @@ function processElements(state: RunState, detailed: boolean, compact: boolean, l
       ),
     );
   }
-  for (const block of state.blocks) {
-    if (block.kind !== 'tool') continue;
+  const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
+  const visibleTools = maxTools === 0 ? [] : toolBlocks.slice(-maxTools);
+  const hiddenTools = toolBlocks.length - visibleTools.length;
+  if (hiddenTools > 0) {
+    elements.push(
+      noteMd(zh
+        ? `_已隐藏 ${hiddenTools} 个较早的工具调用，仅显示最新进展_`
+        : `_Hidden ${hiddenTools} older tool calls; showing the latest progress_`),
+    );
+  }
+  for (const block of visibleTools) {
     const tool = block.tool;
     if (compact) {
       elements.push(toolBlock(tool));
@@ -125,7 +145,13 @@ function processElements(state: RunState, detailed: boolean, compact: boolean, l
   return elements;
 }
 
-function thinkingPanel(state: RunState, detailed: boolean, compact: boolean, locale: CardLocale): object {
+function thinkingPanel(
+  state: RunState,
+  detailed: boolean,
+  compact: boolean,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   return {
     tag: 'collapsible_panel',
     expanded: state.terminal === 'running',
@@ -136,7 +162,7 @@ function thinkingPanel(state: RunState, detailed: boolean, compact: boolean, loc
       icon_expanded_angle: -180,
     },
     border: { color: 'grey', corner_radius: '6px' },
-    elements: processElements(state, detailed, compact, locale),
+    elements: processElements(state, detailed, compact, locale, maxTools),
   };
 }
 
@@ -178,13 +204,18 @@ function ownerLine(state: RunState, locale: CardLocale): object | undefined {
   return state.scopeOwner ? noteMd(`👤 ${locale === 'zh_cn' ? '成员隔离会话' : 'Member-isolated session'}：${state.scopeOwner}`) : undefined;
 }
 
-function renderStandard(state: RunState, now: number, locale: CardLocale): object {
+function renderStandard(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
 
-  elements.push(thinkingPanel(state, false, false, locale));
+  elements.push(thinkingPanel(state, false, false, locale, maxTools));
   elements.push(compatibilityProcessSnapshot(state, locale));
 
   if (state.terminal === 'interrupted') {
@@ -223,13 +254,18 @@ function renderStandard(state: RunState, now: number, locale: CardLocale): objec
   };
 }
 
-function renderCompact(state: RunState, now: number, locale: CardLocale): object {
+function renderCompact(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
   elements.push(noteMd(summaryText(state, locale)));
-  elements.push(thinkingPanel(state, false, true, locale));
+  elements.push(thinkingPanel(state, false, true, locale, maxTools));
   elements.push(compatibilityProcessSnapshot(state, locale));
   if (state.finalDeliveryError) {
     elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
@@ -253,13 +289,18 @@ function renderCompact(state: RunState, now: number, locale: CardLocale): object
   };
 }
 
-function renderDetailed(state: RunState, now: number, locale: CardLocale): object {
+function renderDetailed(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
 
-  elements.push(thinkingPanel(state, true, false, locale));
+  elements.push(thinkingPanel(state, true, false, locale, maxTools));
   elements.push(compatibilityProcessSnapshot(state, locale));
 
   if (state.terminal === 'interrupted') {
@@ -309,12 +350,32 @@ export function renderCard(
   density: CardDensity = 'standard',
   now: number = Date.now(),
 ): object {
-  const render = (locale: CardLocale): object => {
-    if (density === 'compact') return renderCompact(state, now, locale);
-    if (density === 'detailed') return renderDetailed(state, now, locale);
-    return renderStandard(state, now, locale);
+  const render = (locale: CardLocale, maxTools: number): object => {
+    if (density === 'compact') return renderCompact(state, now, locale, maxTools);
+    if (density === 'detailed') return renderDetailed(state, now, locale, maxTools);
+    return renderStandard(state, now, locale, maxTools);
   };
-  return localizeRenderedCard(render('zh_cn'), render('en_us'));
+  const renderWithToolLimit = (maxTools: number): object =>
+    localizeRenderedCard(render('zh_cn', maxTools), render('en_us', maxTools));
+  const toolCount = state.blocks.filter((block) => block.kind === 'tool').length;
+  const initialLimit = Math.min(toolCount, MAX_VISIBLE_TOOL_CALLS);
+  const initialCard = renderWithToolLimit(initialLimit);
+  if (JSON.stringify(initialCard).length <= RUN_CARD_JSON_BUDGET) return initialCard;
+
+  let low = 0;
+  let high = initialLimit - 1;
+  let best = renderWithToolLimit(0);
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = renderWithToolLimit(middle);
+    if (JSON.stringify(candidate).length <= RUN_CARD_JSON_BUDGET) {
+      best = candidate;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return best;
 }
 
 /** Plain schema-2.0 card used when the native collapsible component is rejected. */

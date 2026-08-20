@@ -592,7 +592,9 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   reasoning、工具调用与结果位于 schema 2.0 `collapsible_panel`，运行时展开、结束后默认收起；
   detailed 含工具输入输出与 token usage。面板外的 notation 过程快照持续保留最新推理尾部、最近
   工具与结果；若平台拒绝 `collapsible_panel`，run-flow / guardian 会重试无该组件的 legacy 流式卡。
-  `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。
+  `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。相同 tool id 的
+  增量与完成事件归并为同一条记录；过程过长时以完整本地化卡片的 28,000 字符预算动态隐藏较早的
+  工具记录、保留最新记录，避免工具轨迹膨胀后被飞书以 `230099` 拒绝。
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
