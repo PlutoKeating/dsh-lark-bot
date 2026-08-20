@@ -770,7 +770,10 @@ export interface Logger {
   唯一、enabled、真实 @ 当前 bot 时进入任务管线，且跳过 slash-command dispatch。
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
-- `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`。
+- `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`；整卡
+  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。单次 patch 失败在内部结算并禁用该卡
+  后续更新，不向 producer 抛出，也不产生未处理 Promise rejection；初始卡发送失败仍向上抛出，
+  由 `run-flow` 走 legacy/no-card 降级。
 
 `src/bridge/send-options.ts` 定义出站 `SendOptions { replyTo?, mentions?, threadId? }` 与
 `MentionTarget { userId, name? }`：`sendMarkdown` / `sendCard` / `streamCard` 均接受该选项，
