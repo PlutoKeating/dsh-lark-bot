@@ -90,6 +90,27 @@ describe('lark approval answerer', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('bypasses one-shot approval for simple read-only shell inspections', async () => {
+    let preExecute: ((execution: unknown, next: () => Promise<unknown>) => Promise<unknown>) | undefined;
+    const on = (event: string, listener: unknown): void => {
+      if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+    };
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as never;
+    apply({
+      on,
+      tools: { get: () => ({ presentCall: () => ({ card: 'terminal' }) }) },
+    } as never, { endpoint: 'http://127.0.0.1/approval', token: 't' });
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    await expect(preExecute?.({
+      name: 'bash', arguments: { command: 'git status --short' },
+      agent: { session: { id: 's' } },
+    }, next)).resolves.toEqual({ kind: 'allow' });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('allows exactly the approved execution and reuses it for a nested official request', async () => {
     let preExecute: ((execution: unknown, next: () => Promise<unknown>) => Promise<unknown>) | undefined;
     let approval: ((request: unknown, next: () => Promise<string>) => Promise<string>) | undefined;

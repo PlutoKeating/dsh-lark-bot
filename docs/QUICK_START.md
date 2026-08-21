@@ -183,7 +183,9 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在较大或高风险动作前调用
 `lark_request_plan_approval`。完整计划先以普通 Markdown 消息发送，随后决策卡可“批准，开始执行”
-或填写意见后“继续规划”；未批准时 runtime 会拒绝写入、删除、移动、命令执行与 `run_code`，等待仅暂停
+或填写意见后“继续规划”；未批准时 runtime 会拒绝写入、删除、移动、非只读 shell 命令与 `run_code`。
+单条 `date`、`pwd`、`ls`、`rg`、`git status/log/diff` 等只读检查不需要计划审批；包含串联、重定向、
+命令替换或未知程序的 shell 调用仍按高风险处理。等待仅暂停
 该 session 的空闲超时，批准后原任务自动继续。停止任务会取消并撤回该 session 的卡；legacy headless 不支持工具回调。
 
 **逐操作审批**：默认 SDK 安装无需切换 adapter。计划获批后，dsh rc.8 对实际高风险工具调用会
