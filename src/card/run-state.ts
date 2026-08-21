@@ -155,13 +155,14 @@ export function reduce(state: RunState, event: AgentEvent): RunState {
         ...state,
         blocks: nextBlocks,
         reasoning: { ...state.reasoning, active: false },
-        footer: 'tool_running',
+        footer: existingIndex === -1 ? 'tool_running' : state.footer,
       };
     }
 
     case 'tool_result':
       return {
         ...state,
+        footer: 'thinking',
         blocks: state.blocks.map((block) => {
           if (block.kind !== 'tool' || block.tool.id !== event.id) return block;
           return {

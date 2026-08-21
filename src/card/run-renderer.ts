@@ -6,6 +6,14 @@ import { localizedCard, type CardLocale } from './i18n.js';
 // Feishu 230099. Trim tool history against a smaller full-card budget.
 const RUN_CARD_JSON_BUDGET = 28_000;
 const MAX_VISIBLE_TOOL_CALLS = 40;
+const MAX_TOOL_NAME_LENGTH = 160;
+const MAX_OWNER_LENGTH = 160;
+const MAX_ACTION_SCOPE_LENGTH = 512;
+const MAX_FINAL_FALLBACK_LENGTH = 8_000;
+
+function boundedText(value: string, limit: number): string {
+  return value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
+}
 
 function markdown(content: string): object {
   return { tag: 'markdown', content };
@@ -50,14 +58,16 @@ function summaryText(state: RunState, locale: CardLocale): string {
   return zh ? '思考中' : 'Thinking';
 }
 
-function fallbackSummaryText(state: RunState, locale: CardLocale): string {
+function fallbackSummaryText(state: RunState, locale: CardLocale, maxTools: number): string {
   const zh = locale === 'zh_cn';
   const parts = [summaryText(state, locale)];
-  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-4);
+  const tools = maxTools === 0
+    ? []
+    : state.blocks.filter((block) => block.kind === 'tool').slice(-Math.min(4, maxTools));
   if (tools.length > 0) {
     parts.push(
       `${zh ? '工具' : 'Tools'}：${tools
-        .map((block) => `${block.tool.name}(${block.tool.status})`)
+        .map((block) => `${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)}(${block.tool.status})`)
         .join('、')}`,
     );
   }
@@ -71,13 +81,13 @@ function stopButton(scope: string | undefined, locale: CardLocale): object {
     tag: 'button',
     text: { tag: 'plain_text', content: locale === 'zh_cn' ? '⏹ 终止' : '⏹ Stop' },
     type: 'danger',
-    value: { cmd: 'stop', ...(scope ? { scope } : {}) },
+    value: { cmd: 'stop', ...(scope ? { scope: boundedText(scope, MAX_ACTION_SCOPE_LENGTH) } : {}) },
   };
 }
 
 function toolBlock(tool: ToolEntry): object {
   const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
-  return markdown(`${icon} **${tool.name}**`);
+  return markdown(`${icon} **${boundedText(tool.name, MAX_TOOL_NAME_LENGTH)}**`);
 }
 
 function hasAnswer(state: RunState): boolean {
@@ -134,12 +144,20 @@ function thinkingPanel(
   };
 }
 
-function compatibilityProcessSnapshot(state: RunState, locale: CardLocale): object {
+function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTools: number): object {
   const zh = locale === 'zh_cn';
   const lines = [zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_'];
-  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-3);
+  const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
+  const visibleCount = Math.min(3, maxTools);
+  const tools = visibleCount === 0 ? [] : toolBlocks.slice(-visibleCount);
+  const hiddenTools = toolBlocks.length - tools.length;
+  if (hiddenTools > 0) {
+    lines.push(zh
+      ? `_已隐藏 ${hiddenTools} 个较早的工具调用_`
+      : `_Hidden ${hiddenTools} older tool calls_`);
+  }
   for (const block of tools) {
-    lines.push(`🧰 ${block.tool.name} · ${block.tool.status}`);
+    lines.push(`🧰 ${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)} · ${block.tool.status}`);
   }
   if (lines.length === 1) lines.push(state.terminal === 'running'
     ? zh ? '正在处理请求…' : 'Processing the request…'
@@ -162,7 +180,7 @@ function finalDeliveryFailureLine(locale: CardLocale): object {
 function finalDeliveryFallback(state: RunState, locale: CardLocale): object | undefined {
   if (!state.finalDeliveryError || !state.finalDeliveryFallback) return undefined;
   return markdown(
-    `⚠️ **${locale === 'zh_cn' ? '最终回答独立发送失败，已降级显示在此卡片' : 'Final answer delivery failed; showing it in this card'}**\n\n${state.finalDeliveryFallback}`,
+    `⚠️ **${locale === 'zh_cn' ? '最终回答独立发送失败，已降级显示在此卡片' : 'Final answer delivery failed; showing it in this card'}**\n\n${boundedText(state.finalDeliveryFallback, MAX_FINAL_FALLBACK_LENGTH)}`,
   );
 }
 
@@ -175,7 +193,7 @@ function usageLine(state: RunState): string {
 }
 
 function ownerLine(state: RunState, locale: CardLocale): object | undefined {
-  return state.scopeOwner ? noteMd(`👤 ${locale === 'zh_cn' ? '成员隔离会话' : 'Member-isolated session'}：${state.scopeOwner}`) : undefined;
+  return state.scopeOwner ? noteMd(`👤 ${locale === 'zh_cn' ? '成员隔离会话' : 'Member-isolated session'}：${boundedText(state.scopeOwner, MAX_OWNER_LENGTH)}`) : undefined;
 }
 
 function renderStandard(
@@ -190,7 +208,7 @@ function renderStandard(
   if (owner) elements.push(owner);
 
   elements.push(thinkingPanel(state, locale, maxTools));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
@@ -222,7 +240,7 @@ function renderStandard(
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
@@ -240,7 +258,7 @@ function renderCompact(
   if (owner) elements.push(owner);
   elements.push(noteMd(summaryText(state, locale)));
   elements.push(thinkingPanel(state, locale, maxTools));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
   if (state.terminal === 'error') {
     elements.push(runFailureLine(locale));
   }
@@ -260,7 +278,7 @@ function renderCompact(
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
@@ -278,7 +296,7 @@ function renderDetailed(
   if (owner) elements.push(owner);
 
   elements.push(thinkingPanel(state, locale, maxTools));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
@@ -306,7 +324,7 @@ function renderDetailed(
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
@@ -326,24 +344,7 @@ export function renderCard(
   const renderWithToolLimit = (maxTools: number): object =>
     localizeRenderedCard(render('zh_cn', maxTools), render('en_us', maxTools));
   const toolCount = state.blocks.filter((block) => block.kind === 'tool').length;
-  const initialLimit = Math.min(toolCount, MAX_VISIBLE_TOOL_CALLS);
-  const initialCard = renderWithToolLimit(initialLimit);
-  if (JSON.stringify(initialCard).length <= RUN_CARD_JSON_BUDGET) return initialCard;
-
-  let low = 0;
-  let high = initialLimit - 1;
-  let best = renderWithToolLimit(0);
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const candidate = renderWithToolLimit(middle);
-    if (JSON.stringify(candidate).length <= RUN_CARD_JSON_BUDGET) {
-      best = candidate;
-      low = middle + 1;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return best;
+  return fitToBudget(state, toolCount, renderWithToolLimit, false);
 }
 
 /** Plain schema-2.0 card used when the native collapsible component is rejected. */
@@ -352,19 +353,26 @@ export function renderLegacyCard(
   _density: CardDensity = 'standard',
   now: number = Date.now(),
 ): object {
-  return localizeRenderedCard(
-    renderLegacyVariant(state, now, 'zh_cn'),
-    renderLegacyVariant(state, now, 'en_us'),
+  const renderWithToolLimit = (maxTools: number): object => localizeRenderedCard(
+    renderLegacyVariant(state, now, 'zh_cn', maxTools),
+    renderLegacyVariant(state, now, 'en_us', maxTools),
     true,
   );
+  const toolCount = state.blocks.filter((block) => block.kind === 'tool').length;
+  return fitToBudget(state, toolCount, renderWithToolLimit, true);
 }
 
-function renderLegacyVariant(state: RunState, now: number, locale: CardLocale): object {
+function renderLegacyVariant(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
     elements.push(stopButton(state.actionScope, locale));
@@ -384,10 +392,55 @@ function renderLegacyVariant(state: RunState, now: number, locale: CardLocale): 
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
+}
+
+function fitToBudget(
+  state: RunState,
+  toolCount: number,
+  renderWithToolLimit: (maxTools: number) => object,
+  bilingualFallback: boolean,
+): object {
+  const initialLimit = Math.min(toolCount, MAX_VISIBLE_TOOL_CALLS);
+  const initialCard = renderWithToolLimit(initialLimit);
+  if (JSON.stringify(initialCard).length <= RUN_CARD_JSON_BUDGET) return initialCard;
+
+  let low = 0;
+  let high = initialLimit - 1;
+  let best: object | undefined;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = renderWithToolLimit(middle);
+    if (JSON.stringify(candidate).length <= RUN_CARD_JSON_BUDGET) {
+      best = candidate;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return best ?? minimalRunCard(state, bilingualFallback);
+}
+
+function minimalRunCard(state: RunState, bilingualFallback: boolean): object {
+  const variant = (locale: CardLocale): object => ({
+    schema: '2.0',
+    config: {
+      streaming_mode: state.terminal === 'running',
+      summary: { content: summaryText(state, locale) },
+    },
+    body: {
+      elements: [
+        noteMd(locale === 'zh_cn'
+          ? '执行记录过长，较早的详情已隐藏。'
+          : 'The execution history is too long; older details are hidden.'),
+        ...(state.terminal === 'running' ? [stopButton(undefined, locale)] : []),
+      ],
+    },
+  });
+  return localizeRenderedCard(variant('zh_cn'), variant('en_us'), bilingualFallback);
 }
 
 function localizeRenderedCard(

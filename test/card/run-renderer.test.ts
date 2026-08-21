@@ -176,4 +176,53 @@ describe('renderCard', () => {
       expect(serialized).toContain('older tool calls');
     },
   );
+
+  it('bounds legacy cards and explicitly counts hidden tool history', () => {
+    let state = initialState;
+    for (let index = 0; index < 120; index += 1) {
+      state = reduce(state, {
+        type: 'tool_use',
+        id: `legacy-${index}`,
+        name: `legacy-${index}-${'n'.repeat(300)}`,
+        input: `PRIVATE_INPUT_${index}`,
+      });
+      state = reduce(state, {
+        type: 'tool_result',
+        id: `legacy-${index}`,
+        output: `PRIVATE_OUTPUT_${index}`,
+        isError: false,
+      });
+    }
+
+    const serialized = JSON.stringify(renderLegacyCard(state));
+    expect(serialized.length).toBeLessThanOrEqual(28_000);
+    expect(serialized).toContain('legacy-119-');
+    expect(serialized).not.toContain('legacy-0-');
+    expect(serialized).toContain('较早的工具调用');
+    expect(serialized).toContain('older tool calls');
+    expect(serialized).not.toContain('PRIVATE_INPUT_');
+    expect(serialized).not.toContain('PRIVATE_OUTPUT_');
+  });
+
+  it.each(['compact', 'standard', 'detailed'] as const)(
+    'keeps an oversized free-form %s base card within budget',
+    (density) => {
+      let state = reduce(initialState, {
+        type: 'tool_use',
+        id: 'huge',
+        name: `tool-${'n'.repeat(100_000)}`,
+        input: 'PRIVATE_HUGE_INPUT',
+      });
+      state = markFinalDeliveryFailed(
+        { ...state, scopeOwner: 'o'.repeat(100_000), actionScope: 's'.repeat(100_000) },
+        'PRIVATE_HUGE_DELIVERY_ERROR',
+        `answer-${'a'.repeat(100_000)}`,
+      );
+
+      const serialized = JSON.stringify(renderCard(state, density));
+      expect(serialized.length).toBeLessThanOrEqual(28_000);
+      expect(serialized).not.toContain('PRIVATE_HUGE_INPUT');
+      expect(serialized).not.toContain('PRIVATE_HUGE_DELIVERY_ERROR');
+    },
+  );
 });

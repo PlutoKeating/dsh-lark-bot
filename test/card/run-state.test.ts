@@ -76,5 +76,6 @@ describe('run state reducer', () => {
         },
       },
     ]);
+    expect(state.footer).toBe('thinking');
   });
 });

@@ -39,18 +39,18 @@ Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace 
 
 Tired of being chained to your desk to drive DeepSeek Harness? dsh runs on your local machine, so checking progress and adjusting tasks means going back to your computer; once you leave your desk, a run can stall, drift, or dsh itself can crash without you ever hearing about it — until you come back and find you wasted hours.
 
-dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding agent from DMs, group chats and topics, with a native collapsible panel showing reasoning and tool calls in real time and the final answer delivered as a separate message; get proactive notifications pushed to any chat you're in with @mentions when tasks finish; and even when dsh crashes, Feishu still answers — send `/safemode` to enter core-only safe mode and locate the problem and restart the engine right from the chat. **It is the only bridge where you never lose contact when dsh goes down.**
+dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding agent from DMs, group chats and topics, with a native collapsible panel showing phase, elapsed time, and tool names/statuses in real time and the final answer delivered as a separate message; get proactive notifications pushed to any chat you're in with @mentions when tasks finish; and even when dsh crashes, Feishu still answers — send `/safemode` to enter core-only safe mode and locate the problem and restart the engine right from the chat. **It is the only bridge where you never lose contact when dsh goes down.**
 
 **Who it is for**: developers and teams who drive a local dsh coding agent from Feishu / Lark (DMs, groups, topics) — especially those needing multi-project isolation, role-based collaboration, parallel tasks and session archival.
 
-Bot-owned command help, status/error messages and interactive cards are available in Chinese and English. Card JSON 2.0 uses native component-level `i18n_content`, so members of the same group see one shared card in their own client language. Plain Markdown, toast messages and legacy fallbacks cannot detect each viewer's locale and therefore show both languages. Agent answers, reasoning, tool input/output and user-authored text are never translated.
+Bot-owned command help, status/error messages and interactive cards are available in Chinese and English. Card JSON 2.0 uses native component-level `i18n_content`, so members of the same group see one shared card in their own client language. Plain Markdown, toast messages and legacy fallbacks cannot detect each viewer's locale and therefore show both languages. Agent answers and user-authored text are never translated; raw reasoning and tool payloads remain local and are not rendered into process cards.
 
 ## What you get
 
 **Core**:
 
 - Drive your local dsh coding agent from private chats, group chats and threads; images / text files can be sent straight to the bot;
-- A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. A timed-out card patch only freezes that process card—the agent and final reply continue instead of taking down the bridge;
+- A streaming process card with a native collapsible panel for phase, elapsed time, and tool names/statuses; raw reasoning, tool payloads, and underlying errors stay out of the card. The final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. A timed-out card patch only freezes that process card—the agent and final reply continue instead of taking down the bridge;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
 **Eleven exclusive capabilities**:

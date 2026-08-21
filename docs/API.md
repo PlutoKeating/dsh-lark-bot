@@ -588,7 +588,8 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   设置 `config.locales/use_custom_translation`，并把 `zh_cn`、`en_us` 写入各文本组件的 `i18n_content`；`config.summary.i18n_content` 同步双语
   消息预览。模块递归提取 button callback value 并要求两种语言严格相同，否则 fail closed。
   `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级。
-  variant 只翻译 bot 固定文案，agent 回答、推理、工具参数/结果、用户问题与 option 原文不改写。
+  variant 只翻译 bot 固定文案，agent 回答、用户问题与 option 原文不改写；原始推理与工具参数/结果
+  不进入过程卡。
 
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
   schema 2.0 `collapsible_panel` 只展示阶段、耗时、工具名与状态，运行时展开、结束后默认收起；
@@ -650,7 +651,8 @@ headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch fail
 `src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；单次卡片 update 失败不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
-路由。发送失败不会丢失已记录的 exchange，过程卡会写明失败原因并回填完整回答正文；中断、超时和
+  路由。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
+  原本面向用户的回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
 `src/card/session-recovery-card.ts` 提供 native resume 零活动失败时的双语中性终态卡；它不包含
 session ID、底层错误或本机路径，fresh-session retry 另开正常过程卡继续任务。
