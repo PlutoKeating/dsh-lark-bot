@@ -125,7 +125,7 @@ export async function runAgentBatch(input: RunFlowInput): Promise<RunBatchOutcom
   try {
     return terminalOutcome(await runAttempt(input, cwd, requestedCwd, sessionId, resuming, replyOptions));
   } catch (error) {
-    if (resuming) {
+    if (resuming && classifySessionError(errorMessage(error)) !== undefined) {
       // A native-session resume can be rejected by the dsh runtime when its
       // persisted log no longer matches the live session (e.g. the previous
       // run was interrupted mid-stream). Fall back to a fresh session so the
@@ -303,6 +303,7 @@ async function runAttempt(
           }
         };
         const showResumeRecovery = async (error: unknown): Promise<void> => {
+          if (classifySessionError(errorMessage(error)) === undefined) throw error;
           resumeFailure = errorMessage(error);
           try {
             await controller.update(renderSessionRecoveryCard());
@@ -600,12 +601,15 @@ async function runAttempt(
         : {}),
     });
   } catch (error) {
-    log.fail('run-flow', error, { scope: input.scope, runId });
     state = markInterrupted(state);
     // A failed native-session resume (thrown above when `resuming` and no
     // activity yet) must propagate so `runAgentBatch` clears the binding and
     // retries with a fresh session — do not swallow it here.
-    if (resuming && !sawActivity) throw error;
+    if (resuming && !sawActivity) {
+      log.warn('run-flow', 'resume-attempt-failed', { scope: input.scope, runId });
+      throw error;
+    }
+    log.fail('run-flow', error, { scope: input.scope, runId });
     const runErrorText = errorMessage(error);
     const healKind = classifySessionError(runErrorText);
     if (healKind !== undefined) {

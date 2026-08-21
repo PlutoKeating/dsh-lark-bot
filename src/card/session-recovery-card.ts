@@ -1,27 +1,27 @@
 import { localizedCard } from './i18n.js';
 
-/** Terminal status for a rejected native resume before the fresh-session retry. */
+/** Neutral status for a rejected native resume before the fresh-session retry. */
 export function renderSessionRecoveryCard(): object {
   return localizedCard({
     config: { streaming_mode: false },
     zhCn: {
-      summary: '会话状态已自动恢复',
+      summary: '正在恢复会话状态',
       body: {
         elements: [
           {
             tag: 'markdown',
-            content: '**会话状态已自动恢复**\n旧会话绑定不可用；历史已保留，任务正在新会话中继续执行。',
+            content: '**正在恢复会话状态**\n旧会话绑定不可用；历史已保留，正在尝试通过新会话继续任务。',
           },
         ],
       },
     },
     enUs: {
-      summary: 'Session state recovered automatically',
+      summary: 'Recovering session state',
       body: {
         elements: [
           {
             tag: 'markdown',
-            content: '**Session state recovered automatically**\nThe previous binding was unavailable. History was preserved and the task is continuing in a fresh session.',
+            content: '**Recovering session state**\nThe previous binding was unavailable. History was preserved while a fresh-session retry is attempted.',
           },
         ],
       },

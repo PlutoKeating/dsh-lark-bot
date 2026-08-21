@@ -929,7 +929,7 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.prompt).toContain('my name is Bob');
     // Only the recovered final answer is sent; no failure message is surfaced.
     expect(fake.messages).toEqual(['recovered']);
-    expect(JSON.stringify(fake.updates)).toContain('会话状态已自动恢复');
+    expect(JSON.stringify(fake.updates)).toContain('正在恢复会话状态');
     expect(JSON.stringify(fake.updates)).not.toContain('id collision');
     expect(JSON.stringify(fake.updates)).not.toContain('agent 失败');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
@@ -1013,7 +1013,7 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.sessionId).toBeUndefined();
     // Only the recovered final answer is sent; no hard failure is surfaced.
     expect(fake.messages).toEqual(['recovered via error event']);
-    expect(JSON.stringify(fake.updates)).toContain('会话状态已自动恢复');
+    expect(JSON.stringify(fake.updates)).toContain('正在恢复会话状态');
     expect(JSON.stringify(fake.updates)).not.toContain('id collision');
     expect(JSON.stringify(fake.updates)).not.toContain('agent 失败');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
