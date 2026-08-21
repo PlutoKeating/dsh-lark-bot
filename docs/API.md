@@ -864,7 +864,13 @@ topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 `options` / `header`，`timeoutMs` 10 分钟），执行时以 `exec.agent.session.id`
 定位会话并 POST 到 `DSH_LARK_ASK_URL` 阻塞等待答案；答案作为普通工具结果
 回到 agent 循环。问答卡按 native session 归属；等待期间仅暂停所属 run 的超时看门狗，run 结束
-调用 `settleSession`，单卡发送失败调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
+调用 `settleSession`，单卡发送失败或 callback 断开调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
+
+`/ask`、`/plan`、`/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
+响应头，之后每 30 秒写入一个 JSON 合法空白换行，最终追加单个 JSON 结果对象。这样既不会触发
+Node/Undici 默认 300 秒响应头或响应体空闲超时，现有 `response.json()` 客户端也无需特殊解析；
+客户端真正断开时仍通过 AbortSignal 精确清理对应 pending 项。鉴权和参数错误发生在 flush 前，继续
+保留原有 4xx 状态；flush 后的业务失败由响应体 `ok: false` 表示。
 
 同一服务器还提供 `POST /plan`（`server.planUrl` / `DSH_LARK_PLAN_URL`）。
 `buildPlanHandler` 以 session id 定位当前 scope，先发完整 Markdown 计划，再以

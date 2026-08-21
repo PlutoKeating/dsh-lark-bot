@@ -525,7 +525,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
   后续问答卡作为 reply 正确发回原话题。
 - **本地回调**：运行 `lark_notify`、`lark_send_file`、`lark_ask_user`、`lark_request_plan_approval` 或逐工具审批时，dsh
   runtime 子进程通过 `127.0.0.1` 随机端口 + 每启动随机 token 回调 bridge 进程（仅本机回环，
-  不监听公网）；计划内容、待执行工具的理由/参数与决策卡会发送到当前飞书 / Lark 会话。群聊中的审批内容对群成员可见。
+  不监听公网）；等待人工回答的回调会立即发送响应头，并用 JSON 空白心跳维持连接，避免 Node 默认的
+  5 分钟 HTTP 空闲边界中断审批。计划内容、待执行工具的理由/参数与决策卡会发送到当前飞书 / Lark 会话。
+  群聊中的审批内容对群成员可见。
 - **进程**：spawn 本机 `dsh` runtime 子进程（`dsh-sdk-jsonrpc-server` / `dsh-acp` profile）执行 agent 任务。
 - **dsh 配置**：`/model` `/providers` `/provider` `/key` 命令按 dsh 官方存储协议读写
   `~/.dsh/settings.yaml` 与 `~/.dsh/.credentials.yaml`（仅管理员可写；settings 只存 `apiKeyEnv`
