@@ -88,6 +88,26 @@ describe('adaptLarkChannel', () => {
 
     expect(stream).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith('oc_chat', { card: { state: 'initial' } }, {});
-    expect(updateCard).toHaveBeenCalledOnce();
+    expect(updateCard).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]?.[1]).toMatchObject({
+      markdown: expect.stringContaining('任务仍在继续'),
+    });
+  });
+
+  it('recovers a streaming card after one transient patch failure', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: 'stream-card' });
+    const updateCard = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary timeout'))
+      .mockResolvedValue(undefined);
+    const channel = { send, updateCard } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'final' });
+    });
+
+    expect(updateCard).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledOnce();
   });
 });

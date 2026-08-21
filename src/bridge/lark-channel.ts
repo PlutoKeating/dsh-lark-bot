@@ -10,6 +10,7 @@ import type { MentionTarget, SendOptions as BridgeSendOptions } from './send-opt
 import { log } from '../core/logger.js';
 
 const CARD_STREAM_THROTTLE_MS = 100;
+const CARD_PATCH_ATTEMPTS = 2;
 
 function toLarkSendOptions(options: BridgeSendOptions | undefined): SendOptions {
   const sendOptions: SendOptions = {};
@@ -50,6 +51,8 @@ class ResilientCardStreamController {
   constructor(
     private readonly channel: LarkChannel,
     private readonly messageId: string,
+    private readonly chatId: string,
+    private readonly sendOptions: SendOptions,
   ) {}
 
   async update(card: object): Promise<void> {
@@ -100,12 +103,32 @@ class ResilientCardStreamController {
     if (this.failed || !this.dirty || this.latest === undefined) return;
     const snapshot = this.latest;
     this.dirty = false;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= CARD_PATCH_ATTEMPTS; attempt += 1) {
+      try {
+        await this.channel.updateCard(this.messageId, snapshot);
+        return;
+      } catch (error) {
+        lastError = error;
+        log.warn('lark-card-stream', 'patch-attempt-failed', {
+          messageId: this.messageId,
+          attempt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.failed = true;
+    this.dirty = false;
+    log.warn('lark-card-stream', 'patch-disabled', {
+      messageId: this.messageId,
+      error: lastError instanceof Error ? lastError.message : String(lastError),
+    });
     try {
-      await this.channel.updateCard(this.messageId, snapshot);
+      await this.channel.send(this.chatId, {
+        markdown: '⚠️ 过程卡更新失败，任务仍在继续；最终回答将单独发送。\n\nProcess-card updates failed. The task is still running; the final answer will arrive separately.',
+      }, this.sendOptions);
     } catch (error) {
-      this.failed = true;
-      this.dirty = false;
-      log.warn('lark-card-stream', 'patch-disabled', {
+      log.warn('lark-card-stream', 'fallback-notice-failed', {
         messageId: this.messageId,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -183,7 +206,13 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
         toLarkSendOptions(options),
       );
       if (!sent.messageId) throw new Error('Feishu streaming card returned no message_id');
-      const controller = new ResilientCardStreamController(channel, sent.messageId);
+      const sendOptions = toLarkSendOptions(options);
+      const controller = new ResilientCardStreamController(
+        channel,
+        sent.messageId,
+        chatId,
+        sendOptions,
+      );
       try {
         await producer(controller);
       } finally {

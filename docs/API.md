@@ -651,7 +651,8 @@ SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期
 最终才写入结果对象。该保活同时覆盖 `/ask`、`/plan`、`/approval`，避免 Node/Undici 默认 300 秒
 headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch failed`。
 
-`src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；单次卡片 update 失败不会中断事件消费或最终
+`src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；卡片 update 失败会有限重试，仍失败则冻结该卡并
+发送普通降级提示，不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
   路由。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
