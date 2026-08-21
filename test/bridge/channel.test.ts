@@ -809,7 +809,7 @@ describe('startChannel', () => {
 
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
       messageId: 'switch-workspace',
-      content: '/cd /tmp/project-b',
+      content: '/cd /tmp',
     }));
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(message({
       messageId: 'workspace-b-task',
@@ -817,7 +817,7 @@ describe('startChannel', () => {
     }));
     expect(pending.push).toHaveBeenCalledWith('chat-1', expect.objectContaining({
       content: 'work in project b',
-      workspaceCwd: '/tmp/project-b',
+      workspaceCwd: '/tmp',
     }));
 
     isolationMode = 'member';

@@ -12,6 +12,7 @@ export const inject = ['tools'];
 export interface Config {
   endpoint?: string;
   token?: string;
+  mode?: 'strict' | 'off';
 }
 
 export interface PlanPolicyExecution {
@@ -19,6 +20,44 @@ export interface PlanPolicyExecution {
   arguments: unknown;
   agent?: object;
 }
+
+const READ_ONLY_SHELL_TOOLS = new Set(['bash', 'shell']);
+const READ_ONLY_COMMANDS = new Set([
+  'basename',
+  'cat',
+  'date',
+  'df',
+  'dirname',
+  'du',
+  'find',
+  'grep',
+  'head',
+  'id',
+  'jq',
+  'ls',
+  'pgrep',
+  'ps',
+  'pwd',
+  'readlink',
+  'realpath',
+  'rg',
+  'stat',
+  'tail',
+  'uname',
+  'wc',
+  'whoami',
+]);
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+  'diff',
+  'ls-files',
+  'ls-tree',
+  'log',
+  'merge-base',
+  'rev-parse',
+  'show',
+  'status',
+]);
+const SHELL_CONTROL_SYNTAX = /[\n\r;&|<>`]|\$\(|\$\{/u;
 
 type PlanPolicyContext = ToolPluginContext & {
   on(
@@ -41,17 +80,22 @@ type PlanPolicyContext = ToolPluginContext & {
 export function apply(ctx: Context, config: Config = {}) {
   const policyCtx = ctx as PlanPolicyContext;
   const currentTurns = new WeakMap<object, number>();
-  const approvedTurns = new WeakMap<object, number>();
+  const approvedCalls = new WeakMap<object, number>();
+  const gateDisabled = (config.mode ?? process.env.DSH_LARK_PLAN_GATE) === 'off';
 
   policyCtx.on('agent/pre-step', async (payload, next) => {
     currentTurns.set(payload.agent, payload.turn);
     return next();
   });
   policyCtx.on('tools/pre-execute', async (execution, next) => {
+    if (gateDisabled) return next();
     if (!isHighRiskTool(policyCtx, execution)) return next();
     const agent = execution.agent;
     const turn = agent ? currentTurns.get(agent) : undefined;
-    if (agent && turn !== undefined && approvedTurns.get(agent) === turn) return next();
+    if (agent && turn !== undefined && approvedCalls.get(agent) === turn) {
+      approvedCalls.delete(agent);
+      return next();
+    }
     return {
       kind: 'deny',
       reason:
@@ -110,12 +154,18 @@ export function apply(ctx: Context, config: Config = {}) {
         ? undefined
         : String(exec.agent.session.id);
       if (!sessionId) throw new Error('lark_request_plan_approval needs an active session');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, sessionId, plan }),
-        ...(exec?.signal === undefined ? {} : { signal: exec.signal }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token, sessionId, plan }),
+          ...(exec?.signal === undefined ? {} : { signal: exec.signal }),
+        });
+      } catch (error) {
+        if (exec?.signal?.aborted) return { resolved: false, error: 'cancelled' };
+        throw error;
+      }
       const body = await response.json() as {
         ok?: boolean;
         decision?: 'approved' | 'revise';
@@ -123,11 +173,14 @@ export function apply(ctx: Context, config: Config = {}) {
         error?: string;
       };
       if (!response.ok || body.ok !== true || !body.decision) {
-        return { resolved: false, ...(body.error ? { error: body.error } : {}) };
+        if (body.error?.toLowerCase().includes('cancel')) {
+          return { resolved: false, error: body.error };
+        }
+        throw new Error(body.error ?? `plan approval delivery failed (${response.status})`);
       }
       if (body.decision === 'approved' && exec?.agent) {
         const turn = currentTurns.get(exec.agent);
-        if (turn !== undefined) approvedTurns.set(exec.agent, turn);
+        if (turn !== undefined) approvedCalls.set(exec.agent, turn);
       }
       return {
         resolved: true,
@@ -141,6 +194,10 @@ export function apply(ctx: Context, config: Config = {}) {
 export function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExecution): boolean {
   if (execution.name === 'lark_request_plan_approval') return false;
   if (execution.name === 'run_code') return true;
+  const normalized = execution.name.toLowerCase().replaceAll('-', '_');
+  if (READ_ONLY_SHELL_TOOLS.has(normalized)) {
+    return !isSimpleReadOnlyShellCommand(execution.arguments);
+  }
   try {
     const view = ctx.tools.get?.(execution.name, execution.agent)?.presentCall?.(
       execution.arguments,
@@ -151,7 +208,96 @@ export function isHighRiskTool(ctx: ToolPluginContext, execution: PlanPolicyExec
   } catch {
     // Fall through to the conservative name classifier.
   }
-  const normalized = execution.name.toLowerCase().replaceAll('-', '_');
   return /(^|_)(bash|shell|exec|execute|run|write|edit|patch|delete|remove|move|rename)(_|$)/u
     .test(normalized);
+}
+
+/**
+ * Read-only shell calls bypass both the plan gate and one-shot approval.
+ * Keep this deliberately narrow: one command only, no shell composition, and
+ * an allowlisted executable/subcommand. Unknown syntax remains high risk.
+ */
+function isSimpleReadOnlyShellCommand(rawArguments: unknown): boolean {
+  const command = shellCommand(rawArguments)?.trim();
+  if (!command || SHELL_CONTROL_SYNTAX.test(command)) return false;
+  const words = command.split(/\s+/u);
+  const executablePath = words[0];
+  if (
+    !executablePath ||
+    (executablePath.includes('/') &&
+      !executablePath.startsWith('/bin/') &&
+      !executablePath.startsWith('/usr/bin/'))
+  ) return false;
+  const executable = executablePath.split('/').at(-1);
+  if (!executable) return false;
+  if (executable === 'git') return isReadOnlyGitCommand(words.slice(1));
+  if (!READ_ONLY_COMMANDS.has(executable)) return false;
+  if (executable === 'date') {
+    return words.slice(1).every((word) =>
+      word === '-u' || word === '--utc' || word === '--universal' || word.startsWith('+')
+    );
+  }
+  if (executable === 'rg') {
+    return !words.slice(1).some((word) =>
+      word === '--pre' ||
+      word.startsWith('--pre=') ||
+      word === '--hostname-bin' ||
+      word.startsWith('--hostname-bin=')
+    );
+  }
+  if (executable === 'find') {
+    return !words.slice(1).some((word) =>
+      ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf'].includes(word)
+    );
+  }
+  if (executable === 'tail') {
+    return !words.slice(1).some((word) =>
+      word === '-f' || word === '-F' || word === '--follow' || word.startsWith('--follow=')
+    );
+  }
+  return true;
+}
+
+function shellCommand(rawArguments: unknown): string | undefined {
+  if (typeof rawArguments === 'object' && rawArguments !== null && !Array.isArray(rawArguments)) {
+    const entries = Object.entries(rawArguments);
+    if (entries.length !== 1 || entries[0]?.[0] !== 'command') return undefined;
+    const command = entries[0][1];
+    return typeof command === 'string' ? command : undefined;
+  }
+  if (typeof rawArguments !== 'string') return undefined;
+  try {
+    return shellCommand(JSON.parse(rawArguments));
+  } catch {
+    return rawArguments;
+  }
+}
+
+function isReadOnlyGitCommand(words: readonly string[]): boolean {
+  let index = 0;
+  while (words[index] === '-C') {
+    if (!words[index + 1]) return false;
+    index += 2;
+  }
+  const subcommand = words[index];
+  if (subcommand === 'branch') {
+    const flags = words.slice(index + 1);
+    return flags.length === 0 || flags.every((word) =>
+      ['--show-current', '--list', '--all', '-a', '--remotes', '-r', '-v', '-vv'].includes(word)
+    );
+  }
+  if (subcommand === 'remote') {
+    const args = words.slice(index + 1);
+    return args.length === 0 ||
+      args.every((word) => word === '-v' || word === '--verbose') ||
+      args[0] === 'get-url';
+  }
+  if (!subcommand || !READ_ONLY_GIT_SUBCOMMANDS.has(subcommand)) return false;
+  return !words.slice(index + 1).some((word) =>
+    word === '-o' ||
+    word === '--output' ||
+    word.startsWith('--output=') ||
+    word === '--ext-diff' ||
+    word === '--textconv'
+  );
 }

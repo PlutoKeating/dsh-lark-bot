@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { adaptLarkChannel } from '../../src/bridge/lark-channel.js';
 import type { LarkChannel } from '@larksuite/channel';
 
-describe('adaptLarkChannel file delivery', () => {
+describe('adaptLarkChannel', () => {
   it('uploads an in-memory file without granting local filesystem access', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: 'file-message' });
     const channel = { send } as unknown as LarkChannel;
@@ -62,5 +62,52 @@ describe('adaptLarkChannel file delivery', () => {
     create.mockResolvedValueOnce({ code: 0, data: {} });
     await expect(bridge.sendCard?.('oc_chat', card, { idempotencyKey: 'projection:no-id' }))
       .rejects.toThrow('no message_id');
+  });
+
+  it('contains a timed-out streaming card patch without stopping the producer', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: 'stream-card' });
+    const updateCard = vi.fn().mockRejectedValue(new Error('timeout of 30000ms exceeded'));
+    const stream = vi.fn(async (
+      _chatId: string,
+      input: { card: { producer(controller: { update(card: object): Promise<void> }): Promise<void> } },
+    ) => {
+      await input.card.producer({ update: updateCard });
+    });
+    const channel = { send, updateCard, stream } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await expect(bridge.streamCard(
+      'oc_chat',
+      { state: 'initial' },
+      async (controller) => {
+        await controller.update({ state: 'streaming' });
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        await controller.update({ state: 'final' });
+      },
+    )).resolves.toBeUndefined();
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith('oc_chat', { card: { state: 'initial' } }, {});
+    expect(updateCard).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]?.[1]).toMatchObject({
+      markdown: expect.stringContaining('任务仍在继续'),
+    });
+  });
+
+  it('recovers a streaming card after one transient patch failure', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: 'stream-card' });
+    const updateCard = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary timeout'))
+      .mockResolvedValue(undefined);
+    const channel = { send, updateCard } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'final' });
+    });
+
+    expect(updateCard).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledOnce();
   });
 });

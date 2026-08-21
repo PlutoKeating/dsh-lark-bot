@@ -929,6 +929,9 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.prompt).toContain('my name is Bob');
     // Only the recovered final answer is sent; no failure message is surfaced.
     expect(fake.messages).toEqual(['recovered']);
+    expect(JSON.stringify(fake.updates)).toContain('正在恢复会话状态');
+    expect(JSON.stringify(fake.updates)).not.toContain('id collision');
+    expect(JSON.stringify(fake.updates)).not.toContain('agent 失败');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },
@@ -1010,6 +1013,9 @@ describe('runAgentBatch', () => {
     expect(calls[1]?.sessionId).toBeUndefined();
     // Only the recovered final answer is sent; no hard failure is surfaced.
     expect(fake.messages).toEqual(['recovered via error event']);
+    expect(JSON.stringify(fake.updates)).toContain('正在恢复会话状态');
+    expect(JSON.stringify(fake.updates)).not.toContain('id collision');
+    expect(JSON.stringify(fake.updates)).not.toContain('agent 失败');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBeUndefined();
     expect(sessions.historyFor('chat-a', '/tmp/project')).toEqual([
       { role: 'user', content: 'my name is Bob' },
@@ -1079,7 +1085,8 @@ describe('runAgentBatch', () => {
       body?: { elements?: Array<{ content?: string }> };
     };
     const lastText = lastCard?.body?.elements?.map((el) => el.content ?? '').join('\n') ?? '';
-    expect(lastText).toContain('upstream provider failed mid-task');
+    expect(lastText).toContain('Agent 运行失败');
+    expect(lastText).not.toContain('upstream provider failed mid-task');
     expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
   });
 

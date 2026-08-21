@@ -1,6 +1,6 @@
 # dsh-TUI v0.15 conformance evidence
 
-This directory binds the `io.github.plutokeating.dsh-lark-bot@0.16.1` host facet to the pinned
+This directory binds the `io.github.plutokeating.dsh-lark-bot@0.17.0` host facet to the pinned
 TUI Admission revision `e1b902b0f95f4280a8e68d414ec7a4d25d6ce106` and its vendored dsh-std revision
 `614dfa1ac168db79fcf4577cf0ebb34e2e3b944b`.
 
@@ -8,8 +8,9 @@ TUI Admission revision `e1b902b0f95f4280a8e68d414ec7a4d25d6ce106` and its vendor
 - `claim.*.json` binds each descriptor digest to the exact built `dist/plugin.js` digest.
 - `pnpm check:tui-admission` validates the unique manifest, all lockfile package integrities, then performs a
   real `npm pack` + clean temporary consumer install and re-hashes the installed host facet.
-- `pnpm check:tui-tty` allocates a real PTY and loads the published `dist/plugin.js` inside it. Windows fails
-  closed until equivalent external ConPTY evidence is supplied.
+- `pnpm check:tui-tty` allocates a real PTY and loads the published `dist/plugin.js` inside it, using the
+  util-linux `script` form on Linux and the positional BSD form on macOS. Windows fails closed until equivalent
+  external ConPTY evidence is supplied.
 - `test/tui/*.test.ts` covers all five decisions, local/remote/container profiles, repeated activation,
   optional-seam absence/failure and deterministic cleanup. The plugin never caches or consumes a Presentation.
 

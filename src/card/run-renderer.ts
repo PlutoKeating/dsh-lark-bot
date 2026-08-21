@@ -2,6 +2,19 @@ import type { FooterStatus, RunState, ToolEntry } from './run-state.js';
 import type { CardDensity } from './density.js';
 import { localizedCard, type CardLocale } from './i18n.js';
 
+// @larksuite/channel rolls over markdown at 30,000 characters to avoid
+// Feishu 230099. Trim tool history against a smaller full-card budget.
+const RUN_CARD_JSON_BUDGET = 28_000;
+const MAX_VISIBLE_TOOL_CALLS = 40;
+const MAX_TOOL_NAME_LENGTH = 160;
+const MAX_OWNER_LENGTH = 160;
+const MAX_ACTION_SCOPE_LENGTH = 512;
+const MAX_FINAL_FALLBACK_LENGTH = 8_000;
+
+function boundedText(value: string, limit: number): string {
+  return value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
+}
+
 function markdown(content: string): object {
   return { tag: 'markdown', content };
 }
@@ -45,23 +58,21 @@ function summaryText(state: RunState, locale: CardLocale): string {
   return zh ? '思考中' : 'Thinking';
 }
 
-function fallbackSummaryText(state: RunState, locale: CardLocale): string {
+function fallbackSummaryText(state: RunState, locale: CardLocale, maxTools: number): string {
   const zh = locale === 'zh_cn';
   const parts = [summaryText(state, locale)];
-  if (state.reasoning.content) parts.push(`${zh ? '思考' : 'Reasoning'}：${state.reasoning.content.slice(-240)}`);
-  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-4);
+  const tools = maxTools === 0
+    ? []
+    : state.blocks.filter((block) => block.kind === 'tool').slice(-Math.min(4, maxTools));
   if (tools.length > 0) {
     parts.push(
       `${zh ? '工具' : 'Tools'}：${tools
-        .map((block) => {
-          const output = block.tool.output?.trim();
-          return `${block.tool.name}(${block.tool.status})${output ? `=${output.slice(0, 80)}` : ''}`;
-        })
+        .map((block) => `${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)}(${block.tool.status})`)
         .join('、')}`,
     );
   }
-  if (state.errorMsg) parts.push(`${zh ? '错误' : 'Error'}：${state.errorMsg}`);
-  if (state.finalDeliveryError) parts.push(`${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`);
+  if (state.terminal === 'error') parts.push(zh ? '详情见本机日志' : 'See local logs for details');
+  if (state.finalDeliveryError) parts.push(zh ? '最终回答发送失败' : 'Final answer delivery failed');
   return parts.join(' · ').slice(0, 500);
 }
 
@@ -70,99 +81,106 @@ function stopButton(scope: string | undefined, locale: CardLocale): object {
     tag: 'button',
     text: { tag: 'plain_text', content: locale === 'zh_cn' ? '⏹ 终止' : '⏹ Stop' },
     type: 'danger',
-    value: { cmd: 'stop', ...(scope ? { scope } : {}) },
+    value: { cmd: 'stop', ...(scope ? { scope: boundedText(scope, MAX_ACTION_SCOPE_LENGTH) } : {}) },
   };
 }
 
 function toolBlock(tool: ToolEntry): object {
   const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
-  return markdown(`${icon} **${tool.name}**`);
-}
-
-function reasoningPreview(content: string, limit: number, locale: CardLocale): string {
-  if (content.length <= limit) return content;
-  const headLength = Math.floor(limit / 2);
-  const tailLength = limit - headLength;
-  return `${content.slice(0, headLength)}\n\n…\n\n_${locale === 'zh_cn' ? '最新进展' : 'Latest progress'}_\n${content.slice(-tailLength)}`;
+  return markdown(`${icon} **${boundedText(tool.name, MAX_TOOL_NAME_LENGTH)}**`);
 }
 
 function hasAnswer(state: RunState): boolean {
   return state.blocks.some((block) => block.kind === 'text' && block.content.trim() !== '');
 }
 
-function processElements(state: RunState, detailed: boolean, compact: boolean, locale: CardLocale): object[] {
+function processElements(
+  state: RunState,
+  locale: CardLocale,
+  maxTools: number,
+): object[] {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
-  if (state.reasoning.content) {
+  const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
+  const visibleTools = maxTools === 0 ? [] : toolBlocks.slice(-maxTools);
+  const hiddenTools = toolBlocks.length - visibleTools.length;
+  if (hiddenTools > 0) {
     elements.push(
-      markdown(
-        `🧠 **${zh ? '推理' : 'Reasoning'}**\n${reasoningPreview(state.reasoning.content, detailed ? 2000 : compact ? 240 : 500, locale)}`,
-      ),
+      noteMd(zh
+        ? `_已隐藏 ${hiddenTools} 个较早的工具调用，仅显示最新进展_`
+        : `_Hidden ${hiddenTools} older tool calls; showing the latest progress_`),
     );
   }
-  for (const block of state.blocks) {
-    if (block.kind !== 'tool') continue;
+  for (const block of visibleTools) {
     const tool = block.tool;
-    if (compact) {
-      elements.push(toolBlock(tool));
-      continue;
-    }
-    const icon = tool.status === 'error' ? '⚠️' : tool.status === 'done' ? '✅' : '⏳';
-    const lines = [`${icon} **${tool.name}**`];
-    if (detailed && tool.input !== undefined && tool.input !== '') {
-      lines.push(`${zh ? '输入' : 'Input'}：\`\`\`\n${safeJsonPreview(tool.input)}\n\`\`\``);
-    }
-    if (tool.output) lines.push(`${zh ? '输出' : 'Output'}：${tool.output.slice(0, detailed ? 500 : 200)}`);
-    elements.push(markdown(lines.join('\n')));
+    elements.push(toolBlock(tool));
   }
   if (elements.length === 0) {
     elements.push(
       noteMd(state.terminal === 'running'
-        ? zh ? '_等待推理或工具事件…_' : '_Waiting for reasoning or tool events…_'
-        : zh ? '_没有可展示的推理或工具事件_' : '_No reasoning or tool events to display_'),
+        ? zh ? '_正在处理请求…_' : '_Processing the request…_'
+        : zh ? '_执行过程已结束_' : '_Execution finished_'),
     );
   }
   return elements;
 }
 
-function thinkingPanel(state: RunState, detailed: boolean, compact: boolean, locale: CardLocale): object {
+function thinkingPanel(
+  state: RunState,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   return {
     tag: 'collapsible_panel',
     expanded: state.terminal === 'running',
     header: {
-      title: { tag: 'plain_text', content: `🧠 ${locale === 'zh_cn' ? '思考过程' : 'Process'} · ${summaryText(state, locale)}` },
+      title: { tag: 'plain_text', content: `⚙️ ${locale === 'zh_cn' ? '执行过程' : 'Execution'} · ${summaryText(state, locale)}` },
       icon: { tag: 'standard_icon', token: 'down-small-ccm_outlined' },
       icon_position: 'right',
       icon_expanded_angle: -180,
     },
     border: { color: 'grey', corner_radius: '6px' },
-    elements: processElements(state, detailed, compact, locale),
+    elements: processElements(state, locale, maxTools),
   };
 }
 
-function compatibilityProcessSnapshot(state: RunState, locale: CardLocale): object {
+function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTools: number): object {
   const zh = locale === 'zh_cn';
-  const lines = [zh ? '_过程快照（兼容显示）_' : '_Process snapshot (compatibility view)_'];
-  if (state.reasoning.content) {
-    lines.push(`🧠 ${state.reasoning.content.slice(-300)}`);
+  const lines = [zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_'];
+  const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
+  const visibleCount = Math.min(3, maxTools);
+  const tools = visibleCount === 0 ? [] : toolBlocks.slice(-visibleCount);
+  const hiddenTools = toolBlocks.length - tools.length;
+  if (hiddenTools > 0) {
+    lines.push(zh
+      ? `_已隐藏 ${hiddenTools} 个较早的工具调用_`
+      : `_Hidden ${hiddenTools} older tool calls_`);
   }
-  const tools = state.blocks.filter((block) => block.kind === 'tool').slice(-3);
   for (const block of tools) {
-    const output = block.tool.output?.trim();
-    lines.push(
-      `🧰 ${block.tool.name} · ${block.tool.status}${output ? `：${output.slice(-160)}` : ''}`,
-    );
+    lines.push(`🧰 ${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)} · ${block.tool.status}`);
   }
   if (lines.length === 1) lines.push(state.terminal === 'running'
-    ? zh ? '正在等待过程事件…' : 'Waiting for process events…'
-    : zh ? '无过程事件' : 'No process events');
+    ? zh ? '正在处理请求…' : 'Processing the request…'
+    : zh ? '执行过程已结束' : 'Execution finished');
   return noteMd(lines.join('\n'));
+}
+
+function runFailureLine(locale: CardLocale): object {
+  return noteMd(locale === 'zh_cn'
+    ? '⚠️ Agent 运行失败。可重试；底层详情仅保留在本机日志中。'
+    : '⚠️ The agent run failed. Retry it or inspect the local logs for details.');
+}
+
+function finalDeliveryFailureLine(locale: CardLocale): object {
+  return noteMd(locale === 'zh_cn'
+    ? '⚠️ 最终回答发送失败，已尝试在本卡片中显示。'
+    : '⚠️ Final-answer delivery failed; the answer is shown in this card when available.');
 }
 
 function finalDeliveryFallback(state: RunState, locale: CardLocale): object | undefined {
   if (!state.finalDeliveryError || !state.finalDeliveryFallback) return undefined;
   return markdown(
-    `⚠️ **${locale === 'zh_cn' ? '最终回答独立发送失败，已降级显示在此卡片' : 'Final answer delivery failed; showing it in this card'}**\n\n${state.finalDeliveryFallback}`,
+    `⚠️ **${locale === 'zh_cn' ? '最终回答独立发送失败，已降级显示在此卡片' : 'Final answer delivery failed; showing it in this card'}**\n\n${boundedText(state.finalDeliveryFallback, MAX_FINAL_FALLBACK_LENGTH)}`,
   );
 }
 
@@ -175,24 +193,29 @@ function usageLine(state: RunState): string {
 }
 
 function ownerLine(state: RunState, locale: CardLocale): object | undefined {
-  return state.scopeOwner ? noteMd(`👤 ${locale === 'zh_cn' ? '成员隔离会话' : 'Member-isolated session'}：${state.scopeOwner}`) : undefined;
+  return state.scopeOwner ? noteMd(`👤 ${locale === 'zh_cn' ? '成员隔离会话' : 'Member-isolated session'}：${boundedText(state.scopeOwner, MAX_OWNER_LENGTH)}`) : undefined;
 }
 
-function renderStandard(state: RunState, now: number, locale: CardLocale): object {
+function renderStandard(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
 
-  elements.push(thinkingPanel(state, false, false, locale));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(thinkingPanel(state, locale, maxTools));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   } else if (
     state.terminal === 'done' &&
     !hasAnswer(state)
@@ -203,7 +226,7 @@ function renderStandard(state: RunState, now: number, locale: CardLocale): objec
     if (usage) elements.push(noteMd(usage));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -217,22 +240,30 @@ function renderStandard(state: RunState, now: number, locale: CardLocale): objec
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
 }
 
-function renderCompact(state: RunState, now: number, locale: CardLocale): object {
+function renderCompact(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
   elements.push(noteMd(summaryText(state, locale)));
-  elements.push(thinkingPanel(state, false, true, locale));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(thinkingPanel(state, locale, maxTools));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
+  if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
+  }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -247,34 +278,39 @@ function renderCompact(state: RunState, now: number, locale: CardLocale): object
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
 }
 
-function renderDetailed(state: RunState, now: number, locale: CardLocale): object {
+function renderDetailed(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
 
-  elements.push(thinkingPanel(state, true, false, locale));
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(thinkingPanel(state, locale, maxTools));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
 
   if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   } else if (state.terminal === 'done') {
     const usage = usageLine(state);
     if (usage) elements.push(noteMd(usage));
     if (!hasAnswer(state)) elements.push(noteMd(zh ? '_（未返回内容）_' : '_(No content returned)_'));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -288,19 +324,10 @@ function renderDetailed(state: RunState, now: number, locale: CardLocale): objec
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
-}
-
-function safeJsonPreview(value: unknown): string {
-  if (typeof value === 'string') return value.slice(0, 300);
-  try {
-    return JSON.stringify(value).slice(0, 300);
-  } catch {
-    return String(value).slice(0, 300);
-  }
 }
 
 /** Render the run card at the requested density (compact / standard / detailed). */
@@ -309,12 +336,15 @@ export function renderCard(
   density: CardDensity = 'standard',
   now: number = Date.now(),
 ): object {
-  const render = (locale: CardLocale): object => {
-    if (density === 'compact') return renderCompact(state, now, locale);
-    if (density === 'detailed') return renderDetailed(state, now, locale);
-    return renderStandard(state, now, locale);
+  const render = (locale: CardLocale, maxTools: number): object => {
+    if (density === 'compact') return renderCompact(state, now, locale, maxTools);
+    if (density === 'detailed') return renderDetailed(state, now, locale, maxTools);
+    return renderStandard(state, now, locale, maxTools);
   };
-  return localizeRenderedCard(render('zh_cn'), render('en_us'));
+  const renderWithToolLimit = (maxTools: number): object =>
+    localizeRenderedCard(render('zh_cn', maxTools), render('en_us', maxTools));
+  const toolCount = state.blocks.filter((block) => block.kind === 'tool').length;
+  return fitToBudget(state, toolCount, renderWithToolLimit, false);
 }
 
 /** Plain schema-2.0 card used when the native collapsible component is rejected. */
@@ -323,37 +353,38 @@ export function renderLegacyCard(
   _density: CardDensity = 'standard',
   now: number = Date.now(),
 ): object {
-  return localizeRenderedCard(
-    renderLegacyVariant(state, now, 'zh_cn'),
-    renderLegacyVariant(state, now, 'en_us'),
+  const renderWithToolLimit = (maxTools: number): object => localizeRenderedCard(
+    renderLegacyVariant(state, now, 'zh_cn', maxTools),
+    renderLegacyVariant(state, now, 'en_us', maxTools),
     true,
   );
+  const toolCount = state.blocks.filter((block) => block.kind === 'tool').length;
+  return fitToBudget(state, toolCount, renderWithToolLimit, true);
 }
 
-function renderLegacyVariant(state: RunState, now: number, locale: CardLocale): object {
+function renderLegacyVariant(
+  state: RunState,
+  now: number,
+  locale: CardLocale,
+  maxTools: number,
+): object {
   const zh = locale === 'zh_cn';
   const elements: object[] = [];
   const owner = ownerLine(state, locale);
   if (owner) elements.push(owner);
-  elements.push(compatibilityProcessSnapshot(state, locale));
+  elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
   if (state.terminal === 'running') {
-    const liveText = state.blocks
-      .filter((block) => block.kind === 'text')
-      .map((block) => block.content)
-      .join('')
-      .slice(-1000);
-    if (liveText) elements.push(markdown(liveText));
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
     elements.push(stopButton(state.actionScope, locale));
   } else if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
     elements.push(noteMd(zh ? `_⏱ ${state.idleTimeoutMinutes ?? 0} 分钟无响应，已自动终止_` : `_⏱ No response for ${state.idleTimeoutMinutes ?? 0} minutes; stopped automatically_`));
-  } else if (state.terminal === 'error' && state.errorMsg) {
-    elements.push(noteMd(`⚠️ ${zh ? 'agent 失败' : 'Agent failed'}：${state.errorMsg}`));
+  } else if (state.terminal === 'error') {
+    elements.push(runFailureLine(locale));
   }
   if (state.finalDeliveryError) {
-    elements.push(noteMd(`⚠️ ${zh ? '最终回答发送失败' : 'Final answer delivery failed'}：${state.finalDeliveryError}`));
+    elements.push(finalDeliveryFailureLine(locale));
   }
   const fallback = finalDeliveryFallback(state, locale);
   if (fallback) elements.push(fallback);
@@ -361,10 +392,55 @@ function renderLegacyVariant(state: RunState, now: number, locale: CardLocale): 
     schema: '2.0',
     config: {
       streaming_mode: state.terminal === 'running',
-      summary: { content: fallbackSummaryText(state, locale) },
+      summary: { content: fallbackSummaryText(state, locale, maxTools) },
     },
     body: { elements },
   };
+}
+
+function fitToBudget(
+  state: RunState,
+  toolCount: number,
+  renderWithToolLimit: (maxTools: number) => object,
+  bilingualFallback: boolean,
+): object {
+  const initialLimit = Math.min(toolCount, MAX_VISIBLE_TOOL_CALLS);
+  const initialCard = renderWithToolLimit(initialLimit);
+  if (JSON.stringify(initialCard).length <= RUN_CARD_JSON_BUDGET) return initialCard;
+
+  let low = 0;
+  let high = initialLimit - 1;
+  let best: object | undefined;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = renderWithToolLimit(middle);
+    if (JSON.stringify(candidate).length <= RUN_CARD_JSON_BUDGET) {
+      best = candidate;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return best ?? minimalRunCard(state, bilingualFallback);
+}
+
+function minimalRunCard(state: RunState, bilingualFallback: boolean): object {
+  const variant = (locale: CardLocale): object => ({
+    schema: '2.0',
+    config: {
+      streaming_mode: state.terminal === 'running',
+      summary: { content: summaryText(state, locale) },
+    },
+    body: {
+      elements: [
+        noteMd(locale === 'zh_cn'
+          ? '执行记录过长，较早的详情已隐藏。'
+          : 'The execution history is too long; older details are hidden.'),
+        ...(state.terminal === 'running' ? [stopButton(undefined, locale)] : []),
+      ],
+    },
+  });
+  return localizeRenderedCard(variant('zh_cn'), variant('en_us'), bilingualFallback);
 }
 
 function localizeRenderedCard(

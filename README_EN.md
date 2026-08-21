@@ -40,18 +40,18 @@ Turn **DeepSeek Harness (`dsh`)** into a member of your Feishu / Lark workspace 
 
 Tired of being chained to your desk to drive DeepSeek Harness? dsh runs on your local machine, so checking progress and adjusting tasks means going back to your computer; once you leave your desk, a run can stall, drift, or dsh itself can crash without you ever hearing about it — until you come back and find you wasted hours.
 
-dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding agent from DMs, group chats and topics, with a native collapsible panel showing reasoning and tool calls in real time and the final answer delivered as a separate message; get proactive notifications pushed to any chat you're in with @mentions when tasks finish; and even when dsh crashes, Feishu still answers — send `/safemode` to enter core-only safe mode and locate the problem and restart the engine right from the chat. **It is the only bridge where you never lose contact when dsh goes down.**
+dsh-lark-bot puts the remote control in your Feishu: drive your local dsh coding agent from DMs, group chats and topics, with a native collapsible panel showing phase, elapsed time, and tool names/statuses in real time and the final answer delivered as a separate message; get proactive notifications pushed to any chat you're in with @mentions when tasks finish; and even when dsh crashes, Feishu still answers — send `/safemode` to enter core-only safe mode and locate the problem and restart the engine right from the chat. **It is the only bridge where you never lose contact when dsh goes down.**
 
 **Who it is for**: developers and teams who drive a local dsh coding agent from Feishu / Lark (DMs, groups, topics) — especially those needing multi-project isolation, role-based collaboration, parallel tasks and session archival.
 
-Bot-owned command help, status/error messages and interactive cards are available in Chinese and English. Card JSON 2.0 uses native component-level `i18n_content`, so members of the same group see one shared card in their own client language. Plain Markdown, toast messages and legacy fallbacks cannot detect each viewer's locale and therefore show both languages. Agent answers, reasoning, tool input/output and user-authored text are never translated.
+Bot-owned command help, status/error messages and interactive cards are available in Chinese and English. Card JSON 2.0 uses native component-level `i18n_content`, so members of the same group see one shared card in their own client language. Plain Markdown, toast messages and legacy fallbacks cannot detect each viewer's locale and therefore show both languages. Agent answers and user-authored text are never translated; raw reasoning and tool payloads remain local and are not rendered into process cards.
 
 ## What you get
 
 **Core**:
 
 - Drive your local dsh coding agent from private chats, group chats and threads; images / text files can be sent straight to the bot;
-- A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions;
+- A streaming process card with a native collapsible panel for phase, elapsed time, and tool names/statuses; raw reasoning, tool payloads, and underlying errors stay out of the card. The final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. Failed card patches are retried finitely and degrade to a plain notice—the agent and final reply continue instead of taking down the bridge;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
 **Eleven exclusive capabilities**:
@@ -237,11 +237,15 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
-moves, command execution and `run_code` in that turn until a plan is approved. The bridge sends the complete Markdown plan as a normal
+moves, non-read-only shell commands and `run_code` until a plan is approved. Each approval grants only the next
+high-risk call; later unplanned calls require approval again. Single read-only inspections such as `date`, `pwd`,
+`ls`, `find`, `rg`, and `git status/log/diff` run directly; shell chaining,
+redirection, command substitution, and unknown executables remain behind the conservative plan gate. The bridge sends the complete Markdown plan as a normal
 message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
 and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires
 another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
-stopping it cancels and recalls only that session's pending card. The legacy headless adapter cannot use callback tools.
+stopping it cancels and recalls only that session's pending card. Trusted deployments may set
+`DSH_LARK_PLAN_GATE=off` to disable this separate gate (ordinary per-tool approval still applies). The legacy headless adapter cannot use callback tools.
 
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
 
@@ -501,7 +505,9 @@ This tool runs **locally**; before installing, be aware that it accesses:
 - **Scope routing**: `scopes.json` stores the chat/thread and latest inbound message id; that id is used only as
   the reply anchor that places later agent question cards back in the original topic.
 - **Local callback**: `lark_notify`, `lark_send_file`, `lark_ask_user`, `lark_request_plan_approval`, and per-tool approval call the bridge over a
-  random 127.0.0.1 port with a per-boot token (loopback only); plan text and its decision card are sent to the
+  random 127.0.0.1 port with a per-boot token (loopback only). Human-wait callbacks send response headers immediately
+  and JSON-whitespace heartbeats while pending, so Node's default five-minute HTTP idle boundary cannot cancel a
+  legitimate approval wait. Plan text and its decision card are sent to the
   current Feishu / Lark conversation. Approval reasons/arguments are visible to members of a shared group.
 - **Processes**: spawns local `dsh` runtime subprocesses (`dsh-sdk-jsonrpc-server` / `dsh-acp` profiles) to run agent tasks.
 - **dsh configuration**: `/model` `/providers` `/provider` `/key` read / write `~/.dsh/settings.yaml` and `~/.dsh/.credentials.yaml` using the official dsh storage protocol (admin-only writes; settings keep only `apiKeyEnv` references; credentials file mode 0600, directory 0700; literal keys never enter settings or chat history).

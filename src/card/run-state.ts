@@ -122,28 +122,47 @@ export function reduce(state: RunState, event: AgentEvent): RunState {
         },
       };
 
-    case 'tool_use':
+    case 'tool_use': {
+      const blocks = closeStreamingText(state.blocks);
+      const existingIndex = blocks.findIndex(
+        (block) => block.kind === 'tool' && block.tool.id === event.id,
+      );
+      const nextBlocks = existingIndex === -1
+        ? [
+            ...blocks,
+            {
+              kind: 'tool' as const,
+              tool: {
+                id: event.id,
+                name: event.name,
+                input: event.input,
+                status: 'running' as const,
+              },
+            },
+          ]
+        : blocks.map((block, index) => {
+            if (index !== existingIndex || block.kind !== 'tool') return block;
+            return {
+              ...block,
+              tool: {
+                ...block.tool,
+                name: event.name,
+                input: event.input,
+              },
+            };
+          });
       return {
         ...state,
-        blocks: [
-          ...closeStreamingText(state.blocks),
-          {
-            kind: 'tool',
-            tool: {
-              id: event.id,
-              name: event.name,
-              input: event.input,
-              status: 'running',
-            },
-          },
-        ],
+        blocks: nextBlocks,
         reasoning: { ...state.reasoning, active: false },
-        footer: 'tool_running',
+        footer: existingIndex === -1 ? 'tool_running' : state.footer,
       };
+    }
 
     case 'tool_result':
       return {
         ...state,
+        footer: 'thinking',
         blocks: state.blocks.map((block) => {
           if (block.kind !== 'tool' || block.tool.id !== event.id) return block;
           return {

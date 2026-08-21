@@ -99,7 +99,8 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
   const [sub, ...rest] = positionals;
 
   if (!sub) {
-    const active = ctx.models.get(ctx.scope) ?? ctx.defaultModel;
+    const override = ctx.models.get(ctx.scope);
+    const active = override ?? ctx.defaultModel;
     const dshDefault = await ctx.dshConfig.defaultModelSelection();
     const providers = await ctx.dshConfig.listProviders();
     const modelLines = providers.flatMap((provider) =>
@@ -108,7 +109,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     await reply(
       ctx,
       [
-        `**当前会话模型**：\`${active}\``,
+        `**当前会话模型**：\`${active}\`${override ? `（会话级；bot 重启后回落到 \`${ctx.defaultModel}\`）` : '（默认来源）'}`,
         `**dsh 默认模型**（agent-default-model）：${dshDefault ? `\`${dshDefault.model}\`（provider \`${dshDefault.provider}\`）` : '(未设置)'}`,
         `**bot 回退默认**（profile / DSH_LARK_MODEL）：\`${ctx.defaultModel}\``,
         '',
@@ -118,7 +119,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
         '用法：`/model use <provider/model>`（也兼容唯一模型 ID）、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>]`',
       ].join('\n'),
       [
-        `**Current session model**: \`${active}\``,
+        `**Current session model**: \`${active}\`${override ? ` (session override; falls back to \`${ctx.defaultModel}\` after a bot restart)` : ' (default source)'}`,
         `**dsh default model** (agent-default-model): ${dshDefault ? `\`${dshDefault.model}\` (provider \`${dshDefault.provider}\`)` : '(not set)'}`,
         `**Bot fallback default** (profile / DSH_LARK_MODEL): \`${ctx.defaultModel}\``,
         '',
@@ -144,7 +145,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     }
     const selection = id.includes('/') ? `${route.provider}/${route.model}` : route.model;
     ctx.models.set(ctx.scope, selection);
-    await reply(ctx, `已热切换当前会话模型：\`${selection}\`（下一轮消息生效，无需重启 bot）。`, `Switched this session to \`${selection}\`. It takes effect on the next message; no bot restart is needed.`);
+    await reply(ctx, `已热切换当前会话模型：\`${selection}\`（下一轮消息生效）。这是内存中的会话级覆盖；bot 重启后会回落到 \`${ctx.defaultModel}\`，长期固定请用 \`/model default\`。`, `Switched this session to \`${selection}\` for the next message. This in-memory session override falls back to \`${ctx.defaultModel}\` after a bot restart; use \`/model default\` for a persistent default.`);
     return;
   }
 

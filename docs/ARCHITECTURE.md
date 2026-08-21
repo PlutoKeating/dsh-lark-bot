@@ -156,7 +156,12 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    失败只记录结构化日志，不能阻塞 agent 继续运行；registry 已结算或不存在时返回明确 stale toast，
    不允许静默空响应。本地 `/ask`、`/plan`、`/approval` 等待响应以合法 JSON 前导空白定期保活，
    避免 Node/Undici 的 300 秒 headers/body inactivity timeout 取消仍在等待用户的卡片。
+    运行过程卡不使用 `@larksuite/channel` 的 whole-card timer controller：其 timer 不观察异步
+    `patchCard` rejection，弱网超时会升级为进程级 unhandled rejection。`adaptLarkChannel` 自己按
+    100 ms 合并并串行更新；patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
+    producer、Agent 与单独的最终 Markdown 继续运行。
    **任务执行模式**由 `ExecutionModeStore` 在 profile 的 `execution-modes.json` 以 0600 原子写入，按 immutable scope 保存 `quick|balanced|deep`。`/mode`/`/effort` 与卡片回调写入时复检当前 scope/操作者，`/status` 读取有效值。队列开始新 run 时取一次快照，并由 `run-flow` 注入统一模式前置指令，因此 SDK、ACP、Web 行为一致；运行中的任务不被切换打断，安全、工具权限与计划门禁也不因模式降低。
+   managed runtime persona 还要求 Git 写入前读取目标仓库适用的 `AGENTS.md`、检查状态并仅暂存明确审查过的路径，禁止 `git add .` / `git add -A`。
 5. **bot UI 国际化 seam**：`src/card/i18n.ts` 把中文与英文 variant 组合为同一 Card JSON 2.0
    payload（`config.locales/use_custom_translation` + 每个文本组件的 `i18n_content.zh_cn/en_us`），并在出站前校验两种语言的 button
    callback value 完全一致。运行、状态、工作区、配置、审批、计划与问答卡只本地化固定 chrome，
@@ -188,10 +193,15 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
    `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
+   `/ask`、`/plan`、`/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
+   JSON 合法空白心跳；这同时避开 Node/Undici 默认 300 秒 headers/body idle timeout。连接真正断开时
+   AbortSignal 仍精确取消该 session/id 的 pending 项，而不会靠 agent 重试生成重复卡。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
-   `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；run 或 HTTP request
+   `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；`bash` / `shell`
+   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行，串联、重定向、命令替换、
+   未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
    高风险工具，再以 structural listener 接入 rc.8
@@ -237,8 +247,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
    （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
    安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
-   `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致的原生折叠过程卡（思考 / 工具 /
-   web search）和独立最终回答，SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
+   `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致、仅展示阶段 / 耗时 / 工具名与状态的
+   原生折叠过程卡和独立最终回答，SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
    （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务空闲超时（默认 10 分钟，
    持续无活动事件才终止，活跃的流式任务不会被误杀）、
    `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。

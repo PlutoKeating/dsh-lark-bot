@@ -1,5 +1,4 @@
 import type {
-  CardStreamController as LarkCardStreamController,
   LarkChannel,
   MentionInfo,
   SendOptions,
@@ -8,6 +7,10 @@ import { createHash } from 'node:crypto';
 import type { CommandChannel } from '../commands/index.js';
 import type { StreamingChannel } from './types.js';
 import type { MentionTarget, SendOptions as BridgeSendOptions } from './send-options.js';
+import { log } from '../core/logger.js';
+
+const CARD_STREAM_THROTTLE_MS = 100;
+const CARD_PATCH_ATTEMPTS = 2;
 
 function toLarkSendOptions(options: BridgeSendOptions | undefined): SendOptions {
   const sendOptions: SendOptions = {};
@@ -28,6 +31,109 @@ function toLarkSendOptions(options: BridgeSendOptions | undefined): SendOptions 
       .filter((mention): mention is MentionInfo => mention !== undefined);
   }
   return sendOptions;
+}
+
+/**
+ * Whole-card streaming owned by the bridge instead of the channel package.
+ * The upstream timer invokes its async patch callback without observing the
+ * returned promise, so a network timeout becomes an unhandled rejection and
+ * can terminate the host process. This controller coalesces updates, owns the
+ * in-flight promise, and degrades to a frozen process card after one failure.
+ */
+class ResilientCardStreamController {
+  private latest: object | undefined;
+  private dirty = false;
+  private failed = false;
+  private closed = false;
+  private timer: NodeJS.Timeout | undefined;
+  private inFlight: Promise<void> | undefined;
+
+  constructor(
+    private readonly channel: LarkChannel,
+    private readonly messageId: string,
+    private readonly chatId: string,
+    private readonly sendOptions: SendOptions,
+  ) {}
+
+  async update(card: object): Promise<void> {
+    if (this.closed || this.failed) return;
+    this.latest = card;
+    this.dirty = true;
+    this.schedule();
+  }
+
+  async finish(): Promise<void> {
+    this.closed = true;
+    if (this.timer !== undefined) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    if (this.inFlight !== undefined) await this.inFlight;
+    if (!this.failed && this.dirty) await this.flush();
+  }
+
+  private schedule(): void {
+    if (this.timer !== undefined || this.inFlight !== undefined || this.failed) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.startFlush();
+    }, CARD_STREAM_THROTTLE_MS);
+    this.timer.unref();
+  }
+
+  private startFlush(): void {
+    const task = this.flush();
+    this.inFlight = task;
+    void task
+      .finally(() => {
+        if (this.inFlight === task) this.inFlight = undefined;
+        if (!this.closed && this.dirty && !this.failed) this.schedule();
+      })
+      .catch((error: unknown) => {
+        this.failed = true;
+        this.dirty = false;
+        log.warn('lark-card-stream', 'flush-failed', {
+          messageId: this.messageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
+  private async flush(): Promise<void> {
+    if (this.failed || !this.dirty || this.latest === undefined) return;
+    const snapshot = this.latest;
+    this.dirty = false;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= CARD_PATCH_ATTEMPTS; attempt += 1) {
+      try {
+        await this.channel.updateCard(this.messageId, snapshot);
+        return;
+      } catch (error) {
+        lastError = error;
+        log.warn('lark-card-stream', 'patch-attempt-failed', {
+          messageId: this.messageId,
+          attempt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    this.failed = true;
+    this.dirty = false;
+    log.warn('lark-card-stream', 'patch-disabled', {
+      messageId: this.messageId,
+      error: lastError instanceof Error ? lastError.message : String(lastError),
+    });
+    try {
+      await this.channel.send(this.chatId, {
+        markdown: '⚠️ 过程卡更新失败，任务仍在继续；最终回答将单独发送。\n\nProcess-card updates failed. The task is still running; the final answer will arrive separately.',
+      }, this.sendOptions);
+    } catch (error) {
+      log.warn('lark-card-stream', 'fallback-notice-failed', {
+        messageId: this.messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
@@ -94,18 +200,24 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
       return channel.createChat(opts);
     },
     async streamCard(chatId, initial, producer, options) {
-      await channel.stream(
+      const sent = await channel.send(
         chatId,
-        {
-          card: {
-            initial,
-            producer: async (controller: LarkCardStreamController) => {
-              await producer(controller);
-            },
-          },
-        },
+        { card: initial },
         toLarkSendOptions(options),
       );
+      if (!sent.messageId) throw new Error('Feishu streaming card returned no message_id');
+      const sendOptions = toLarkSendOptions(options);
+      const controller = new ResilientCardStreamController(
+        channel,
+        sent.messageId,
+        chatId,
+        sendOptions,
+      );
+      try {
+        await producer(controller);
+      } finally {
+        await controller.finish();
+      }
     },
   };
 }

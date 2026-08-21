@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
+import { BRIDGE_RUNTIME_PERSONA } from './bridge-persona.js';
 import type { OwnPackageInfo } from './own-package.js';
 import { ownPackageInfo } from './own-package.js';
 import { profilePackageMatches } from './profile-package.js';
@@ -89,8 +90,8 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '      config:',
     '        maxTokensAsSuccess: true',
     '',
-    '# Unattended IM runtime: interactive user questions cannot be answered',
-    '# through Feishu, so the tool is disabled (default-deny).',
+    '# Host-native interactive questions are disabled because this IM runtime',
+    '# uses lark_ask_user for interactive answers through Feishu/Lark.',
     '- id: user-questions',
     '  disabled: true',
     '',
@@ -98,7 +99,7 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '  config:',
     '    persona: >-',
     bridgeTools
-      ? '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}. Before substantial or high-risk repository actions, use lark_request_plan_approval and wait for approval.'
+      ? `      ${BRIDGE_RUNTIME_PERSONA}`
       : '      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.',
     '',
     '- id: hmr',
@@ -140,6 +141,7 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '      config:',
       '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
       '',
       // Default-runtime answerer for the official dsh user-approval seam.
       '- insert:',

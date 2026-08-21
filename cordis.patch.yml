@@ -28,7 +28,7 @@
         workspace: !!js process.env.DSH_LARK_WORKSPACE
         adapter: !!js process.env.DSH_LARK_ADAPTER
         model: !!js process.env.DSH_LARK_MODEL
-        scopeConcurrency: !!js process.env.DSH_LARK_SCOPE_CONCURRENCY ? Number(process.env.DSH_LARK_SCOPE_CONCURRENCY) : undefined
+        scopeConcurrency: !!js 'process.env.DSH_LARK_SCOPE_CONCURRENCY ? Number(process.env.DSH_LARK_SCOPE_CONCURRENCY) : undefined'
         notificationDefault: !!js process.env.DSH_LARK_NOTIFICATION_DEFAULT
         disabled: !!js process.env.DSH_LARK_DISABLED === '1'
 
@@ -49,6 +49,7 @@
       config:
         endpoint: !!js process.env.DSH_LARK_PLAN_URL
         token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
+        mode: !!js process.env.DSH_LARK_PLAN_GATE
 
     - id: lark-approval-answerer
       name: 'dsh-lark-bot/approval'

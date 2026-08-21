@@ -61,11 +61,24 @@ describe('card i18n', () => {
     );
   });
 
+  it('supports a process-level language preference for plain Markdown', () => {
+    const previous = process.env.DSH_LARK_REPLY_LANG;
+    try {
+      process.env.DSH_LARK_REPLY_LANG = 'zh';
+      expect(bilingualMarkdown('中文', 'English')).toBe('中文');
+      process.env.DSH_LARK_REPLY_LANG = 'en';
+      expect(bilingualMarkdown('中文', 'English')).toBe('English');
+    } finally {
+      if (previous === undefined) delete process.env.DSH_LARK_REPLY_LANG;
+      else process.env.DSH_LARK_REPLY_LANG = previous;
+    }
+  });
+
   it('keeps a bilingual protocol fallback on the legacy run card', () => {
     const card = renderLegacyCard(initialState) as Record<string, any>;
     const content = card.body.elements[0].content as string;
-    expect(content).toContain('过程快照');
-    expect(content).toContain('Process snapshot');
+    expect(content).toContain('执行状态');
+    expect(content).toContain('Execution status');
   });
 
   it('translates only fixed config chrome and preserves dynamic values', () => {
@@ -81,7 +94,7 @@ describe('card i18n', () => {
       pair.zh_cn.includes(adapterLabel) && pair.en_us.includes(adapterLabel))).toBe(true);
   });
 
-  it('keeps agent-authored content byte-identical across viewer languages', () => {
+  it('keeps intended agent content byte-identical but never localizes raw reasoning', () => {
     const question = '¿Deploy 版本 α now?';
     const questionCard = renderQuestionCard({ id: 'q-agent', kind: 'text', question }) as Record<string, any>;
     expect(i18nPairs(questionCard.body).some((pair) =>
@@ -90,8 +103,7 @@ describe('card i18n', () => {
     const reasoning = '用户原文 / agent reasoning / 日本語';
     const state = reduce(initialState, { type: 'thinking', delta: reasoning });
     const runCard = renderCard(state) as Record<string, any>;
-    expect(i18nPairs(runCard.body).some((pair) =>
-      pair.zh_cn.includes(reasoning) && pair.en_us.includes(reasoning))).toBe(true);
+    expect(JSON.stringify(runCard)).not.toContain(reasoning);
   });
 
   it('localizes every bot-owned interactive card surface', () => {

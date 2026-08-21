@@ -47,6 +47,10 @@ describe('resolveAcpLaunch', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/plan'");
     expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).toContain('use lark_request_plan_approval');
+    expect(patch).toContain('Read-only inspections with simple shell commands do not need plan approval');
+    expect(patch).toContain('use lark_ask_user and wait for the answer');
+    expect(patch).toContain('Do not invent a sandbox, policy, or permission restriction');
+    expect(patch).toContain('uses lark_ask_user for interactive answers');
   });
 
   it('resolves the discovered bin with the ACP profile', () => {

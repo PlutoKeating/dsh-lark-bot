@@ -100,7 +100,7 @@ export async function statusGuardianCommand(
     `dsh 是否在线：${up ? '是' : '否'}${processFound ? `（pid ${processFound.pid}）` : ''}`,
     `心跳龄：${heartbeat ? `${heartbeatAgeMs(heartbeat)}ms` : '无'}`,
     `已观察过 dsh 运行：${state.profileSeenUp ? '是' : '否'}`,
-    `守护进程 pid：${process.pid}`,
+    '守护进程 pid：未发现（状态命令不会把自身 PID 冒充为守护进程）',
     `状态文件：${layout.stateFile}`,
     `心跳文件：${layout.heartbeatFile}`,
   ]);
