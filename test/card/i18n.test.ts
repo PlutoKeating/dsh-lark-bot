@@ -61,6 +61,19 @@ describe('card i18n', () => {
     );
   });
 
+  it('supports a process-level language preference for plain Markdown', () => {
+    const previous = process.env.DSH_LARK_REPLY_LANG;
+    try {
+      process.env.DSH_LARK_REPLY_LANG = 'zh';
+      expect(bilingualMarkdown('中文', 'English')).toBe('中文');
+      process.env.DSH_LARK_REPLY_LANG = 'en';
+      expect(bilingualMarkdown('中文', 'English')).toBe('English');
+    } finally {
+      if (previous === undefined) delete process.env.DSH_LARK_REPLY_LANG;
+      else process.env.DSH_LARK_REPLY_LANG = previous;
+    }
+  });
+
   it('keeps a bilingual protocol fallback on the legacy run card', () => {
     const card = renderLegacyCard(initialState) as Record<string, any>;
     const content = card.body.elements[0].content as string;

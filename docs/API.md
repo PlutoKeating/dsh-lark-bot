@@ -588,7 +588,8 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/card/i18n.ts`：`localizedCard({ zhCn, enUs, config? })` 生成 schema 2.0 默认中文 body/header，
   设置 `config.locales/use_custom_translation`，并把 `zh_cn`、`en_us` 写入各文本组件的 `i18n_content`；`config.summary.i18n_content` 同步双语
   消息预览。模块递归提取 button callback value 并要求两种语言严格相同，否则 fail closed。
-  `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级。
+  `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级；
+  `DSH_LARK_REPLY_LANG=zh|en|both` 可选择进程级纯文本回退语言，默认 `both`。
   variant 只翻译 bot 固定文案，agent 回答、用户问题与 option 原文不改写；原始推理与工具参数/结果
   不进入过程卡。
 
