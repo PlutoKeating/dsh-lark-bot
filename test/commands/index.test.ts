@@ -441,14 +441,23 @@ describe('command router', () => {
     ctx.sessions.recordExchange('chat-a', '/tmp/default', ['context a'], 'answer a');
     const stop = vi.fn();
     ctx.activeRuns.set('chat-a', { runId: 'run-a', workspaceCwd: '/tmp/default', stop });
-    const handled = await tryHandleCommand('/cd /tmp/project', ctx);
+    const handled = await tryHandleCommand('/cd /tmp', ctx);
 
     expect(handled).toBe(true);
-    expect(ctx.workspaces.cwdFor('chat-a')).toBe('/tmp/project');
+    expect(ctx.workspaces.cwdFor('chat-a')).toBe('/tmp');
     expect(ctx.sessions.resumeFor('chat-a', '/tmp/default')).toBe('session-a');
     expect(ctx.sessions.historyFor('chat-a', '/tmp/default')).toHaveLength(2);
     expect(stop).toHaveBeenCalledOnce();
     expect(ctx.channel.sendMarkdown).toHaveBeenCalled();
+  });
+
+  it('rejects a nonexistent /cd target before changing workspace state', async () => {
+    const ctx = makeContext();
+    await tryHandleCommand('/cd /definitely-not-a-dsh-workspace', ctx);
+    expect(ctx.workspaces.cwdFor('chat-a')).toBeUndefined();
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a', expect.stringContaining('目录不存在'), { replyTo: 'msg-1' },
+    );
   });
 
   it('/new clears only the currently selected workspace session', async () => {
@@ -888,6 +897,9 @@ describe('command router', () => {
 
     await tryHandleCommand('/effort quick', ctx);
     expect(modes.get('chat-a')).toBe('quick');
+    expect(ctx.channel.sendMarkdown).toHaveBeenCalledWith(
+      'chat-a', expect.stringContaining('兼容别名'), { replyTo: 'msg-1' },
+    );
   });
 
   it('/newg creates a group, invites the sender and replies with a link', async () => {

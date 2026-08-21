@@ -52,8 +52,9 @@
 ### 4.1 桥接（bridge）
 - 通过飞书/Lark **WebSocket 长连接**（`@larksuite/channel` + PersonalAgent 应用）收发消息，免公网服务器、免域名、免内网穿透。
 - 私聊直接发消息、群聊 `@bot`、话题 / thread、文档评论均可触发。
-- **流式过程卡**：thinking、工具调用与结果实时更新在 Card JSON 2.0 原生折叠面板中；面板内同时
-  保留开头与最新推理，面板外持续更新兼容快照。平台拒绝折叠组件时自动回退 legacy 流式卡。
+- **流式过程卡**：Card JSON 2.0 原生折叠面板实时更新阶段、耗时、工具名与状态；原始 thinking、
+  工具输入输出、草稿正文和底层错误不得进入卡片正文、兼容快照或消息预览。平台拒绝折叠组件时
+  自动回退具有同一隐私边界的 legacy 流式卡。
 - **最终回答**：正常完成后作为独立 Markdown 消息发送，继承 reply/thread 路由；过程卡失败不能
   阻断最终投递，最终消息发送失败时把回答正文回填卡片且不丢失会话记录。
 - 图片 / 文件：下载到本地后交给 agent 处理。
@@ -184,7 +185,8 @@
 - SDK / ACP / Web agent 自动获得 `lark_send_file(path, file_name?)`；目标由当前 native session
   固定为原 chat/thread，不允许模型指定其他会话。
 - bridge 只读取当前 workspace、当前 scope 的实际执行 worktree、当前 scope 归档和实例日志中的
-  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。拒绝 symlink 越界、目录、不安全
+  realpath 普通文件；runtime cwd 仅解析相对路径，不能扩大允许根。路径包含检查必须统一平台路径
+  别名，并从最深已存在祖先解析尚未创建的后代。拒绝 symlink 越界、目录、不安全
   文件名与默认超过 20 MiB 的文件，失败作为结构化工具结果返回。
 - 回调沿用 127.0.0.1 + 每启动随机 token；文件内容不进入 JSON 请求，bridge 校验后直接通过
   channel 二进制上传能力发送。
@@ -301,7 +303,8 @@
   原位更新，未终态卡可跨重启继续更新，失败追加；tool/thinking 默认不展开，不编辑用户本人消息，
   不猜测 WebUI/TUI 来源。
 - **自愈 v2**（`src/session/heal.ts`）：仅对真正损坏的会话日志归档（seq gap 类），
-  id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。
+  id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。被拒绝的旧 run
+  卡只显示中性的“正在恢复会话状态”，不得先暴露底层错误或在新会话重试成功前宣告恢复成功。
 
 ### 4.12 一键彻底升级（one-command upgrade，issue #10）
 

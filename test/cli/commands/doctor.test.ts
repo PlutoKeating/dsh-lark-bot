@@ -1,10 +1,11 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runDoctor } from '../../../src/cli/commands/doctor.js';
 import { ConfigStore } from '../../../src/config/profile-store.js';
 import { ScopeDirectory } from '../../../src/bridge/scope-directory.js';
+import { guardianServiceFilePath } from '../../../src/guardian/install.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -109,31 +110,34 @@ describe('runDoctor', () => {
     expect(probe).not.toHaveBeenCalled();
   });
 
-  it('warns when the guardian unit points into the npm cache', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-guardian-'));
-    process.env.DSH_LARK_HOME = root;
-    process.env.DSH_LARK_DSH_COMMAND = 'node';
-    process.env.DSH_LARK_ADAPTER = 'headless';
-    process.env.DSH_LARK_UPGRADE_CHECK = '0';
-    const unitDir = join(root, '.config', 'systemd', 'user');
-    await mkdir(unitDir, { recursive: true });
-    await writeFile(
-      join(unitDir, 'dsh-lark-guardian.service'),
-      'ExecStart=/usr/bin/node /home/u/.npm/_npx/abc/node_modules/dsh-lark-bot/dist/cli.js guardian run\n',
-      'utf8',
-    );
-    const outputChunks: string[] = [];
-    try {
-      await runDoctor({
-        version: '0.13.1',
-        output: (text) => outputChunks.push(text),
-        guardianRoot: root,
-      });
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-    expect(outputChunks.join('')).toContain('guardian: ⚠️ 服务单元指向 npx 缓存路径');
-  });
+  it.skipIf(process.platform !== 'linux' && process.platform !== 'darwin')(
+    'warns when the guardian unit points into the npm cache',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-guardian-'));
+      process.env.DSH_LARK_HOME = root;
+      process.env.DSH_LARK_DSH_COMMAND = 'node';
+      process.env.DSH_LARK_ADAPTER = 'headless';
+      process.env.DSH_LARK_UPGRADE_CHECK = '0';
+      const unitPath = guardianServiceFilePath(process.platform, root);
+      await mkdir(dirname(unitPath), { recursive: true });
+      await writeFile(
+        unitPath,
+        'ExecStart=/usr/bin/node /home/u/.npm/_npx/abc/node_modules/dsh-lark-bot/dist/cli.js guardian run\n',
+        'utf8',
+      );
+      const outputChunks: string[] = [];
+      try {
+        await runDoctor({
+          version: '0.13.1',
+          output: (text) => outputChunks.push(text),
+          guardianRoot: root,
+        });
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+      expect(outputChunks.join('')).toContain('guardian: ⚠️ 服务单元指向 npx 缓存路径');
+    },
+  );
 
   it('surfaces a pending restart after an upgrade', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-lark-doctor-restart-'));

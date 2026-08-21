@@ -37,4 +37,45 @@ describe('run state reducer', () => {
       { kind: 'text', content: 'hello from dsh', streaming: false },
     ]);
   });
+
+  it('coalesces repeated updates for the same tool call', () => {
+    let state = reduce(initialState, {
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'read',
+      input: '',
+    });
+    state = reduce(state, {
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'read',
+      input: { path: 'src/index.ts' },
+    });
+    state = reduce(state, {
+      type: 'tool_result',
+      id: 'tool-1',
+      output: 'file contents',
+      isError: false,
+    });
+    state = reduce(state, {
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'read_file',
+      input: { path: 'src/index.ts' },
+    });
+
+    expect(state.blocks).toEqual([
+      {
+        kind: 'tool',
+        tool: {
+          id: 'tool-1',
+          name: 'read_file',
+          input: { path: 'src/index.ts' },
+          status: 'done',
+          output: 'file contents',
+        },
+      },
+    ]);
+    expect(state.footer).toBe('thinking');
+  });
 });

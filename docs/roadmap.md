@@ -100,10 +100,11 @@
   Markdown 消息发送，再用 schema 2.0 form card 收集批准 / 继续规划与可选反馈；工具阻塞等待并在
   决策后续接同一 agent turn；pre-execute 强制阻断未批准的 mutating/execute 调用，run/callback
   结束按 session 精确取消并撤回卡片，等待期间只暂停所属 run 的 idle watchdog。
-- **P21 done（issue #19）**：运行卡使用飞书 Card JSON 2.0 `collapsible_panel` 实时展示推理、工具
-  调用与结果，运行中展开、完成后默认收起；最终回答作为独立 Markdown 消息发送并继承原 reply/thread
-  路由。面板外的兼容快照保留最新推理与最近工具结果，平台拒绝折叠组件时自动重试 legacy 流式卡；
-  最终消息发送失败会把完整回答回填过程卡，同时 exchange 仍持久化。
+- **P21 done（issue #19，issue #66 安全收敛）**：运行卡使用飞书 Card JSON 2.0
+  `collapsible_panel` 实时展示阶段、耗时、工具名与状态，运行中展开、完成后默认收起；原始推理、
+  工具输入输出、草稿正文和底层错误均不发送到飞书。最终回答作为独立 Markdown 消息发送并继承原
+  reply/thread 路由；平台拒绝折叠组件时自动重试同样脱敏的 legacy 流式卡。最终消息发送失败会把
+  完整回答回填过程卡，同时 exchange 仍持久化。
 - **0.9.0 released**：agent 主动发起问答卡（`lark_ask_user` 工具 + `/ask` 问答卡），任务等待
   用户回答期间超时看门狗暂停。
 - **P23 done**：问答卡绑定发送后的 messageId；用户可直接回复卡片输入自由文本，单选/多选也接受
@@ -130,7 +131,8 @@
 - **0.10.2 released（恢复自愈补全）**：SDK 适配器把被拒绝的 session 恢复（如 dsh 持久化层
   的 `id collision`）以 **error 事件**送达而不是抛异常，0.10.1 的降级路径因此没有触发。
   现在恢复中的 run 若**零活动即以 error 终止**，同样判定为会话级失败：清 session 绑定并以
-  新会话重试一次（转写重放）；有实际活动后的运行中错误仍正常展示、不重试。安全模式任务在
+  新会话重试一次（转写重放），旧 run 卡以中性恢复状态收尾，不展示底层错误；有实际活动后的
+  运行中错误仍正常展示、不重试。安全模式任务在
   同类零活动错误后也会丢弃存储的 session 绑定，下一次安全任务从新会话开始。
 - **0.8.0 released**：P14 安全网守护随 0.8.0 发布；npm / GitHub Packages / GitHub Release
   双包同步，社区收录更新请求（awesome-dsh-plugins / dshfind / omdsh）已提交。
@@ -139,6 +141,9 @@
 - **dsh Web 可视化设置 done（issue #36）**：Host 注册实际 profile-backed settings namespace，
   包内 `./client` 在官方 Plugins 配置页渲染应用、workspace、模型、并行数、adapter 与提醒；
   App Secret write-only，保存串行 reload，诊断快捷入口和命令/env 降级齐备。
+- **macOS 路径别名修复（issue #69）**：containment 与 CLI 自执行检测同时规范化 `/var` 一类
+  平台别名；未创建后代从最深已存在祖先继续解析，仍拒绝 symlink 越界。doctor 缓存路径测试按
+  当前平台写入服务入口，默认 macOS `TMPDIR` 下可完整运行测试。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;

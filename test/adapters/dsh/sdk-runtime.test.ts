@@ -34,6 +34,10 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain("id: lark-approval-answerer");
     expect(patch).toContain("name: 'dsh-lark-bot/approval'");
     expect(patch).toContain('use lark_request_plan_approval');
+    expect(patch).toContain('Read-only inspections with simple shell commands do not need plan approval');
+    expect(patch).toContain('use lark_ask_user and wait for the answer');
+    expect(patch).toContain('Do not invent a sandbox, policy, or permission restriction');
+    expect(patch).toContain('uses lark_ask_user for interactive answers');
   });
 
   it('omits the bridge tools from the core-only safe SDK overlay', () => {

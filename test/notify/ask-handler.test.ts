@@ -72,6 +72,32 @@ describe('buildAskHandler', () => {
     expect(questions.pendingCount('chat-a')).toBe(0);
   });
 
+  it('cancels the exact pending question when its callback disconnects', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'oc_group', undefined);
+    const questions = new QuestionRegistry();
+    const sendCard = vi.fn().mockResolvedValue('question-card-message');
+    const handler = buildAskHandler({
+      sessions,
+      scopeDirectory: directory,
+      questions,
+      channel: { sendCard },
+    });
+    const controller = new AbortController();
+
+    const result = handler(
+      { token: 't', sessionId: 'session-1', question: 'Q' },
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(questions.pendingCount('chat-a')).toBe(1));
+    controller.abort();
+
+    await expect(result).resolves.toEqual({ ok: false, error: 'question cancelled' });
+    expect(questions.pendingCount('chat-a')).toBe(0);
+  });
+
   it('does not cancel another session question when one card send fails', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a', 'session-b', '/tmp/project');

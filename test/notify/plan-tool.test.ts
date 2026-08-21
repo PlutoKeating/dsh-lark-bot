@@ -60,6 +60,24 @@ describe('lark_request_plan_approval tool', () => {
     );
   });
 
+  it('throws delivery failures instead of rendering them as completed', async () => {
+    const definitions: RawToolDefinition[] = [];
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, error: 'message audit rejected the plan' }),
+    }) as never;
+    apply({
+      on: vi.fn(),
+      tools: { register: (definition: RawToolDefinition) => definitions.push(definition) },
+    } as never, { endpoint: 'http://127.0.0.1/plan', token: 'secret' });
+
+    await expect(definitions[0]!.execute(
+      { plan: 'Plan' },
+      { agent: { session: { id: 'session-1' } } } as never,
+    )).rejects.toThrow('message audit rejected');
+  });
+
   it('denies mutating tools until the current turn plan is approved', async () => {
     const definitions: RawToolDefinition[] = [];
     let preStep: (
@@ -93,8 +111,129 @@ describe('lark_request_plan_approval tool', () => {
     await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
     await definitions[0]!.execute({ plan: 'Edit a.ts' }, { agent } as never);
     await expect(preExecute(edit, allow)).resolves.toEqual({ kind: 'allow' });
+    await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
 
     await preStep({ agent, turn: 2 }, allow);
     await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
+  });
+
+  it('allows simple read-only shell inspections without plan approval', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    const on = (event: string, listener: unknown): void => {
+      if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+    };
+    apply({
+      on,
+      tools: {
+        register: vi.fn(),
+        get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
+      },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const command of [
+      'date',
+      '/usr/bin/date +%F',
+      'pwd',
+      'ls -la /tmp',
+      'rg --files src',
+      'find src -name *.ts',
+      'git status --short',
+      'git log -5 --oneline',
+      'git diff --check',
+      'git branch --show-current',
+      'git remote -v',
+      'ps aux',
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toEqual({
+        kind: 'allow',
+      });
+    }
+    expect(next).toHaveBeenCalledTimes(12);
+  });
+
+  it('keeps mutating, compound, redirected, and unknown shell commands behind the plan gate', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    const on = (event: string, listener: unknown): void => {
+      if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+    };
+    apply({
+      on,
+      tools: {
+        register: vi.fn(),
+        get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
+      },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const command of [
+      'rm -rf build',
+      'git push fork HEAD',
+      'date; rm file',
+      'pwd > location.txt',
+      'echo $(rm file)',
+      'node script.mjs',
+      'date --set=tomorrow',
+      'rg --pre=./transform pattern',
+      'find build -delete',
+      'tail -f app.log',
+      'git diff --output=changes.patch',
+      'git branch new-branch',
+      'git remote set-url origin example.invalid/repo',
+      './date',
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toMatchObject({
+        kind: 'deny',
+      });
+    }
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for background, escalation, and unknown shell arguments', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn() },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const arguments_ of [
+      { command: 'date', run_in_background: true },
+      { command: 'pwd', sandbox_permissions: 'require_escalated' },
+      { command: 'git status', workdir: '/tmp' },
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: arguments_ }, next)).resolves.toMatchObject({
+        kind: 'deny',
+      });
+    }
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('supports an explicit environment override for trusted deployments', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn() },
+    } as never, { mode: 'off' });
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    await expect(preExecute({ name: 'bash', arguments: { command: 'rm file' } }, next))
+      .resolves.toEqual({ kind: 'allow' });
   });
 });

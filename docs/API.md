@@ -389,6 +389,9 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 `archiveSessionDir(sessionId)` 先把会话目录**复制**到
 `~/.dsh-lark/_archived-sessions/<id>-<ts>` 再删除原目录，并返回归档路径供用户可见与恢复
 （复制失败不删原目录）。
+`run-flow` 仅在 native resume 零活动失败可归类为已知 session collision/corruption 时，才把旧过程卡
+原位更新为固定的“正在恢复”状态，再向上抛出并触发
+fresh-session retry；抛异常和 error-event 两种 adapter 形态共用该路径，原始错误仅写本机日志。
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
@@ -585,14 +588,19 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
 - `src/card/i18n.ts`：`localizedCard({ zhCn, enUs, config? })` 生成 schema 2.0 默认中文 body/header，
   设置 `config.locales/use_custom_translation`，并把 `zh_cn`、`en_us` 写入各文本组件的 `i18n_content`；`config.summary.i18n_content` 同步双语
   消息预览。模块递归提取 button callback value 并要求两种语言严格相同，否则 fail closed。
-  `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级。
-  variant 只翻译 bot 固定文案，agent 回答、推理、工具参数/结果、用户问题与 option 原文不改写。
+  `bilingualMarkdown(zhCn,enUs)` 用于服务端无法获得每位读者 locale 的 Markdown/toast/旧客户端降级；
+  `DSH_LARK_REPLY_LANG=zh|en|both` 可选择进程级纯文本回退语言，默认 `both`。
+  variant 只翻译 bot 固定文案，agent 回答、用户问题与 option 原文不改写；原始推理与工具参数/结果
+  不进入过程卡。
 
 - `src/card/run-renderer.ts`：`renderCard(state, density)`，三档 `compact / standard / detailed`；
-  reasoning、工具调用与结果位于 schema 2.0 `collapsible_panel`，运行时展开、结束后默认收起；
-  detailed 含工具输入输出与 token usage。面板外的 notation 过程快照持续保留最新推理尾部、最近
-  工具与结果；若平台拒绝 `collapsible_panel`，run-flow / guardian 会重试无该组件的 legacy 流式卡。
-  `config.summary` 另同步截断轨迹供消息预览使用；正常卡片正文不承载最终回答。
+  schema 2.0 `collapsible_panel` 只展示阶段、耗时、工具名与状态，运行时展开、结束后默认收起；
+  detailed 可展示更多工具项与 token usage，但原始 reasoning、工具输入输出、草稿正文、adapter 错误和
+  delivery 错误不得进入任一卡片密度、`config.summary` 或兼容快照。若平台拒绝
+  `collapsible_panel`，run-flow / guardian 会重试具有相同隐私边界的 legacy 流式卡。正常卡片正文
+  不承载最终回答；仅当独立最终消息发送失败时，才把原本就面向用户的最终回答回填卡片。相同 tool id 的
+  增量与完成事件归并为同一条记录；过程过长时以完整本地化卡片的 28,000 字符预算动态隐藏较早的
+  工具记录、保留最新记录，避免工具轨迹膨胀后被飞书以 `230099` 拒绝。
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
@@ -632,7 +640,11 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 只有 pending-card reply 免 @；topic scope 必须匹配 thread，member scope 必须匹配 sender open_id，拒绝路径不结算也不入队。
 
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
-`tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、命令执行与 `run_code`；通过 token 鉴权的
+`tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、非只读 shell 命令与 `run_code`。
+`bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
+subcommand 位于只读白名单时才绕过计划和逐工具审批；未知参数或语法一律保持高风险。通过 token 鉴权的
+一次批准只消费于随后一次高风险调用，不能解锁整个 turn；`DSH_LARK_PLAN_GATE=off` 可为可信部署关闭
+独立计划门禁，但不改变官方逐工具审批策略。
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
@@ -640,18 +652,23 @@ SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期
 最终才写入结果对象。该保活同时覆盖 `/ask`、`/plan`、`/approval`，避免 Node/Undici 默认 300 秒
 headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch failed`。
 
-`src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；单次卡片 update 失败不会中断事件消费或最终
+`src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；卡片 update 失败会有限重试，仍失败则冻结该卡并
+发送普通降级提示，不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
-路由。发送失败不会丢失已记录的 exchange，过程卡会写明失败原因并回填完整回答正文；中断、超时和
+  路由。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
+  原本面向用户的回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
+`src/card/session-recovery-card.ts` 提供已知 native resume 零活动失败时的双语中性恢复卡；它不包含
+session ID、底层错误或本机路径，fresh-session retry 另开正常过程卡继续任务。
 
 ## 5. 安全模块 · Security
 
 `src/config/security.ts` 提供：
 
 - `redactSecrets(text)`：Bearer / `sk-` / `api_key=` 正则脱敏。
-- `isPathWithin(root, candidate)`：realpath containment（拒绝符号链接逃逸）。
+- `isPathWithin(root, candidate)`：从最深已存在祖先开始做 realpath containment；因此可接受同一目录
+  的平台路径别名和未创建后代，同时拒绝已存在或未存在目标下的符号链接逃逸。
 - `truncateUtf8Safe(text, maxBytes)`：UTF-8 安全字节截断。
 - `isEventFresh(timestampMs, windowMs, now?)`：过期事件拒绝。
 - `isSafeHttpUrl(url)`：SSRF 防护（拒绝环回 / 私网 / 链路本地 / CGNAT / IPv6 ULA）。
@@ -779,7 +796,10 @@ export interface Logger {
   唯一、enabled、真实 @ 当前 bot 时进入任务管线，且跳过 slash-command dispatch。
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
-- `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`。
+- `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`；整卡
+  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。单次 patch 失败在内部结算并禁用该卡
+  后续更新，不向 producer 抛出，也不产生未处理 Promise rejection；初始卡发送失败仍向上抛出，
+  由 `run-flow` 走 legacy/no-card 降级。
 
 `src/bridge/send-options.ts` 定义出站 `SendOptions { replyTo?, mentions?, threadId? }` 与
 `MentionTarget { userId, name? }`：`sendMarkdown` / `sendCard` / `streamCard` 均接受该选项，
@@ -863,11 +883,19 @@ topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 `options` / `header`，`timeoutMs` 10 分钟），执行时以 `exec.agent.session.id`
 定位会话并 POST 到 `DSH_LARK_ASK_URL` 阻塞等待答案；答案作为普通工具结果
 回到 agent 循环。问答卡按 native session 归属；等待期间仅暂停所属 run 的超时看门狗，run 结束
-调用 `settleSession`，单卡发送失败调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
+调用 `settleSession`，单卡发送失败或 callback 断开调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
+
+`/ask`、`/plan`、`/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
+响应头，之后每 30 秒写入一个 JSON 合法空白换行，最终追加单个 JSON 结果对象。这样既不会触发
+Node/Undici 默认 300 秒响应头或响应体空闲超时，现有 `response.json()` 客户端也无需特殊解析；
+客户端真正断开时仍通过 AbortSignal 精确清理对应 pending 项。鉴权和参数错误发生在 flush 前，继续
+保留原有 4xx 状态；flush 后的业务失败由响应体 `ok: false` 表示。
 
 同一服务器还提供 `POST /plan`（`server.planUrl` / `DSH_LARK_PLAN_URL`）。
 `buildPlanHandler` 以 session id 定位当前 scope，先发完整 Markdown 计划，再以
 `PlanApprovalRegistry` + `renderPlanApprovalCard` 等待批准 / 继续规划和可选 feedback。
+计划出站前依次脱敏 secret 与 email/SSH `user@host` 形状，避免飞书消息审计误判；非取消类交付失败
+会 reject 工具调用，只有所属 run 明确取消才返回正常的 unresolved 结果。
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval`（无固定 tool timeout，生命周期服从当前
 run 的 AbortSignal）；决策作为工具结果返回同一 agent turn。pending plan 与 question 都会暂停 run
 idle watchdog；plan 按 session 计数/结算，callback 断开或 run 结束只取消对应 session，并终态提示、撤回失效卡。

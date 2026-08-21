@@ -37,8 +37,8 @@ export interface AskHandlerDeps {
  */
 export function buildAskHandler(
   deps: AskHandlerDeps,
-): (payload: AskPayload) => Promise<AskResult> {
-  return async (payload) => {
+): (payload: AskPayload, signal?: AbortSignal) => Promise<AskResult> {
+  return async (payload, signal) => {
     const scope = deps.sessions.scopeForSession(payload.sessionId);
     if (!scope) {
       return { ok: false, error: `unknown session: ${payload.sessionId}` };
@@ -56,28 +56,41 @@ export function buildAskHandler(
         ? { options: payload.options }
         : {}),
     };
+    if (signal?.aborted) return { ok: false, error: 'question cancelled' };
     const { id, promise } = deps.questions.register(scope, input, payload.sessionId);
-    try {
-      const messageId = await deps.channel.sendCard(
-        destination.chatId,
-        renderQuestionCard({ ...input, id, actionScope: scope }),
-        destination.threadId && destination.messageId
-          ? { threadId: destination.threadId, replyTo: destination.messageId }
-          : undefined,
-      );
-      if (messageId) deps.questions.bindMessage(scope, id, messageId);
-    } catch (error) {
-      log.fail('ask-card', error, { scope });
+    const cancel = (): void => {
       deps.questions.cancel(scope, id);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    // Abort may have happened after the check above but before listener
+    // registration. EventTarget does not replay an already-fired abort.
+    if (signal?.aborted) cancel();
+    try {
+      if (signal?.aborted) return { ok: false, error: 'question cancelled' };
+      try {
+        const messageId = await deps.channel.sendCard(
+          destination.chatId,
+          renderQuestionCard({ ...input, id, actionScope: scope }),
+          destination.threadId && destination.messageId
+            ? { threadId: destination.threadId, replyTo: destination.messageId }
+            : undefined,
+        );
+        if (messageId) deps.questions.bindMessage(scope, id, messageId);
+      } catch (error) {
+        log.fail('ask-card', error, { scope });
+        deps.questions.cancel(scope, id);
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+      const answer = await promise;
+      if (answer === undefined) {
+        return { ok: false, error: 'question cancelled' };
+      }
+      return { ok: true, answer };
+    } finally {
+      signal?.removeEventListener('abort', cancel);
     }
-    const answer = await promise;
-    if (answer === undefined) {
-      return { ok: false, error: 'question cancelled' };
-    }
-    return { ok: true, answer };
   };
 }
