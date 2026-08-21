@@ -87,6 +87,12 @@ dsh --profile dsh-lark
 
 ③ On first boot the terminal prints a QR code → scan it with the Feishu / Lark app to create or choose a PersonalAgent app → after binding, DM the bot directly; groups/topics use `@bot` by default, with an explicitly enabled allowlist-protected no-@ mode available.
 
+Buttons use Card JSON 2.0 `behaviors.callback`, and the QR flow explicitly requests the
+`card.action.trigger` callback capability required by plan, approval, and
+question-card buttons. If an existing app was created by an older flow, enable card callbacks under Developer
+Console → Events & Callbacks → Callback Configuration and publish the app again. Without it, messages still work
+while card clicks never reach the bot.
+
 `setup` automatically: locates your local dsh → pre-approves pnpm's build policy (protobufjs) → runs the standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running package) → installs the safety-net guardian system service. One command installs everything.
 
 > **No public IP / domain / server / tunneling required** (Feishu outbound WebSocket long connection); works on Linux / macOS / Windows.
@@ -238,6 +244,8 @@ another plan. There is no fixed ten-minute deadline: the gate follows the owning
 stopping it cancels and recalls only that session's pending card. The legacy headless adapter cannot use callback tools.
 
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
+
+Plan, approval and question-card submissions immediately show a native toast, post a terminal confirmation and recall the original card. Stale cards return an explicit error toast, while received actions and stale reasons are written to structured logs. Confirmation/recall failures do not change the decision already delivered to the agent. Local human-decision callbacks stream insignificant JSON whitespace while waiting so Node's HTTP client cannot invalidate a live card after five minutes.
 
 **Safety-net guardian**: a minimal system-level resident process (systemd / LaunchAgent / Windows startup), independent of the dsh process and installed **by default with `setup`**. Silent while dsh runs, it takes over the Feishu channel when dsh goes down or fails to boot (e.g. a third-party plugin breaks the profile composition), so you can self-heal without touching the command line:
 

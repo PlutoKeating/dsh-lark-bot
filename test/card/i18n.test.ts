@@ -36,6 +36,10 @@ describe('card i18n', () => {
       zh_cn: '会话状态',
       en_us: 'Session status',
     });
+    expect(card.body.elements[0].value).toBeUndefined();
+    expect(card.body.elements[0].behaviors).toEqual([
+      { type: 'callback', value },
+    ]);
   });
 
   it('rejects localized variants whose callback behavior differs', () => {

@@ -13,13 +13,17 @@ describe('onboardPersonalAgent', () => {
   it('renders the QR code and returns Feishu tenant credentials', async () => {
     const lines: string[] = [];
     const qr: string[] = [];
+    let registrationOptions: RegisterAppOptions | undefined;
 
     const created = await onboardPersonalAgent({
-      register: fakeRegister({
-        client_id: 'cli_test',
-        client_secret: 'secret',
-        user_info: { tenant_brand: 'feishu', open_id: 'ou_1' },
-      }),
+      register: async (options) => {
+        registrationOptions = options;
+        return fakeRegister({
+          client_id: 'cli_test',
+          client_secret: 'secret',
+          user_info: { tenant_brand: 'feishu', open_id: 'ou_1' },
+        })(options);
+      },
       renderQr: (value) => qr.push(value),
       print: (line) => lines.push(line),
     });
@@ -33,6 +37,7 @@ describe('onboardPersonalAgent', () => {
     expect(qr).toEqual(['https://example.test/qr']);
     expect(lines.join('\n')).toContain('未检测到飞书 / Lark 应用凭据');
     expect(lines.join('\n')).toContain('App ID:  cli_test');
+    expect(registrationOptions?.addons?.callbacks?.items).toContain('card.action.trigger');
   });
 
   it('switches to lark tenant when the scan reports an international tenant', async () => {

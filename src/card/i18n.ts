@@ -29,7 +29,9 @@ export function localizedCard(input: LocalizedCardInput): object {
     throw new Error('Localized card callback values must be identical');
   }
 
-  const body = localizeNode(input.zhCn.body, input.enUs.body, 'body', input.bilingualFallback === true);
+  const body = withV2CallbackBehaviors(
+    localizeNode(input.zhCn.body, input.enUs.body, 'body', input.bilingualFallback === true),
+  );
   const header = input.zhCn.header
     ? localizeNode(
         input.zhCn.header,
@@ -57,6 +59,26 @@ export function localizedCard(input: LocalizedCardInput): object {
     },
     ...(header ? { header } : {}),
     body,
+  };
+}
+
+/** Card JSON 2.0 routes button interactions through callback behaviors. */
+function withV2CallbackBehaviors(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withV2CallbackBehaviors);
+  if (!value || typeof value !== 'object') return value;
+  const source = value as Record<string, unknown>;
+  const mapped = Object.fromEntries(
+    Object.entries(source).map(([key, child]) => [key, withV2CallbackBehaviors(child)]),
+  );
+  if (source.tag !== 'button' || source.value === undefined) return mapped;
+  const { value: callbackValue, ...button } = mapped;
+  const behaviors = Array.isArray(button.behaviors) ? button.behaviors : [];
+  return {
+    ...button,
+    behaviors: [
+      ...behaviors,
+      { type: 'callback', value: callbackValue },
+    ],
   };
 }
 

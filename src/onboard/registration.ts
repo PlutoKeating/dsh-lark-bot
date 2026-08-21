@@ -32,6 +32,10 @@ export async function onboardPersonalAgent(
 
   const result = await register({
     source: deps.source ?? DEFAULT_SOURCE,
+    // Card callbacks are a separate application capability in Feishu/Lark.
+    // A WebSocket can be healthy and receive messages while silently never
+    // receiving card.action.trigger unless this callback is enabled.
+    addons: { callbacks: { items: ['card.action.trigger'] } },
     ...(deps.signal ? { signal: deps.signal } : {}),
     onQRCodeReady: (info) => {
       print('请使用飞书 / Lark App 扫描以下二维码，创建或选择 PersonalAgent 应用：');
