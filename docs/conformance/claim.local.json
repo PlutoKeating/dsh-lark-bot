@@ -1,13 +1,13 @@
 {
   "claimVersion": "0.15",
-  "subject": "io.github.plutokeating.dsh-lark-bot@0.16.1",
+  "subject": "io.github.plutokeating.dsh-lark-bot@0.17.0",
   "specVersion": "community-v0.15",
   "hostDescriptorDigest": "sha256:b440a6f6548c56d9b7e07627ddd3c5324fbdba5efca646eb010435d523d6b4a1",
-  "artifactDigest": "sha256:7c5a5a2e20c35413f8c4e1e8da57b267523a999cf95a172d236fa10f880dca91",
+  "artifactDigest": "sha256:8154d32de2e8f656af96c887044470e2a9d5b59351da057bfe86e0dafff81e62",
   "suiteVersion": "0.15.0-experimental+e1b902b0",
   "evidenceLevel": "Tested",
   "result": "pass",
-  "testedAt": "2026-08-21T21:43:04Z",
+  "testedAt": "2026-08-21T22:31:00Z",
   "runtime": "node-22/linux-x64/local",
   "revoked": false,
   "failedRequirements": []
