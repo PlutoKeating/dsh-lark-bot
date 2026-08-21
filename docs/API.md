@@ -894,6 +894,8 @@ Node/Undici 默认 300 秒响应头或响应体空闲超时，现有 `response.j
 同一服务器还提供 `POST /plan`（`server.planUrl` / `DSH_LARK_PLAN_URL`）。
 `buildPlanHandler` 以 session id 定位当前 scope，先发完整 Markdown 计划，再以
 `PlanApprovalRegistry` + `renderPlanApprovalCard` 等待批准 / 继续规划和可选 feedback。
+计划出站前依次脱敏 secret 与 email/SSH `user@host` 形状，避免飞书消息审计误判；非取消类交付失败
+会 reject 工具调用，只有所属 run 明确取消才返回正常的 unresolved 结果。
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval`（无固定 tool timeout，生命周期服从当前
 run 的 AbortSignal）；决策作为工具结果返回同一 agent turn。pending plan 与 question 都会暂停 run
 idle watchdog；plan 按 session 计数/结算，callback 断开或 run 结束只取消对应 session，并终态提示、撤回失效卡。

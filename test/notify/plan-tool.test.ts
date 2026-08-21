@@ -60,6 +60,24 @@ describe('lark_request_plan_approval tool', () => {
     );
   });
 
+  it('throws delivery failures instead of rendering them as completed', async () => {
+    const definitions: RawToolDefinition[] = [];
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: false, error: 'message audit rejected the plan' }),
+    }) as never;
+    apply({
+      on: vi.fn(),
+      tools: { register: (definition: RawToolDefinition) => definitions.push(definition) },
+    } as never, { endpoint: 'http://127.0.0.1/plan', token: 'secret' });
+
+    await expect(definitions[0]!.execute(
+      { plan: 'Plan' },
+      { agent: { session: { id: 'session-1' } } } as never,
+    )).rejects.toThrow('message audit rejected');
+  });
+
   it('denies mutating tools until the current turn plan is approved', async () => {
     const definitions: RawToolDefinition[] = [];
     let preStep: (

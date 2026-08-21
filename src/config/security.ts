@@ -21,6 +21,14 @@ export function redactSecrets(text: string): string {
   return result;
 }
 
+/** Redact email-shaped values, including SSH Git user@host syntax, for message audit. */
+export function redactEmails(text: string): string {
+  return text.replace(
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu,
+    '[redacted-email]',
+  );
+}
+
 function resolveReal(path: string): string | undefined {
   let cursor = resolve(path);
   const missingParts: string[] = [];

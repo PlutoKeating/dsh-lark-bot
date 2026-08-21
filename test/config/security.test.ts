@@ -8,6 +8,7 @@ import {
   isEventFresh,
   isPathWithin,
   isSafeHttpUrl,
+  redactEmails,
   redactSecrets,
   truncateUtf8Safe,
 } from '../../src/config/security.js';
@@ -31,6 +32,13 @@ describe('redactSecrets', () => {
 
   it('leaves ordinary text untouched', () => {
     expect(redactSecrets('run the tests please')).toBe('run the tests please');
+  });
+});
+
+describe('redactEmails', () => {
+  it('redacts ordinary and SSH-shaped email values', () => {
+    expect(redactEmails('mail user@example.com; clone git@github.com:org/repo.git'))
+      .toBe('mail [redacted-email]; clone [redacted-email]:org/repo.git');
   });
 });
 

@@ -29,13 +29,13 @@ describe('buildPlanHandler', () => {
     const resultPromise = handler({
       token: 't',
       sessionId: 'session-1',
-      plan: '## Plan\n\n1. Inspect\n2. Change',
+      plan: '## Plan\n\n1. Inspect git@github.com:org/repo.git\n2. Change',
     });
     await vi.waitFor(() => expect(sendCard).toHaveBeenCalledOnce());
     expect(order).toEqual(['plan', 'card']);
     expect(sendMarkdown).toHaveBeenCalledWith(
       'oc_group',
-      '## Plan\n\n1. Inspect\n2. Change',
+      '## Plan\n\n1. Inspect [redacted-email]:org/repo.git\n2. Change',
       { threadId: 'oc_thread' },
     );
     const serialized = JSON.stringify(sendCard.mock.calls[0]?.[1]);

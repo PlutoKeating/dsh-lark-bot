@@ -154,12 +154,18 @@ export function apply(ctx: Context, config: Config = {}) {
         ? undefined
         : String(exec.agent.session.id);
       if (!sessionId) throw new Error('lark_request_plan_approval needs an active session');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token, sessionId, plan }),
-        ...(exec?.signal === undefined ? {} : { signal: exec.signal }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token, sessionId, plan }),
+          ...(exec?.signal === undefined ? {} : { signal: exec.signal }),
+        });
+      } catch (error) {
+        if (exec?.signal?.aborted) return { resolved: false, error: 'cancelled' };
+        throw error;
+      }
       const body = await response.json() as {
         ok?: boolean;
         decision?: 'approved' | 'revise';
@@ -167,7 +173,10 @@ export function apply(ctx: Context, config: Config = {}) {
         error?: string;
       };
       if (!response.ok || body.ok !== true || !body.decision) {
-        return { resolved: false, ...(body.error ? { error: body.error } : {}) };
+        if (body.error?.toLowerCase().includes('cancel')) {
+          return { resolved: false, error: body.error };
+        }
+        throw new Error(body.error ?? `plan approval delivery failed (${response.status})`);
       }
       if (body.decision === 'approved' && exec?.agent) {
         const turn = currentTurns.get(exec.agent);

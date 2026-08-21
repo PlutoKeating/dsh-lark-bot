@@ -5,6 +5,7 @@ import { renderPlanApprovalCard } from '../card/plan-approval-card.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import { bilingualMarkdown } from '../card/i18n.js';
+import { redactEmails, redactSecrets } from '../config/security.js';
 
 export interface PlanPayload {
   token: string;
@@ -47,7 +48,11 @@ export function buildPlanHandler(
     };
     try {
       if (signal?.aborted) return { ok: false, error: 'plan approval cancelled' };
-      await deps.channel.sendMarkdown(destination.chatId, payload.plan, options);
+      await deps.channel.sendMarkdown(
+        destination.chatId,
+        redactEmails(redactSecrets(payload.plan)),
+        options,
+      );
       if (signal?.aborted) {
         await settleCancelledCard(deps, destination.chatId, undefined, options);
         return { ok: false, error: 'plan approval cancelled' };
