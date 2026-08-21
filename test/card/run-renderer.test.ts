@@ -147,4 +147,33 @@ describe('renderCard', () => {
     const snapshot = card.body.elements.find((element) => JSON.stringify(element).includes('执行状态'));
     expect(JSON.stringify(snapshot)).not.toContain('-LATEST');
   });
+
+  it.each(['compact', 'standard', 'detailed'] as const)(
+    'keeps long %s run cards within the streaming transport budget',
+    (density) => {
+      let state = initialState;
+      for (let index = 0; index < 80; index += 1) {
+        const marker = index === 0 ? 'OLDEST' : index === 79 ? 'LATEST' : `${index}`;
+        state = reduce(state, {
+          type: 'tool_use',
+          id: `tool-${index}`,
+          name: `tool-${marker}-${'n'.repeat(80)}`,
+          input: { query: `${marker}-${'i'.repeat(800)}` },
+        });
+        state = reduce(state, {
+          type: 'tool_result',
+          id: `tool-${index}`,
+          output: `${marker}-${'o'.repeat(800)}`,
+          isError: false,
+        });
+      }
+
+      const serialized = JSON.stringify(renderCard(state, density));
+      expect(serialized.length).toBeLessThanOrEqual(28_000);
+      expect(serialized).toContain('tool-LATEST');
+      expect(serialized).not.toContain('tool-OLDEST');
+      expect(serialized).toContain('较早的工具调用');
+      expect(serialized).toContain('older tool calls');
+    },
+  );
 });

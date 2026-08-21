@@ -595,7 +595,9 @@ ACP `PromptResponse.usage` 提供该 ACP session 的累计 input/output/cache，
   detailed 可展示更多工具项与 token usage，但原始 reasoning、工具输入输出、草稿正文、adapter 错误和
   delivery 错误不得进入任一卡片密度、`config.summary` 或兼容快照。若平台拒绝
   `collapsible_panel`，run-flow / guardian 会重试具有相同隐私边界的 legacy 流式卡。正常卡片正文
-  不承载最终回答；仅当独立最终消息发送失败时，才把原本就面向用户的完整最终回答回填卡片。
+  不承载最终回答；仅当独立最终消息发送失败时，才把原本就面向用户的最终回答回填卡片。相同 tool id 的
+  增量与完成事件归并为同一条记录；过程过长时以完整本地化卡片的 28,000 字符预算动态隐藏较早的
+  工具记录、保留最新记录，避免工具轨迹膨胀后被飞书以 `230099` 拒绝。
 - `src/card/run-state.ts`：`reduce(state, event)` 状态机；`usage` 字段由 `usage` 事件更新；
   `finalDeliveryError` 记录独立最终消息的发送失败并在过程卡显式展示。
 - `src/card/status-card.ts`：纯 `renderStatusCard(input)` / `statusCardMarkdown(input)`；展示
