@@ -1,4 +1,6 @@
-import { resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 import type { ActiveRuns } from '../bot/active-runs.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
@@ -193,6 +195,7 @@ const HELP = [
   '- `/archive [note]`、`/archive send <id> [scope|chatId]`、`/archive list [N]`、`/archive clean` — 归档并上传 / 重发或转发 / 查看 / 清理',
   '- `/density [compact|standard|detailed]` — 查看或设置卡片密度',
   '- `/mode [quick|balanced|deep]` — 选择当前会话的任务执行强度（下一轮生效）',
+  '- `/effort` — `/mode` 兼容别名；不控制模型推理档位',
   '- `/model` — 查看当前模型与 dsh 可用模型',
   '- `/model use <id>` — 热切换当前会话模型（下一轮生效）',
   '- `/model default <id>` — 写入 dsh 默认模型 agent-default-model（管理员）',
@@ -234,6 +237,7 @@ const HELP_EN = [
   '- `/archive [note]`, `/archive send <id> [scope|chatId]`, `/archive list [N]`, `/archive clean` — archive and upload, resend/forward, list, or clean sessions',
   '- `/density [compact|standard|detailed]` — view or set card density',
   '- `/mode [quick|balanced|deep]` — choose this session’s task execution strength for the next turn',
+  '- `/effort` — compatibility alias for `/mode`; it does not control model reasoning effort',
   '- `/model` — view the current model and available dsh models',
   '- `/model use <id>` — hot-switch this session’s model for the next turn',
   '- `/model default <id>` — set dsh agent-default-model (admin)',
@@ -335,7 +339,18 @@ async function handleCd(args: string, ctx: CommandContext): Promise<void> {
     await reply(ctx, '用法：`/cd <path>`', 'Usage: `/cd <path>`');
     return;
   }
-  const cwd = resolve(path);
+  const normalized = path.replace(/^～/u, '~');
+  const expanded = normalized === '~'
+    ? homedir()
+    : normalized.startsWith('~/')
+      ? join(homedir(), normalized.slice(2))
+      : normalized;
+  const cwd = resolve(expanded);
+  const target = await stat(cwd).catch(() => undefined);
+  if (!target?.isDirectory()) {
+    await reply(ctx, `目录不存在或不是目录：\`${cwd}\`。`, `The path does not exist or is not a directory: \`${cwd}\`.`);
+    return;
+  }
   const previous = ctx.workspaces.cwdFor(ctx.scope) ?? ctx.defaultWorkspace;
   const interrupted = cwd === previous
     ? 0
@@ -985,6 +1000,15 @@ async function handleExecutionMode(args: string, ctx: CommandContext): Promise<v
     `Set this session’s execution mode to **${input}** for the next turn. Active work and existing context are unchanged.`);
 }
 
+async function handleEffortAlias(args: string, ctx: CommandContext): Promise<void> {
+  await reply(
+    ctx,
+    '`/effort` 是 `/mode` 的兼容别名，只控制任务执行强度；模型推理档位由模型适配器决定。',
+    '`/effort` is a compatibility alias for `/mode`; it controls task execution intensity, not the model reasoning-effort setting.',
+  );
+  await handleExecutionMode(args, ctx);
+}
+
 async function handleAsk(args: string, ctx: CommandContext): Promise<void> {
   const question = args.trim();
   if (!question) {
@@ -1195,7 +1219,7 @@ const handlers: Record<string, Handler> = {
   '/archive': handleArchive,
   '/density': handleDensity,
   '/mode': handleExecutionMode,
-  '/effort': handleExecutionMode,
+  '/effort': handleEffortAlias,
   '/model': handleModelDispatch,
   '/providers': handleConfigHub,
   '/provider': handleProviderDispatch,
