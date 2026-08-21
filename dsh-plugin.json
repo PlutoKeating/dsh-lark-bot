@@ -3,7 +3,7 @@
   "manifestVersion": "0.15",
   "id": "io.github.plutokeating.dsh-lark-bot",
   "name": "dsh-lark-bot",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "facets": {
     "host": {
       "entry": "dist/plugin.js",
