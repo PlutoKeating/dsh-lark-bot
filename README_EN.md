@@ -50,7 +50,7 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 **Core**:
 
 - Drive your local dsh coding agent from private chats, group chats and threads; images / text files can be sent straight to the bot;
-- A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions;
+- A streaming process card with a native collapsible panel for reasoning, tool calls and results; the final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. A timed-out card patch only freezes that process card—the agent and final reply continue instead of taking down the bridge;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
 **Eleven exclusive capabilities**:
