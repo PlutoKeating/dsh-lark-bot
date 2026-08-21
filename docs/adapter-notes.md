@@ -186,7 +186,7 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
    ACP 按 committed 文本块发 `agent_message_chunk`。两种都走 `AgentEvent` 事件流渲染卡片。
 2. **会话续跑**：SDK 用 `session(id?)` 在同一 runtime 内原生 resume；关闭重开后 rc.8 JSON-RPC
    server 会对同名 JSONL 日志返回 `id collision`，bridge 清除失效 binding 并用自身 transcript
-   新建 session。ACP 仅全新会话。
+   新建 session；被拒绝的旧 run 卡只显示中性恢复状态，不把底层错误暴露给用户。ACP 仅全新会话。
 3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.8 `approval/request` answerer
    都映射一次性 allow/reject 飞书卡；registry 按 scope + owner session + request id 精确结算，
    并发 run、单卡失败与 callback abort 不会取消其他任务。

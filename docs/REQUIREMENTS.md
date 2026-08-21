@@ -303,7 +303,8 @@
   原位更新，未终态卡可跨重启继续更新，失败追加；tool/thinking 默认不展开，不编辑用户本人消息，
   不猜测 WebUI/TUI 来源。
 - **自愈 v2**（`src/session/heal.ts`）：仅对真正损坏的会话日志归档（seq gap 类），
-  id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。
+  id-collision 类保留历史；resume 失败时自动清绑定并以新会话重试，用户消息不丢。被拒绝的旧 run
+  卡只显示中性的“会话状态已自动恢复”，不得先暴露底层错误再给出成功结果。
 
 ### 4.12 一键彻底升级（one-command upgrade，issue #10）
 

@@ -389,6 +389,8 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 `archiveSessionDir(sessionId)` 先把会话目录**复制**到
 `~/.dsh-lark/_archived-sessions/<id>-<ts>` 再删除原目录，并返回归档路径供用户可见与恢复
 （复制失败不删原目录）。
+`run-flow` 在 native resume 零活动失败时先把旧过程卡原位更新为固定的恢复状态，再向上抛出并触发
+fresh-session retry；抛异常和 error-event 两种 adapter 形态共用该路径，原始错误仅写本机日志。
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
@@ -646,6 +648,8 @@ headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch fail
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
 路由。发送失败不会丢失已记录的 exchange，过程卡会写明失败原因并回填完整回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
+`src/card/session-recovery-card.ts` 提供 native resume 零活动失败时的双语中性终态卡；它不包含
+session ID、底层错误或本机路径，fresh-session retry 另开正常过程卡继续任务。
 
 ## 5. 安全模块 · Security
 
