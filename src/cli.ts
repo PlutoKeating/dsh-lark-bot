@@ -243,7 +243,7 @@ export function isDirectInvocation(
 ): boolean {
   if (!entry) return false;
   try {
-    return realpathSync(entry) === fileURLToPath(metaUrl);
+    return realpathSync(entry) === realpathSync(fileURLToPath(metaUrl));
   } catch {
     return false;
   }

@@ -139,6 +139,9 @@
 - **dsh Web 可视化设置 done（issue #36）**：Host 注册实际 profile-backed settings namespace，
   包内 `./client` 在官方 Plugins 配置页渲染应用、workspace、模型、并行数、adapter 与提醒；
   App Secret write-only，保存串行 reload，诊断快捷入口和命令/env 降级齐备。
+- **macOS 路径别名修复（issue #69）**：containment 与 CLI 自执行检测同时规范化 `/var` 一类
+  平台别名；未创建后代从最深已存在祖先继续解析，仍拒绝 symlink 越界。doctor 缓存路径测试按
+  当前平台写入服务入口，默认 macOS `TMPDIR` 下可完整运行测试。
 
 Milestones (English): P1 — scan-to-bind and a streaming card round-trip; P2 — named workspaces with
 isolated git worktrees and per-project AGENTS.md injection, native SDK session continuation;
