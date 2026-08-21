@@ -141,6 +141,7 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '      config:',
       '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
       '',
       // Default-runtime answerer for the official dsh user-approval seam.
       '- insert:',

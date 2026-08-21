@@ -120,6 +120,7 @@ export function acpPatchYaml(provider: string, model: string): string {
     '      config:',
     '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
     '',
   ].join('\n');
 }

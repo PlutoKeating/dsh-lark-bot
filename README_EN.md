@@ -236,13 +236,15 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
-moves, non-read-only shell commands and `run_code` in that turn until a plan is approved. Single read-only
-inspections such as `date`, `pwd`, `ls`, `rg`, and `git status/log/diff` run directly; shell chaining,
+moves, non-read-only shell commands and `run_code` until a plan is approved. Each approval grants only the next
+high-risk call; later unplanned calls require approval again. Single read-only inspections such as `date`, `pwd`,
+`ls`, `find`, `rg`, and `git status/log/diff` run directly; shell chaining,
 redirection, command substitution, and unknown executables remain behind the conservative plan gate. The bridge sends the complete Markdown plan as a normal
 message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
 and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires
 another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
-stopping it cancels and recalls only that session's pending card. The legacy headless adapter cannot use callback tools.
+stopping it cancels and recalls only that session's pending card. Trusted deployments may set
+`DSH_LARK_PLAN_GATE=off` to disable this separate gate (ordinary per-tool approval still applies). The legacy headless adapter cannot use callback tools.
 
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
 

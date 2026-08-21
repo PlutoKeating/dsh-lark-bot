@@ -12,6 +12,7 @@ export const inject = ['tools'];
 export interface Config {
   endpoint?: string;
   token?: string;
+  mode?: 'strict' | 'off';
 }
 
 export interface PlanPolicyExecution {
@@ -28,6 +29,7 @@ const READ_ONLY_COMMANDS = new Set([
   'df',
   'dirname',
   'du',
+  'find',
   'grep',
   'head',
   'id',
@@ -78,17 +80,22 @@ type PlanPolicyContext = ToolPluginContext & {
 export function apply(ctx: Context, config: Config = {}) {
   const policyCtx = ctx as PlanPolicyContext;
   const currentTurns = new WeakMap<object, number>();
-  const approvedTurns = new WeakMap<object, number>();
+  const approvedCalls = new WeakMap<object, number>();
+  const gateDisabled = (config.mode ?? process.env.DSH_LARK_PLAN_GATE) === 'off';
 
   policyCtx.on('agent/pre-step', async (payload, next) => {
     currentTurns.set(payload.agent, payload.turn);
     return next();
   });
   policyCtx.on('tools/pre-execute', async (execution, next) => {
+    if (gateDisabled) return next();
     if (!isHighRiskTool(policyCtx, execution)) return next();
     const agent = execution.agent;
     const turn = agent ? currentTurns.get(agent) : undefined;
-    if (agent && turn !== undefined && approvedTurns.get(agent) === turn) return next();
+    if (agent && turn !== undefined && approvedCalls.get(agent) === turn) {
+      approvedCalls.delete(agent);
+      return next();
+    }
     return {
       kind: 'deny',
       reason:
@@ -164,7 +171,7 @@ export function apply(ctx: Context, config: Config = {}) {
       }
       if (body.decision === 'approved' && exec?.agent) {
         const turn = currentTurns.get(exec.agent);
-        if (turn !== undefined) approvedTurns.set(exec.agent, turn);
+        if (turn !== undefined) approvedCalls.set(exec.agent, turn);
       }
       return {
         resolved: true,
@@ -229,12 +236,24 @@ function isSimpleReadOnlyShellCommand(rawArguments: unknown): boolean {
       word.startsWith('--hostname-bin=')
     );
   }
+  if (executable === 'find') {
+    return !words.slice(1).some((word) =>
+      ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf'].includes(word)
+    );
+  }
+  if (executable === 'tail') {
+    return !words.slice(1).some((word) =>
+      word === '-f' || word === '-F' || word === '--follow' || word.startsWith('--follow=')
+    );
+  }
   return true;
 }
 
 function shellCommand(rawArguments: unknown): string | undefined {
   if (typeof rawArguments === 'object' && rawArguments !== null && !Array.isArray(rawArguments)) {
-    const command = (rawArguments as { command?: unknown }).command;
+    const entries = Object.entries(rawArguments);
+    if (entries.length !== 1 || entries[0]?.[0] !== 'command') return undefined;
+    const command = entries[0][1];
     return typeof command === 'string' ? command : undefined;
   }
   if (typeof rawArguments !== 'string') return undefined;
