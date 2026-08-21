@@ -38,6 +38,8 @@ describe('guardian CLI commands', () => {
       expect(output).toContain('dsh profile：dsh-lark');
       expect(output).toContain('安全 profile：dsh-lark-safe');
       expect(output).toContain('模式：standby');
+      expect(output).toContain('守护进程 pid：未发现');
+      expect(output).not.toContain(`守护进程 pid：${process.pid}`);
     } finally {
       process.stdout.write = originalWrite;
     }
