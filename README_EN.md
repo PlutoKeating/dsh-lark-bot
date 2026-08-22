@@ -164,7 +164,7 @@ message mappings, plus only the unfinished card body needed to resume that card�
 
 **`/newg <group name>`**: auto-creates a private group, invites the sender and replies with a group link — chatting in the new group starts a fresh scope/session while the current session is untouched. Requires the `im:chat` and `im:chat.members:write_only` scopes.
 
-Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. `/status` lists runs for the current workspace; `/new` stops only that workspace, while `/stop` interrupts all runs in the scope.
+Each scope (DM / group / topic) runs up to **2 tasks in parallel** by default (adjust with `DSH_LARK_SCOPE_CONCURRENCY` or `/concurrency`): successive messages become independent runs, each with its own dsh session and run id. SDK runtimes use `scope + workspace` as their cancellation domain, and concurrent sessions in one scope are split into separate runtimes, so a card stop affects only that run and `/stop` affects only the current scope—never another group. `/status` lists runs for the current workspace; `/new` stops only that workspace.
 
 **Session status card**: `/status` shows the workspace, effective model, session, explicit projection binding/cursor, active runs, version,
 context occupancy, cumulative input/output/cache tokens, and pending approvals/questions/plans. **Refresh**
@@ -390,15 +390,15 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 
 ## Compatibility
 
-- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.8** (last verified 2026-08-20: clean temporary install, SDK JSON-RPC / ACP initialize, tool/approval, live-session resume, and restart-collision probes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md) for rc.8 risks and verification boundaries.
+- **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.8** (last verified 2026-08-22: clean temporary install, SDK JSON-RPC / ACP initialize, tool/approval, live-session resume, and restart-collision probes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md) for rc.8 risks and verification boundaries.
 - **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
 - **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public server, domain or tunneling required).
 - The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, and the rc.8 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## Known limitations
 
-- ACP sessions are always fresh (an upstream limit); the SDK protocol has no mid-turn cancel, so `/stop` closes and recreates the runtime.
-- The engine runs in-process as a dsh plugin; agent execution uses the official dsh SDK runtime subprocess — a deliberate nested-runtime design for per-workspace runtime pools and parallel runs. The one process-level exception is the safety-net guardian installed by default — a minimal resident process independent of dsh / Cordis that only takes over the Feishu channel after dsh goes down and stays silent otherwise.
+- ACP sessions are always fresh (an upstream limit); the SDK protocol has no mid-turn cancel, so stopping a run closes and recreates only that run's isolated runtime. Other scopes and concurrent runs keep their own runtimes. Native SDK continuation is used only while this bridge process still owns the same live runtime; after restart, stop, or model switch the bridge creates a fresh session and replays its transcript instead of handing rc.8 a stale ID that would trigger `id collision`.
+- The engine runs in-process as a dsh plugin; agent execution uses the official dsh SDK runtime subprocess — a deliberate nested-runtime design for scope/workspace cancellation domains and parallel runs. The one process-level exception is the safety-net guardian installed by default — a minimal resident process independent of dsh / Cordis that only takes over the Feishu channel after dsh goes down and stays silent otherwise.
 - Feishu doc comments and rich-text replies are planned, not yet implemented.
 - pnpm ≥ 10 build policy is handled by `setup`; when installing manually and `ERR_PNPM_IGNORED_BUILDS` appears, add `allowBuilds: { protobufjs: true }` to the profile's `pnpm-workspace.yaml` and retry.
 

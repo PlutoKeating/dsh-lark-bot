@@ -41,6 +41,8 @@ export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unava
 
 export interface AgentRunOptions {
   runId: string;
+  /** Stable cancellation/runtime ownership domain (normally scope + workspace). */
+  runtimeKey?: string;
   prompt: string;
   cwd: string | undefined;
   sessionId: string | undefined;
@@ -84,6 +86,14 @@ export interface AgentAdapter {
    * for them instead.
    */
   resumeCapable?: boolean;
+  /** Whether this live adapter instance still owns the named native session. */
+  canResume?(options: {
+    runtimeKey?: string;
+    cwd: string | undefined;
+    sessionId: string;
+    provider?: string;
+    model: string | undefined;
+  }): boolean;
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
   run(options: AgentRunOptions): AgentRun;

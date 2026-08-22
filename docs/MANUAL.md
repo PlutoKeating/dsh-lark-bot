@@ -314,6 +314,12 @@ dsh-lark-bot guardian uninstall
   等待期间仅所属 session 不触发 idle timeout。legacy headless 不支持。
 - 计划获批不等于永久放行具体工具：默认 SDK / Web 随后仍按 dsh policy 对每个高风险调用逐次审批；
   卡片里的命令、参数和理由在群聊中对群成员可见，敏感操作请改用私聊。
+- 可信内网 profile 如不需要独立计划门禁，可在启动/服务环境设置 `DSH_LARK_PLAN_GATE=off`；
+  这不会关闭逐工具审批。受管服务会在 `service install|start|restart` 时重新快照当前环境，例如
+  POSIX shell 使用 `DSH_LARK_PLAN_GATE=off dsh-lark-bot service restart --profile dsh-lark`，
+  Windows PowerShell 先执行 `$env:DSH_LARK_PLAN_GATE = "off"`，再执行
+  `dsh-lark-bot service restart --profile dsh-lark`。默认 `strict`；
+  `date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等受限单条只读检查无需计划审批。
 
 - 私聊始终独立；群聊默认按话题隔离 scope。管理员可用 `/isolation group|topic|member` 改为
   整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /
@@ -323,8 +329,10 @@ dsh-lark-bot guardian uninstall
 - `sessions.json` 按 `scope + workspace cwd` 保存独立 native session、transcript 与指标；`/cd` / `/ws use`
   会中断原工作区仍在运行的任务，但不删除数据，切回会续接。`/new` / `/reset` 只清空当前工作区。
 - 同一 scope 默认允许 2 个任务并行（`/concurrency` 或 `DSH_LARK_SCOPE_CONCURRENCY` 调整，
-  1 为严格串行）；并行 run 各持独立 dsh session 与 runId。`/status` 只显示当前 workspace 的 active
-  runs，`/new` 只停止当前 workspace，`/stop` 仍终止 scope 内全部运行。
+  1 为严格串行）；并行 run 各持独立 dsh session 与 runId。SDK runtime 以 `scope + workspace`
+  为停止域，并发 session 也彼此隔离；卡片停止只终止对应 run，`/stop` 仍终止当前 scope 内全部
+  运行，但不会影响其他群。重启、停止或模型切换后的旧 SDK session binding 不会交给新 runtime，
+  bridge 会以 transcript 新建 session，避免 rc.8 `id collision`。
 - `/status` 状态卡还显示有效模型、版本、待审批 / 提问 / 计划数，以及当前 session 的累计
   input / output / cache token；pending 数仅统计当前 workspace 的 session/run。ACP `usage_update` 提供真实 context used/size；SDK 当前只保证
   模型调用 token/cache usage。模型目录声明的 contextWindow 可作为上限；没有真实 used 时仍显示
@@ -407,6 +415,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
 | `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
+| `DSH_LARK_PLAN_GATE` | `strict` | `strict` 启用独立计划门禁；可信 profile 可设 `off`，仅关闭计划门禁，不关闭逐工具审批；受管服务需在该环境下 restart 以重新快照 |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent base URL |
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式确认的 DSH session 历史/实时投影；不会自动跟随 WebUI/TUI |
 | `DSH_LARK_SESSION_BACKFILL_MESSAGES` | `20` | 确认绑定后最多回填的人类消息数 |
@@ -436,4 +445,5 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
-桥接引擎）；无需任何独立服务环境快照。
+桥接引擎）。受管 bridge/guardian service 会在 install/start/restart 时把当前 `DSH_LARK_*` 环境
+快照进服务配置；修改后需在新环境下执行 service restart 才会持久生效。

@@ -586,7 +586,13 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         }
       }
       if (value?.cmd === 'stop') {
-        await deps.activeRuns.interrupt(scope);
+        const runId = typeof value.runId === 'string' ? value.runId : undefined;
+        if (runId) {
+          await deps.activeRuns.interruptRun(scope, runId);
+        } else {
+          // Compatibility for cards created before run-scoped stop actions.
+          await deps.activeRuns.interrupt(scope);
+        }
         return;
       }
       if (value?.cmd === 'execution-mode' && deps.executionModes) {

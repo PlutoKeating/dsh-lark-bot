@@ -99,6 +99,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    当前兼容基线为 rc.8；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
    核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
    block；出站图片在 channel 增加二进制能力前输出明确降级提示。
+   SDK rc.8 没有 per-session cancel，adapter 因此以 `scope + workspace` 建立 runtime 取消域，
+   同一 scope 的并发 fresh session 另开 runtime；run handle 捕获并只关闭自己的 entry。原生 resume
+   还必须通过 adapter 的 live-owner 检查：只有当前进程仍持有同 runtime/session/route 时复用 ID；
+   重启、停止或 route 重建后改用 fresh session + bridge transcript，避免上游新 live seed 与旧 JSONL
+   不匹配产生 `id collision`。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
    `SessionStore` schema 2 在同一 `sessions.json` 中按 scope + canonical workspace cwd 分别保存
    transcript、native binding 与 metrics；schema 1 在启动时按 `WorkspaceStore` 当前选择迁移。消息入队

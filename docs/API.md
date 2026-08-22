@@ -389,9 +389,11 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 `archiveSessionDir(sessionId)` 先把会话目录**复制**到
 `~/.dsh-lark/_archived-sessions/<id>-<ts>` 再删除原目录，并返回归档路径供用户可见与恢复
 （复制失败不删原目录）。
-`run-flow` 仅在 native resume 零活动失败可归类为已知 session collision/corruption 时，才把旧过程卡
-原位更新为固定的“正在恢复”状态，再向上抛出并触发
-fresh-session retry；抛异常和 error-event 两种 adapter 形态共用该路径，原始错误仅写本机日志。
+`run-flow` 在 native resume 前调用 adapter `canResume()`；SDK 只有当前进程仍持有完全相同的
+runtime/session/cwd/route 才接收旧 ID，重启、停止、并发切换或模型 route 重建后直接使用
+fresh session 并回放 bridge transcript。若上游仍在零活动阶段返回已知 session
+collision/corruption，旧过程卡原位更新为固定的“正在恢复”状态，再触发 fresh-session retry；
+抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
@@ -479,6 +481,8 @@ export type AgentEvent =
 
 export interface AgentRunOptions {
   runId: string;
+  /** Stable runtime cancellation domain; bridge passes scope + workspace. */
+  runtimeKey?: string;
   prompt: string;
   cwd: string | undefined;
   sessionId: string | undefined;
@@ -502,10 +506,16 @@ export interface AgentRun {
 export interface AgentAdapter {
   readonly id: string;
   readonly displayName: string;
-  /** True for the SDK adapter: a live runtime natively resumes `options.sessionId`.
-   *  A persisted-log collision after restart is cleared and retried by run-flow;
-   *  ACP / headless 每次全新，桥接层会为其把 scope transcript 重放进 prompt。 */
+  /** True for the SDK adapter: a live runtime can natively resume a session. */
   resumeCapable?: boolean;
+  /** Confirm this adapter instance still owns the exact live runtime/session/route. */
+  canResume?(options: {
+    runtimeKey?: string;
+    cwd: string | undefined;
+    sessionId: string;
+    provider?: string;
+    model: string | undefined;
+  }): boolean;
   isAvailable(): Promise<boolean>;
   checkAvailability(): Promise<AgentAvailability>;
   run(options: AgentRunOptions): AgentRun;
@@ -539,8 +549,10 @@ export async function buildAgentAdapter(
 ```
 
 - `sdk`（默认）：`SdkDshAdapter`（`src/adapters/dsh/sdk-adapter.ts`），先 `ensureSdkProfile`
-  创建 `~/.dsh/profiles/dsh-lark-sdk`（`dsh-base` + `dsh-sdk-jsonrpc-server`），按 cwd 管理
-  `DeepSeekHarness` runtime 池，`session(id)` 原生续跑；`/stop` 关闭对应 runtime。
+  创建 `~/.dsh/profiles/dsh-lark-sdk`（`dsh-base` + `dsh-sdk-jsonrpc-server`），按
+  `scope + workspace` 管理 `DeepSeekHarness` 取消域，同 scope 并发 session 使用独立 runtime；
+  stop handle 只关闭自己捕获的 runtime。`session(id)` 仅在当前 adapter 仍拥有同一 live
+  runtime/session/route 时原生续跑，否则 fresh session 会回放 bridge transcript。
 - `acp`：`AcpDshAdapter`（`src/adapters/dsh/acp-adapter.ts`），先 `ensureAcpProfile` 创建
   `~/.dsh/profiles/dsh-lark-acp`（`dsh-base` + `dsh-acp`），以 `ClientSideConnection` 连接
   ACP server，`session/request_permission` 映射审批卡；会话每次全新。

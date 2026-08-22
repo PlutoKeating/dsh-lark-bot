@@ -9,6 +9,7 @@ const MAX_VISIBLE_TOOL_CALLS = 40;
 const MAX_TOOL_NAME_LENGTH = 160;
 const MAX_OWNER_LENGTH = 160;
 const MAX_ACTION_SCOPE_LENGTH = 512;
+const MAX_ACTION_RUN_ID_LENGTH = 160;
 const MAX_FINAL_FALLBACK_LENGTH = 8_000;
 
 function boundedText(value: string, limit: number): string {
@@ -76,12 +77,20 @@ function fallbackSummaryText(state: RunState, locale: CardLocale, maxTools: numb
   return parts.join(' · ').slice(0, 500);
 }
 
-function stopButton(scope: string | undefined, locale: CardLocale): object {
+function stopButton(
+  scope: string | undefined,
+  runId: string | undefined,
+  locale: CardLocale,
+): object {
   return {
     tag: 'button',
     text: { tag: 'plain_text', content: locale === 'zh_cn' ? '⏹ 终止' : '⏹ Stop' },
     type: 'danger',
-    value: { cmd: 'stop', ...(scope ? { scope: boundedText(scope, MAX_ACTION_SCOPE_LENGTH) } : {}) },
+    value: {
+      cmd: 'stop',
+      ...(scope ? { scope: boundedText(scope, MAX_ACTION_SCOPE_LENGTH) } : {}),
+      ...(runId ? { runId: boundedText(runId, MAX_ACTION_RUN_ID_LENGTH) } : {}),
+    },
   };
 }
 
@@ -233,7 +242,7 @@ function renderStandard(
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
-    elements.push(stopButton(state.actionScope, locale));
+    elements.push(stopButton(state.actionScope, state.actionRunId, locale));
   }
 
   return {
@@ -272,7 +281,7 @@ function renderCompact(
     elements.push(footerStatus(state.footer, state, now, locale));
   }
   if (state.terminal === 'running') {
-    elements.push(stopButton(state.actionScope, locale));
+    elements.push(stopButton(state.actionScope, state.actionRunId, locale));
   }
   return {
     schema: '2.0',
@@ -317,7 +326,7 @@ function renderDetailed(
 
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
-    elements.push(stopButton(state.actionScope, locale));
+    elements.push(stopButton(state.actionScope, state.actionRunId, locale));
   }
 
   return {
@@ -375,7 +384,7 @@ function renderLegacyVariant(
   elements.push(compatibilityProcessSnapshot(state, locale, maxTools));
   if (state.terminal === 'running') {
     if (state.footer) elements.push(footerStatus(state.footer, state, now, locale));
-    elements.push(stopButton(state.actionScope, locale));
+    elements.push(stopButton(state.actionScope, state.actionRunId, locale));
   } else if (state.terminal === 'interrupted') {
     elements.push(noteMd(zh ? '_⏹ 已被中断_' : '_⏹ Interrupted_'));
   } else if (state.terminal === 'idle_timeout') {
@@ -436,7 +445,9 @@ function minimalRunCard(state: RunState, bilingualFallback: boolean): object {
         noteMd(locale === 'zh_cn'
           ? '执行记录过长，较早的详情已隐藏。'
           : 'The execution history is too long; older details are hidden.'),
-        ...(state.terminal === 'running' ? [stopButton(undefined, locale)] : []),
+        ...(state.terminal === 'running'
+          ? [stopButton(state.actionScope, state.actionRunId, locale)]
+          : []),
       ],
     },
   });
