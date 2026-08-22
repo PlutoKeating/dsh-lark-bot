@@ -22,15 +22,22 @@ describe('runSupervise', () => {
       if (signal === 'SIGKILL') queueMicrotask(() => child.emit('exit', null, 'SIGKILL'));
       return true;
     });
+    let markSpawned: (() => void) | undefined;
+    const spawned = new Promise<void>((resolve) => {
+      markSpawned = resolve;
+    });
     const run = runSupervise(
       { profile: 'work', envFile },
       {
         dshBin: '/opt/dsh.js',
         childStopGraceMs: 5,
-        spawn: vi.fn().mockReturnValue(child) as never,
+        spawn: vi.fn().mockImplementation(() => {
+          markSpawned?.();
+          return child;
+        }) as never,
       },
     );
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await spawned;
     process.emit('SIGTERM');
     await run;
     expect(child.kill.mock.calls.map((call) => call[0])).toEqual(['SIGTERM', 'SIGKILL']);

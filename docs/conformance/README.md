@@ -1,6 +1,6 @@
 # dsh-TUI v0.15 conformance evidence
 
-This directory binds the `io.github.plutokeating.dsh-lark-bot@0.17.1` host facet to the pinned
+This directory binds the `io.github.plutokeating.dsh-lark-bot@0.17.2` host facet to the pinned
 TUI Admission revision `e1b902b0f95f4280a8e68d414ec7a4d25d6ce106` and its vendored dsh-std revision
 `614dfa1ac168db79fcf4577cf0ebb34e2e3b944b`.
 
