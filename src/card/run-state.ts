@@ -33,6 +33,8 @@ export interface RunState {
   scopeOwner: string | undefined;
   /** Immutable scope encoded into run-card actions across isolation switches. */
   actionScope: string | undefined;
+  /** Immutable run id encoded into run-card stop actions. */
+  actionRunId: string | undefined;
   /** Wall-clock start of the run (ms epoch); set by the runner, not reduce(). */
   startedAtMs: number | undefined;
   /** Last moment an agent event arrived (ms epoch); drives the stall hint. */
@@ -51,6 +53,7 @@ export const initialState: RunState = {
   idleTimeoutMinutes: undefined,
   scopeOwner: undefined,
   actionScope: undefined,
+  actionRunId: undefined,
   startedAtMs: undefined,
   lastActivityMs: undefined,
 };

@@ -116,11 +116,22 @@ export async function runAgentBatch(input: RunFlowInput): Promise<RunBatchOutcom
   // Only the first run in this scope+workspace resumes its native dsh session:
   // concurrent runs in the same workspace get fresh wire session ids, while a
   // sibling workspace may safely resume its own independent binding.
-  const sessionId =
+  const runtimeKey = `${input.scope}\0${requestedCwd ?? ''}`;
+  const storedSessionId =
     activeInWorkspace === 0
       ? input.sessions.resumeFor(input.scope, requestedCwd)
       : undefined;
-  const resuming = sessionId !== undefined && input.adapter.resumeCapable === true;
+  const resuming =
+    storedSessionId !== undefined &&
+    input.adapter.resumeCapable === true &&
+    (input.adapter.canResume?.({
+      runtimeKey,
+      cwd,
+      sessionId: storedSessionId,
+      ...(input.provider === undefined ? {} : { provider: input.provider }),
+      model: input.model,
+    }) ?? true);
+  const sessionId = resuming ? storedSessionId : undefined;
 
   try {
     return terminalOutcome(await runAttempt(input, cwd, requestedCwd, sessionId, resuming, replyOptions));
@@ -203,6 +214,7 @@ async function runAttempt(
 
   const run = input.adapter.run({
     runId,
+    runtimeKey: `${input.scope}\0${workspaceCwd ?? ''}`,
     prompt,
     cwd,
     sessionId,
@@ -244,6 +256,7 @@ async function runAttempt(
     lastActivityMs: now,
     scopeOwner: input.scopeOwner,
     actionScope: input.scope,
+    actionRunId: runId,
   };
   const stopRequested = { value: false };
   const timeoutMs = input.runPolicies?.get(input.scope) ?? input.runTimeoutMs ?? 0;

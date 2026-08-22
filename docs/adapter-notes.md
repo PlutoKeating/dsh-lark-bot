@@ -8,7 +8,7 @@
 ## 1. 核心结论 · TL;DR
 
 - 桥接层的 agent 后端是**抽象接口 `AgentAdapter`**，dsh adapter 已落地在 `src/adapters/dsh/`。
-- **两条官方接入路线均已实测**（2026-08-20 最后验证）：
+- **两条官方接入路线均已实测**（2026-08-22 最后验证）：
   - **SDK client**（`@deepseek-ai/dsh-sdk-client`，默认）：驱动 `dsh-sdk-jsonrpc-server`
     runtime，原生 `session(id)` 续跑；`assistant/chunk` 提供
     **reasoning-delta / text-delta token 级事件**；thinking / tools 实时进入折叠过程卡，聚合后的
@@ -123,7 +123,9 @@ type AgentEvent =
   `session.event`（`assistant/chunk` 的 reasoning/text/tool 增量）+ `finalResponse` 映射成
   `AgentEvent`。
 
-**SDK 已知限制**：无 mid-turn cancel（`/stop` 会关闭整个 runtime，重启用时自动拉起）。SDK JSON-RPC
+**SDK 已知限制**：无 mid-turn cancel（停止必须关闭该 run 的 runtime）。adapter 以
+`scope + workspace` 划分取消域，同 scope 并发 fresh session 另开 runtime；stop handle 捕获具体
+entry，所以关闭不会波及其他群或并发 run。SDK JSON-RPC
 本身没有 server→client approval RPC，但 managed profile 在 runtime 内装配 rc.8 `approval/request`
 answerer + `tools/pre-execute` 强制门禁，经 bridge `/approval` 提供逐工具卡片确认，因此默认安装不再要求切换 ACP。
 
@@ -184,9 +186,11 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
 
 1. **流式差异**：SDK 有 token 级流式（`assistant/chunk` 的 `reasoning-delta` / `text-delta`）；
    ACP 按 committed 文本块发 `agent_message_chunk`。两种都走 `AgentEvent` 事件流渲染卡片。
-2. **会话续跑**：SDK 用 `session(id?)` 在同一 runtime 内原生 resume；关闭重开后 rc.8 JSON-RPC
-   server 会对同名 JSONL 日志返回 `id collision`，bridge 清除失效 binding 并用自身 transcript
-   新建 session；被拒绝的旧 run 卡只显示中性恢复状态，不把底层错误暴露给用户。ACP 仅全新会话。
+2. **会话续跑**：SDK 用 `session(id?)` 在同一 runtime 内原生 resume；`canResume()` 先确认当前
+   adapter 仍拥有完全相同的 runtime/session/cwd/route。关闭重开后 rc.8 JSON-RPC server 会把同名
+   ID 当作新 live session 创建，并因空 seed 与旧 JSONL 不一致返回 `id collision`，所以 bridge 在
+   重启、停止或 route 重建后主动改用 fresh session + 自身 transcript，不再先触发错误。意外 collision
+   仍保留中性恢复 fallback，不把底层错误暴露给用户。ACP 仅全新会话。
 3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.8 `approval/request` answerer
    都映射一次性 allow/reject 飞书卡；registry 按 scope + owner session + request id 精确结算，
    并发 run、单卡失败与 callback abort 不会取消其他任务。

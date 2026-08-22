@@ -165,7 +165,7 @@ transcript 卡并持久绑定。私聊允许已授权用户；member scope 仅�
 
 **`/newg <群名>`**：自动新建私密群、拉发送者入群并回复群链接——新群即新 scope / 新会话，当前会话不受影响。需应用具备 `im:chat` 与 `im:chat.members:write_only` 权限。
 
-同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；`/status` 查看当前 workspace 的 run，`/new` 只停止当前 workspace，`/stop` 一次性终止 scope 内全部运行。
+同一 scope（私聊 / 群聊 / 话题）默认 **2 个任务并行**（`DSH_LARK_SCOPE_CONCURRENCY` 或 `/concurrency` 调整）：多条消息以独立 run 并行推进，每个 run 使用独立 dsh session 与 runId；SDK runtime 以 `scope + workspace` 为取消域，同一 scope 的并发 session 也会切到独立 runtime，因此卡片停止只影响该 run，`/stop` 只终止当前 scope 的全部运行，不会误停其他群。`/status` 查看当前 workspace 的 run，`/new` 只停止当前 workspace。
 
 **会话状态卡**：`/status` 展示工作区、有效模型、session、显式投影绑定/cursor、active runs、版本、上下文占用、
 累计 input / output / cache token，以及待审批 / 待提问 / 待批准计划；点击“刷新”会原位更新同一张卡。
@@ -395,7 +395,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 兼容性
 
-- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.8**（最后验证 2026-08-20：临时安装 + SDK JSON-RPC / ACP runtime initialize、工具/审批、live session 续接与 restart collision 探针），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
+- **DeepSeek Harness（`dsh`）**：已验证 **dsh 0.1.0-rc.8**（最后验证 2026-08-22：临时安装 + SDK JSON-RPC / ACP runtime initialize、工具/审批、live session 续接与 restart collision 探针），通过官方 `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp` 接入；
   具体锁定版本、升级政策与自动化探测见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)，
   adapter 接入细节见 [`docs/adapter-notes.md`](docs/adapter-notes.md)，rc.8 差异、已知风险和
   自动/人工验证边界见 [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md)。
@@ -409,10 +409,12 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 ## 已知限制
 
-- ACP 模式会话每次全新（上游限制，无续跑）；SDK 协议暂无 mid-turn cancel，`/stop` 会关闭
-  对应 runtime 并自动重建。
+- ACP 模式会话每次全新（上游限制，无续跑）；SDK 协议暂无 mid-turn cancel，停止操作会关闭
+  该 run 所属的隔离 runtime 并自动重建，不会关闭其他 scope 或并发 run 的 runtime。SDK 只在当前
+  bridge 进程仍持有同一个 live runtime 时原生续接 session；进程重启、停止或模型切换后会主动
+  新建 session 并回放 bridge transcript，避免把旧 ID 交给 rc.8 新 runtime 触发 `id collision`。
 - 桥接引擎作为 dsh 插件在 dsh 进程内运行，agent 执行使用官方 dsh SDK runtime 子进程
-  （嵌套 runtime 是有意取舍，用于按工作区隔离的 runtime 池与 scope 内并行 run）。
+  （嵌套 runtime 是有意取舍，用于按 scope + workspace 隔离取消域与并行 run）。
   唯一的进程级例外是默认安装的「安全网守护」——它独立于 dsh / Cordis 常驻，仅在 dsh
   下线后接管飞书通道，正常运行时保持静默。
 - 飞书文档评论、富文本回复为规划中能力，尚未实现。

@@ -843,6 +843,7 @@ describe('startChannel', () => {
     const workspaces = new WorkspaceStore(':memory:');
     const activeRuns = new ActiveRuns();
     const interrupt = vi.spyOn(activeRuns, 'interrupt').mockResolvedValue(1);
+    const interruptRun = vi.spyOn(activeRuns, 'interruptRun').mockResolvedValue(true);
     const approvals = new ApprovalRegistry();
     const questions = new QuestionRegistry();
     const plans = new PlanApprovalRegistry();
@@ -909,12 +910,13 @@ describe('startChannel', () => {
       operator?: { openId: string };
     }) => Promise<void>)({
       chatId: 'chat-1',
-      action: { value: { cmd: 'stop', scope: 'chat-1:member:user-1' } },
+      action: { value: { cmd: 'stop', scope: 'chat-1:member:user-1', runId: 'run-card' } },
       raw: { message: { thread_id: 'thread-9' } },
       operator: { openId: 'user-1' },
     });
 
-    expect(interrupt).toHaveBeenCalledWith('chat-1:member:user-1');
+    expect(interruptRun).toHaveBeenCalledWith('chat-1:member:user-1', 'run-card');
+    expect(interrupt).not.toHaveBeenCalled();
 
     interrupt.mockClear();
     for (const value of [

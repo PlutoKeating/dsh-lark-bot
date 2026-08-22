@@ -941,6 +941,61 @@ describe('runAgentBatch', () => {
     ]);
   });
 
+  it('does not send a persisted binding to a runtime that cannot resume it', async () => {
+    let observedPrompt = '';
+    let observedSessionId: string | undefined;
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      canResume: () => false,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        observedPrompt = options.prompt;
+        observedSessionId = options.sessionId;
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield {
+              type: 'system',
+              sessionId: 'session-fresh',
+              cwd: '/tmp/project',
+              model: undefined,
+            };
+            yield { type: 'final_text', content: 'continued from bridge history' };
+            yield { type: 'done', sessionId: 'session-fresh', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.recordExchange('chat-a', '/tmp/project', ['my name is Bob'], 'Nice to meet you.');
+    sessions.set('chat-a', 'session-from-dead-runtime', '/tmp/project');
+
+    await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['continue'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: makeChannel().channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(observedSessionId).toBeUndefined();
+    expect(observedPrompt).toContain('my name is Bob');
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-fresh');
+  });
+
   it('falls back when a native resume fails via an error event', async () => {
     const calls: Array<{ sessionId: string | undefined }> = [];
     let first = true;

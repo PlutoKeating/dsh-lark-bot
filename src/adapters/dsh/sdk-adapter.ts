@@ -26,12 +26,17 @@ export interface SdkAdapterOptions {
 
 interface RuntimeEntry {
   harness: DeepSeekHarness;
+  runtimeKey: string;
+  cwd: string;
+  sessionId: string;
   provider: string;
   model: string;
   /** Number of runs currently holding this harness. */
   active: number;
-  /** True once this entry has been superseded by a new route. */
+  /** True once this entry has been superseded or explicitly stopped. */
   retired: boolean;
+  /** Memoized teardown so stop/release/dispose cannot close twice. */
+  closing?: Promise<void>;
 }
 
 export interface ModelRoute {
@@ -131,8 +136,9 @@ function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<
 
 /**
  * Official DeepSeek Harness SDK adapter. Replaces the hand-written headless
- * subprocess protocol with `@deepseek-ai/dsh-sdk-client`: one runtime per
- * workspace cwd, native `session(id)` continuation, and token-level streaming
+ * subprocess protocol with `@deepseek-ai/dsh-sdk-client`: one live runtime per
+ * scope/workspace cancellation domain (and per concurrent session), native
+ * `session(id)` continuation, and token-level streaming
  * events (`assistant/chunk` reasoning/text deltas).
  */
 export class SdkDshAdapter implements AgentAdapter {
@@ -215,13 +221,21 @@ export class SdkDshAdapter implements AgentAdapter {
 
   run(options: AgentRunOptions): AgentRun {
     const cwd = options.cwd ?? process.cwd();
+    const runtimeKey = options.runtimeKey ?? cwd;
     const route: ModelRoute = {
       provider: options.provider ?? this.provider,
       model: options.model ?? this.model,
     };
-    const entry = this.runtimeFor(cwd, route);
-    const sessionId =
+    let sessionId =
       options.sessionId ?? `session-${randomUUID().replaceAll('-', '')}`;
+    const current = this.runtimes.get(runtimeKey);
+    if (current?.active) {
+      // A second run can race before ActiveRuns registration and receive the
+      // same persisted binding. Never share a no-per-session-cancel runtime or
+      // open the same persisted ID concurrently in another rc.8 runtime.
+      sessionId = `session-${randomUUID().replaceAll('-', '')}`;
+    }
+    const entry = this.runtimeFor(runtimeKey, cwd, route, sessionId);
     const stopRequested = { value: false };
     entry.active += 1;
     const handle = createSdkRun(entry.harness, options.prompt, {
@@ -242,10 +256,29 @@ export class SdkDshAdapter implements AgentAdapter {
       events: handle.events,
       stop: async () => {
         stopRequested.value = true;
-        await this.closeRuntime(cwd);
+        await this.closeEntry(entry);
       },
       waitForExit: (timeoutMs) => waitWithTimeout(handle.settled, timeoutMs),
     };
+  }
+
+  canResume(options: {
+    runtimeKey?: string;
+    cwd: string | undefined;
+    sessionId: string;
+    provider?: string;
+    model: string | undefined;
+  }): boolean {
+    const cwd = options.cwd ?? process.cwd();
+    const runtimeKey = options.runtimeKey ?? cwd;
+    const entry = this.runtimes.get(runtimeKey);
+    return entry !== undefined &&
+      entry.cwd === cwd &&
+      entry.sessionId === options.sessionId &&
+      entry.provider === (options.provider ?? this.provider) &&
+      entry.model === (options.model ?? this.model) &&
+      entry.active === 0 &&
+      !entry.retired;
   }
 
   /** Close every runtime subprocess (used on bridge shutdown). */
@@ -256,7 +289,7 @@ export class SdkDshAdapter implements AgentAdapter {
     const draining = [...this.draining];
     this.draining.clear();
     await Promise.allSettled(
-      [...entries, ...draining].map((entry) => entry.harness.close()),
+      [...entries, ...draining].map((entry) => this.closeHarness(entry)),
     );
   }
 
@@ -275,44 +308,52 @@ export class SdkDshAdapter implements AgentAdapter {
   }
 
   /**
-   * Return the runtime entry for a cwd + model route, rebinding when the
-   * requested route differs from the harness's fixed route. The dsh SDK
-   * JSON-RPC protocol binds provider/model at session creation (initialize
-   * handshake), so a hot model/provider switch requires re-spawning that
-   * runtime. An in-use harness is NOT killed: it is retired and closed once
-   * its last in-flight run settles, so parallel tasks are never interrupted
-   * by a model switch.
+   * Return the runtime for one scope/workspace + native-session identity.
+   * A concurrent fresh session or route change retires the previous entry,
+   * which drains without being killed. This is required because rc.8 has no
+   * per-session cancel: each stop handle must own the process it closes.
    */
-  private runtimeFor(cwd: string, route: ModelRoute): RuntimeEntry {
+  private runtimeFor(
+    runtimeKey: string,
+    cwd: string,
+    route: ModelRoute,
+    sessionId: string,
+  ): RuntimeEntry {
     if (this.disposed) {
       throw new Error('SdkDshAdapter is disposed');
     }
-    const existing = this.runtimes.get(cwd);
+    const existing = this.runtimes.get(runtimeKey);
     if (
       existing &&
+      existing.active === 0 &&
+      existing.cwd === cwd &&
+      existing.sessionId === sessionId &&
       existing.provider === route.provider &&
       existing.model === route.model
     ) {
       return existing;
     }
     if (existing) {
-      this.runtimes.delete(cwd);
+      this.runtimes.delete(runtimeKey);
       if (existing.active > 0) {
         existing.retired = true;
         this.draining.add(existing);
       } else {
         // Best-effort teardown; a failed close must not block the hot switch.
-        void existing.harness.close().catch(() => undefined);
+        void this.closeHarness(existing);
       }
     }
     const entry: RuntimeEntry = {
       harness: withRetryableStart(this.harnessFactory(cwd, route)),
+      runtimeKey,
+      cwd,
+      sessionId,
       provider: route.provider,
       model: route.model,
       active: 0,
       retired: false,
     };
-    this.runtimes.set(cwd, entry);
+    this.runtimes.set(runtimeKey, entry);
     return entry;
   }
 
@@ -320,20 +361,21 @@ export class SdkDshAdapter implements AgentAdapter {
     entry.active = Math.max(0, entry.active - 1);
     if (entry.retired && entry.active === 0) {
       this.draining.delete(entry);
-      void entry.harness.close().catch(() => undefined);
+      void this.closeHarness(entry);
     }
   }
 
-  private async closeRuntime(cwd: string): Promise<void> {
-    const entry = this.runtimes.get(cwd);
-    if (!entry) return;
-    this.runtimes.delete(cwd);
-    try {
-      await entry.harness.close();
-    } catch (error) {
-      // Closing is best-effort; the runtime process teardown ladder is
-      // already idempotent inside the SDK client.
-      void error;
+  private async closeEntry(entry: RuntimeEntry): Promise<void> {
+    if (this.runtimes.get(entry.runtimeKey) === entry) {
+      this.runtimes.delete(entry.runtimeKey);
     }
+    entry.retired = true;
+    this.draining.delete(entry);
+    await this.closeHarness(entry);
+  }
+
+  private closeHarness(entry: RuntimeEntry): Promise<void> {
+    entry.closing ??= entry.harness.close().catch(() => undefined);
+    return entry.closing;
   }
 }
