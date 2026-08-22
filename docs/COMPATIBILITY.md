@@ -7,7 +7,7 @@
 
 ## 1. 兼容矩阵
 
-> 最后验证：2026-08-20（临时 DSH_HOME 安装 + SDK / ACP initialize；ACP task/permission；SDK notify/ask/plan/approval、live session 续接与 restart collision；rc.7 SQLite fail-closed 实测）。
+> 最后验证：2026-08-22（临时 DSH_HOME 安装 + SDK / ACP initialize；ACP task/permission；SDK notify/ask/plan/approval、live session 续接与 restart collision；rc.7 SQLite fail-closed 实测）。
 
 | 组件 | 锁定版本 | 说明 |
 | :--- | :--- | :--- |
@@ -55,8 +55,9 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
    在临时 DSH_HOME 安装锁定版 dsh，走 SDK / ACP runtime 初始化握手，并用本地
    OpenAI-compatible fixture 验证 ACP 文本任务 + plan + one-shot permission 拒绝，以及 SDK 任务、`lark_notify` / `lark_ask_user` /
    `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → rc.8 one-shot approval → 实际执行的顺序、
-   one-shot 拒绝后 agent 继续替代工具路径、同一 runtime 的 session 续接，以及关闭重开后
-   persisted-log collision 明确可识别（bridge 随后清 binding 并用 transcript 新建 session）。
+   one-shot 拒绝后 agent 继续替代工具路径、同一 live runtime 的 session 续接，以及关闭重开后
+   persisted-log collision 的上游边界明确可识别；bridge 的 live-owner 检查必须在调用上游前拒绝
+   复用失效 binding，并用 transcript 新建 session。
 6. **实机回归**：重启 profile（`dsh --profile <name>`，或守护模式下
    `dsh-lark-bot guardian status` 观察接管/交还）后运行 `dsh-lark-bot doctor`，
    确认 dsh profile 中插件装载正常（`dsh --profile <name>` 内引擎启动）；飞书会话内跑一轮真实任务。

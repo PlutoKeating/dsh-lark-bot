@@ -167,6 +167,11 @@ WebUI/TUI 的 open、resume 或 activity 也不会自动切换飞书 binding。�
 `DSH_LARK_SESSION_BACKFILL_MESSAGES` / `DSH_LARK_SESSION_BACKFILL_BYTES` 限制历史回填，
 `DSH_LARK_SESSION_STREAM_UPDATE_MS` 控制 assistant 卡片更新间隔。
 
+SDK runtime 按 `scope + workspace` 隔离停止域，同一 scope 的并发 session 也使用独立 runtime；
+因此任务卡停止只停止该 run，`/stop` 只停止当前 scope，不会连带其他群。当前进程确认仍持有
+live runtime 时才原生续接 session；重启、停止或模型切换后自动新建 session 并回放 bridge
+transcript，避免 rc.8 persisted-log `id collision`。
+
 开发/准入验证还应在 build 后运行 `pnpm check:tui-admission`（唯一 v0.15 manifest、artifact SHA-256、
 lock closure 与 local/remote Host Descriptor）及 `pnpm check:tui-tty`（真实 PTY；Windows 需 ConPTY）。
 

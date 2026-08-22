@@ -28,13 +28,18 @@ describe('renderCard densities', () => {
   });
 
   it('keeps a running card interactive with a stop button', () => {
-    const state = reduce(initialState, { type: 'thinking', delta: '…' });
+    const state = {
+      ...reduce(initialState, { type: 'thinking', delta: '…' }),
+      actionScope: 'chat-a',
+      actionRunId: 'run-a',
+    };
     const card = renderCard(state, 'compact') as {
       config: { streaming_mode?: boolean };
       body: { elements: Array<{ tag: string }> };
     };
     expect(card.config.streaming_mode).toBe(true);
     expect(card.body.elements.some((element) => element.tag === 'button')).toBe(true);
+    expect(JSON.stringify(card)).toContain('"runId":"run-a"');
   });
 
   it('includes token usage in the detailed view', () => {

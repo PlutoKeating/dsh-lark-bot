@@ -26,7 +26,7 @@ function fakeHarness(route?: ModelRoute): DeepSeekHarness {
 }
 
 describe('SdkDshAdapter', () => {
-  it('runs a prompt through a per-cwd harness and reuses sessions', async () => {
+  it('runs a prompt through a scoped harness and reuses sessions', async () => {
     const created: string[] = [];
     const adapter = new SdkDshAdapter({
       launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
@@ -87,6 +87,107 @@ describe('SdkDshAdapter', () => {
     });
     await adapter.dispose();
     expect(harness.close).toHaveBeenCalledTimes(2);
+  });
+
+  it('stopping one scope does not close another scope runtime in the same cwd', async () => {
+    const created: DeepSeekHarness[] = [];
+    const adapter = new SdkDshAdapter({
+      launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      harnessFactory: () => {
+        const harness = fakeHarness();
+        created.push(harness);
+        return harness;
+      },
+    });
+
+    const runA = adapter.run({
+      runId: 'scope-a-run',
+      runtimeKey: 'scope-a\0/tmp/shared',
+      prompt: 'task a',
+      cwd: '/tmp/shared',
+      sessionId: undefined,
+      model: undefined,
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+    const runB = adapter.run({
+      runId: 'scope-b-run',
+      runtimeKey: 'scope-b\0/tmp/shared',
+      prompt: 'task b',
+      cwd: '/tmp/shared',
+      sessionId: undefined,
+      model: undefined,
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+
+    expect(created).toHaveLength(2);
+    await runA.stop();
+    expect(created[0]?.close).toHaveBeenCalledTimes(1);
+    expect(created[1]?.close).not.toHaveBeenCalled();
+
+    void runA.events;
+    void runB.events;
+    await adapter.dispose();
+  });
+
+  it('gives concurrent runs with the same stale binding independent runtimes and session ids', async () => {
+    const created: DeepSeekHarness[] = [];
+    let settleFirst: (() => void) | undefined;
+    const adapter = new SdkDshAdapter({
+      launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      harnessFactory: () => {
+        const harness = fakeHarness();
+        if (created.length === 0) {
+          harness.run = vi.fn(() => new Promise((resolve) => {
+            settleFirst = () => resolve({
+              sessionId: 'session-a',
+              finalResponse: 'a',
+              events: [],
+              notifications: [],
+            });
+          })) as unknown as typeof harness.run;
+        }
+        created.push(harness);
+        return harness;
+      },
+    });
+    const base = {
+      runtimeKey: 'scope-a\0/tmp/shared',
+      cwd: '/tmp/shared',
+      model: undefined,
+      images: undefined,
+      stopGraceMs: undefined,
+    };
+    const runA = adapter.run({
+      ...base,
+      runId: 'concurrent-a',
+      prompt: 'a',
+      sessionId: 'session-shared',
+    });
+    const runB = adapter.run({
+      ...base,
+      runId: 'concurrent-b',
+      prompt: 'b',
+      sessionId: 'session-shared',
+    });
+
+    expect(created).toHaveLength(2);
+    await runA.stop();
+    expect(created[0]?.close).toHaveBeenCalledTimes(1);
+    expect(created[1]?.close).not.toHaveBeenCalled();
+
+    settleFirst?.();
+    void runA.events;
+    const runBEvents = [];
+    for await (const event of runB.events) runBEvents.push(event);
+    expect(runBEvents.at(-1)).toMatchObject({ type: 'done' });
+    expect(runBEvents.at(-1)).not.toMatchObject({ sessionId: 'session-shared' });
+    await adapter.dispose();
   });
 
   it('hot-switches the runtime route when the per-run model/provider changes', async () => {
@@ -155,7 +256,7 @@ describe('SdkDshAdapter', () => {
         runId,
         prompt: 'hi',
         cwd: '/tmp/a',
-        sessionId: undefined,
+        sessionId: 'session-stable',
         model: 'deepseek-v4-flash',
         provider: 'deepseek-official',
         images: undefined,
@@ -168,6 +269,44 @@ describe('SdkDshAdapter', () => {
       // consume
     }
     expect(created.length).toBe(1);
+    await adapter.dispose();
+  });
+
+  it('only resumes sessions owned by the current live runtime', async () => {
+    const adapter = new SdkDshAdapter({
+      launch: { command: 'node', args: ['bin.js', '--profile', 'dsh-lark'], profile: 'dsh-lark' },
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      harnessFactory: () => fakeHarness(),
+    });
+    const resumeQuery = {
+      runtimeKey: 'chat-a\0/tmp/a',
+      cwd: '/tmp/a',
+      sessionId: 'session-live',
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+    };
+
+    expect(adapter.canResume(resumeQuery)).toBe(false);
+    const run = adapter.run({
+      runId: 'live-session-run',
+      runtimeKey: resumeQuery.runtimeKey,
+      prompt: 'hi',
+      cwd: resumeQuery.cwd,
+      sessionId: resumeQuery.sessionId,
+      provider: resumeQuery.provider,
+      model: resumeQuery.model,
+      images: undefined,
+      stopGraceMs: undefined,
+    });
+    expect(adapter.canResume(resumeQuery)).toBe(false);
+    for await (const _event of run.events) {
+      // consume
+    }
+    expect(adapter.canResume(resumeQuery)).toBe(true);
+
+    await run.stop();
+    expect(adapter.canResume(resumeQuery)).toBe(false);
     await adapter.dispose();
   });
 
