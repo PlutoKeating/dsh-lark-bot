@@ -22,6 +22,10 @@ export interface ApprovalPayload {
   callId?: string;
   reason?: string;
   toolInput?: unknown;
+  /** Resolve the persisted scope policy without creating an approval card. */
+  policyCheckOnly?: boolean;
+  /** Low-risk calls are silently allowed while the scope policy is `ask`. */
+  lowRisk?: boolean;
 }
 
 export interface ApprovalResult {
@@ -29,6 +33,7 @@ export interface ApprovalResult {
   outcome?: ApprovalOutcome;
   error?: string;
   denial?: PolicyDenial;
+  policy?: 'ask' | 'allow' | 'deny';
 }
 
 export interface ApprovalHandlerDeps {
@@ -53,6 +58,15 @@ export function buildApprovalHandler(
     const destination = deps.scopeDirectory.resolve(scope);
     if (!destination) return { ok: false, error: `unknown scope: ${scope}` };
     const policy = deps.permissionPolicies?.get(scope) ?? 'ask';
+    if (payload.policyCheckOnly) {
+      return {
+        ok: true,
+        policy,
+        ...(policy === 'deny'
+          ? { denial: permissionPolicyDenial(scope, payload.toolName) }
+          : {}),
+      };
+    }
     if (policy === 'allow') return { ok: true, outcome: 'allowed-once' };
     if (policy === 'deny') {
       const denial = permissionPolicyDenial(scope, payload.toolName);
@@ -73,6 +87,7 @@ export function buildApprovalHandler(
       }
       return { ok: true, outcome: 'rejected', denial };
     }
+    if (payload.lowRisk) return { ok: true, outcome: 'allowed-once' };
     const id = `approval-${randomUUID().replaceAll('-', '')}`;
     const request: ApprovalRequest = {
       id,

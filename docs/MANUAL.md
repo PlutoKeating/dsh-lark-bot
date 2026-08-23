@@ -255,11 +255,12 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- SDK / Web 的逐操作审批经 `/approval` 回调，ACP 使用原生 permission 请求。当前 scope 默认
-  `ask` 并弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
+- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调读取 scope 策略。
+  当前 scope 默认 `ask`：低风险自省静默放行，高风险调用弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
   `/permission deny` 直接拒绝并得到明确反馈，`/permission ask` 恢复逐次询问。member 模式下
   管理员可用 `/permission <策略> <scope>` 修改同一聊天内其他成员 scope。策略写入成功后才回执，
-  按隔离 scope 持久化（0600）并显示在 `/status`；它不影响独立计划门禁。legacy headless 无工具回调。
+  按隔离 scope 持久化（0600）并显示在 `/status`；`deny` 优先于独立计划门禁，`allow` 不替代计划
+  确认。legacy headless 无工具回调。
 
 ### 安全网守护 · Safety-net guardian
 
@@ -322,7 +323,8 @@ dsh-lark-bot guardian uninstall
   POSIX shell 使用 `DSH_LARK_PLAN_GATE=off dsh-lark-bot service restart --profile dsh-lark`，
   Windows PowerShell 先执行 `$env:DSH_LARK_PLAN_GATE = "off"`，再执行
   `dsh-lark-bot service restart --profile dsh-lark`。默认 `strict`；
-  `date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等受限单条只读检查无需计划审批；
+  `date`、`id`、`pwd`、`uname`、`whoami` 与受限仓库内只读 Git 命令无需计划审批；文件内容读取、
+  路径枚举、外部路径与控制语法均按高风险处理，拒绝后不得换用等价命令/工具/路径绕行；
   SDK 的 `description`、`workdir` 与 `run_in_background:false` 无副作用元数据不会改变只读判定，
   未知参数继续失败关闭。
 

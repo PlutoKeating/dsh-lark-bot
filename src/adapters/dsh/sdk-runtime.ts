@@ -140,6 +140,7 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       `      name: '${own.name}/plan'`,
       '      config:',
       '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+      '        policyEndpoint: !!js process.env.DSH_LARK_APPROVAL_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
       '',
