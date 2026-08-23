@@ -362,30 +362,20 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     write(out, '已跳过 guardian（--no-guardian）。\n');
   }
 
-  // 3. Optional profile-process restart (explicit opt-in).
-  if (options.restart && detection.profileProcess) {
-    const restartProfile = options.restartProfileFn ?? restartProfileProcess;
-    const restarted = await restartProfile(profile, {});
-    write(out, `${restarted.message}\n`);
-  } else if (detection.profileProcess && !options.restart) {
-    write(
-      out,
-      `⚠️ dsh profile 进程正在运行（pid ${detection.profileProcess.pid}）。为加载新版本，请手动重启：\n`,
-    );
-    write(out, `    dsh --profile ${profile}\n`);
-    write(out, '（升级不会中断运行中的会话；配置/会话/凭据均不受影响。）\n');
-  }
-
-  // 4. Record the change for rollback.
+  // 3. Record the change before verification/restart. A channel-triggered
+  //    worker can live in the managed profile's systemd cgroup and therefore
+  //    be terminated by the final profile restart; rollback evidence must be
+  //    durable before that intentional self-termination point.
+  let record: UpgradeRecord | undefined;
   if (packageChanged) {
-    const record: UpgradeRecord = {
+    record = {
       at: startedAt,
       fromVersion,
       toVersion: target.version,
       profile,
       packageSpec: target.spec,
       guardianInstalled: guardian,
-      pendingRestart: detection.profileProcess !== undefined && !options.restart,
+      pendingRestart: detection.profileProcess !== undefined,
     };
     await saveUpgradeState(stateFile, { schemaVersion: 1, lastUpgrade: record });
     write(
@@ -394,7 +384,8 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     );
   }
 
-  // 5. Post-upgrade verification.
+  // 4. Verify before the final profile restart for the same reason: a
+  //    service controller may kill this caller's entire cgroup.
   write(out, '\n--- 升级后验证（doctor）---\n');
   const doctor = await (options.runDoctorFn ?? runDoctorChecks)({
     // Same as --check: doctor inspects the bridge state profile.
@@ -406,5 +397,23 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     write(out, '⚠️ doctor 检查发现关键问题，请运行 dsh-lark-bot doctor 排查。\n');
   } else {
     write(out, '✅ 升级后验证通过。\n');
+  }
+
+  // 5. Optional profile-process restart is deliberately last.
+  if (options.restart && detection.profileProcess) {
+    const restartProfile = options.restartProfileFn ?? restartProfileProcess;
+    const restarted = await restartProfile(profile, {});
+    write(out, `${restarted.message}\n`);
+    if (restarted.ok && record) {
+      record = { ...record, pendingRestart: false };
+      await saveUpgradeState(stateFile, { schemaVersion: 1, lastUpgrade: record });
+    }
+  } else if (detection.profileProcess && !options.restart) {
+    write(
+      out,
+      `⚠️ dsh profile 进程正在运行（pid ${detection.profileProcess.pid}）。为加载新版本，请手动重启：\n`,
+    );
+    write(out, `    dsh --profile ${profile}\n`);
+    write(out, '（升级不会中断运行中的会话；配置/会话/凭据均不受影响。）\n');
   }
 }

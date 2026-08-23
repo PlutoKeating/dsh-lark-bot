@@ -320,6 +320,31 @@ describe('dsh-lark-bot upgrade', () => {
     expect(state?.lastUpgrade.pendingRestart).toBe(false);
   });
 
+  it('records rollback state and completes doctor before a managed restart can terminate the caller cgroup', async () => {
+    const harness = makeHarness();
+    harness.dshHome = await makeHome();
+    harness.larkHome = await makeHome();
+    harness.stateFile = join(harness.larkHome, 'upgrade-state.json');
+    await installFakePackage(harness.dshHome, 'dsh-lark', '0.10.2');
+    harness.restartProfile.mockImplementation(async () => {
+      expect(harness.runDoctor).toHaveBeenCalledOnce();
+      expect((await loadUpgradeState(harness.stateFile))?.lastUpgrade.toVersion).toBe('0.12.0');
+      return { ok: true, message: 'profile 已重启' };
+    });
+
+    await runWith(harness, {
+      yes: true,
+      restart: true,
+      fetchLatestFn: async () => '0.12.0',
+      listProcessesFn: async () => [{
+        pid: 4242,
+        cmdline: 'node /home/x/@deepseek-ai/dsh/lib/bin.js --profile dsh-lark',
+      }],
+    });
+
+    expect(harness.restartProfile).toHaveBeenCalledOnce();
+  });
+
   it('--no-guardian skips the guardian install', async () => {
     const harness = makeHarness();
     harness.dshHome = await makeHome();

@@ -145,6 +145,46 @@ function message(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage 
 }
 
 describe('startChannel', () => {
+  it('lets only the bound profile admin confirm an update card and starts the guardian handoff', async () => {
+    const fake = makeChannel();
+    const decide = vi.fn().mockResolvedValue({
+      kind: 'started', updateId: 'update-1', targetVersion: '0.19.0',
+    });
+    await startChannel({
+      appId: 'cli_test', appSecret: 'secret', tenant: 'feishu', adapter: fakeAdapter(),
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), runPolicies: new RunPolicyStore(),
+      concurrencyStore: new ConcurrencyStore(), defaultScopeConcurrency: 2,
+      retentionStore: new RetentionStore(), roleStore: new RoleStore(':memory:'),
+      archiver: { archive: vi.fn(), list: vi.fn().mockResolvedValue([]), prune: vi.fn().mockResolvedValue(0) } as never,
+      defaultRetention: 40, archiveMax: 50, archiveMaxAgeDays: 90,
+      defaultRunTimeoutMs: 300_000, models: new ModelStore(), wizardStore: new WizardStore(),
+      dshConfig: new DshProviderManager({ home: join(tmpdir(), 'dsh-lark-bot-upgrade-home') }),
+      defaultModel: 'deepseek-v4-flash', channelUpdates: { check: vi.fn(), decide } as never,
+      accessManager: { isAdmin: (id: string) => id === 'ou_admin', snapshot: () => ({ allowedUsers: [], allowedChats: [], admins: ['ou_admin'] }) } as never,
+      pending: { push: vi.fn(), size: vi.fn().mockReturnValue(0), isFlushing: vi.fn().mockReturnValue(false), isBlocked: vi.fn().mockReturnValue(false) } as never,
+      defaultWorkspace: '/tmp/project', createChannel: fake.createChannel,
+    });
+
+    const handle = fake.handlers.cardAction as (event: unknown) => Promise<{ toast?: { type: string } } | undefined>;
+    const rejected = await handle({
+      chatId: 'chat-1', messageId: 'upgrade-card', operator: { openId: 'ou_other' },
+      action: { value: { cmd: 'channel-upgrade', decision: 'confirm', offerId: 'offer-1', scope: 'chat-1', actorId: 'ou_admin' } },
+    });
+    expect(rejected?.toast?.type).toBe('error');
+    expect(decide).not.toHaveBeenCalled();
+
+    const accepted = await handle({
+      chatId: 'chat-1', messageId: 'upgrade-card', operator: { openId: 'ou_admin' },
+      action: { value: { cmd: 'channel-upgrade', decision: 'confirm', offerId: 'offer-1', scope: 'chat-1', actorId: 'ou_admin' } },
+    });
+    expect(accepted?.toast?.type).toBe('success');
+    expect(decide).toHaveBeenCalledWith({
+      offerId: 'offer-1', scope: 'chat-1', actorId: 'ou_admin', decision: 'confirm',
+      route: { chatId: 'chat-1', requesterId: 'ou_admin' },
+    });
+  });
+
   it('persists a current-scope mode card action and rejects stale or foreign actors', async () => {
     const fake = makeChannel();
     const executionModes = new ExecutionModeStore(':memory:');

@@ -66,9 +66,11 @@ import type {
 import type { SessionProjectionController } from './session-projection.js';
 import type { ExecutionMode, ExecutionModeStore } from '../bot/execution-mode-store.js';
 import { renderExecutionModeCard } from '../card/execution-mode-card.js';
+import { renderUpdateCard } from '../card/update-card.js';
 import type { LanguagePolicyStore } from '../bot/language-policy-store.js';
 import type { SecretTargetType } from '../secret/registry.js';
 import { assertCommandCatalogMatches, renderCommandHelp } from './catalog.js';
+import type { ChannelUpdateController } from '../upgrade/channel-update.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -151,6 +153,7 @@ export interface CommandContext {
     configured(target: SecretTargetType, reference: string): Promise<boolean>;
     remove(target: SecretTargetType, reference: string): Promise<boolean>;
   };
+  channelUpdates?: Pick<ChannelUpdateController, 'check'>;
 }
 
 type Handler = (args: string, ctx: CommandContext) => Promise<void>;
@@ -185,6 +188,7 @@ const HELP = [
   '- `/status` — 查看可刷新状态卡、上下文/token 用量与待处理卡',
   '- `/jobs [show <消息ID>|retry <消息ID>]` — 对账排队/运行/失败任务并显式重试',
   '- `/version` — 查看当前版本与最新版本（有新版本时提示升级）',
+  '- `/upgrade` — 检查并确认机器人自更新（管理员）',
   '- `/doctor` — 生成脱敏诊断包并作为文件发送（管理员）',
   '- `/resume` — 查看当前会话最近上下文',
   '- `/session [current|bind <sessionId>]` — 显式选择、确认并绑定当前 workspace 的 DSH session',
@@ -227,6 +231,7 @@ const HELP_EN = [
   '- `/status` — open a refreshable status card with context/token usage and pending actions',
   '- `/jobs [show <message-id>|retry <message-id>]` — reconcile queued/running/failed jobs and retry explicitly',
   '- `/version` — show the installed and latest versions',
+  '- `/upgrade` — check and confirm a bot self-update (admin)',
   '- `/doctor` — generate and send a redacted diagnostic bundle (admin)',
   '- `/resume` — show recent context for this session',
   '- `/session [current|bind <sessionId>]` — explicitly select, confirm, and bind a DSH session in this workspace',
@@ -279,6 +284,26 @@ async function handleNew(_args: string, ctx: CommandContext): Promise<void> {
     interrupted > 0 ? `已中断 ${String(interrupted)} 个任务并开始新会话。` : '已开始新会话。',
     interrupted > 0 ? `Interrupted ${String(interrupted)} task(s) and started a new session.` : 'Started a new session.',
   );
+  try {
+    // A new session is an explicit user boundary, so probe once even when the
+    // process-wide update cache is warm. Failure is intentionally silent: it
+    // must never delay or change `/new` beyond the best-effort reminder.
+    const current = currentVersion();
+    const latest = await latestVersion({ cacheMs: 0 });
+    if (isNewer(latest, current)) {
+      await ctx.channel.sendMarkdown(
+        ctx.chatId,
+        bilingualMarkdown(
+          `⬆️ dsh-lark-bot 可更新：\`${current} → ${latest}\`。管理员可发送 \`/upgrade\`。`,
+          `⬆️ dsh-lark-bot update available: \`${current} → ${latest}\`. An admin can send \`/upgrade\`.`,
+          ctx.languagePolicies?.get().plain,
+        ),
+        { replyTo: ctx.messageId },
+      );
+    }
+  } catch {
+    // A registry outage has no user-visible side effect for `/new`.
+  }
 }
 
 const MAX_GROUP_NAME_LENGTH = 60;
@@ -657,6 +682,37 @@ async function handleVersion(_args: string, ctx: CommandContext): Promise<void> 
     english.push('Latest-version lookup is unavailable (network or registry error).');
   }
   await reply(ctx, lines.join('\n'), english.join('\n'));
+}
+
+async function handleUpgrade(_args: string, ctx: CommandContext): Promise<void> {
+  if (!requireAdmin(ctx)) return;
+  if (!ctx.senderId || !ctx.channelUpdates) {
+    await reply(ctx, '当前运行方式不支持飞书内更新。', 'In-chat updates are unavailable in this runtime.');
+    return;
+  }
+  const result = await ctx.channelUpdates.check({ scope: ctx.scope, actorId: ctx.senderId });
+  if (result.kind === 'unavailable') {
+    await reply(ctx, '暂时无法查询 npm 最新版本，请稍后重试。', 'The latest npm version is temporarily unavailable. Try again later.');
+    return;
+  }
+  if (result.kind === 'current') {
+    await reply(ctx, `✅ 当前已是最新版本：\`${result.current}\`。`, `✅ Already up to date: \`${result.current}\`.`);
+    return;
+  }
+  if (!ctx.channel.sendCard) {
+    await reply(ctx, '当前渠道无法发送更新确认卡，未执行任何更新。', 'This channel cannot send an update confirmation card. Nothing was changed.');
+    return;
+  }
+  await ctx.channel.sendCard(ctx.chatId, renderUpdateCard({
+    scope: ctx.scope,
+    actorId: ctx.senderId,
+    offerId: result.offerId,
+    current: result.current,
+    latest: result.latest,
+  }), {
+    ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+    replyTo: ctx.messageId,
+  });
 }
 
 async function handleDoctor(_args: string, ctx: CommandContext): Promise<void> {
@@ -1284,6 +1340,7 @@ const handlers: Record<string, Handler> = {
   '/status': handleStatus,
   '/jobs': handleJobs,
   '/version': handleVersion,
+  '/upgrade': handleUpgrade,
   '/doctor': handleDoctor,
   '/resume': handleResume,
   '/session': handleSessionProjection,
