@@ -36,6 +36,26 @@ describe('buildApprovalHandler', () => {
     );
   });
 
+  it('answers policy preflight and silently allows low-risk calls under ask', async () => {
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'chat-a', undefined);
+    const sendCard = vi.fn();
+    const handler = buildApprovalHandler({
+      sessions, scopeDirectory: directory, approvals: new ApprovalRegistry(), channel: { sendCard },
+      permissionPolicies: { get: () => 'ask' } as unknown as PermissionPolicyStore,
+    });
+
+    await expect(handler({
+      token: 't', sessionId: 'session-1', toolName: 'bash', policyCheckOnly: true,
+    })).resolves.toEqual({ ok: true, policy: 'ask' });
+    await expect(handler({
+      token: 't', sessionId: 'session-1', toolName: 'bash', lowRisk: true,
+    })).resolves.toEqual({ ok: true, outcome: 'allowed-once' });
+    expect(sendCard).not.toHaveBeenCalled();
+  });
+
   it('routes a default-runtime request to a detailed one-shot card', async () => {
     const sessions = new SessionStore(':memory:');
     sessions.set('chat-a:thread-a', 'session-1', '/tmp/project');

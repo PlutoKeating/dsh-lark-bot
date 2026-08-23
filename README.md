@@ -235,13 +235,13 @@ guardian 仍只救援其配置的主实例。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
-**逐操作审批与 scope 权限策略**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.8 官方 `approval/request` seam；ACP 走原生 `session/request_permission`。默认 `ask` 会弹出“允许执行一次 / 拒绝”卡。管理员可用 `/permission allow` 对当前隔离 scope 自动放行逐工具审批，或用 `/permission deny` 直接拒绝并向聊天给出明确反馈；`/permission ask` 恢复逐次询问。member 隔离下可从目标 `/status` 复制 scope，执行 `/permission <策略> <scope>`；只允许修改当前聊天内 scope。策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢，且显示在 `/status`。该策略不绕过较大/高风险任务的计划门禁；legacy `headless` 不具备工具回调能力。
+**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环读取当前 immutable scope 的 `ask|allow|deny`。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
 移动、非只读 shell 命令与 `run_code`。一次计划批准只放行随后一次高风险调用，计划外的后续调用必须
-重新确认。`date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等单条
-只读检查直接放行；SDK `bash` 自动附带的 `description`、`workdir` 与
+重新确认。快速通道只保留无路径的 `date`、`id`、`pwd`、`uname`、`whoami` 与受限的
+`git status/log/diff` 等仓库内检查；`cat`、`grep`、`find`、`head`、`tail`、`rg`、`ls` 等可读取文件或枚举路径的命令不在快速通道，避免借工作区外路径读取环境或凭据。SDK `bash` 自动附带的 `description`、`workdir` 与
 `run_in_background:false` 经无副作用校验后不会改变只读判定。包含未知参数、串联、重定向、
 命令替换或未知程序的 shell 调用仍保守地走计划门禁。
 bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
@@ -253,8 +253,8 @@ bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准
 插件可控的拒绝统一为 `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`，随后给出
 `reason` 与 `to change`；Harness 自己的 `[sandbox: ...]` 明确归类为 `file-sandbox`。高风险分类器、
 persona 中的只读说明和拒绝文本由 `src/policy/tool-policy.ts` 同一来源生成，因此策略调整不会只改
-提示词或只改执行钩子。计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，
-也不替代计划确认。
+提示词或只改执行钩子。persona 同时要求任一层拒绝后停止，不得换用等价命令、工具或路径绕行。
+计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，也不替代计划确认。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入任意文字；单选/多选没有合适项时，回复文字就是补充答案。系统按被回复的 card messageId 精确匹配 pending 问题，回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 

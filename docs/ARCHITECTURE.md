@@ -207,13 +207,16 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
-   `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；`bash` / `shell`
-   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行；SDK 附带的
+   `tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
+   在任何快速通道前终止，`ask` 的低风险调用静默放行，高风险调用在计划确认后进入一次性审批，
+   `allow` 仅自动通过逐工具审批。随后计划门会拒绝当前 turn 尚未批准的 mutating/execute/`run_code`
+   调用；`bash` / `shell` 快速通道只保留无路径自省命令与受限仓库内只读 Git 子命令，文件内容读取、
+   路径枚举、外部路径与控制语法一律保持高风险；SDK 附带的
    `description` / `workdir` / false background 元数据经显式校验后不改变判定，未知参数、串联、
    重定向、命令替换、未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
    `src/policy/tool-policy.ts` 是插件策略的单一判定/文案来源：计划门与逐工具审批共用高风险分类器，
-   runtime persona 从同一只读命令集合生成；拒绝统一携带 `[policy-denial layer=...]`、reason 与
+   runtime persona 从同一只读命令集合生成，并禁止拒绝后换用等价命令/工具/路径；拒绝统一携带 `[policy-denial layer=...]`、reason 与
    to-change。计划门负责意图确认，`/permission` 负责逐工具决策，二者不互相冒充；Harness
    `[sandbox: ...]` 作为上游 `file-sandbox` 层被明确识别但不由插件越权改写。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
@@ -221,11 +224,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
    ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
    继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。
-   `PermissionPolicyStore`（`<profile>/permission-policies.json`，0600）在两条审批入口创建卡片前
-   按 immutable scope 统一执行 `ask/allow/deny`；默认 ask，管理员通过 `/permission` 修改，member
+   `PermissionPolicyStore`（`<profile>/permission-policies.json`，0600）由 `/approval` 的 policy-only
+   预检与实际审批共享，按 immutable scope 统一执行 `ask/allow/deny`；默认 ask，管理员通过 `/permission` 修改，member
    隔离下可显式指定同一 chat 内目标 scope（跨 chat fail closed）；持久写成功后才回执，失败回滚。
-   deny 返回 rejected 并显式通知。策略不参与 `lark_request_plan_approval`，所以自动放行逐工具审批
-   也不能跳过关键任务计划门禁；legacy headless 因无工具回调不在保证范围。
+   deny 返回 structured denial 并显式通知，且优先于计划门；自动放行逐工具审批仍不能跳过关键任务
+   计划门禁。即使 `DSH_LARK_PLAN_GATE=off`，scope policy 预检仍生效；legacy headless 因无工具回调不在保证范围。
    `NotificationPreferenceStore`（`<profile>/notification-preferences.json`，0600，schema 2）按 immutable scope
    保存事件/目标/@/审批延迟或相对 Web default 的显式关闭；无 override 时继承 profile 的
    `notificationDefault`。`NotificationDispatcher` 只在 durable job 终态落盘后发送

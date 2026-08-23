@@ -193,16 +193,18 @@ SDK 经 dsh attachment store 校验后发送原生 image block，不发送路径
 **关键任务计划门禁**：SDK / ACP / Web agent 在较大或高风险动作前调用
 `lark_request_plan_approval`。完整计划先以普通 Markdown 消息发送，随后决策卡可“批准，开始执行”
 或填写意见后“继续规划”；未批准时 runtime 会拒绝写入、删除、移动、非只读 shell 命令与 `run_code`。
-每次批准仅放行随后一次高风险调用；计划外的后续调用必须重新确认。单条 `date`、`pwd`、`ls`、
-`find`、`rg`、`git status/log/diff` 等只读检查不需要计划审批；SDK 附带的命令说明、工作目录与
+每次批准仅放行随后一次高风险调用；计划外的后续调用必须重新确认。快速通道仅包含无路径的
+`date`、`id`、`pwd`、`uname`、`whoami` 和受限仓库内只读 Git 检查；`cat`、`grep`、`find`、
+`head`、`tail`、`rg`、`ls` 等文件读取/路径枚举命令按高风险处理。SDK 附带的命令说明、工作目录与
 false background 元数据不会改变只读判定，包含未知参数、串联、重定向、命令替换或未知程序的
 shell 调用仍按高风险处理。等待仅暂停
 该 session 的空闲超时，批准后原任务自动继续。停止任务会取消并撤回该 session 的卡。可信部署可用
-`DSH_LARK_PLAN_GATE=off` 关闭独立计划门禁，但不会关闭逐工具审批；legacy headless 不支持工具回调。
+`DSH_LARK_PLAN_GATE=off` 关闭独立计划门禁，但不会关闭 scope policy 预检或逐工具审批；legacy headless 不支持工具回调。
 
 若工具被拒绝，插件会返回 `[policy-denial layer=...]`、明确原因和 `to change`；Harness 原生
 `[sandbox: ...]` 则属于 `file-sandbox`。`/permission allow` 只自动通过逐工具审批，不代表计划已获
-批准，也不会扩大 workspace 文件边界。persona 的只读规则直接由执行分类器生成，避免文字与代码漂移。
+批准，也不会扩大 workspace 文件边界。`/permission deny` 在任何快速通道和计划门前生效；persona 的
+只读规则直接由执行分类器生成，并禁止拒绝后改用等价命令/工具/路径绕行。
 
 **逐操作审批**：默认 SDK 安装无需切换 adapter。计划获批后，dsh rc.8 对实际高风险工具调用会
 自动弹“允许执行一次 / 拒绝”卡；卡上显示工具、理由与可取得的参数，等待不计入 idle timeout。

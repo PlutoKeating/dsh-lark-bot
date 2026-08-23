@@ -10,6 +10,7 @@ import {
   planGateDenial,
   policyDenialText,
   type PlanPolicyExecution,
+  type PolicyDenial,
 } from '../policy/tool-policy.js';
 
 export { isHighRiskTool, type PlanPolicyExecution } from '../policy/tool-policy.js';
@@ -19,6 +20,7 @@ export const inject = ['tools'];
 
 export interface Config {
   endpoint?: string;
+  policyEndpoint?: string;
   token?: string;
   mode?: 'strict' | 'off';
 }
@@ -54,6 +56,10 @@ export function apply(ctx: Context, config: Config = {}) {
     return next();
   });
   policyCtx.on('tools/pre-execute', async (execution, next) => {
+    const policyDecision = await checkPermissionPolicy(config, execution);
+    if (policyDecision?.denial) {
+      return { kind: 'deny', reason: policyDenialText(policyDecision.denial) };
+    }
     if (gateDisabled) return next();
     if (!isHighRiskTool(policyCtx, execution)) return next();
     const agent = execution.agent;
@@ -154,6 +160,59 @@ export function apply(ctx: Context, config: Config = {}) {
       };
     },
   });
+}
+
+async function checkPermissionPolicy(
+  config: Config,
+  execution: PlanPolicyExecution,
+): Promise<{ policy: 'ask' | 'allow' | 'deny'; denial?: PolicyDenial } | undefined> {
+  const endpoint = config.policyEndpoint ?? process.env.DSH_LARK_APPROVAL_URL;
+  const token = config.token ?? process.env.DSH_LARK_NOTIFY_TOKEN;
+  const sessionId = (execution.agent as { session?: { id?: unknown } } | undefined)?.session?.id;
+  if (!endpoint || !token || sessionId === undefined) return undefined;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        sessionId: String(sessionId),
+        toolName: execution.name,
+        policyCheckOnly: true,
+      }),
+    });
+    const body = await response.json() as { ok?: boolean; policy?: unknown; denial?: unknown };
+    if (!response.ok || body.ok !== true || !isPermissionPolicy(body.policy)) {
+      return { policy: 'deny', denial: unavailablePolicyDenial(execution.name) };
+    }
+    return {
+      policy: body.policy,
+      ...(isPolicyDenial(body.denial) ? { denial: body.denial } : {}),
+    };
+  } catch {
+    return { policy: 'deny', denial: unavailablePolicyDenial(execution.name) };
+  }
+}
+
+function unavailablePolicyDenial(toolName: string): PolicyDenial {
+  return {
+    layer: 'permission-policy',
+    reason: `the bridge could not verify the scope policy before tool ${toolName}`,
+    toChange: 'restore the local bridge approval callback before retrying the tool',
+  };
+}
+
+function isPermissionPolicy(value: unknown): value is 'ask' | 'allow' | 'deny' {
+  return value === 'ask' || value === 'allow' || value === 'deny';
+}
+
+function isPolicyDenial(value: unknown): value is PolicyDenial {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const denial = value as Partial<PolicyDenial>;
+  return (
+    denial.layer === 'plan-gate' || denial.layer === 'permission-policy' ||
+    denial.layer === 'tool-approval' || denial.layer === 'file-sandbox'
+  ) && typeof denial.reason === 'string' && typeof denial.toChange === 'string';
 }
 
 function planGateMode(value: unknown): PlanGateMode {

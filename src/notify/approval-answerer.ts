@@ -30,6 +30,7 @@ interface RawApprovalRequest {
   reason?: unknown;
   toolInput?: unknown;
   signal?: AbortSignal;
+  lowRisk?: boolean;
 }
 
 type ApprovalContext = Context & {
@@ -60,7 +61,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   });
 
   approvalCtx.on('tools/pre-execute', async (execution, next) => {
-    if (!isHighRiskTool(approvalCtx, execution)) return next();
+    const highRisk = isHighRiskTool(approvalCtx, execution);
+    if (!highRisk && !approvalEndpoint(config)) return next();
     const request: RawApprovalRequest = {
       ...(execution.agent === undefined
         ? {}
@@ -68,6 +70,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       toolName: execution.name,
       reason: approvalReason(execution),
       toolInput: execution.arguments,
+      lowRisk: !highRisk,
     };
     const decision = await requestBridgeApproval(config, request, async () => 'unavailable');
     if (decision.outcome !== 'allowed-once') {
@@ -100,7 +103,7 @@ async function requestBridgeApproval(
   request: RawApprovalRequest,
   next: () => Promise<Outcome>,
 ): Promise<ApprovalDecision> {
-    const endpoint = config.endpoint ?? process.env.DSH_LARK_APPROVAL_URL;
+    const endpoint = approvalEndpoint(config);
     const token = config.token ?? process.env.DSH_LARK_NOTIFY_TOKEN;
     if (!endpoint || !token) return { outcome: await next() };
     const sessionId = request.agent?.session?.id;
@@ -118,6 +121,7 @@ async function requestBridgeApproval(
           ...(request.callId === undefined ? {} : { callId: String(request.callId) }),
           ...(typeof request.reason === 'string' ? { reason: request.reason } : {}),
           ...(request.toolInput === undefined ? {} : { toolInput: request.toolInput }),
+          ...('lowRisk' in request && request.lowRisk === true ? { lowRisk: true } : {}),
         }),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
@@ -135,6 +139,10 @@ async function requestBridgeApproval(
     } catch {
       return { outcome: request.signal?.aborted ? 'cancelled' : 'unavailable' };
     }
+}
+
+function approvalEndpoint(config: Config): string | undefined {
+  return config.endpoint ?? process.env.DSH_LARK_APPROVAL_URL;
 }
 
 function approvalReason(execution: PlanPolicyExecution): string {
