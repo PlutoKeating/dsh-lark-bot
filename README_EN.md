@@ -50,7 +50,7 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 **Core**:
 
 - Drive your local dsh coding agent from private chats, group chats and threads; images / text files can be sent straight to the bot;
-- A streaming process card with a native collapsible panel for phase, elapsed time, and tool names/statuses; raw reasoning, tool payloads, and underlying errors stay out of the card. The final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. Failed card patches are retried finitely and degrade to a plain notice—the agent and final reply continue instead of taking down the bridge;
+- A streaming process card with a native collapsible panel for phase, elapsed time, and tool names/statuses. A completed turn containing a failed tool is summarized as **Completed with warnings** in native and legacy views without changing the completed job outcome. Raw reasoning, tool payloads, and underlying errors stay out of the card. The final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. Failed card patches are retried finitely and degrade to a plain notice—the agent and final reply continue instead of taking down the bridge;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
 **Twelve exclusive capabilities**:
@@ -151,7 +151,9 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/help` | Show help |
 
 Every SDK, ACP, and Web turn receives structured, secret-free channel context and the official runtime
-`dsh-lark-bot` skill. API keys, tokens, and App Secrets must be entered through the owner-only password form opened
+`dsh-lark-bot` skill. The context distinguishes bridge-side slash commands from model-callable tools: the tool list
+does not imply that slash commands are absent, and `/help` remains the authoritative command list if the runtime
+skill cannot be loaded. API keys, tokens, and App Secrets must be entered through the owner-only password form opened
 by `/key set <ref>`, `/secret set …`, or `lark_request_secret`. Ordinary chat, legacy `/key set <ref> <value>`, and
 `--api-key` no longer consume values. The value never enters prompts, sessions, jobs, archives, logs, diagnostics,
 or replies. Guardian safe mode is a degraded recovery surface without the full configuration/secret seam.
@@ -167,7 +169,8 @@ The `/model` card merges the dsh default into its switchable catalogue even when
 list omits it, and uses compact distinguishing labels with at most two buttons per mobile row. Provider
 names, models, input modalities, and reasoning-effort options are discovered from the models.dev runtime
 catalogue and cached in memory for 15 minutes. If it is unavailable, only explicit dsh settings and the
-configured default are shown—there is no hardcoded fallback list. Override the feed with
+configured default are shown, and an object-form `agent-default-model` remains a minimally resolvable offline
+route—there is no hardcoded fallback list and other unknown models remain rejected. Override the feed with
 `DSH_LARK_MODEL_CATALOG_URL`; model commands and the wizard preserve `inputModalities`.
 
 **Message-level DSH session sync (`web` adapter)**: `/session` lists metadata only for non-subagent sessions
@@ -255,7 +258,7 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 
 **Direct result-file delivery**: SDK / ACP / Web agents can call `lark_send_file` to upload a file from the current session workspace, its actual execution worktree, its scope archive, or the instance logs to the originating Feishu chat/topic. `/archive [note]` uploads its Markdown and JSONL after the durable local write; `/archive send <id> [scope|chatId]` retries locally or lets an admin forward it to a registered session. Only regular files up to 20 MiB are accepted by default. The resolved path must remain inside roots computed by the bridge; a runtime-supplied cwd never expands access.
 
-**Per-action approval and scope policy**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.8's official `approval/request` seam into Feishu; ACP uses native `session/request_permission`. The default `ask` policy shows **Allow once** / **Reject**. An admin may use `/permission allow` to auto-allow tool approvals in the current isolated scope, `/permission deny` to reject them with an explicit chat notice, or `/permission ask` to restore prompts. In member isolation, copy the target from `/status` and use `/permission <policy> <scope>`; cross-chat targets are rejected. Success is confirmed only after the owner-only `permission-policies.json` write completes, so policies survive restarts and appear in `/status`. They never bypass the separate plan gate; legacy `headless` has no tool callback channel.
+**Per-action approval and scope policy**: the default SDK and Web host enforce a `tools/pre-execute` gate and wire dsh rc.8's official `approval/request` seam into Feishu; ACP uses native `session/request_permission`. Before any fast path or plan gate, the runtime synchronously queries the immutable scope policy through the authenticated policy-only callback; this response is `ask|allow|deny`, requires no approval outcome, and never creates or waits for a card. The default `ask` policy shows **Allow once** / **Reject** for high-risk calls. An admin may use `/permission allow` to auto-allow tool approvals in the current isolated scope, `/permission deny` to reject them with an explicit chat notice, or `/permission ask` to restore prompts. In member isolation, copy the target from `/status` and use `/permission <policy> <scope>`; cross-chat targets are rejected. Success is confirmed only after the owner-only `permission-policies.json` write completes, so policies survive restarts and appear in `/status`. They never bypass the separate plan gate; legacy `headless` has no tool callback channel.
 
 **Plan gate for substantial tasks**: SDK / ACP / Web agents use `lark_request_plan_approval` before file
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
