@@ -1,14 +1,18 @@
-name: dsh-upstream
+name: upstream-release-watch
 
 on:
   schedule:
-    # Weekly check (Monday 03:17 UTC) that upstream DeepSeek Harness has not
-    # published a newer stable release than the pinned compatibility matrix.
-    - cron: '17 3 * * 1'
+    # Daily; all versions newer than each reviewed baseline are processed.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
+
+concurrency:
+  group: upstream-release-watch
+  cancel-in-progress: false
 
 jobs:
   watch:
@@ -24,5 +28,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Compare pinned matrix with upstream stable releases
-        run: node scripts/check-dsh-upstream.mjs --fail-on-upgrade
+      - name: Synchronize upstream release issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-dsh-upstream.mjs --sync-issues

@@ -569,9 +569,17 @@ pnpm check:publish-bundle   # verifies dist matches every export & the CLI entry
 pnpm ci:local
 pnpm release:check   # ci:local + upstream consistency check
 pnpm compat:probe    # temp-installs pinned dsh; probes SDK/ACP plus SDK tool/resume
-pnpm dsh:upstream    # compares npm upstream stable with the pinned matrix
+pnpm upstream:report # read-only dsh + dsh-TUI GitHub Release/npm source report
+pnpm dsh:upstream    # backward-compatible alias for upstream:report
 pnpm security:monitor # impostor-repo & npm copycat monitor (recommended weekly)
 ```
+
+The repository's `upstream-release-watch` GitHub Actions workflow runs daily and can also be dispatched
+manually. Its reviewed `trackFrom` baselines live in `scripts/upstream-release-config.mjs`. It merges every
+non-draft GitHub Release with npm versions, publish times, and dist-tags, then creates one `upstream-update`
+Issue per upstream/version. A later GitHub Release enriches the existing npm-only Issue, while hidden markers
+deduplicate both open and closed Issues. This automation only transports sanitized, bounded release data; it
+does not assess compatibility, modify dependencies/code, or create adaptation PRs.
 
 See [`AGENTS.md`](AGENTS.md) for the development workflow, [`docs/API.md`](docs/API.md) for module contracts, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the architecture. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the compatibility matrix, upgrade policy and automation.
 
