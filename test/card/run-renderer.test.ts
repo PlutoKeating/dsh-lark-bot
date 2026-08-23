@@ -100,6 +100,11 @@ describe('renderCard', () => {
       expect(serialized).toContain('Completed with warnings');
     }
 
+    const legacy = renderLegacyCard(warned) as { body: { elements: unknown[] } };
+    const legacyBody = JSON.stringify(legacy.body.elements);
+    expect(legacyBody).toContain('已完成（含警告）');
+    expect(legacyBody).toContain('Completed with warnings');
+
     const successful = reduce(initialState, {
       type: 'done', sessionId: 's2', terminationReason: 'normal',
     });

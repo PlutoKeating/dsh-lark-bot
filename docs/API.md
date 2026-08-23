@@ -701,7 +701,8 @@ headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch fail
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
   路由。正常结束但任一工具 block 为 `error` 时，所有 renderer/locale 的汇总使用
-  “已完成（含警告）/Completed with warnings”；run terminal 仍为 done，真正的 run error/interrupted/timeout
+  “已完成（含警告）/Completed with warnings”，并在 legacy 兼容正文中重复该终态，避免旧客户端忽略
+  card summary 后只看到孤立的 `tool · error`；run terminal 仍为 done，真正的 run error/interrupted/timeout
   保持更高显示优先级。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
   原本面向用户的回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
