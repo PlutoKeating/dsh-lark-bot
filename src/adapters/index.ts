@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import type { RuntimeEnv } from '../config/env.js';
+import { DshProviderManager, type DshModelSelection } from '../config/dsh-config.js';
 import { DshAdapter } from './dsh/adapter.js';
 import { SdkDshAdapter } from './dsh/sdk-adapter.js';
 import { ensureSdkProfile, resolveSdkLaunch } from './dsh/sdk-runtime.js';
@@ -9,6 +10,35 @@ import type { AgentAdapter } from './types.js';
 export interface AdapterPreferences {
   stopGraceMs: number | undefined;
   model: string | undefined;
+}
+
+type AdapterRouteSource = Pick<
+  DshProviderManager,
+  'defaultModelSelection' | 'resolveModelRoute'
+>;
+
+/** Resolve the startup route before provisioning SDK/ACP managed runtimes. */
+export async function resolveAdapterRoute(
+  input: { provider: string | undefined; model: string | undefined },
+  source: Pick<AdapterRouteSource, 'defaultModelSelection'> &
+    Partial<Pick<AdapterRouteSource, 'resolveModelRoute'>>,
+): Promise<DshModelSelection | undefined> {
+  const provider = input.provider?.trim() || undefined;
+  const model = input.model?.trim() || undefined;
+  if (provider && model) return { provider, model };
+  if (model && source.resolveModelRoute) {
+    const resolved = await source.resolveModelRoute(model);
+    if (resolved) return resolved;
+  }
+  const fallback = await source.defaultModelSelection();
+  if (!provider && !model) return fallback;
+  if (provider && !model && fallback?.provider === provider) {
+    return { provider, model: fallback.model };
+  }
+  if (!provider && model && fallback?.model === model) {
+    return { provider: fallback.provider, model };
+  }
+  return undefined;
 }
 
 /**
@@ -22,6 +52,19 @@ export async function buildAgentAdapter(
   env: RuntimeEnv,
   preferences: AdapterPreferences = { stopGraceMs: undefined, model: undefined },
 ): Promise<AgentAdapter> {
+  const configuredModel = preferences.model ?? env.model;
+  const managedRoute = env.adapterMode === 'sdk' || env.adapterMode === 'acp'
+    ? await resolveAdapterRoute(
+        { provider: env.provider, model: configuredModel },
+        new DshProviderManager({ env: process.env }),
+      )
+    : undefined;
+  if ((env.adapterMode === 'sdk' || env.adapterMode === 'acp') && !managedRoute) {
+    throw new Error(
+      'SDK/ACP runtime requires a provider/model route. Set DSH_LARK_PROVIDER and ' +
+        'DSH_LARK_MODEL, or configure object-form dsh agent-default-model { provider, model }.',
+    );
+  }
   switch (env.adapterMode) {
     case 'headless': {
       const options: ConstructorParameters<typeof DshAdapter>[0] = {
@@ -35,7 +78,10 @@ export async function buildAgentAdapter(
     }
     case 'acp': {
       const { buildAcpAgentAdapter } = await import('./dsh/acp-adapter.js');
-      return buildAcpAgentAdapter(env, preferences);
+      return buildAcpAgentAdapter(
+        { ...env, provider: managedRoute!.provider, model: managedRoute!.model },
+        { ...preferences, model: managedRoute!.model },
+      );
     }
     case 'web': {
       return new WebDshAdapter({
@@ -63,8 +109,8 @@ export async function buildAgentAdapter(
       const launch = resolveSdkLaunch(runtimeOptions);
       return new SdkDshAdapter({
         launch,
-        provider: env.provider,
-        model: preferences.model ?? env.model,
+        provider: managedRoute!.provider,
+        model: managedRoute!.model,
         ...(env.maxTokens === undefined ? {} : { maxTokens: env.maxTokens }),
       });
     }

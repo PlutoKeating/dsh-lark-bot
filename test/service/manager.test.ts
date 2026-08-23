@@ -81,6 +81,7 @@ describe('ServiceManager', () => {
       env: { DEEPSEEK_API_KEY: 'sk-secret', DSH_LARK_ADAPTER: 'sdk' },
       controller,
       dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
     });
 
     try {
@@ -128,6 +129,30 @@ describe('ServiceManager', () => {
       const envFile = await readFile(join(root, 'service', 'default.env'), 'utf8');
       expect(envFile).toContain('CUSTOM_GATEWAY_TOKEN="provider-secret"');
       expect(envFile).not.toContain('UNRELATED');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('retains managed route values when install or restart runs from a sparse shell', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-manager-'));
+    const paths = resolveAppPaths(root);
+    await mkdir(paths.serviceDir, { recursive: true });
+    await writeFile(
+      paths.serviceEnvFile('default'),
+      'DSH_LARK_PROVIDER="deepseek-official"\nDSH_LARK_MODEL="saved-model"\n',
+    );
+    const manager = new ServiceManager({
+      profile: 'default', paths, env: { DSH_LARK_ADAPTER: 'sdk' },
+      controller: new FakeController(), dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
+    });
+    try {
+      await manager.install();
+      const envFile = await readFile(paths.serviceEnvFile('default'), 'utf8');
+      expect(envFile).toContain('DSH_LARK_PROVIDER="deepseek-official"');
+      expect(envFile).toContain('DSH_LARK_MODEL="saved-model"');
+      expect(envFile).toContain('DSH_LARK_ADAPTER="sdk"');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -8,7 +8,12 @@ import { DshProviderManager } from '../config/dsh-config.js';
 import { resolveGuardianCliEntry } from '../guardian/install.js';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 import { resolveCliJsPath, serviceNameFor, launchdLabelFor } from './command.js';
-import { secureWindowsServiceEnv, snapshotServiceEnv, writeServiceEnv } from './env-snapshot.js';
+import {
+  readServiceEnv,
+  secureWindowsServiceEnv,
+  snapshotServiceEnv,
+  writeServiceEnv,
+} from './env-snapshot.js';
 import { isSystemdUserAvailable, SystemdServiceController } from './linux-systemd.js';
 import { LaunchdServiceController } from './macos-launchd.js';
 import { PortableServiceController } from './portable.js';
@@ -211,6 +216,8 @@ export class ServiceManager {
       // can still proceed with the standard environment keys.
     }
     const serviceName = serviceNameFor(this.profile);
+    const serviceEnvFile = this.paths.serviceEnvFile(this.profile);
+    const inheritedServiceEnv = await readServiceEnv(serviceEnvFile);
     const cliJsPath = this.controllerOverride
       ? resolveCliJsPath()
       : resolveGuardianCliEntry(this.profile, this.home, this.sourceEnv);
@@ -230,9 +237,9 @@ export class ServiceManager {
         '--env-file',
         this.paths.serviceEnvFile(this.profile),
       ],
-      envFile: this.paths.serviceEnvFile(this.profile),
+      envFile: serviceEnvFile,
       logFile: this.paths.serviceLogFile(this.profile),
-      env: snapshotServiceEnv(this.sourceEnv, credentialKeys),
+      env: snapshotServiceEnv(this.sourceEnv, credentialKeys, inheritedServiceEnv),
     };
   }
 

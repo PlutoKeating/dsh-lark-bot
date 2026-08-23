@@ -39,6 +39,24 @@ describe('snapshotServiceEnv', () => {
     );
     expect(env).toEqual({ CUSTOM_PROVIDER_TOKEN: 'secret' });
   });
+
+  it('preserves existing managed values unless the current shell overrides them', () => {
+    const env = snapshotServiceEnv(
+      { DSH_LARK_MODEL: 'shell-model', PATH: '/usr/bin' },
+      [],
+      {
+        DSH_LARK_PROVIDER: 'deepseek-official',
+        DSH_LARK_MODEL: 'saved-model',
+        UNRELATED_SECRET: 'do-not-retain',
+      },
+    );
+
+    expect(env).toEqual({
+      DSH_LARK_PROVIDER: 'deepseek-official',
+      DSH_LARK_MODEL: 'shell-model',
+      PATH: '/usr/bin',
+    });
+  });
 });
 
 describe('writeServiceEnv', () => {
