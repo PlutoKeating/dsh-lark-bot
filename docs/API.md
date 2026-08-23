@@ -1091,7 +1091,9 @@ CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
 
 ## 11. Channel context、Skill、语言与安全密钥 API
 
-- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块。
+- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块；
+  `available_channel_tools` 只表示模型可调用工具，bridge 在 Agent 前预处理的斜杠命令是独立能力，
+  Skill 不可加载时 Agent 必须引导 `/help`，不得从工具清单推断命令不存在。
 - `registerDshLarkBotSkill(ctx.skills)`：注册 model/user invocable 的 runtime Skill，并返回 disposer。
 - `LanguagePolicyStore.get|set|reset|flush`：profile 级 `{ui:'per-viewer', plain, agent}` 策略。
 - `SecretRequestRegistry.register|get|submit|cancel`：10 分钟 owner/scope-bound 一次性请求；submit 在写入前 claim，回执无 value。

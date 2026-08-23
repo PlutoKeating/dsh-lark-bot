@@ -153,7 +153,8 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/help` | 查看帮助|
 
 每轮 SDK / ACP / Web 请求都会注入结构化、无密钥的频道上下文，并注册官方 runtime Skill
-`dsh-lark-bot`。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
+`dsh-lark-bot`。上下文明确区分 bridge 预处理的用户斜杠命令与 Agent 可调用工具；后者的列表不代表
+前者不存在，Skill 暂时不可加载时仍以 `/help` 为当前版本权威命令入口。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
 工具 `lark_request_secret` 打开的密码表单提交；普通聊天、旧 `/key set <引用名> <值>` 与
 `--api-key` 不再消费值。表单只允许发起者提交，值直接写入本机受支持目标，不进入 prompt、session、
 任务账本、归档、日志、诊断包或回复。Guardian 安全模式是降级恢复面，不提供该完整配置与密钥工具。

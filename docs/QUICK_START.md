@@ -144,7 +144,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/language show\|set plain\|agent …\|reset …` | 设置普通文本与 Agent 回答语言策略 |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
-| `/help` | 查看命令帮助 |
+| `/help` | 查看 bridge 直接处理的当前版本权威命令清单 |
 
 模型 / provider / 凭据管理直接读写 dsh 官方配置（`~/.dsh/settings.yaml` 与
 `~/.dsh/.credentials.yaml`，与 dsh Web Settings→Models 同协议），改动下一请求生效：

@@ -332,7 +332,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 
 17. **频道自描述、runtime Skill 与密钥数据平面（issue #85）**：SDK / ACP / Web 共用的
     `run-flow` 在每次 fresh/resume prompt 前注入有界 `ChannelContext`，仅含 tenant、chat type、scope、
-    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。Cordis `ctx.skills`
+    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。上下文明确说明
+    bridge 预处理的斜杠命令不属于 Agent tool list；Skill 失败时 `/help` 仍是权威清单。Cordis `ctx.skills`
     注册 lifecycle-bound `dsh-lark-bot` runtime Skill，命令索引与 `/help` 共享单一目录。
     `lark_request_secret` 只传 target/reference/purpose/sessionId；localhost callback 把 session 映射为
     scope、校验当前 actor 为管理员并发送 owner-only password form。回调在异步写前 claim 一次性请求，

@@ -134,7 +134,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/invite user\|admin\|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
 | `/invite remove user\|group <id>` | 移除白名单 |
-| `/help` | 查看帮助 |
+| `/help` | 查看当前版本权威命令清单；即使 Agent runtime Skill 暂不可用仍由 bridge 直接处理 |
 
 安全网守护接管期间（dsh 下线后）的额外命令：
 
