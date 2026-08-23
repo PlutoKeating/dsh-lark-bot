@@ -70,7 +70,7 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 | 机制 | 位置 | 作用 |
 | :--- | :--- | :--- |
 | 上游雷达 | `scripts/check-dsh-upstream.mjs` + `.github/workflows/dsh-upstream.yml`（每周一 03:17 UTC + 手动触发） | 分列 `latest` / `next` / highest，校验矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
-| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision |
+| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision；模拟模型回合设有请求上限，状态断言漂移时快速失败而不耗尽内存 |
 | 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性） | 本地全量门禁 |
 
 ## 5. 风险披露

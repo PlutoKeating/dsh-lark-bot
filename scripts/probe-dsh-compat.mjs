@@ -32,6 +32,8 @@ const textResponse = (text) => [
   '[DONE]',
 ];
 
+const MAX_FIXTURE_MODEL_REQUESTS = 32;
+
 async function startCompatServer() {
   const notifications = [];
   const questions = [];
@@ -78,6 +80,15 @@ async function startCompatServer() {
       }
       const modelInput = raw.length > 0 ? JSON.parse(raw) : {};
       modelRequests.push(modelInput);
+      if (modelRequests.length > MAX_FIXTURE_MODEL_REQUESTS) {
+        response.writeHead(500, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({
+          error: {
+            message: `compat fixture exceeded ${MAX_FIXTURE_MODEL_REQUESTS} model requests; a state transition matcher is stale`,
+          },
+        }));
+        return;
+      }
       const serializedInput = JSON.stringify(modelInput);
       const hasNativeImage = serializedInput.includes('data:image/png;base64') ||
         serializedInput.includes('"image_url"');
@@ -101,11 +112,11 @@ async function startCompatServer() {
       const hasRejectPlan = serializedInput.includes('compat-reject-plan') &&
         serializedInput.includes('compat-approved');
       const hasApprovalReject = serializedInput.includes('compat-reject-bash') &&
-        serializedInput.includes('user rejected this one-shot tool execution');
+        serializedInput.includes('[policy-denial layer=tool-approval]');
       const hasRecoveryNotify = serializedInput.includes('compat-recovery-notify') &&
         serializedInput.includes('Message sent to compat-chat');
       const hasGateDenial = serializedInput.includes('compat-gate-denied') &&
-        serializedInput.includes('blocked until the current turn calls lark_request_plan_approval');
+        serializedInput.includes('[policy-denial layer=plan-gate]');
       const hasGateApproval = serializedInput.includes('compat-gate-plan') &&
         serializedInput.includes('compat-approved');
       const hasGateExecution = serializedInput.includes('compat-gate-bash') &&
