@@ -313,6 +313,15 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     绑定插件 lifecycle。facet 为 `trusted-in-process`、不是沙箱；项目保持 AGPL-3.0，生态 listing
     不等于认证、安全审查、背书或许可证豁免。
 
+16. **双上游发布雷达（issue #54）**：`scripts/upstream-release-config.mjs` 显式声明 dsh 与
+    dsh-TUI 的 GitHub 仓库、npm 包集合及人工确认的首次基线。每日 workflow 通过结构化 API 获取
+    全部非 draft Releases 与 npm 全版本/time/dist-tags，以“upstream id + 规范化 SemVer”归并；
+    基线及历史版本不补发。`upstream-update` Issue 的 v1 隐藏标记同时覆盖 open/closed 去重，自动区块
+    与人工 checklist 分离，因此 npm-only 事件在 Release 后补时只替换自动区块，不抹掉人工勾选。
+    上游 notes 是不受信任数据：控制字符与 mention 被中和，Markdown 有长度上限，只经 JSON API
+    写入，永不拼接或执行 shell。单源故障可显式降级，所有来源均失败或 Issue API 失败才令任务失败；
+    workflow 仅授予 `contents: read` / `issues: write` 并用 concurrency group 串行化。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |

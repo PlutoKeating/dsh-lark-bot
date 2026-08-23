@@ -79,9 +79,10 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 ### 4.1 自动化保障
 
-- `scripts/check-dsh-upstream.mjs`（+ 每周 CI `dsh-upstream` 任务）：对比 npm `latest`，
-  上游发布新 stable 时以失败引起注意；同时校验 `dsh-compat.ts` 与 `package.json`
-  的 `dsh-sdk-client` 锁定版本无漂移。
+- `scripts/check-dsh-upstream.mjs`（+ 每日 CI `upstream-release-watch` 任务）：把 dsh 与 dsh-TUI
+  的 GitHub 全部非 draft Releases、npm 全版本/time/dist-tags 归并为逐版本事件，并以隐藏标记对
+  open/closed `upstream-update` Issue 幂等同步；发现新版本本身不令任务失败，也不自动判断兼容性、
+  改代码或建 PR。同时校验 `dsh-compat.ts` 与 `package.json` 的 SDK 锁定版本无漂移。
 - `scripts/probe-dsh-compat.mjs`（+ CI `compat-probe` 任务）：临时 DSH_HOME 安装锁定版
   dsh + SDK server，通过 `dist/cli.js doctor` 走真实 SDK 初始化握手，满足 L4 运行实测。
 - `scripts/check-publish-bundle.mjs`（+ `pnpm release:check` / release CI 的 Build 后步骤）：

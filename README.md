@@ -607,9 +607,17 @@ pnpm check:publish-bundle   # 校验 dist 与全部 exports/bin 入口一致（�
 pnpm ci:local
 pnpm release:check   # ci:local + 上游一致性检查
 pnpm compat:probe    # 临时安装锁定版 dsh，验证 SDK/ACP 握手及 SDK 工具/续接
-pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵
+pnpm upstream:report # 只读检查 dsh + dsh-TUI 的 GitHub Release/npm 双源发布
+pnpm dsh:upstream    # upstream:report 的兼容别名
 pnpm security:monitor # 假冒仓库与仿冒包监控（建议每周）
 ```
+
+仓库的 `upstream-release-watch` GitHub Actions 每天运行，也可手动触发。它以
+`scripts/upstream-release-config.mjs` 中经人工确认的 `trackFrom` 为首次基线，合并全部非 draft
+GitHub Releases 与 npm 全版本/发布时间/dist-tags；每个新“上游 + 版本”创建一个带
+`upstream-update` label 的跟踪 Issue。同一版本的 npm-only Issue 会在 GitHub Release 后续补发时
+原地补充，closed Issue 也参与隐藏标记去重。该自动化只搬运并安全截断外部发布信息，不分析兼容性、
+不修改依赖或代码，也不自动创建适配 PR。
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 兼容矩阵的升级政策与自动化见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)。
