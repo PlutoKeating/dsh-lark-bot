@@ -45,6 +45,46 @@ export interface DshModelEntry {
   reasoningEfforts?: string[] | undefined;
 }
 
+const VISION_MODEL_ID_TOKEN = /(^|[-_.])(vision|vlm|vl|4v)([-_.]|$)/i;
+const VISION_MODEL_ID_GPT4O = /(^|[-_.])4o([-_.]|$)/i;
+const VISION_MODEL_ID_IMAGE = /image/i;
+
+/**
+ * Whether a model id signals image (vision) capabilities. The upstream harness
+ * rejects image input for a model whose `inputModalities` does not include
+ * `'image'`, so a vision model whose modality is left unset silently fails the
+ * whole turn. This is a conservative name heuristic, used as a fallback when
+ * the models.dev catalog does not declare the modality.
+ */
+export function isVisionModelId(modelId: string): boolean {
+  return (
+    VISION_MODEL_ID_TOKEN.test(modelId) ||
+    VISION_MODEL_ID_GPT4O.test(modelId) ||
+    VISION_MODEL_ID_IMAGE.test(modelId)
+  );
+}
+
+/**
+ * Default the input modalities for a vision-capable model to `['text','image']`.
+ * `current` is the explicitly configured value (undefined when unset); pass
+ * `catalogDeclaresImage` when the models.dev catalog marks the model as image
+ * capable. Returns `current` unchanged for non-vision models so no model
+ * config is rewritten; for vision models it guarantees both `text` and `image`
+ * are declared.
+ */
+export function normalizeVisionModelInputModalities(
+  id: string,
+  current: Array<'text' | 'image'> | undefined,
+  catalogDeclaresImage: boolean,
+): Array<'text' | 'image'> | undefined {
+  const isVision = catalogDeclaresImage || isVisionModelId(id);
+  if (!isVision) return current;
+  const result = new Set<'text' | 'image'>(current ?? []);
+  result.add('text');
+  result.add('image');
+  return [...result];
+}
+
 export interface DshProviderSummary {
   id: string;
   displayName: string;
@@ -111,17 +151,25 @@ function parseModels(value: unknown): DshModelEntry[] | undefined {
   const models: DshModelEntry[] = [];
   for (const raw of value) {
     if (!isMapLike(raw) || typeof raw.id !== 'string' || raw.id.length === 0) continue;
+    const configuredModalities = Array.isArray(raw.inputModalities)
+      ? raw.inputModalities.filter(
+        (modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image',
+      )
+      : undefined;
     models.push({
       id: raw.id,
       name: typeof raw.name === 'string' ? raw.name : undefined,
       contextWindow:
         typeof raw.contextWindow === 'number' ? raw.contextWindow : undefined,
       maxTokens: typeof raw.maxTokens === 'number' ? raw.maxTokens : undefined,
-      inputModalities: Array.isArray(raw.inputModalities)
-        ? raw.inputModalities.filter(
-          (modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image',
-        )
-        : undefined,
+      // A vision model whose modality is unset must still declare image input
+      // (issue #96): without it the upstream harness rejects the image and the
+      // whole turn fails.
+      inputModalities: normalizeVisionModelInputModalities(
+        raw.id,
+        configuredModalities,
+        false,
+      ),
       imagePixelBudget:
         typeof raw.imagePixelBudget === 'number' ? raw.imagePixelBudget : undefined,
       imageMaxBytes: typeof raw.imageMaxBytes === 'number' ? raw.imageMaxBytes : undefined,
@@ -141,7 +189,14 @@ function modelRecord(input: DshModelEntry): Record<string, unknown> {
   if (input.name !== undefined) record.name = input.name;
   if (input.contextWindow !== undefined) record.contextWindow = input.contextWindow;
   if (input.maxTokens !== undefined) record.maxTokens = input.maxTokens;
-  if (input.inputModalities !== undefined) record.inputModalities = input.inputModalities;
+  // Ensure a vision model is persisted with image input declared (issue #96),
+  // even when `/model add` was issued without `--input-modalities`.
+  const modalities = normalizeVisionModelInputModalities(
+    input.id,
+    input.inputModalities,
+    false,
+  );
+  if (modalities !== undefined) record.inputModalities = modalities;
   if (input.imagePixelBudget !== undefined) record.imagePixelBudget = input.imagePixelBudget;
   if (input.imageMaxBytes !== undefined) record.imageMaxBytes = input.imageMaxBytes;
   return record;
@@ -189,7 +244,14 @@ function mergeCatalogModels(
       name: model.name ?? discovered?.name,
       contextWindow: model.contextWindow ?? discovered?.contextWindow,
       maxTokens: model.maxTokens ?? discovered?.maxTokens,
-      inputModalities: model.inputModalities ?? discovered?.inputModalities,
+      // The catalog marks a model image-capable via inputModalities; when the
+      // user configured the model without declaring it, default the modality so
+      // the harness accepts images (issue #96).
+      inputModalities: normalizeVisionModelInputModalities(
+        model.id,
+        model.inputModalities ?? discovered?.inputModalities,
+        discovered?.inputModalities?.includes('image') ?? false,
+      ),
       imagePixelBudget: model.imagePixelBudget ?? discovered?.imagePixelBudget,
       imageMaxBytes: model.imageMaxBytes ?? discovered?.imageMaxBytes,
       reasoningEfforts: model.reasoningEfforts ?? discovered?.reasoningEfforts,
