@@ -16,6 +16,9 @@ describe('channel context', () => {
     expect(rendered).toContain('scope: oc_x:thread_y');
     expect(rendered).toContain('adapter: dsh-sdk');
     expect(rendered).toContain('lark_request_secret');
+    expect(rendered).toContain('Slash commands are handled by the bridge before the agent');
+    expect(rendered).toContain('do not infer their absence from available_channel_tools');
+    expect(rendered).toContain('tell the user to run /help');
     expect(rendered).not.toMatch(/app.?secret|api.?key|token/i);
   });
 });
