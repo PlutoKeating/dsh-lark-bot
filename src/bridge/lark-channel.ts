@@ -50,7 +50,7 @@ class ResilientCardStreamController {
 
   constructor(
     private readonly channel: LarkChannel,
-    private readonly messageId: string,
+    private messageId: string,
     private readonly chatId: string,
     private readonly sendOptions: SendOptions,
   ) {}
@@ -133,6 +133,44 @@ class ResilientCardStreamController {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * Recall the current card and re-create it as the newest top-level message in
+   * the chat, rebinding the controller to the fresh message id. Because Feishu
+   * cannot reorder an existing message, this is the only way to keep an
+   * in-progress process card visible at the tail while interim agent bubbles are
+   * appended below. Best-effort: if the recall fails the card is left where it
+   * is (no duplicate is created); if the controller is closed or failed the id
+   * is left unchanged.
+   */
+  async reanchor(): Promise<string> {
+    if (this.closed || this.failed) return this.messageId;
+    if (this.inFlight !== undefined) await this.inFlight;
+    if (this.timer !== undefined) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    const card = this.latest;
+    if (card === undefined) return this.messageId;
+    try {
+      await this.channel.recallMessage(this.messageId);
+    } catch (error) {
+      log.warn('lark-card-stream', 'reanchor-recall-failed', {
+        messageId: this.messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return this.messageId;
+    }
+    // Re-create as a top-level message (no replyTo) so it lands at the very
+    // bottom of the conversation rather than remaining attached to the parent.
+    const sent = await this.channel.send(this.chatId, { card }, {});
+    if (!sent.messageId) throw new Error('Feishu card re-anchor returned no message_id');
+    this.messageId = sent.messageId;
+    this.latest = card;
+    this.dirty = false;
+    this.failed = false;
+    return this.messageId;
   }
 }
 

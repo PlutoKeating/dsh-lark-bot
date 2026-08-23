@@ -173,6 +173,13 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     `patchCard` rejection，弱网超时会升级为进程级 unhandled rejection。`adaptLarkChannel` 自己按
     100 ms 合并并串行更新；patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
     producer、Agent 与单独的最终 Markdown 继续运行。
+   **过程卡跟随会话末尾**：飞书不能重排已存在消息，运行中 agent 发出的中间气泡（`lark_notify`、
+   问答/计划/审批卡等）会被追加到会话底部，而只做原位更新的过程卡停留在顶部，用户查看新气泡后需
+   上滑才能确认任务仍在继续。为此 `run-flow` 把过程卡的流式控制器注册进 `RunCardAnchors`，
+   `attachRunCardAnchors` 包装统一发送漏斗（`streaming` 通道的 markdown/card/file 发送），在每次
+   中间气泡成功送达后触发 `reanchor()`：先 best-effort 撤回原卡，再以顶层消息在会话末尾重建同内容卡，
+   并把控制器重定向到新 `message_id`，后续 patch 全部落到新卡；召回失败则保持原卡不重复建卡。
+   仅在 `state.terminal === 'running'` 时触发，因此最终回答（在 finalize 之后发送）不会把卡拽到其下方。
    **任务执行模式**由 `ExecutionModeStore` 在 profile 的 `execution-modes.json` 以 0600 原子写入，按 immutable scope 保存 `quick|balanced|deep`。`/mode`/`/effort` 与卡片回调写入时复检当前 scope/操作者，`/status` 读取有效值。队列开始新 run 时取一次快照，并由 `run-flow` 注入统一模式前置指令，因此 SDK、ACP、Web 行为一致；运行中的任务不被切换打断，安全、工具权限与计划门禁也不因模式降低。
    managed runtime persona 还要求 Git 写入前读取目标仓库适用的 `AGENTS.md`、检查状态并仅暂存明确审查过的路径，禁止 `git add .` / `git add -A`。
 5. **bot UI 国际化 seam**：`src/card/i18n.ts` 把中文与英文 variant 组合为同一 Card JSON 2.0
