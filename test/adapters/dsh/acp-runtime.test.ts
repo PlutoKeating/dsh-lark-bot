@@ -44,10 +44,12 @@ describe('resolveAcpLaunch', () => {
     expect(patch).toContain("id: lark-ask");
     expect(patch).toContain("name: 'dsh-lark-bot/ask'");
     expect(patch).toContain("id: lark-plan-approval");
+    expect(patch).toContain('policyEndpoint: !!js process.env.DSH_LARK_APPROVAL_URL');
     expect(patch).toContain("name: 'dsh-lark-bot/plan'");
     expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).toContain('use lark_request_plan_approval');
     expect(patch).toContain('The bridge policy treats one uncomposed shell call as read-only');
+    expect(patch).toContain('do not try an equivalent command, tool, or path');
     expect(patch).toContain('use lark_ask_user and wait for the answer');
     expect(patch).toContain('[policy-denial layer=...]');
     expect(patch).toContain('uses lark_ask_user for interactive answers');

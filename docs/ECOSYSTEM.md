@@ -29,7 +29,7 @@ DeepSeek Harness 生态有一个社区维护的**目录与兼容性雷达**（`a
   dsh-lark-bot` 标准安装，或一行 `npx dsh-lark-bot@latest setup --profile <name>`；
   bundle patch 装配 `dsh-lark-bot/plugin`（在 dsh 进程内运行完整桥接引擎，首次启动扫码绑定）
   与 `lark-notify`、`lark-file`、`lark-plan-approval`、`lark-approval-answerer`（标准插件行）。
-- `./plugin`、`./invariant`、`./notify`、`./file`、`./ask`、`./plan`、`./approval` 七个子路径导出随包发布：`plugin` 为 bundle
+- `./plugin`、`./invariant`、`./notify`、`./file`、`./ask`、`./plan`、`./approval`、`./secret` 八个子路径导出随包发布：`plugin` 为 bundle
   行对应的 cordis 插件；`invariant` 为 `invariants` 注册表伴生模块（与官方
   dsh-lark-channel 同款契约）；`notify` 为 `lark_notify` 工具插件，`file` 为当前 session 定向的
   `lark_send_file` 结果文件插件，`ask` 为
@@ -79,9 +79,10 @@ README 必须覆盖以下九个章节（本仓库已全部填实，见根目录 
 
 ### 4.1 自动化保障
 
-- `scripts/check-dsh-upstream.mjs`（+ 每周 CI `dsh-upstream` 任务）：对比 npm `latest`，
-  上游发布新 stable 时以失败引起注意；同时校验 `dsh-compat.ts` 与 `package.json`
-  的 `dsh-sdk-client` 锁定版本无漂移。
+- `scripts/check-dsh-upstream.mjs`（+ 每日 CI `upstream-release-watch` 任务）：把 dsh 与 dsh-TUI
+  的 GitHub 全部非 draft Releases、npm 全版本/time/dist-tags 归并为逐版本事件，并以隐藏标记对
+  open/closed `upstream-update` Issue 幂等同步；发现新版本本身不令任务失败，也不自动判断兼容性、
+  改代码或建 PR。同时校验 `dsh-compat.ts` 与 `package.json` 的 SDK 锁定版本无漂移。
 - `scripts/probe-dsh-compat.mjs`（+ CI `compat-probe` 任务）：临时 DSH_HOME 安装锁定版
   dsh + SDK server，通过 `dist/cli.js doctor` 走真实 SDK 初始化握手，满足 L4 运行实测。
 - `scripts/check-publish-bundle.mjs`（+ `pnpm release:check` / release CI 的 Build 后步骤）：

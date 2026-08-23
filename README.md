@@ -143,10 +143,18 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 的模型，可声明视觉输入能力（管理员）|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
+| `/key set <引用名>`、`/key remove\|list <引用名>` | 通过仅请求者可提交的安全表单设置 dsh 凭据；remove 需管理员 |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <引用>` | 查询状态或安全采集/删除受支持密钥（写操作需管理员；值不进入 Agent） |
+| `/language show\|set plain\|agent …\|reset …` | 管理普通文本与 Agent 回答语言策略（写操作需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单（写操作需管理员）|
 | `/help` | 查看帮助|
+
+每轮 SDK / ACP / Web 请求都会注入结构化、无密钥的频道上下文，并注册官方 runtime Skill
+`dsh-lark-bot`。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
+工具 `lark_request_secret` 打开的密码表单提交；普通聊天、旧 `/key set <引用名> <值>` 与
+`--api-key` 不再消费值。表单只允许发起者提交，值直接写入本机受支持目标，不进入 prompt、session、
+任务账本、归档、日志、诊断包或回复。Guardian 安全模式是降级恢复面，不提供该完整配置与密钥工具。
 
 飞书消息中的图片会按文件内容识别 PNG/JPEG/WebP/GIF 并补全安全扩展名；默认 SDK 会经 dsh
 附件存储校验后发送原生 image block，而不是把路径当作图片。无法读取或模型不支持视觉时会明确
@@ -236,13 +244,13 @@ guardian 仍只救援其配置的主实例。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
-**逐操作审批与 scope 权限策略**：默认 SDK 与 Web 宿主在 `tools/pre-execute` 强制拦截高风险调用，并接入 dsh rc.8 官方 `approval/request` seam；ACP 走原生 `session/request_permission`。默认 `ask` 会弹出“允许执行一次 / 拒绝”卡。管理员可用 `/permission allow` 对当前隔离 scope 自动放行逐工具审批，或用 `/permission deny` 直接拒绝并向聊天给出明确反馈；`/permission ask` 恢复逐次询问。member 隔离下可从目标 `/status` 复制 scope，执行 `/permission <策略> <scope>`；只允许修改当前聊天内 scope。策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢，且显示在 `/status`。该策略不绕过较大/高风险任务的计划门禁；legacy `headless` 不具备工具回调能力。
+**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环读取当前 immutable scope 的 `ask|allow|deny`。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
 移动、非只读 shell 命令与 `run_code`。一次计划批准只放行随后一次高风险调用，计划外的后续调用必须
-重新确认。`date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等单条
-只读检查直接放行；SDK `bash` 自动附带的 `description`、`workdir` 与
+重新确认。快速通道只保留无路径的 `date`、`id`、`pwd`、`uname`、`whoami` 与受限的
+`git status/log/diff` 等仓库内检查；`cat`、`grep`、`find`、`head`、`tail`、`rg`、`ls` 等可读取文件或枚举路径的命令不在快速通道，避免借工作区外路径读取环境或凭据。SDK `bash` 自动附带的 `description`、`workdir` 与
 `run_in_background:false` 经无副作用校验后不会改变只读判定。包含未知参数、串联、重定向、
 命令替换或未知程序的 shell 调用仍保守地走计划门禁。
 bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
@@ -254,8 +262,8 @@ bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准
 插件可控的拒绝统一为 `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`，随后给出
 `reason` 与 `to change`；Harness 自己的 `[sandbox: ...]` 明确归类为 `file-sandbox`。高风险分类器、
 persona 中的只读说明和拒绝文本由 `src/policy/tool-policy.ts` 同一来源生成，因此策略调整不会只改
-提示词或只改执行钩子。计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，
-也不替代计划确认。
+提示词或只改执行钩子。persona 同时要求任一层拒绝后停止，不得换用等价命令、工具或路径绕行。
+计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，也不替代计划确认。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入任意文字；单选/多选没有合适项时，回复文字就是补充答案。系统按被回复的 card messageId 精确匹配 pending 问题，回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
@@ -307,7 +315,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
   （需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，
   字面密钥不进 settings / 聊天记录。
-- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要生效还须在其
+- **凭据引用必须关联**：`/key set <引用名>` 通过安全表单写入凭据文件；provider 要生效还须在其
   `apiKeyEnv` 字段引用同一名字（`/provider add|update ... --api-key-env <引用名>`，或向导中填写）。
   引用名与 provider ID 相同且 provider 未设 `apiKeyEnv` 时，`/key set` 会自动补关联；
   已存在的老配置在下次运行时也会自动补齐。
@@ -316,7 +324,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
   `https://www.kingapi.xyz`）会自动补全为 `/v1`。dsh runtime 启动后需几百毫秒才注册
   pi-ai 路由，桥接会重试握手直到注册完成（避免 “no adapter registered for provider”）。
 
-安全提醒：在飞书会话输入密钥会对可见成员暴露，建议私聊使用或 `--api-key-env` 引用环境变量；bot 不在任何回复中回显密钥值。
+安全提醒：不要在普通飞书消息中输入密钥；使用安全表单或 `--api-key-env` 引用环境变量。bot 不读取旧式带值命令，也不在回复中回显密钥值。
 
 ## 升级、禁用与卸载
 
@@ -511,6 +519,11 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_UPGRADE_NOTIFY` | `false` | `true` 时发现新版本向指定 chat 推送飞书通知（默认仅日志）|
 | `DSH_LARK_UPGRADE_NOTIFY_CHAT` | — | 接收更新通知的 chat id（配合 `DSH_LARK_UPGRADE_NOTIFY=true`）|
 
+SDK / ACP 启动会先解析完整 provider/model route：显式双字段优先；缺失时读取 dsh 对象形式
+`agent-default-model: { provider, model }`；仍无法得到完整 route 时在 bridge/doctor 入口给出本项目的
+明确配置错误，不把空 provider 传给上游 runtime。受管 service 的 install/start/restart 会把旧 env
+文件中的受管键与当前 shell 合并（当前 shell 显式值优先），避免从另一个终端重启时静默丢失已有 route。
+
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
 ## 权限与数据
@@ -603,9 +616,17 @@ pnpm check:publish-bundle   # 校验 dist 与全部 exports/bin 入口一致（�
 pnpm ci:local
 pnpm release:check   # ci:local + 上游一致性检查
 pnpm compat:probe    # 临时安装锁定版 dsh，验证 SDK/ACP 握手及 SDK 工具/续接
-pnpm dsh:upstream    # 对比 npm 上游 stable 与锁定矩阵
+pnpm upstream:report # 只读检查 dsh + dsh-TUI 的 GitHub Release/npm 双源发布
+pnpm dsh:upstream    # upstream:report 的兼容别名
 pnpm security:monitor # 假冒仓库与仿冒包监控（建议每周）
 ```
+
+仓库的 `upstream-release-watch` GitHub Actions 每天运行，也可手动触发。它以
+`scripts/upstream-release-config.mjs` 中经人工确认的 `trackFrom` 为首次基线，合并全部非 draft
+GitHub Releases 与 npm 全版本/发布时间/dist-tags；每个新“上游 + 版本”创建一个带
+`upstream-update` label 的跟踪 Issue。同一版本的 npm-only Issue 会在 GitHub Release 后续补发时
+原地补充，closed Issue 也参与隐藏标记去重。该自动化只搬运并安全截断外部发布信息，不分析兼容性、
+不修改依赖或代码，也不自动创建适配 PR。
 
 开发规范见 [`AGENTS.md`](AGENTS.md)，模块契约见 [`docs/API.md`](docs/API.md)，架构见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 兼容矩阵的升级政策与自动化见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)。

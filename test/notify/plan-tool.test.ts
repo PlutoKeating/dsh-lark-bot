@@ -141,21 +141,20 @@ describe('lark_request_plan_approval tool', () => {
       'date',
       '/usr/bin/date +%F',
       'pwd',
-      'ls -la /tmp',
-      'rg --files src',
-      'find src -name *.ts',
+      'id',
+      'uname',
+      'whoami',
       'git status --short',
       'git log -5 --oneline',
       'git diff --check',
       'git branch --show-current',
       'git remote -v',
-      'ps aux',
     ]) {
       await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toEqual({
         kind: 'allow',
       });
     }
-    expect(next).toHaveBeenCalledTimes(12);
+    expect(next).toHaveBeenCalledTimes(11);
   });
 
   it('allows the real SDK bash metadata shape for read-only commands', async () => {
@@ -175,13 +174,56 @@ describe('lark_request_plan_approval tool', () => {
       { command: 'date', description: 'Run date command' },
       { command: 'pwd', description: 'Inspect the working directory', workdir: '/tmp' },
       JSON.stringify({ command: 'git status --short', description: 'Inspect changes' }),
-      { command: 'ls -la', description: 'List files', run_in_background: false },
+      { command: 'whoami', description: 'Inspect identity', run_in_background: false },
     ]) {
       await expect(preExecute({ name: 'bash', arguments: arguments_ }, next)).resolves.toEqual({
         kind: 'allow',
       });
     }
     expect(next).toHaveBeenCalledTimes(4);
+  });
+
+  it('evaluates an explicit deny policy before the local plan gate', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        policy: 'deny',
+        denial: {
+          layer: 'permission-policy',
+          reason: 'scope policy is deny',
+          toChange: 'run /permission ask',
+        },
+      }),
+    }) as never;
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn(), get: () => ({ presentCall: () => ({ kind: 'edit' }) }) },
+    } as never, {
+      policyEndpoint: 'http://127.0.0.1/approval', token: 'secret', mode: 'off',
+    });
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    await expect(preExecute({
+      name: 'bash', arguments: { command: 'date' }, agent: { session: { id: 's' } },
+    }, next)).resolves.toMatchObject({
+      kind: 'deny', reason: expect.stringContaining('[policy-denial layer=permission-policy]'),
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1/approval',
+      expect.objectContaining({
+        body: JSON.stringify({
+          token: 'secret', sessionId: 's', toolName: 'bash', policyCheckOnly: true,
+        }),
+      }),
+    );
   });
 
   it('keeps mutating, compound, redirected, and unknown shell commands behind the plan gate', async () => {
@@ -219,6 +261,34 @@ describe('lark_request_plan_approval tool', () => {
     ]) {
       await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toMatchObject({
         kind: 'deny',
+      });
+    }
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('keeps file-content readers and external path discovery out of the read-only fast path', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn() },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const command of [
+      'cat /proc/self/environ',
+      'cat ~/.dsh-lark/config.json',
+      'grep -r password ~',
+      'find / -name id_rsa',
+      'tail -c 100000 ~/.bash_history',
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: { command } }, next)).resolves.toMatchObject({
+        kind: 'deny',
+        reason: expect.stringContaining('[policy-denial layer=plan-gate]'),
       });
     }
     expect(next).not.toHaveBeenCalled();

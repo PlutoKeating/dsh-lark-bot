@@ -1,7 +1,6 @@
 import type { DshModelEntry, DshProviderSummary } from '../config/dsh-config.js';
 import {
   DEEPSEEK_PROVIDER,
-  PIAI_NAMESPACE,
   SUPPORTED_PI_AI_PROTOCOLS,
 } from '../config/dsh-config.js';
 import type { CommandContext } from './index.js';
@@ -249,7 +248,7 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
 
   if ((sub === 'add' || sub === 'update') && id) {
     if (!requireAdmin(ctx)) return;
-    const deepseekFlags = ['base-url', 'api-key-env', 'api-key'];
+    const deepseekFlags = ['base-url', 'api-key-env'];
     const piAiFlags = [
       'display-name',
       'api-key-env',
@@ -258,6 +257,10 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       'model',
     ];
     const provided = new Set([...Object.keys(flags), ...Object.keys(repeated)]);
+    if (provided.has('api-key')) {
+      await reply(ctx, '普通命令不接受密钥值。请先设置引用，再使用 `/secret set dsh-credential <引用名>`。', 'Ordinary commands do not accept secret values. Configure a reference, then use `/secret set dsh-credential <reference>`.');
+      return;
+    }
 
     if (id === DEEPSEEK_PROVIDER) {
       const unsupported = [...provided].filter((name) => !deepseekFlags.includes(name));
@@ -266,18 +269,17 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
         return;
       }
       if (provided.size === 0) {
-        await reply(ctx, '用法：`/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>] [--api-key <key>]`', 'Usage: `/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>] [--api-key <key>]`');
+        await reply(ctx, '用法：`/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>]`', 'Usage: `/provider add|update deepseek-official --base-url <url> [--api-key-env <ref>]`');
         return;
       }
       await ctx.dshConfig.upsertDeepseekProvider({
         ...(flags['base-url'] ? { baseURL: flags['base-url'] } : {}),
         ...(flags['api-key-env'] ? { apiKeyEnv: flags['api-key-env'] } : {}),
-        ...(flags['api-key'] ? { apiKey: flags['api-key'] } : {}),
       });
       await reply(
         ctx,
-        `已${sub === 'add' ? '添加/更新' : '更新'} provider：\`${id}\`。凭据${flags['api-key'] ? '已写入 .credentials.yaml（值已隐藏）' : '不变'}；其他字段按参数更新。`,
-        `${sub === 'add' ? 'Added/updated' : 'Updated'} provider \`${id}\`. The credential ${flags['api-key'] ? 'was written to .credentials.yaml (value hidden)' : 'is unchanged'}; other fields follow the supplied flags.`,
+        `已${sub === 'add' ? '添加/更新' : '更新'} provider：\`${id}\`。凭据值不变；其他字段按参数更新。`,
+        `${sub === 'add' ? 'Added/updated' : 'Updated'} provider \`${id}\`. The credential value is unchanged; other fields follow the supplied flags.`,
       );
       return;
     }
@@ -309,8 +311,8 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       const protocolNote = flags.api ? `协议 \`${flags.api}\`` : '协议不变';
       const modelNote = models.length > 0 ? `，models 已${sub === 'add' ? '写入' : '替换为'} ${models.length} 个` : '';
       const credentialNote = flags['api-key-env']
-        ? `凭据引用已设为 \`${flags['api-key-env']}\`，可用 \`/key set ${flags['api-key-env']} <值>\` 写入密钥值。`
-        : '`/key set` 的引用名不会自动关联 provider；未设 `--api-key-env` 时密钥不会生效，可先 `/provider update <id> --api-key-env <引用名>` 关联，再 `/key set <引用名> <值>`。';
+        ? `凭据引用已设为 \`${flags['api-key-env']}\`，可用 \`/key set ${flags['api-key-env']}\` 打开安全表单。`
+        : '`/key set` 的引用名不会自动关联 provider；未设 `--api-key-env` 时密钥不会生效。';
       await reply(
         ctx,
         [
@@ -325,7 +327,7 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
           `${sub === 'add' ? 'Added' : 'Updated'} provider \`${id}\`${models.length > 0 ? ` with ${models.length} model(s)` : ''}.`,
           '',
           flags['api-key-env']
-            ? `Credential reference set to \`${flags['api-key-env']}\`; use \`/key set ${flags['api-key-env']} <value>\` to store the value.`
+            ? `Credential reference set to \`${flags['api-key-env']}\`; use \`/key set ${flags['api-key-env']}\` to open the secure form.`
             : '`/key set` references are not linked automatically. Set `--api-key-env` on the provider before storing that reference.',
           '',
           'Secrets are never shown in chat.',
@@ -363,7 +365,7 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       '- `/provider update <id> [--api <protocol>] [--base-url <url>] [--model <modelId> ...] [--display-name <name>] [--api-key-env <ref>]`',
       '- `/provider remove <id>`',
       '',
-      `\`deepseek-official\` 仅支持 --base-url / --api-key-env / --api-key；其他 id 走 llm-pi-ai 自定义 provider（协议可选：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}）。`,
+      `\`deepseek-official\` 仅支持 --base-url / --api-key-env；密钥值请用 /key set 安全表单。其他 id 走 llm-pi-ai（协议：${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}）。`,
     ].join('\n'),
     [
       'Usage:',
@@ -371,7 +373,7 @@ export async function handleProvider(args: string, ctx: CommandContext): Promise
       '- `/provider update <id> [--api <protocol>] [--base-url <url>] [--model <modelId> ...] [--display-name <name>] [--api-key-env <ref>]`',
       '- `/provider remove <id>`',
       '',
-      `\`deepseek-official\` only supports --base-url / --api-key-env / --api-key. Other IDs use llm-pi-ai (protocols: ${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}).`,
+      `\`deepseek-official\` only supports --base-url / --api-key-env; use the /key set secure form for values. Other IDs use llm-pi-ai (protocols: ${SUPPORTED_PI_AI_PROTOCOLS.join(' / ')}).`,
     ].join('\n'),
   );
 }
@@ -404,49 +406,20 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
 
   if (sub === 'set') {
     const ref = rest[0];
-    const value = rest.slice(1).join(' ').trim();
-    if (!ref || !value) {
-      await reply(ctx, '用法：`/key set <引用名> <值>`', 'Usage: `/key set <reference> <value>`');
+    if (!ref) {
+      await reply(ctx, '用法：`/key set <引用名>`（密钥值通过安全表单提交）', 'Usage: `/key set <reference>` (submit the value through the secure form)');
       return;
     }
-    try {
-      await ctx.dshConfig.setCredential(ref, value);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await reply(ctx, `写入失败：${message}`, `Write failed: ${message}`);
+    if (rest.length > 1) {
+      await reply(ctx, '出于安全原因，普通消息中的密钥值不会被读取或保存。请重新发送 `/key set <引用名>` 并使用安全表单。', 'For safety, a secret value in an ordinary message is neither read nor stored. Send `/key set <reference>` again and use the secure form.');
       return;
     }
-    // The user's intuitive flow is `/key set <providerId> <value>`; if the
-    // ref matches a pi-ai provider that has no apiKeyEnv yet, link it so the
-    // credential actually authenticates that provider's requests.
-    const providers = await ctx.dshConfig.listProviders();
-    const target = providers.find(
-      (provider) =>
-        provider.id === ref &&
-        provider.namespace === PIAI_NAMESPACE &&
-        provider.credentialRef === undefined,
-    );
-    let autoLinked = false;
-    if (target) {
-      await ctx.dshConfig.upsertPiAiProvider({ id: ref, apiKeyEnv: ref });
-      autoLinked = true;
+    if (!ctx.secretService || !ctx.senderId) {
+      await reply(ctx, '当前渠道无法打开安全表单；请使用 `/secret set dsh-credential <引用名>`。', 'The secure form is unavailable; use `/secret set dsh-credential <reference>`.');
+      return;
     }
-    await reply(
-      ctx,
-      [
-        `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`,
-        ...(autoLinked
-          ? [
-              '',
-              `🔗 已自动把 provider \`${ref}\` 的 apiKeyEnv 关联到 \`${ref}\`（下一请求生效）。`,
-            ]
-          : []),
-      ].join('\n'),
-      [
-        `Stored credential \`${ref}\` in \`~/.dsh/.credentials.yaml\` (0600; value hidden). Prefer a direct chat because secrets pasted into a group are visible to group members.`,
-        ...(autoLinked ? ['', `🔗 Linked provider \`${ref}\` apiKeyEnv to \`${ref}\`; it takes effect on the next request.`] : []),
-      ].join('\n'),
-    );
+    await ctx.secretService.request({ scope: ctx.scope, chatId: ctx.chatId, ...(ctx.threadId ? { threadId: ctx.threadId } : {}), ownerId: ctx.senderId, target: 'dsh-credential', reference: ref, purpose: 'Configure a dsh provider credential' });
+    await reply(ctx, '已发送安全表单；密钥值不会进入 Agent 上下文。', 'Secure form sent; the value will not enter agent context.');
     return;
   }
 
@@ -461,5 +434,5 @@ export async function handleKey(args: string, ctx: CommandContext): Promise<void
     return;
   }
 
-  await reply(ctx, '用法：`/key set <引用名> <值>`、`/key remove <引用名>`、`/key list`', 'Usage: `/key set <reference> <value>`, `/key remove <reference>`, or `/key list`');
+  await reply(ctx, '用法：`/key set <引用名>`、`/key remove <引用名>`、`/key list`', 'Usage: `/key set <reference>`, `/key remove <reference>`, or `/key list`');
 }

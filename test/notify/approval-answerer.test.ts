@@ -109,12 +109,23 @@ describe('lark approval answerer', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('bypasses one-shot approval for simple read-only shell inspections', async () => {
+  it('consults the scope policy before allowing simple read-only shell inspections', async () => {
     let preExecute: ((execution: unknown, next: () => Promise<unknown>) => Promise<unknown>) | undefined;
     const on = (event: string, listener: unknown): void => {
       if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
     };
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        outcome: 'rejected',
+        denial: {
+          layer: 'permission-policy',
+          reason: 'scope policy is deny',
+          toChange: 'run /permission ask',
+        },
+      }),
+    });
     globalThis.fetch = fetchMock as never;
     apply({
       on,
@@ -125,9 +136,12 @@ describe('lark approval answerer', () => {
     await expect(preExecute?.({
       name: 'bash', arguments: { command: 'git status --short' },
       agent: { session: { id: 's' } },
-    }, next)).resolves.toEqual({ kind: 'allow' });
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(fetchMock).not.toHaveBeenCalled();
+    }, next)).resolves.toMatchObject({
+      kind: 'deny',
+      reason: expect.stringContaining('[policy-denial layer=permission-policy]'),
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('allows exactly the approved execution and reuses it for a nested official request', async () => {

@@ -16,9 +16,7 @@ export interface PlanPolicyExecution {
 
 const READ_ONLY_SHELL_TOOLS = new Set(['bash', 'shell']);
 const READ_ONLY_COMMANDS = new Set([
-  'basename', 'cat', 'date', 'df', 'dirname', 'du', 'find', 'grep', 'head', 'id',
-  'jq', 'ls', 'pgrep', 'ps', 'pwd', 'readlink', 'realpath', 'rg', 'stat', 'tail',
-  'uname', 'wc', 'whoami',
+  'date', 'id', 'pwd', 'uname', 'whoami',
 ]);
 const READ_ONLY_GIT_SUBCOMMANDS = new Set([
   'diff', 'ls-files', 'ls-tree', 'log', 'merge-base', 'rev-parse', 'show', 'status',
@@ -62,6 +60,7 @@ export function renderToolPolicyPersona(): string[] {
     'Before modifying files, installing packages, running scripts, pushing, deleting, or taking another substantial or high-risk action, use lark_request_plan_approval and wait for approval.',
     'The plan-gate confirms the intended plan; /permission separately controls per-tool approval and never bypasses the plan-gate or the Harness file-sandbox.',
     'Policy refusals use [policy-denial layer=...] with a reason and to-change instruction. Harness errors beginning [sandbox: ...] are file-sandbox refusals. Report the named layer and exact error; never invent a different restriction.',
+    'After any policy or sandbox refusal, do not try an equivalent command, tool, or path to obtain the same result. Stop, report the refusal accurately, and let the user decide whether to change the policy or approve another approach.',
   ];
 }
 
@@ -106,23 +105,7 @@ function isSimpleReadOnlyShellCommand(rawArguments: unknown): boolean {
       word === '-u' || word === '--utc' || word === '--universal' || word.startsWith('+')
     );
   }
-  if (executable === 'rg') {
-    return !words.slice(1).some((word) =>
-      word === '--pre' || word.startsWith('--pre=') ||
-      word === '--hostname-bin' || word.startsWith('--hostname-bin=')
-    );
-  }
-  if (executable === 'find') {
-    return !words.slice(1).some((word) =>
-      ['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fprintf'].includes(word)
-    );
-  }
-  if (executable === 'tail') {
-    return !words.slice(1).some((word) =>
-      word === '-f' || word === '-F' || word === '--follow' || word.startsWith('--follow=')
-    );
-  }
-  return true;
+  return words.length === 1;
 }
 
 function shellCommand(rawArguments: unknown): string | undefined {
@@ -145,11 +128,7 @@ function shellCommand(rawArguments: unknown): string | undefined {
 }
 
 function isReadOnlyGitCommand(words: readonly string[]): boolean {
-  let index = 0;
-  while (words[index] === '-C') {
-    if (!words[index + 1]) return false;
-    index += 2;
-  }
+  const index = 0;
   const subcommand = words[index];
   if (subcommand === 'branch') {
     const flags = words.slice(index + 1);
@@ -166,6 +145,7 @@ function isReadOnlyGitCommand(words: readonly string[]): boolean {
   if (!subcommand || !READ_ONLY_GIT_SUBCOMMANDS.has(subcommand)) return false;
   return !words.slice(index + 1).some((word) =>
     word === '-o' || word === '--output' || word.startsWith('--output=') ||
-    word === '--ext-diff' || word === '--textconv'
+    word === '--ext-diff' || word === '--textconv' || word === '--no-index' ||
+    word.startsWith('/') || word.startsWith('~') || /(^|\/)\.\.(\/|$)/u.test(word)
   );
 }

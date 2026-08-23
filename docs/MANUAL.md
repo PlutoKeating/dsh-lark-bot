@@ -120,7 +120,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 模型并声明视觉输入能力（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
+| `/key set <引用名>`、`/key remove\|list <引用名>` | 用仅请求者可提交的安全表单设置 dsh 凭据；写需管理员 |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <引用>` | 安全采集受支持密钥或查询配置状态 |
+| `/language show\|set plain\|agent …\|reset …` | 管理 plain fallback 与 Agent 回答语言策略 |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
 | `/invite user\|admin\|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
@@ -165,9 +167,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   视觉模型的 `inputModalities` 会被写入并从 settings 读回，交互向导也提供相同字段。
 - provider 展示名、实时模型目录、模态与推理档位来自 models.dev，并缓存 15 分钟；目录不可用时
   仅显示 dsh settings 的显式配置和默认选择。可用 `DSH_LARK_MODEL_CATALOG_URL` 切换兼容镜像。
-- `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；settings
+- `/key set|remove|list`：引用名与状态读自 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；set
+  只打开安全密码表单，值由本地 bridge 直接写入；普通聊天、旧的带值命令和 `--api-key` 不消费值。settings
   只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
-- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要使用该密钥，其
+- **凭据引用必须关联**：`/key set <引用名>` 安全写入凭据文件；provider 要使用该密钥，其
   `apiKeyEnv` 必须引用同一名字（`/provider update <id> --api-key-env <引用名>` 或向导中填写）。
   引用名与 provider ID 相同且 provider 未设 `apiKeyEnv` 时，`/key set` 自动补关联；已存在的
   老配置在下次运行时也会自动补齐。
@@ -175,6 +178,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   在路由变化时自动重建 runtime，`/model use` 的下一轮生效是真实行为（issue #47 修复）；
   因 dsh runtime 启动后异步注册 llm-pi-ai 路由，桥接会轮询重试握手（issue #47 二次修复）。
   命令执行失败会直接回复错误，不再被误转发给 agent；卡片发送失败自动降级为文字列表。
+
+安全表单的数据仍需经过飞书/Lark 平台传输到本机 bridge；平台自身的审计、传输日志与保留策略不受
+本项目控制，因此只应在受信私聊中操作。本项目保证该值不成为普通会话消息，并且 bridge 不把它送入
+云端 LLM、prompt、session、任务账本、归档、结构化日志、诊断包、确认卡或回复。
 
 除 `/model use`、`/model reset`、`/model`、`/providers`、`/key list` 外，其余写操作均需管理员
 （`/invite admin <open_id>` 设置）。密钥值永不回显；在群聊中粘贴密钥会对群成员可见，建议仅在
@@ -255,11 +262,12 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- SDK / Web 的逐操作审批经 `/approval` 回调，ACP 使用原生 permission 请求。当前 scope 默认
-  `ask` 并弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
+- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调读取 scope 策略。
+  当前 scope 默认 `ask`：低风险自省静默放行，高风险调用弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
   `/permission deny` 直接拒绝并得到明确反馈，`/permission ask` 恢复逐次询问。member 模式下
   管理员可用 `/permission <策略> <scope>` 修改同一聊天内其他成员 scope。策略写入成功后才回执，
-  按隔离 scope 持久化（0600）并显示在 `/status`；它不影响独立计划门禁。legacy headless 无工具回调。
+  按隔离 scope 持久化（0600）并显示在 `/status`；`deny` 优先于独立计划门禁，`allow` 不替代计划
+  确认。legacy headless 无工具回调。
 
 ### 安全网守护 · Safety-net guardian
 
@@ -322,7 +330,8 @@ dsh-lark-bot guardian uninstall
   POSIX shell 使用 `DSH_LARK_PLAN_GATE=off dsh-lark-bot service restart --profile dsh-lark`，
   Windows PowerShell 先执行 `$env:DSH_LARK_PLAN_GATE = "off"`，再执行
   `dsh-lark-bot service restart --profile dsh-lark`。默认 `strict`；
-  `date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等受限单条只读检查无需计划审批；
+  `date`、`id`、`pwd`、`uname`、`whoami` 与受限仓库内只读 Git 命令无需计划审批；文件内容读取、
+  路径枚举、外部路径与控制语法均按高风险处理，拒绝后不得换用等价命令/工具/路径绕行；
   SDK 的 `description`、`workdir` 与 `run_in_background:false` 无副作用元数据不会改变只读判定，
   未知参数继续失败关闭。
 
@@ -451,5 +460,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
-桥接引擎）。受管 bridge/guardian service 会在 install/start/restart 时把当前 `DSH_LARK_*` 环境
-快照进服务配置；修改后需在新环境下执行 service restart 才会持久生效。
+桥接引擎）。SDK / ACP 会先使用完整显式 provider/model；缺失时回退到 dsh 对象形式
+`agent-default-model`，仍不完整则给出明确配置错误。受管 bridge/guardian service 在
+install/start/restart 时把旧 service env 的受管键与当前 `DSH_LARK_*` 环境合并（当前 shell 显式值
+优先），因此稀疏 shell 重启不会删除已有 route；修改值后仍需在新环境下执行 service restart 才会生效。

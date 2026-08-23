@@ -223,9 +223,10 @@ scope resolver：私聊始终用 chat ID；group 共用 chat ID；topic 使用 `
 `src/bot/permission-policy-store.ts` 提供持久化 `PermissionPolicyStore`
 （`<profile>/permission-policies.json`，0600），按隔离 scope 保存 `ask|allow|deny`，缺省为
 `ask`。`/permission [policy] [scope]` 只读查询对已授权用户开放，修改仅管理员；可指定的目标
-必须属于当前 chat（用于 member 隔离下代改），持久写入完成后才回执，失败回滚内存值；`allow`/`deny` 在 SDK/Web
-`/approval` 回调和 ACP `onApprovalRequest` 入口于创建卡片前执行。`deny` 返回标准 rejected
-outcome 并发送明确双语提示；计划门禁保持独立，不受该 store 影响。
+必须属于当前 chat（用于 member 隔离下代改），持久写入完成后才回执，失败回滚内存值。SDK / ACP /
+Web 的 `tools/pre-execute` 先向 `/approval` 发 `policyCheckOnly` 请求，再走任何只读快速通道或计划门；
+`deny` 返回标准 structured denial，`ask` 对低风险静默放行、对高风险进入一次性审批，`allow` 自动
+通过逐工具审批。计划门禁仍保持独立，但 permission-policy 的拒绝具有更高裁决优先级。
 
 `src/bot/notification-preference-store.ts` 提供 `NotificationPreferenceStore`（schema 2，
 `<profile>/notification-preferences.json`，0600），按 immutable scope 保存目标、
@@ -339,6 +340,15 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `linkCredentialRefIfMissing()` 在运行前把「凭据名 == provider ID」的老配置自动补齐
 `apiKeyEnv` 关联。dsh runtime 启动后异步注册 llm-pi-ai 路由（约几百毫秒），
 `SdkDshAdapter` 对 initialize 握手做同进程轮询重试（issue #47 二次修复）。
+
+`src/adapters/index.ts` 的 `resolveAdapterRoute()` 在 SDK / ACP profile provision 前解析启动 route：
+显式 provider+model 直接通过；仅 model 时用 `resolveModelRoute()` 找 owner；两者均为空时读取对象形式
+`defaultModelSelection()`；单边配置与默认 route 不一致或最终仍缺字段时，`buildAgentAdapter()` 抛出
+本项目可操作的配置错误。run 与 doctor 都走该工厂，因此不会出现 doctor 与消息路径行为漂移。
+
+`snapshotServiceEnv(source, extraKeys, inherited)` 只合并白名单受管键，顺序为旧 service env → 当前
+shell（后者覆盖）；`ServiceManager.buildSpec()` 每次 install/start/restart 都先读取原 0600 env 文件，
+所以稀疏 shell 不会擦除已有 `DSH_LARK_PROVIDER`，显式新值仍可正常替换。
 
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
@@ -667,12 +677,14 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 `to change: ...`；layer 目前为 `plan-gate`、`permission-policy` 或 `tool-approval`，persona 另把
 Harness `[sandbox: ...]` 标记为不可由插件改写的 `file-sandbox`。`POST /approval` 会把可用的
 `PolicyDenial` 元数据原样返回 nested runtime，使 agent 能区分 scope deny 与用户单次拒绝。
-`bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
-subcommand 位于只读白名单时才绕过计划和逐工具审批。真实 SDK 参数可额外携带字符串
+每个 `tools/pre-execute` 先以 `policyCheckOnly` 查询当前 scope；无法验证时失败关闭，`deny` 在本地
+plan gate 之前终止。`bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且为
+无路径自省命令（`date/id/pwd/uname/whoami`）或受限仓库内只读 Git 子命令时才绕过计划和 ask 卡；
+文件读取/路径枚举命令与外部路径均按高风险处理。真实 SDK 参数可额外携带字符串
 `description` / `workdir` 与 `run_in_background:false`；这些字段只作无副作用元数据校验，
 其他字段、未知语法一律保持高风险。通过 token 鉴权的
 一次批准只消费于随后一次高风险调用，不能解锁整个 turn；`DSH_LARK_PLAN_GATE=off` 可为可信部署关闭
-独立计划门禁，但不改变官方逐工具审批策略。
+独立计划门禁，但不关闭 scope policy 预检或官方逐工具审批策略。
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
@@ -1063,3 +1075,13 @@ dsh 重新在线时（用户手动启动或退出安全模式后），守护立�
 
 CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
 `dsh-lark-bot guardian run|install|uninstall|status`。
+
+## 11. Channel context、Skill、语言与安全密钥 API
+
+- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块。
+- `registerDshLarkBotSkill(ctx.skills)`：注册 model/user invocable 的 runtime Skill，并返回 disposer。
+- `LanguagePolicyStore.get|set|reset|flush`：profile 级 `{ui:'per-viewer', plain, agent}` 策略。
+- `SecretRequestRegistry.register|get|submit|cancel`：10 分钟 owner/scope-bound 一次性请求；submit 在写入前 claim，回执无 value。
+- `SecretTargetManager`：仅允许 `dsh-credential/<validated-ref>` 与 `app-secret/current|<profile>`。
+- localhost `POST /secret` 与 `lark_request_secret({target, reference, purpose?})`：用 sessionId 路由 scope，管理员授权后等待安全表单；响应仅含配置状态。
+- `/secret …`、`/language …` 与 `/key set <ref>` 是人工入口；普通聊天和 provider `--api-key` 不接受值。

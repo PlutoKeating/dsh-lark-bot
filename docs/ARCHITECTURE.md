@@ -146,6 +146,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
+   SDK / ACP managed runtime 在 profile provision 之前还会调用统一的 `resolveAdapterRoute()`：完整显式
+   route 直接使用；空 route 回退到 dsh 对象形式 `agent-default-model`；只有单边字段时必须能与模型目录
+   或默认 route 一致，否则在本项目边界给出配置错误，绝不把空 provider 交给上游。doctor 与真实 bridge
+   复用同一 adapter 工厂。OS service 重建 env snapshot 时先读取现有 0600 env 文件，再以当前 shell 的
+   已定义受管键覆盖，防止普通 restart 删除此前保存的 provider/model 或实例设置。
    dsh Web 的通用 bridge 设置走官方 settings 扩展契约：Host `src/plugin.ts` 以
    `@deepseek-ai/dsh-settings` 注册 `dsh-lark-bot` namespace 与 Schemastery schema，先把
    `ConfigStore` 中扫码绑定后实际生效的 profile 合入 composition base；`appSecret` 使用
@@ -207,13 +212,16 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
-   `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；`bash` / `shell`
-   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行；SDK 附带的
+   `tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
+   在任何快速通道前终止，`ask` 的低风险调用静默放行，高风险调用在计划确认后进入一次性审批，
+   `allow` 仅自动通过逐工具审批。随后计划门会拒绝当前 turn 尚未批准的 mutating/execute/`run_code`
+   调用；`bash` / `shell` 快速通道只保留无路径自省命令与受限仓库内只读 Git 子命令，文件内容读取、
+   路径枚举、外部路径与控制语法一律保持高风险；SDK 附带的
    `description` / `workdir` / false background 元数据经显式校验后不改变判定，未知参数、串联、
    重定向、命令替换、未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
    `src/policy/tool-policy.ts` 是插件策略的单一判定/文案来源：计划门与逐工具审批共用高风险分类器，
-   runtime persona 从同一只读命令集合生成；拒绝统一携带 `[policy-denial layer=...]`、reason 与
+   runtime persona 从同一只读命令集合生成，并禁止拒绝后换用等价命令/工具/路径；拒绝统一携带 `[policy-denial layer=...]`、reason 与
    to-change。计划门负责意图确认，`/permission` 负责逐工具决策，二者不互相冒充；Harness
    `[sandbox: ...]` 作为上游 `file-sandbox` 层被明确识别但不由插件越权改写。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
@@ -221,11 +229,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
    ACP 保留协议原生 `session/request_permission`，避免双 answerer；若底层工具在 pre-execute 放行后
    继续询问官方 seam，同一 in-flight grant 被复用，不重复弹卡。逐工具等待同样只暂停所属 run。
-   `PermissionPolicyStore`（`<profile>/permission-policies.json`，0600）在两条审批入口创建卡片前
-   按 immutable scope 统一执行 `ask/allow/deny`；默认 ask，管理员通过 `/permission` 修改，member
+   `PermissionPolicyStore`（`<profile>/permission-policies.json`，0600）由 `/approval` 的 policy-only
+   预检与实际审批共享，按 immutable scope 统一执行 `ask/allow/deny`；默认 ask，管理员通过 `/permission` 修改，member
    隔离下可显式指定同一 chat 内目标 scope（跨 chat fail closed）；持久写成功后才回执，失败回滚。
-   deny 返回 rejected 并显式通知。策略不参与 `lark_request_plan_approval`，所以自动放行逐工具审批
-   也不能跳过关键任务计划门禁；legacy headless 因无工具回调不在保证范围。
+   deny 返回 structured denial 并显式通知，且优先于计划门；自动放行逐工具审批仍不能跳过关键任务
+   计划门禁。即使 `DSH_LARK_PLAN_GATE=off`，scope policy 预检仍生效；legacy headless 因无工具回调不在保证范围。
    `NotificationPreferenceStore`（`<profile>/notification-preferences.json`，0600，schema 2）按 immutable scope
    保存事件/目标/@/审批延迟或相对 Web default 的显式关闭；无 override 时继承 profile 的
    `notificationDefault`。`NotificationDispatcher` 只在 durable job 终态落盘后发送
@@ -305,6 +313,25 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     绑定插件 lifecycle。facet 为 `trusted-in-process`、不是沙箱；项目保持 AGPL-3.0，生态 listing
     不等于认证、安全审查、背书或许可证豁免。
 
+16. **双上游发布雷达（issue #54）**：`scripts/upstream-release-config.mjs` 显式声明 dsh 与
+    dsh-TUI 的 GitHub 仓库、npm 包集合及人工确认的首次基线。每日 workflow 通过结构化 API 获取
+    全部非 draft Releases 与 npm 全版本/time/dist-tags，以“upstream id + 规范化 SemVer”归并；
+    基线及历史版本不补发。`upstream-update` Issue 的 v1 隐藏标记同时覆盖 open/closed 去重，自动区块
+    与人工 checklist 分离，因此 npm-only 事件在 Release 后补时只替换自动区块，不抹掉人工勾选。
+    上游 notes 是不受信任数据：控制字符与 mention 被中和，Markdown 有长度上限，只经 JSON API
+    写入，永不拼接或执行 shell。单源故障可显式降级，所有来源均失败或 Issue API 失败才令任务失败；
+    workflow 仅授予 `contents: read` / `issues: write` 并用 concurrency group 串行化。
+
+17. **频道自描述、runtime Skill 与密钥数据平面（issue #85）**：SDK / ACP / Web 共用的
+    `run-flow` 在每次 fresh/resume prompt 前注入有界 `ChannelContext`，仅含 tenant、chat type、scope、
+    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。Cordis `ctx.skills`
+    注册 lifecycle-bound `dsh-lark-bot` runtime Skill，命令索引与 `/help` 共享单一目录。
+    `lark_request_secret` 只传 target/reference/purpose/sessionId；localhost callback 把 session 映射为
+    scope、校验当前 actor 为管理员并发送 owner-only password form。回调在异步写前 claim 一次性请求，
+    仅 allowlist `dsh-credential` 与当前 profile `app-secret`，结果只返回 configured 状态。原始值不经过
+    adapter/prompt/session/jobs/archive/logger/diagnostics/response。Guardian 明确为降级面。profile 语言策略
+    以 0600 原子文件保存：UI 固定 per-viewer，plain 可 bilingual/zh/en，agent 可 auto/zh/en。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |
@@ -325,7 +352,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载、文本注入与出站文件边界校验 |
-| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` `/secret` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/secret/`、`src/skill/` | 安全密钥请求/allowlist 写入边界与官方 runtime Skill 注册 |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |

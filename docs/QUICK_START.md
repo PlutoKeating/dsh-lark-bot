@@ -132,7 +132,9 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 管理 provider 模型及视觉输入能力（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
+| `/key set <引用名>`、`/key remove\|list <引用名>` | 用安全表单设置 / 删除 / 列出 dsh 凭据引用（写需管理员） |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <引用>` | 安全采集受支持密钥或仅查询配置状态 |
+| `/language show\|set plain\|agent …\|reset …` | 设置普通文本与 Agent 回答语言策略 |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
@@ -142,8 +144,14 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 `/model use` 按会话热切换模型（桥接每轮解析 provider 路由并传给 dsh runtime，SDK 适配器
 路由变化时自动重建，下一轮真实生效）；`/model default` 写入 `{ provider, model }` 双字段的
 `agent-default-model`；`/provider add|update` 管理 `deepseek-official` 与自定义 pi-ai provider
-（Base URL 根域名自动补 `/v1`）；`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中
-显示，建议在私聊中使用。
+（Base URL 根域名自动补 `/v1`）；`/key set <引用名>` 打开仅请求者可提交的密码表单，bridge 直接写入
+0600 凭据文件。普通消息中的值（包括旧 `/key set <引用名> <值>` 与 `--api-key`）不会被读取或保存；
+密钥不进入 Agent prompt、session、任务账本、归档、日志、诊断包或回复。
+
+SDK / ACP 启动时若未显式设置 provider/model，会读取 dsh 对象形式的
+`agent-default-model: { provider, model }`；两处都没有完整 route 时 doctor/bridge 会直接给出配置错误。
+受管 service 重启会保留旧 env 文件中当前 shell 未覆盖的 `DSH_LARK_*`，因此从新终端执行 restart
+不会再把已有 provider/model 静默清空。
 
 任务强度用 `/mode` 双语卡片或 `/mode quick|balanced|deep` 切换：快速适合简单问答，平衡适合大多数任务，深度适合复杂重构与需要更多验证的工作。模式按 scope 持久化并显示在 `/status`；切换仅影响下一轮，不会中断当前任务或清空上下文。`/effort` 是等价别名。
 
@@ -193,16 +201,18 @@ SDK 经 dsh attachment store 校验后发送原生 image block，不发送路径
 **关键任务计划门禁**：SDK / ACP / Web agent 在较大或高风险动作前调用
 `lark_request_plan_approval`。完整计划先以普通 Markdown 消息发送，随后决策卡可“批准，开始执行”
 或填写意见后“继续规划”；未批准时 runtime 会拒绝写入、删除、移动、非只读 shell 命令与 `run_code`。
-每次批准仅放行随后一次高风险调用；计划外的后续调用必须重新确认。单条 `date`、`pwd`、`ls`、
-`find`、`rg`、`git status/log/diff` 等只读检查不需要计划审批；SDK 附带的命令说明、工作目录与
+每次批准仅放行随后一次高风险调用；计划外的后续调用必须重新确认。快速通道仅包含无路径的
+`date`、`id`、`pwd`、`uname`、`whoami` 和受限仓库内只读 Git 检查；`cat`、`grep`、`find`、
+`head`、`tail`、`rg`、`ls` 等文件读取/路径枚举命令按高风险处理。SDK 附带的命令说明、工作目录与
 false background 元数据不会改变只读判定，包含未知参数、串联、重定向、命令替换或未知程序的
 shell 调用仍按高风险处理。等待仅暂停
 该 session 的空闲超时，批准后原任务自动继续。停止任务会取消并撤回该 session 的卡。可信部署可用
-`DSH_LARK_PLAN_GATE=off` 关闭独立计划门禁，但不会关闭逐工具审批；legacy headless 不支持工具回调。
+`DSH_LARK_PLAN_GATE=off` 关闭独立计划门禁，但不会关闭 scope policy 预检或逐工具审批；legacy headless 不支持工具回调。
 
 若工具被拒绝，插件会返回 `[policy-denial layer=...]`、明确原因和 `to change`；Harness 原生
 `[sandbox: ...]` 则属于 `file-sandbox`。`/permission allow` 只自动通过逐工具审批，不代表计划已获
-批准，也不会扩大 workspace 文件边界。persona 的只读规则直接由执行分类器生成，避免文字与代码漂移。
+批准，也不会扩大 workspace 文件边界。`/permission deny` 在任何快速通道和计划门前生效；persona 的
+只读规则直接由执行分类器生成，并禁止拒绝后改用等价命令/工具/路径绕行。
 
 **逐操作审批**：默认 SDK 安装无需切换 adapter。计划获批后，dsh rc.8 对实际高风险工具调用会
 自动弹“允许执行一次 / 拒绝”卡；卡上显示工具、理由与可取得的参数，等待不计入 idle timeout。

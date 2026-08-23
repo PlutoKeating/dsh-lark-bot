@@ -133,21 +133,19 @@ describe('model slash commands', () => {
     });
   });
 
-  it('/key set requires admin and writes the credential file; /key list hides values', async () => {
-    await withContext(async (ctx, root) => {
+  it('/key set requires admin, rejects chat values, and opens the secure form', async () => {
+    await withContext(async (ctx) => {
       await handleKey('set MY_KEY secret', ctx);
       expect(lastReply(ctx)).toContain('仅管理员');
 
       ctx.senderId = 'ou_admin';
       await handleKey('set MY_KEY sk-123', ctx);
-      expect(lastReply(ctx)).toContain('已写入凭据');
-
-      await handleKey('list', ctx);
-      expect(lastReply(ctx)).toContain('MY_KEY');
+      expect(lastReply(ctx)).toContain('不会被读取或保存');
+      const request = vi.fn().mockResolvedValue(undefined);
+      ctx.secretService = { request, configured: vi.fn(), remove: vi.fn() };
+      await handleKey('set MY_KEY', ctx);
+      expect(request).toHaveBeenCalledWith(expect.objectContaining({ target: 'dsh-credential', reference: 'MY_KEY', ownerId: 'ou_admin' }));
       expect(lastReply(ctx)).not.toContain('sk-123');
-
-      const file = await readFile(join(root, '.dsh', '.credentials.yaml'), 'utf8');
-      expect(file).toContain('MY_KEY: sk-123');
     });
   });
 
@@ -184,18 +182,17 @@ describe('model slash commands', () => {
     });
   });
 
-  it('/key set auto-links the credential ref to the matching pi-ai provider', async () => {
-    await withContext(async (ctx, root) => {
+  it('/key set delegates provider credential collection to the safe seam', async () => {
+    await withContext(async (ctx) => {
       ctx.senderId = 'ou_admin';
       await handleProvider(
         'add kingapi --api openai-completions --base-url https://www.kingapi.xyz --model doubao-seed-2-0-lite-260428',
         ctx,
       );
-      await handleKey('set kingapi sk-auto-link-secret', ctx);
-      expect(lastReply(ctx)).toContain('已自动把 provider `kingapi` 的 apiKeyEnv 关联');
-
-      const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
-      expect(settings).toContain('apiKeyEnv: kingapi');
+      const request = vi.fn().mockResolvedValue(undefined);
+      ctx.secretService = { request, configured: vi.fn(), remove: vi.fn() };
+      await handleKey('set kingapi', ctx);
+      expect(request).toHaveBeenCalledWith(expect.objectContaining({ reference: 'kingapi' }));
     });
   });
 });

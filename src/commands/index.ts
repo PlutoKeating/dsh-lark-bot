@@ -66,6 +66,9 @@ import type {
 import type { SessionProjectionController } from './session-projection.js';
 import type { ExecutionMode, ExecutionModeStore } from '../bot/execution-mode-store.js';
 import { renderExecutionModeCard } from '../card/execution-mode-card.js';
+import type { LanguagePolicyStore } from '../bot/language-policy-store.js';
+import type { SecretTargetType } from '../secret/registry.js';
+import { assertCommandCatalogMatches, renderCommandHelp } from './catalog.js';
 
 export interface CommandChannel {
   sendMarkdown(
@@ -142,6 +145,12 @@ export interface CommandContext {
   createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
   diagnosticTimeoutMs?: { generate: number; upload: number };
   sessionProjection?: SessionProjectionController;
+  languagePolicies?: Pick<LanguagePolicyStore, 'get' | 'set' | 'reset'>;
+  secretService?: {
+    request(input: { scope: string; chatId: string; threadId?: string; ownerId: string; target: SecretTargetType; reference: string; purpose: string }): Promise<void>;
+    configured(target: SecretTargetType, reference: string): Promise<boolean>;
+    remove(target: SecretTargetType, reference: string): Promise<boolean>;
+  };
 }
 
 type Handler = (args: string, ctx: CommandContext) => Promise<void>;
@@ -250,8 +259,13 @@ const HELP_EN = [
   '- `/help` — show this help',
 ].join('\n');
 
+// Kept temporarily for compatibility snapshots; `/help` renders the canonical
+// registry below so runtime help and the model skill cannot drift.
+void HELP;
+void HELP_EN;
+
 async function reply(ctx: CommandContext, zhCn: string, enUs?: string): Promise<void> {
-  await ctx.channel.sendMarkdown(ctx.chatId, enUs === undefined ? zhCn : bilingualMarkdown(zhCn, enUs), {
+  await ctx.channel.sendMarkdown(ctx.chatId, enUs === undefined ? zhCn : bilingualMarkdown(zhCn, enUs, ctx.languagePolicies?.get().plain), {
     replyTo: ctx.messageId,
   });
 }
@@ -1143,6 +1157,12 @@ function wizardContext(ctx: CommandContext): ConfigWizardContext {
     wizards: ctx.wizardStore,
     defaultModel: ctx.defaultModel,
     ...(ctx.resolveDefaultModel ? { resolveDefaultModel: ctx.resolveDefaultModel } : {}),
+    ...(ctx.secretService && ctx.senderId
+      ? { requestSecret: (reference: string, purpose: string) => ctx.secretService!.request({
+          scope: ctx.scope, chatId: ctx.chatId, ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+          ownerId: ctx.senderId!, target: 'dsh-credential', reference, purpose,
+        }) }
+      : {}),
   };
 }
 
@@ -1179,7 +1199,68 @@ async function handleKeyDispatch(args: string, ctx: CommandContext): Promise<voi
 }
 
 async function handleHelp(_args: string, ctx: CommandContext): Promise<void> {
-  await reply(ctx, HELP, HELP_EN);
+  await reply(ctx, renderCommandHelp('zh'), renderCommandHelp('en'));
+}
+
+async function handleLanguage(args: string, ctx: CommandContext): Promise<void> {
+  if (!ctx.languagePolicies) {
+    await reply(ctx, '当前运行时未启用语言策略。', 'Language policy is unavailable in this runtime.');
+    return;
+  }
+  const [action = 'show', field, value] = args.trim().split(/\s+/);
+  if (action === 'show') {
+    const policy = ctx.languagePolicies.get();
+    await reply(ctx, `语言策略：UI=按查看者；普通文本=${policy.plain}；Agent=${policy.agent}`, `Language policy: UI=per viewer; plain=${policy.plain}; agent=${policy.agent}`);
+    return;
+  }
+  if (!requireAdmin(ctx)) return;
+  if (action === 'set' && field === 'plain' && (value === 'bilingual' || value === 'zh' || value === 'en')) {
+    await ctx.languagePolicies.set({ plain: value });
+  } else if (action === 'set' && field === 'agent' && (value === 'auto' || value === 'zh' || value === 'en')) {
+    await ctx.languagePolicies.set({ agent: value });
+  } else if (action === 'reset' && (field === undefined || field === 'all' || field === 'plain' || field === 'agent')) {
+    await ctx.languagePolicies.reset(field ?? 'all');
+  } else {
+    await reply(ctx, '用法：`/language show|set plain <bilingual|zh|en>|set agent <auto|zh|en>|reset [plain|agent|all]`', 'Usage: `/language show|set plain <bilingual|zh|en>|set agent <auto|zh|en>|reset [plain|agent|all]`');
+    return;
+  }
+  process.env.DSH_LARK_REPLY_LANG = ctx.languagePolicies.get().plain;
+  await handleLanguage('show', ctx);
+}
+
+function parseSecretTarget(value: string | undefined): SecretTargetType | undefined {
+  return value === 'dsh-credential' || value === 'app-secret' ? value : undefined;
+}
+
+async function handleSecret(args: string, ctx: CommandContext): Promise<void> {
+  if (!ctx.secretService) {
+    await reply(ctx, '当前运行时未启用安全密钥采集。', 'Secure secret collection is unavailable in this runtime.');
+    return;
+  }
+  const [action, targetRaw, referenceRaw, ...purposeParts] = args.trim().split(/\s+/);
+  const target = parseSecretTarget(targetRaw);
+  const reference = referenceRaw?.trim();
+  if (!target || !reference || !['status', 'set', 'remove'].includes(action ?? '')) {
+    await reply(ctx, '用法：`/secret status|set|remove <dsh-credential|app-secret> <引用>`', 'Usage: `/secret status|set|remove <dsh-credential|app-secret> <reference>`');
+    return;
+  }
+  if (action !== 'status' && !requireAdmin(ctx)) return;
+  if (action === 'status') {
+    const configured = await ctx.secretService.configured(target, reference);
+    await reply(ctx, `${target} \`${reference}\`：${configured ? '已配置' : '未配置'}`, `${target} \`${reference}\`: ${configured ? 'configured' : 'not configured'}`);
+    return;
+  }
+  if (action === 'remove') {
+    const removed = await ctx.secretService.remove(target, reference);
+    await reply(ctx, removed ? '✅ 密钥已删除。' : '该引用未配置密钥。', removed ? '✅ Secret removed.' : 'No secret is configured for that reference.');
+    return;
+  }
+  if (!ctx.senderId) {
+    await reply(ctx, '无法识别操作者，不能打开安全表单。', 'The operator cannot be identified, so the secure form cannot be opened.');
+    return;
+  }
+  await ctx.secretService.request({ scope: ctx.scope, chatId: ctx.chatId, ...(ctx.threadId ? { threadId: ctx.threadId } : {}), ownerId: ctx.senderId, target, reference, purpose: purposeParts.join(' ') || 'Configure a protected value' });
+  await reply(ctx, '已发送仅限你提交的安全表单；请勿在普通消息中粘贴密钥。', 'A secure owner-only form was sent. Do not paste the secret into ordinary chat.');
 }
 
 async function handleSessionProjection(args: string, ctx: CommandContext): Promise<void> {
@@ -1224,10 +1305,14 @@ const handlers: Record<string, Handler> = {
   '/providers': handleConfigHub,
   '/provider': handleProviderDispatch,
   '/key': handleKeyDispatch,
+  '/secret': handleSecret,
+  '/language': handleLanguage,
   '/ask': handleAsk,
   '/invite': handleInvite,
   '/help': handleHelp,
 };
+
+assertCommandCatalogMatches(Object.keys(handlers));
 
 export async function tryHandleCommand(text: string, ctx: CommandContext): Promise<boolean> {
   const trimmed = text.trim();

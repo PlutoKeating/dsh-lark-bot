@@ -43,8 +43,9 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 
 以从当前 `0.1.0-rc.8` 升级到 `X.Y.Z` 为例：
 
-1. **确认上游**：`node scripts/check-dsh-upstream.mjs`（或每周 CI `dsh-upstream` 任务）
-   分别检查 `latest`、`next` 与 highest published，阅读对应 release notes 中 SDK/ACP 的破坏性变更。
+1. **确认上游**：`pnpm upstream:report`（或每日 CI `upstream-release-watch` 任务）合并检查
+   GitHub Releases 与 npm 全版本/time/dist-tags；阅读自动创建的 `upstream-update` Issue，再人工判断
+   SDK/ACP release notes 中的破坏性变更。
 2. **更新单一事实来源**：改 `src/config/dsh-compat.ts` 中 `harness` / `sdkClient` /
    `sdkServer` / `acp`（按需），`verifiedAt` 留空待验证后填写。
 3. **同步锁定**：把 `package.json` 的 `@deepseek-ai/dsh-sdk-client` 改为同一精确版本，
@@ -69,7 +70,7 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 
 | 机制 | 位置 | 作用 |
 | :--- | :--- | :--- |
-| 上游雷达 | `scripts/check-dsh-upstream.mjs` + `.github/workflows/dsh-upstream.yml`（每周一 03:17 UTC + 手动触发） | 分列 `latest` / `next` / highest，校验矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
+| 上游雷达 | `scripts/check-dsh-upstream.mjs` + `scripts/upstream-release-config.mjs` + `.github/workflows/dsh-upstream.yml`（每日 03:17 UTC + 手动触发） | dsh + dsh-TUI 双源归一；逐版本创建/补充 `upstream-update` Issue；同时校验本地矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
 | 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision；模拟模型回合设有请求上限，状态断言漂移时快速失败而不耗尽内存 |
 | 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性） | 本地全量门禁 |
 
@@ -77,6 +78,9 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 
 - dsh 仍是 pre-release：即使锁定版本，接口仍可能随 patch 行为变化；以 CI 实测为准。
 - 探测任务需要网络与 `pnpm`；失败时优先看 workflow 日志中的 dsh 安装 / 握手错误。
+- 发布雷达当前首次基线（2026-08-23 核验）为 dsh `0.1.1-rc.2`、dsh-TUI `0.9.0`；基线只控制
+  通知起点，不代表本项目已经兼容该版本。GitHub/npm 单源故障会在 Issue 中标注降级，双源均失败则
+  workflow 失败且不创建不完整通知。
 - rc.8 的已知 session 边界与本次验证限制见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
 - rc.8 不兼容 schema 只属于 opt-in SQLite provider；托管 SDK/ACP 使用 JSONL。自定义 SQLite profile
   不自动迁移，必须保留旧 runtime 或自行导出后新建 schema 17 数据库。
