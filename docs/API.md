@@ -100,7 +100,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   （`compact` / `standard` / `detailed`）。
 - `DSH_LARK_UPGRADE_REGISTRY`：`dsh-lark-bot upgrade` 探测最新版本的 npm registry，
   默认官方 registry（可指向镜像，issue #10）。
-- `DSH_LARK_UPGRADE_CHECK`：`doctor` 是否探测 npm 最新版本并输出更新提醒（默认开启，
+- `DSH_LARK_UPGRADE_CHECK`：`doctor`、`/version`、`/upgrade` 与 `/new` 是否探测 npm 最新版本（默认开启，
   `0` 关闭；探测为 best-effort，失败不影响 doctor 结果，issue #15）。
 - `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS`：桥接引擎周期检查新版本的间隔（默认 6h，`0`
   关闭；发现新版本默认记日志，issue #15）。
@@ -148,6 +148,8 @@ export function resolveAppPaths(root?: string): AppPaths;
   `profileSeenUp` / `mode` / `relaunchedPid`，0600）。
 - 桥接心跳：`profiles/<bridge-profile>/guardian/heartbeat.json`
   （`{ pid, startedAt, ts }`，桥接引擎每 `DSH_LARK_HEARTBEAT_MS` 原子写入，0600）。
+- 飞书内更新状态：`profiles/<bridge-profile>/guardian/update.json`（精确 npm 版本、请求路由、
+  running/succeeded/failed 状态与一次性终态回执，0600）。
 - 仅核心安全 profile：`~/.dsh/profiles/<dsh-profile>-safe`（`dsh-base` + `dsh-headless`，
   无第三方插件）。
 - 安全模式 SDK 流式 profile：`~/.dsh/profiles/<dsh-profile>-safe-sdk`（官方 `dsh-base` +
@@ -801,7 +803,7 @@ export interface Logger {
   `profiles/<name>/` 会话、worktree、archive 与日志；`default` 主机器人不可由 fleet remove，
   必须使用标准 service/plugin 生命周期，避免附加实例管理误伤既有机器人。
 
-飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
+飞书会话内支持：`/new`、`/reset`、`/cd`、`/ws list|save|use|remove`、`/status`（可刷新状态卡）、`/version`、`/upgrade`（管理员确认卡自更新）、`/doctor`（管理员脱敏诊断文件）、`/resume`、
 `/stop`、`/timeout`、`/concurrency`、`/permission [ask|allow|deny] [scope]`、`/notifications [show|off|default|on …]`、`/replies [show|default|set …]`、`/isolation [group|topic|member]`、`/role list|show|set|clear|save|remove`、`/retention`、
 `/archive [note|send <archiveId> [scope|chatId]|list [N]|clean]`、`/density`、
 `/mode [quick|balanced|deep]`（兼容 `/effort`）、
@@ -974,6 +976,13 @@ export function heartbeatAgeMs(payload: HeartbeatPayload, now?: number): number;
 桥接引擎（`startBridgeEngine`，§3）启动后以 `DSH_LARK_HEARTBEAT_MS`（默认 5000）周期写入
 `~/.dsh-lark/profiles/<bridge-profile>/guardian/heartbeat.json`（0600 原子写），引擎停止时
 停止心跳。
+
+飞书内 `/upgrade` 使用 `profiles/<bridge-profile>/guardian/update.json`（0600）保存精确目标版本、
+请求者与 chat/thread 回复路由、执行状态和终态是否已交付。卡片 offer 只在内存保存十分钟并绑定
+scope + profile admin open_id；确认后由独立 worker 运行目标 npm 包的完整 `upgrade --restart` 链。
+重载后的 bridge 以自身实际版本协调被 service cgroup 重启中断的 worker，并向原路由只回执一次。
+`/new` / `/reset` 每次执行一次 best-effort npm 查询，仅在严格新版本存在时发送一条短文本提醒；
+registry 失败和已是最新均保持静默，不影响新会话。
 
 ### 10.2 状态 · Guardian state
 

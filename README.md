@@ -52,7 +52,7 @@
 - 流式过程卡以飞书原生折叠面板实时展示阶段、耗时以及工具名称与状态，完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；原始推理、工具输入输出与底层错误不会进入卡片；卡片更新失败会有限重试并降级为普通提示，Agent 与最终回答继续，不会拖垮 bridge 进程；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
-**十一项全网独有组合**：
+**十二项全网独有组合**：
 
 - 🆘 **Guardian 安全网守护——“永远叫得应”**：DSH 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接重启。
 - 👥 **多角色 Agent——“一个机器人，一整个团队”**：`/role` 切换或指派 PM / 开发 / 文档等角色，每个角色独立人设、模型偏好与规则。
@@ -64,6 +64,7 @@
 - ⚙️ **dsh Web 可视化设置——“不用背环境变量”**：在官方 Settings → Plugins 页面点选应用、工作目录、模型、并行数与提醒，并可直达诊断。
 - 🔑 **对话内管理模型和密钥——“不用离开飞书”**：`/providers` `/provider` `/key` 直接查看、切换供应商、热更新密钥。
 - 🎚️ **快速 / 平衡 / 深度模式——“任务强度一键选”**：`/mode` 按 scope 持久选择，下一轮生效且不打断当前任务。
+- 🔄 **飞书内自更新——“离开命令行也能升级”**：管理员发送 `/upgrade` 检查 npm 官方包并通过确认卡交给 Guardian 后台更新、验证和重载；`/new` 发现新版本时只发一条简短提醒。
 - 🧭 **关键任务先拍板——“计划看清再动手”**：完整计划先单独发出，再用卡片批准执行或附意见继续规划，原任务自动续跑。
 
 ## 30 秒上手
@@ -117,6 +118,8 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/ws use <name>` | 切换到命名工作空间|
 | `/ws remove <name>` | 删除命名工作空间|
 | `/status` | 查看可刷新状态卡（工作区 / 模型 / session / run / context / token / pending / 任务账本）|
+| `/version` | 查看当前版本与 npm 最新版本 |
+| `/upgrade` | 检查更新并通过确认卡让 Guardian 后台更新、验证和重载（管理员） |
 | `/doctor` | 生成脱敏诊断包并作为文件发送（管理员；可下载转发）|
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账排队/运行/完成/失败/中断任务；确认后显式重试 |
 | `/resume` | 查看当前会话最近上下文|
@@ -330,6 +333,8 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
 
 ### 升级
 
+**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时 bot 弹出只允许发起人操作的确认卡；点击“确认更新”后，Guardian 通过独立 worker 安装卡片中确认的精确 npm 版本，复用完整升级、runtime profile 修复、guardian/profile 重启和 doctor 验证链，并在重载后回到原会话报告结果。点击“取消”不会产生任何变更。更新会重启机器人，正在执行的任务可能被中断；配置、会话、归档和凭据保持不变。每次 `/new` / `/reset` 都会 best-effort 查询一次 npm；仅在有新版本时额外发送一条简短普通消息。
+
 **推荐：一行命令彻底升级（v0.12.0+ 新增，issue #10）**
 
 ```bash
@@ -402,7 +407,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 
 **Q: dsh-lark-bot 和其他 DeepSeek Harness 飞书插件（如 harness-lark）有什么区别？**
 
-**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式与关键任务计划门禁十一项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
+**A:** 功能组合最全：安全网守护、多角色 Agent、多机器人可信交接、并行多任务、持久任务对账、会话归档、跨会话主动通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式、关键任务计划门禁与飞书内自更新十二项合一；标准 dsh profile bundle，`setup` 是唯一安装路径；可选 `service install` 只负责把同一 profile 交给 OS 常驻，不是第二套运行时。
 
 **Q: 项目从哪下载？会不会有假冒版本？**
 
@@ -514,7 +519,7 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡）|
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed）|
 | `DSH_LARK_UPGRADE_REGISTRY` | `https://registry.npmjs.org` | `upgrade` 探测最新版本的 npm registry（可指向镜像）|
-| `DSH_LARK_UPGRADE_CHECK` | `1` | `doctor` / `/version` 是否探测 npm 最新版本（`0` 关闭，best-effort）|
+| `DSH_LARK_UPGRADE_CHECK` | `1` | `doctor` / `/version` / `/upgrade` / `/new` 是否探测 npm 最新版本（`0` 关闭，best-effort）|
 | `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS` | `21600000` | 桥接引擎检查新版本的间隔（`0` 关闭，默认 6h）|
 | `DSH_LARK_UPGRADE_NOTIFY` | `false` | `true` 时发现新版本向指定 chat 推送飞书通知（默认仅日志）|
 | `DSH_LARK_UPGRADE_NOTIFY_CHAT` | — | 接收更新通知的 chat id（配合 `DSH_LARK_UPGRADE_NOTIFY=true`）|
@@ -781,7 +786,7 @@ pnpm publish:dual
 - omdsh-dev/community 收录：[Discussion #11](https://github.com/orgs/omdsh-dev/discussions/11) — ✅ 通过，讨论活跃（最新更新说明 v0.10.2）；v0.15.1 更新说明 — 📨 已备妥，待人工粘贴
 - 平台数据刷新（v0.14.0 → v0.15.1）— ✅ 已恢复提交（2026-08-17）：awesome-dsh-plugins [PR #230](https://github.com/AdamPlatin123/awesome-dsh-plugins/pull/230) · dshfind [#6 跟进](https://github.com/hikariming/dshfind/issues/6#issuecomment-5317081509) · omdsh 说明备妥
 
-**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方十一项清单）：
+**历史亮点跟进**（当时六项独家能力与 issue #6 设计实现；当前能力见上方十二项清单）：
 
 - awesome-dsh-plugins 榜单行同步（仓库描述 → 最新）与 agent-test 报告名称异常：[#139](https://github.com/AdamPlatin123/awesome-dsh-plugins/issues/139) — 📨 已提交（维护方已确认，等待渲染周期同步）
 - dshfind 详情页补「对话内管理模型和密钥」亮点：[#2 跟进评论](https://github.com/hikariming/dshfind/issues/2#issuecomment-5301019067) — 📨 已提交

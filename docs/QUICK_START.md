@@ -32,6 +32,11 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 `--check` 只报告版本与运行状态；`--restart` 升级后自动重启 guardian 与受管 profile；
 `--rollback` 回滚到上次升级前版本；详见 README「升级」与 docs/MANUAL.md §1.1。
 
+不接触命令行时，profile 管理员可直接在飞书发送 `/upgrade`：发现新版本后点击 owner-bound
+确认卡，由 Guardian 独立 worker 更新卡片中确认的精确 npm 版本、修复 runtime profiles、重启并
+验证，再回到原 chat/thread 报告结果；取消不做任何变更。每次 `/new` / `/reset` 也会 best-effort
+检查一次 npm，只有存在更新时才额外发送一条简短普通文本提醒。
+
 ## 3. 启动并扫码（首次一次性绑定）
 
 ```bash
@@ -113,6 +118,8 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看可刷新状态卡（模型 / session / run / context / token / pending / 任务账本） |
+| `/version` | 查看当前版本与 npm 最新版本 |
+| `/upgrade` | 检查更新并通过确认卡让 Guardian 后台更新、验证和重载（管理员） |
 | `/doctor` | 生成并上传脱敏诊断 Markdown 文件（管理员） |
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务、查看 checkpoint、显式重试失败/中断任务 |
 | `/resume` | 查看当前会话最近上下文 |
@@ -287,6 +294,7 @@ SDK runtime 不可用（如缺 pnpm）时自动回退 headless——此时任务
 - 多机器人独立 dsh 配置：`~/.dsh-lark/bots/<name>/dsh/`（provider settings、credentials、runtime profiles）
 - 附加实例 adapter：`sdk` / `acp` / legacy `headless`；拒绝无法隔离广播 session 的共享 `web`
 - 守护心跳：`~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json`（桥接引擎周期写入）
+- 飞书内更新状态：`~/.dsh-lark/profiles/<profile>/guardian/update.json`（0600；目标版本、请求路由、执行结果与回执状态）
 
 dsh runtime profile（由 bot 首次启动自动创建于 `~/.dsh/profiles/`）：
 

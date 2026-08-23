@@ -78,6 +78,9 @@ import { ServiceManager } from '../../service/manager.js';
 import { SecretRequestRegistry } from '../../secret/registry.js';
 import { SecretTargetManager } from '../../secret/targets.js';
 import { buildSecretHandler } from '../../notify/secret-handler.js';
+import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
+import { GuardianUpdateHandoff } from '../../guardian/update-handoff.js';
+import { ChannelUpdateController } from '../../upgrade/channel-update.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -234,6 +237,13 @@ export async function startBridgeEngine(
   const replyPolicies = new ReplyPolicyStore(paths.replyPoliciesFile(profileName));
   const executionModes = new ExecutionModeStore(paths.executionModesFile(profileName));
   const languagePolicies = new LanguagePolicyStore(paths.languagePoliciesFile(profileName));
+  const updateHandoff = new GuardianUpdateHandoff({
+    file: paths.profilePath(profileName, 'guardian', 'update.json'),
+    packageName: ownPackageInfo().name,
+    dshProfile: dshProfileName,
+  });
+  await updateHandoff.reconcile(currentVersion());
+  const channelUpdates = new ChannelUpdateController({ handoff: updateHandoff });
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -686,6 +696,7 @@ export async function startBridgeEngine(
     isTrustedBot: (openId) => fleet.isTrustedPeer(openId, profileName),
     botHandoffMax: env.botHandoffMax,
     handoffGuard,
+    channelUpdates,
     jobs,
     ...(env.sessionProjectionEnabled && adapter instanceof WebDshAdapter
       ? {
@@ -773,6 +784,35 @@ export async function startBridgeEngine(
   }
   streaming = adaptLarkChannel(bridge.channel);
   larkChannel = bridge.channel;
+  const deliverUpdateResult = async (): Promise<void> => {
+    await updateHandoff.deliverResult(async (state) => {
+      if (!streaming) throw new Error('channel is not ready');
+      const markdown = state.status === 'succeeded'
+        ? bilingualMarkdown(
+            `✅ dsh-lark-bot 已更新到 \`${state.targetVersion}\`，机器人已完成重载。`,
+            `✅ dsh-lark-bot was updated to \`${state.targetVersion}\` and reloaded.`,
+          )
+        : bilingualMarkdown(
+            `⚠️ dsh-lark-bot 更新到 \`${state.targetVersion}\` 失败。请重新发送 \`/upgrade\`；如仍失败，发送 \`/doctor\` 检查。`,
+            `⚠️ Failed to update dsh-lark-bot to \`${state.targetVersion}\`. Send \`/upgrade\` to retry, or \`/doctor\` if it still fails.`,
+          );
+      await streaming.sendMarkdown(state.route.chatId, markdown, {
+        ...(state.route.threadId ? { threadId: state.route.threadId } : {}),
+      });
+      if (state.status === 'failed') {
+        log.warn('upgrade', 'channel-update-failed', {
+          id: state.id,
+          targetVersion: state.targetVersion,
+          error: state.error,
+        });
+      }
+    });
+  };
+  void deliverUpdateResult().catch((error) => log.fail('upgrade', error, { step: 'deliver-result' }));
+  const updateResultTimer = setInterval(() => {
+    void deliverUpdateResult().catch((error) => log.fail('upgrade', error, { step: 'deliver-result' }));
+  }, 2_000);
+  updateResultTimer.unref?.();
   await recoverDurableJobs(jobRecovery, jobs, pending, streaming);
   await notifyServer.start();
   process.env.DSH_LARK_NOTIFY_URL = notifyServer.url ?? '';
@@ -849,6 +889,7 @@ export async function startBridgeEngine(
       if (stopped) return;
       stopped = true;
       updateNotifier.stop();
+      clearInterval(updateResultTimer);
       heartbeat.stop();
       await notifyServer.stop();
       await bridge.disconnect();

@@ -15,6 +15,7 @@ import { runServiceCommand } from './cli/commands/service.js';
 import { runSupervise } from './cli/commands/supervise.js';
 import { runServiceRuntime } from './cli/commands/service-run.js';
 import { runBotCommand, type BotCommandOptions } from './cli/commands/bot.js';
+import { runGuardianUpdateWorker } from './guardian/update-handoff.js';
 
 function packageVersion(): string {
   const raw = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
@@ -214,6 +215,15 @@ export function buildProgram(): Command {
     .requiredOption('--env-file <path>', 'private service environment snapshot')
     .action(async (opts: { profile?: string; envFile: string }) => {
       await runServiceRuntime(opts);
+    });
+
+  program
+    .command('guardian-update-worker', { hidden: true })
+    .description('Complete an approved in-chat update outside the bridge process')
+    .requiredOption('--state-file <path>', 'durable guardian update state')
+    .requiredOption('--request-id <id>', 'approved update request id')
+    .action(async (opts: { stateFile: string; requestId: string }) => {
+      await runGuardianUpdateWorker({ stateFile: opts.stateFile, id: opts.requestId });
     });
 
   program

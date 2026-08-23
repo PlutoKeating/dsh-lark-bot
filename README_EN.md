@@ -54,7 +54,7 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 - A streaming process card with a native collapsible panel for phase, elapsed time, and tool names/statuses; raw reasoning, tool payloads, and underlying errors stay out of the card. The final answer arrives separately, with interactive buttons for stop / plan gate / approval / questions. Failed card patches are retried finitely and degrade to a plain notice—the agent and final reply continue instead of taking down the bridge;
 - Automatic session archival and retention policies; per-session isolated git worktrees inside Git repositories, so multiple projects never interfere with each other.
 
-**Eleven exclusive capabilities**:
+**Twelve exclusive capabilities**:
 
 - 🆘 **Guardian safety net — "always reachable"**: Feishu still replies after dsh crashes; `/safemode` enters core-only safe mode to locate the problem and restart directly.
 - 👥 **Multi-role agents — "one bot, a whole team"**: switch or assign PM / dev / docs roles with `/role`; each role has its own persona, model preference and rules.
@@ -67,6 +67,7 @@ Bot-owned command help, status/error messages and interactive cards are availabl
 - ⚙️ **Visual dsh Web settings — "no environment variables to memorize"**: edit the app, workspace, model, concurrency and reminders from the official Plugins settings page, with diagnostic shortcuts.
 - 🔑 **In-chat model & key management — "never leave Feishu"**: `/providers` `/provider` `/key` to view, switch vendors and hot-update keys.
 - 🎚️ **Quick / balanced / deep modes — "pick the right task intensity"**: `/mode` persists per scope and applies on the next turn without interrupting active work.
+- 🔄 **In-chat self-update — "upgrade without a terminal"**: an admin sends `/upgrade`, confirms an owner-bound card, and Guardian updates, verifies, and reloads the bot in the background; `/new` emits only a short reminder when a newer version exists.
 
 ## Quick Start
 
@@ -115,6 +116,8 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/ws use <name>` | Switch to a named workspace |
 | `/ws remove <name>` | Remove a named workspace |
 | `/status` | Show a refreshable status card (workspace / model / session / runs / context / tokens / pending cards / job ledger) |
+| `/version` | Show the running version and npm latest version |
+| `/upgrade` | Check for an update and confirm a Guardian-managed background update, verification, and reload (admin) |
 | `/doctor` | Generate and upload a redacted diagnostic bundle (admin; downloadable and forwardable) |
 | `/jobs [list\|show <message-id>\|retry <message-id>]` | Reconcile queued/running/completed/failed/interrupted jobs and explicitly retry after review |
 | `/resume` | Show the session's recent context |
@@ -336,6 +339,8 @@ Security note: never type a key in ordinary Feishu chat. Use the secure form or 
 
 ### Upgrade
 
+**No terminal required:** a profile admin sends `/upgrade` in Feishu/Lark. When a newer release exists, the bot sends an owner-bound confirmation card. Confirming hands the exact npm version to an isolated Guardian worker, which runs the full package/runtime-profile/guardian/profile upgrade and verification path, reloads the bot, and reports the result back to the original chat or thread. Cancel makes no changes. Reloading can interrupt active tasks; configuration, sessions, archives, and credentials are preserved. Every `/new` or `/reset` performs a best-effort npm check and emits one short plain reminder only when a newer version exists.
+
 **Recommended: one-command full upgrade (new in v0.12.0, issue #10)**
 
 ```bash
@@ -490,7 +495,7 @@ Core environment variables:
 | `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | Safe-mode per-task idle timeout (stops the run after it has been silent this long and renders a timeout card) |
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | Card density for safe-mode run cards (compact / standard / detailed) |
 | `DSH_LARK_UPGRADE_REGISTRY` | `https://registry.npmjs.org` | npm registry used by `upgrade` to discover the latest version (mirrors supported) |
-| `DSH_LARK_UPGRADE_CHECK` | `1` | Whether `doctor` / `/version` probe npm latest (`0` disables; best-effort) |
+| `DSH_LARK_UPGRADE_CHECK` | `1` | Whether `doctor` / `/version` / `/upgrade` / `/new` probe npm latest (`0` disables; best-effort) |
 | `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS` | `21600000` | Bridge new-version check interval (`0` disables; default 6h) |
 | `DSH_LARK_UPGRADE_NOTIFY` | `false` | Push a Feishu notification to the target chat when a newer version is found (default: log-only) |
 | `DSH_LARK_UPGRADE_NOTIFY_CHAT` | — | Chat receiving update notifications (with `DSH_LARK_UPGRADE_NOTIFY=true`) |

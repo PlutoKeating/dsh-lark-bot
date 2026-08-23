@@ -262,6 +262,12 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
    通过 `npx dsh-lark-bot@latest upgrade` 引导：npx 拉取最新版执行升级。
+   飞书内 `/upgrade` 在同一升级链前增加管理员与 owner-bound 确认卡：`ChannelUpdateController`
+   只生成十分钟有效的一次性 offer，确认后把精确 npm 版本与原 chat/thread 路由以 0600 状态交给
+   `GuardianUpdateHandoff`。独立 worker 运行最新版 CLI 的 `upgrade --restart`，因此可以跨越 bridge
+   自身和 guardian/profile 重启；新 bridge 按实际运行版本协调可能被 service cgroup 重启中断的
+   worker，并只向原会话交付一次终态。`/new` / `/reset` 每次强制一次 best-effort npm 查询，只有
+   严格更新时追加短文本，不改变建会话结果。
 11. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
@@ -346,7 +352,7 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/bot/` | 持久任务账本、运行注册、消息排队、审批 / 问答 / 计划 registry、群聊隔离策略，以及多机器人 fleet / 跨进程交接计数 |
 | `src/commands/` | 斜杠命令（/cd /ws /new …） |
 | `src/cli/` | CLI 入口：`setup` / `bot add|list|status|remove` / `service` / `doctor` / `upgrade` / 隐藏 `run` |
-| `src/upgrade/` | 一键升级（issue #10/#51）：版本/状态检测、guardian / profile 重启、runtime profile 链接及依赖迁移 |
+| `src/upgrade/` | CLI 与飞书内升级：版本/状态检测、owner-bound offer、guardian / profile 重启、runtime profile 链接及依赖迁移 |
 | `src/config/` | profile / 配置 / 访问白名单管理 |
 | `src/client/` | dsh Web 插件设置卡与诊断快捷入口（动态 `./client` browser half） |
 | `src/core/` | 结构化日志 |
