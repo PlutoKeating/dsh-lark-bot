@@ -246,7 +246,7 @@ guardian 仍只救援其配置的主实例。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
-**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环读取当前 immutable scope 的 `ask|allow|deny`。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
+**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环同步读取当前 immutable scope 的 `ask|allow|deny`；该 policy-only 查询不创建卡片或进入人类等待传输。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、

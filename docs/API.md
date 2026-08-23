@@ -693,7 +693,7 @@ plan gate 之前终止。`bash` / `shell` 只有在命令不含换行、串联�
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
 `NotifyServer` 在鉴权和参数校验通过后立即开始 chunked JSON 响应，并每 30 秒写入 JSON 允许的空白；
-最终才写入结果对象。该保活同时覆盖 `/ask`、`/plan`、`/approval`，避免 Node/Undici 默认 300 秒
+最终才写入结果对象。该保活覆盖 `/ask`、`/plan` 和需要用户决策的 `/approval`，避免 Node/Undici 默认 300 秒
 headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch failed`。
 
 `src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；卡片 update 失败会有限重试，仍失败则冻结该卡并
@@ -930,7 +930,7 @@ topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 回到 agent 循环。问答卡按 native session 归属；等待期间仅暂停所属 run 的超时看门狗，run 结束
 调用 `settleSession`，单卡发送失败或 callback 断开调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
 
-`/ask`、`/plan`、`/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
+`/ask`、`/plan`、需要用户决策的 `/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
 响应头，之后每 30 秒写入一个 JSON 合法空白换行，最终追加单个 JSON 结果对象。这样既不会触发
 Node/Undici 默认 300 秒响应头或响应体空闲超时，现有 `response.json()` 客户端也无需特殊解析；
 客户端真正断开时仍通过 AbortSignal 精确清理对应 pending 项。鉴权和参数错误发生在 flush 前，继续
@@ -946,7 +946,9 @@ run 的 AbortSignal）；决策作为工具结果返回同一 agent turn。pendi
 idle watchdog；plan 按 session 计数/结算，callback 断开或 run 结束只取消对应 session，并终态提示、撤回失效卡。
 
 同一服务器的 `POST /approval`（`server.approvalUrl` / `DSH_LARK_APPROVAL_URL`）接受
-`sessionId`、`toolName`、可选 `callId` / `reason` / `toolInput`；`buildApprovalHandler` 反查 scope 与 topic anchor，
+`sessionId`、`toolName`、可选 `callId` / `reason` / `toolInput` / `policyCheckOnly`。policy-only 请求同步返回
+`{ok:true, policy:'ask'|'allow'|'deny', denial?}`，不要求 approval outcome、不 flush 人类等待响应头；
+缺失或非法 policy 失败关闭。实际审批请求由 `buildApprovalHandler` 反查 scope 与 topic anchor，
 注册固定 allow-once/reject-once 选项并等待按钮。answerer 返回官方 outcome；`rejected` 不抛异常，
 agent 可把它作为工具结果继续。可取得的 `tool_use` input 按 session+callId 关联进卡片；官方 request
 未重复参数时仍显示 call id 并指向运行卡。HTTP 断连返回 cancelled，不遗留 pending；允许不写入规则或 grant store。
