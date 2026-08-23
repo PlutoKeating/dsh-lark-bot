@@ -161,7 +161,10 @@ function thinkingPanel(
 
 function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTools: number): object {
   const zh = locale === 'zh_cn';
-  const lines = [zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_'];
+  const lines = [
+    zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_',
+    summaryText(state, locale),
+  ];
   const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
   const visibleCount = Math.min(3, maxTools);
   const tools = visibleCount === 0 ? [] : toolBlocks.slice(-visibleCount);
@@ -174,9 +177,6 @@ function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTo
   for (const block of tools) {
     lines.push(`🧰 ${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)} · ${block.tool.status}`);
   }
-  if (lines.length === 1) lines.push(state.terminal === 'running'
-    ? zh ? '正在处理请求…' : 'Processing the request…'
-    : zh ? '执行过程已结束' : 'Execution finished');
   return noteMd(lines.join('\n'));
 }
 
