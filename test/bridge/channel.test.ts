@@ -17,7 +17,10 @@ import { RetentionStore } from '../../src/bot/retention-store.js';
 import { RoleStore } from '../../src/bot/role-store.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
-import { DshProviderManager } from '../../src/config/dsh-config.js';
+import {
+  DshProviderManager as RuntimeDshProviderManager,
+  type DshProviderManagerOptions,
+} from '../../src/config/dsh-config.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import { startChannel } from '../../src/bridge/channel.js';
 import { SessionStore } from '../../src/session/store.js';
@@ -29,6 +32,28 @@ import { JobLedger } from '../../src/bot/job-ledger.js';
 import { ExecutionModeStore } from '../../src/bot/execution-mode-store.js';
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
+
+class DshProviderManager extends RuntimeDshProviderManager {
+  constructor(options: DshProviderManagerOptions = {}) {
+    super({
+      ...options,
+      catalog: {
+        listProviders: async () => [{
+          id: 'deepseek-official',
+          name: 'Test provider',
+          api: undefined,
+          env: [],
+          models: [{
+            id: 'deepseek-v4-flash',
+            name: 'Test model',
+            contextWindow: undefined,
+            maxTokens: undefined,
+          }],
+        }],
+      },
+    });
+  }
+}
 
 function makeChannel(): {
   channel: LarkChannel;

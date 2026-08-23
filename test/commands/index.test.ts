@@ -13,7 +13,10 @@ import { RoleStore } from '../../src/bot/role-store.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import { RunPolicyStore } from '../../src/bot/run-policy.js';
 import { AccessManager } from '../../src/config/access-manager.js';
-import { DshProviderManager } from '../../src/config/dsh-config.js';
+import {
+  DshProviderManager as RuntimeDshProviderManager,
+  type DshProviderManagerOptions,
+} from '../../src/config/dsh-config.js';
 import { ConfigStore } from '../../src/config/profile-store.js';
 import {
   statusCardInputFor,
@@ -41,6 +44,28 @@ vi.mock('../../src/upgrade/update-check.js', async (importOriginal) => {
     latestVersion: vi.fn().mockResolvedValue('0.14.0'),
   };
 });
+
+class DshProviderManager extends RuntimeDshProviderManager {
+  constructor(options: DshProviderManagerOptions = {}) {
+    super({
+      ...options,
+      catalog: {
+        listProviders: async () => [{
+          id: 'deepseek-official',
+          name: 'Test provider',
+          api: undefined,
+          env: [],
+          models: [{
+            id: 'deepseek-v4-flash',
+            name: 'Test model',
+            contextWindow: undefined,
+            maxTokens: undefined,
+          }],
+        }],
+      },
+    });
+  }
+}
 
 function makeArchiver(): SessionArchive {
   return {
