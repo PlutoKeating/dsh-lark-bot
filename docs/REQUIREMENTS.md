@@ -323,6 +323,12 @@
   上一版本；重复执行幂等（已最新时跳过）。
 - **离线 / 安全**：`--force` 离线时按当前版本重装；非交互环境不带 `--yes` 安全中止；
   `DSH_LARK_UPGRADE_REGISTRY` 支持镜像 registry。
+- **飞书内自更新**：只有 profile admin 可发送 `/upgrade`；严格更新时返回绑定 scope + 发起人、
+  十分钟有效的一次性确认/取消卡。确认后必须先以 0600 持久化精确 npm 版本和原 chat/thread 路由，
+  再由独立于 bridge 生命周期的 Guardian worker 执行完整 `upgrade --restart`；取消零变更。重载后
+  必须按实际运行版本协调中断状态，并向原路由至多成功回执一次；不得把 worker 原始输出发到飞书。
+- **新会话提醒**：每次 `/new` / `/reset` best-effort 查询 npm；只有严格新版本时追加一条简短普通
+  文本，已最新、关闭探测或网络失败均无额外行为，也不得影响新会话建立。
 
 ### 4.13 dsh Web 可视化配置（issue #36）
 

@@ -17,6 +17,11 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 
 ### 1.1 升级 · Upgrade（v0.12.0+）
 
+**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时点击只允许发起人操作的
+确认卡，Guardian 会安装卡片中确认的精确 npm 版本、修复 runtime profiles、重启并验证，然后回到
+原 chat/thread 报告结果；取消不会更改任何内容。重载可能中断正在执行的任务，但配置、会话、归档
+和凭据保留。每次 `/new` / `/reset` 也会检查一次 npm，只有发现更新才追加一条简短文本提醒。
+
 **一行命令彻底升级（包本体 + guardian + 升级后验证）：**
 
 ```bash
@@ -89,6 +94,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/ws use <name>` | 切换到命名工作空间 |
 | `/ws remove <name>` | 删除命名工作空间 |
 | `/status` | 查看并原位刷新 scope / cwd / 模型 / session / run / context / token / pending / 任务账本 |
+| `/version` | 查看当前版本与 npm 最新版本 |
+| `/upgrade` | 检查并通过 owner-bound 卡确认 Guardian 后台更新和重载（profile 管理员） |
 | `/doctor` | 管理员生成脱敏诊断 Markdown 文件并上传到原聊天/话题 |
 | `/jobs [list\|show <消息ID>\|retry <消息ID>]` | 对账任务状态、查看 checkpoint、确认后重试中断/失败任务 |
 | `/resume` | 查看最近上下文 |

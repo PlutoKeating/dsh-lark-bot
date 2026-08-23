@@ -13,6 +13,7 @@ export const COMMAND_CATALOG: readonly CommandDefinition[] = [
   { names: ['/status'], area: 'operations', zh: '查看状态、上下文/token 与待处理卡', en: 'show status, context/token usage, and pending cards' },
   { names: ['/jobs'], area: 'operations', zh: '`[show <消息ID>|retry <消息ID>]` — 对账并重试任务', en: '`[show <message-id>|retry <message-id>]` — reconcile and retry jobs' },
   { names: ['/version'], area: 'operations', zh: '查看当前与最新版本', en: 'show installed and latest versions' },
+  { names: ['/upgrade'], area: 'operations', zh: '检查并确认机器人自更新（管理员）', en: 'check and confirm a bot self-update (admin)' },
   { names: ['/doctor'], area: 'operations', zh: '生成脱敏诊断包（管理员）', en: 'generate a redacted diagnostic bundle (admin)' },
   { names: ['/resume'], area: 'session', zh: '查看当前会话最近上下文', en: 'show recent context for this session' },
   { names: ['/session'], area: 'session', zh: '`[current|bind <sessionId>]` — 显式绑定 DSH session', en: '`[current|bind <sessionId>]` — explicitly bind a DSH session' },

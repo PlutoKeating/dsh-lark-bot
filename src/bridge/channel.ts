@@ -59,6 +59,7 @@ import type { ExecutionModeStore } from '../bot/execution-mode-store.js';
 import type { LanguagePolicyStore } from '../bot/language-policy-store.js';
 import type { SecretRequestRegistry } from '../secret/registry.js';
 import { renderSecretCard } from '../card/secret-card.js';
+import type { ChannelUpdateController } from '../upgrade/channel-update.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -95,6 +96,7 @@ export interface StartChannelDeps {
   executionModes?: ExecutionModeStore;
   languagePolicies?: LanguagePolicyStore;
   secretRequests?: SecretRequestRegistry;
+  channelUpdates?: Pick<ChannelUpdateController, 'check' | 'decide'>;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -427,6 +429,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           } }
         : {}),
       ...(sessionProjection ? { sessionProjection } : {}),
+      ...(deps.channelUpdates ? { channelUpdates: deps.channelUpdates } : {}),
     };
 
     const handled = botSender ? false : await tryHandleCommand(msg.content, context).catch(async (error: unknown) => {
@@ -561,6 +564,57 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         };
       }
       const scope = requestedScope ?? currentScope;
+      if (value?.cmd === 'channel-upgrade') {
+        const actorId = event.operator?.openId;
+        const boundActor = typeof value.actorId === 'string' ? value.actorId : undefined;
+        const offerId = typeof value.offerId === 'string' ? value.offerId : undefined;
+        const decision = value.decision === 'confirm' ? 'confirm' : value.decision === 'cancel' ? 'cancel' : undefined;
+        if (
+          !deps.channelUpdates || !actorId || actorId !== boundActor || !offerId || !decision ||
+          !deps.accessManager.isAdmin(actorId)
+        ) {
+          return { toast: { type: 'error', content: '此更新卡无效或无权操作 / This update card is invalid or unauthorized' } };
+        }
+        const outcome = await deps.channelUpdates.decide({
+          offerId,
+          scope,
+          actorId,
+          decision,
+          route: {
+            chatId: event.chatId,
+            ...(threadId ? { threadId } : {}),
+            requesterId: actorId,
+          },
+        });
+        if (outcome.kind === 'stale') {
+          return { toast: { type: 'error', content: '此更新卡已失效，请重新发送 /upgrade / This card is stale; send /upgrade again' } };
+        }
+        if (outcome.kind === 'busy') {
+          return { toast: { type: 'info', content: '已有更新正在进行 / An update is already running' } };
+        }
+        if (outcome.kind === 'failed') {
+          return { toast: { type: 'error', content: '更新启动失败，请重新发送 /upgrade / Failed to start; send /upgrade again' } };
+        }
+        if (event.messageId) {
+          void settleActionCard(
+            channel,
+            event.chatId,
+            event.messageId,
+            threadId,
+            outcome.kind === 'cancelled'
+              ? bilingualMarkdown('已取消更新，未做任何更改。', 'Update cancelled. Nothing was changed.')
+              : bilingualMarkdown(`⬆️ 已开始更新到 \`${outcome.targetVersion}\`，Guardian 将完成更新并重载机器人。`, `⬆️ Updating to \`${outcome.targetVersion}\`. Guardian will finish the update and reload the bot.`),
+            scope,
+            'channel-upgrade',
+          );
+        }
+        return {
+          toast: {
+            type: outcome.kind === 'cancelled' ? 'info' : 'success',
+            content: outcome.kind === 'cancelled' ? '已取消 / Cancelled' : '已开始更新 / Update started',
+          },
+        };
+      }
       if ((value?.cmd === 'secret-submit' || value?.cmd === 'secret-cancel') && deps.secretRequests) {
         const id = typeof value.id === 'string' ? value.id : '';
         const receipt = value.cmd === 'secret-cancel'
@@ -997,7 +1051,7 @@ async function settleActionCard(
   threadId: string | undefined,
   markdown: string,
   scope: string,
-  kind: 'approval' | 'question' | 'plan' | 'secret',
+  kind: 'approval' | 'question' | 'plan' | 'secret' | 'channel-upgrade',
 ): Promise<void> {
   try {
     await channel.send(chatId, { markdown }, {

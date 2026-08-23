@@ -497,6 +497,34 @@ describe('command router', () => {
     expect(ctx.sessions.resumeFor('chat-a', '/tmp/default')).toBe('session-a');
   });
 
+  it('/new checks npm once and sends only a short extra reminder when an update exists', async () => {
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeContext({
+      channel: { sendMarkdown } as unknown as CommandChannel,
+    });
+
+    await tryHandleCommand('/new', ctx);
+
+    expect(latestVersion).toHaveBeenCalledWith({ cacheMs: 0 });
+    expect(sendMarkdown).toHaveBeenCalledTimes(2);
+    expect(sendMarkdown.mock.calls[0]?.[1]).toContain('已开始新会话');
+    expect(sendMarkdown.mock.calls[1]?.[1]).toContain('0.13.1 → 0.14.0');
+    expect(sendMarkdown.mock.calls[1]?.[1]).toContain('/upgrade');
+    expect(sendMarkdown.mock.calls[1]?.[1]).not.toContain('dsh-lark-bot upgrade');
+  });
+
+  it('/new stays silent about updates when npm is unavailable or already current', async () => {
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(latestVersion).mockResolvedValueOnce(undefined);
+    const ctx = makeContext({
+      channel: { sendMarkdown } as unknown as CommandChannel,
+    });
+
+    await tryHandleCommand('/new', ctx);
+
+    expect(sendMarkdown).toHaveBeenCalledTimes(1);
+  });
+
   it('/ws use stops the old workspace run and restores the named workspace session', async () => {
     const ctx = makeContext();
     ctx.workspaces.saveNamed('project-a', '/tmp/project-a');
@@ -1007,6 +1035,32 @@ describe('command router', () => {
     const body = (ctx.channel.sendMarkdown as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[1] as string;
     expect(body).toContain('已是最新');
+  });
+
+  it('/upgrade lets an admin check and receive an owner-bound confirmation card', async () => {
+    const sendCard = vi.fn().mockResolvedValue('upgrade-card');
+    const sendMarkdown = vi.fn().mockResolvedValue(undefined);
+    const check = vi.fn().mockResolvedValue({
+      kind: 'available', current: '0.13.1', latest: '0.14.0', offerId: 'offer-1',
+    });
+    const ctx = makeContext({
+      senderId: 'ou_admin',
+      accessManager: makeAccessManager({ admins: ['ou_admin'] }),
+      channelUpdates: { check },
+      channel: { sendMarkdown, sendCard } as unknown as CommandChannel,
+    });
+
+    expect(await tryHandleCommand('/upgrade', ctx)).toBe(true);
+
+    expect(check).toHaveBeenCalledWith({ scope: 'chat-a', actorId: 'ou_admin' });
+    expect(sendCard).toHaveBeenCalledOnce();
+    const card = JSON.stringify(sendCard.mock.calls[0]?.[1]);
+    expect(card).toContain('0.13.1');
+    expect(card).toContain('0.14.0');
+    expect(card).toContain('offer-1');
+    expect(card).toContain('确认更新');
+    expect(card).toContain('取消');
+    expect(card).toContain('正在执行的任务会被中断');
   });
 
   it('/jobs only lists and retries jobs in the current scope and workspace', async () => {

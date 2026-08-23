@@ -23,6 +23,7 @@
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
 | 升级状态 | `~/.dsh-lark/upgrade-state.json` | `--rollback` 的版本快照 |
+| 飞书内升级交接 | `~/.dsh-lark/profiles/<bridge>/guardian/update.json` | 0600；精确目标版本、原 chat/thread 路由、执行终态与一次性回执 |
 | 多机器人 fleet | `~/.dsh-lark/fleet.json` | 每个实例指向独立 dsh profile 与 `bots/<name>/dsh` DSH_HOME；升级状态与重启仍按 profile 管理 |
 | 兼容矩阵 | `docs/COMPATIBILITY.md` | 版本 pin 与上游一致性的单一事实来源 |
 | 会话/worktree/archive schema | `<bridge-profile>/sessions.json` + `worktrees/` + `archives/` | 首次启动从旧 worktree 的 Git registry 核验 owning repo，把 schema 1 会话与旧 retention archive header 归回真实项目；owner 匹配时原位迁移，不匹配时保留旧树并另建 hashed worktree |
@@ -40,13 +41,18 @@
   **任何失败都不得导致 doctor / upgrade 报错**。
 - `doctor` 更新提醒：`DSH_LARK_UPGRADE_CHECK=0` 关闭；发现新版本输出
   `upgrade: 有新版本 X（当前 Y）；执行 dsh-lark-bot upgrade 更新`。
-- `/version` 命令与桥接周期检测（`src/upgrade/update-check.ts` /
+- `/version`、`/upgrade`、`/new` 与桥接周期检测（`src/upgrade/update-check.ts` /
   `src/upgrade/update-notifier.ts`）：内存缓存 1h；`/version` 展示当前/最新版本；
+  `/upgrade` 与每次 `/new` / `/reset` 强制一次 best-effort 探测（`/new` 仅在严格更新时发短文本）；
   桥接按 `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS`（默认 6h）检测，发现新版本默认记日志，
   `DSH_LARK_UPGRADE_NOTIFY=true` + `DSH_LARK_UPGRADE_NOTIFY_CHAT` 时向指定 chat 推送
   一次（按版本去重）。
 
 ## 4. 升级执行链路 · Upgrade pipeline
+
+飞书内入口先由 `ChannelUpdateController` 校验 profile admin，生成绑定 scope + actor、十分钟有效的
+一次性 offer；确认卡只允许发起人确认或取消。确认后 `GuardianUpdateHandoff` 先以 0600 原子落盘
+精确 npm 目标和回复路由，再启动独立 worker；取消不写升级状态、不启动进程。
 
 1. `detectUpgradeState`：读取 own / installed / dsh 进程 / guardian / 心跳；
 2. `resolveTarget`：`--rollback` → `--package <name>@<version>` → npm latest；
@@ -59,11 +65,17 @@
    retention archive header 归回该项目并生成 migration commit，全部成功后才提交 session schema 2。
    请求 base 匹配 owner 时原位移动到 path-hash
    目录；不匹配或不可验证时保留旧树，并为当前 base 新建独立树，避免错误迁移或覆盖 dirty state；
-7. 带 `--restart` 时先探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
-   重启（显式 upgrade 操作可覆盖先前 stop intent），未安装才回退旧的 detached process 重启，
-   避免重复 dsh 实例；
+7. 先记录 `upgrade-state.json`（支持 `--rollback`；运行中实例先标记 pending restart）；
 8. `doctor` 升级后验证；
-9. 记录 `upgrade-state.json`（支持 `--rollback`）。
+9. 带 `--restart` 时最后探测正常引擎 service metadata；已安装则通过对应 OS controller 刷新环境并
+   重启（显式 upgrade 操作可覆盖先前 stop intent），未安装才回退旧的 detached process 重启，
+   避免重复 dsh 实例；成功后清除 pending restart。将 profile 重启放在最后，确保同 cgroup worker
+   即使被重启终止，回滚记录与 doctor 也已经完成。
+
+独立 worker 通过目标版本的 `npx <name>@<version> upgrade --restart --package <name>@<version>`
+复用上述完整链路。受管 profile 的 systemd cgroup 重启可能同时终止 worker；新 bridge 以实际加载的
+包版本协调仍为 running 的交接状态，确认目标已生效后标记 succeeded。终态发送失败保持未交付，
+下一次轮询或重启继续向原 chat/thread 重试，因此结果最多成功交付一次。
 
 ## 5. 生效机制与关键修复 · Activation & hardening
 
@@ -71,10 +83,10 @@
   曾把 ExecStart 指向 `~/.npm/_npx/<hash>/...`——npm 清理缓存后服务失效。现改为优先解析
   `~/.dsh/profiles/<profile>/node_modules/<name>/dist/cli.js`（稳定路径），仅在 profile 内
   无包时回退到当前运行包；`doctor` 会检测单元内容并警告 npx 缓存路径。
-- 包更新后，**运行中的 dsh 进程仍执行旧代码**：默认只提示重启命令（不中断会话），
+- 包更新后，**运行中的 dsh 进程仍执行旧代码**：CLI 默认只提示重启命令（不中断会话），
   `--restart` 自动重启 guardian 服务与受管 profile；若安装了 `service`，优先走 OS 服务重启；
-  重启 dsh 会中断其中的会话（当前无热重载，
-  cordis hmr 被禁用）。
+  飞书 `/upgrade` 总是走该 guardian 协调的自动重载路径。重载会中断正在执行的任务，但持久会话、
+  归档、配置和凭据保留；cordis hmr 仍被禁用，不宣称进程内无重启 HMR。
 - **待生效标记**：升级记录 `pendingRestart`（运行中实例且未 `--restart` 时为 true），
   `doctor` 会提示「上次升级待重启生效」；重启后再次 upgrade / 手动清理即不再提示。
 - 换包后的首次启动较慢（pnpm 校验 / 构建策略，实测 ~30–90s），属已知现象，等待即可。
@@ -90,7 +102,7 @@
 | 旧版本 `npx` 引导（< v0.12.0） | v0.13.1 起探测健壮；**在包源码目录内**执行会触发 npm shim 错误 | 文档提示从任意普通目录执行 |
 | guardian 单元指向 npx 缓存 | 已修复 + doctor 告警 | 重新 `guardian install` |
 | registry 偶发 406 / 慢响应 | #14 重试 + Accept 降级 | 已修复 |
-| 运行中实例升级 | 默认提示重启，`--restart` 可用；会话会中断 | #15 后续：排队重启 / 热重载 |
+| 运行中实例升级 | CLI 默认提示重启；飞书确认后 Guardian 自动更新并重载，活动任务会中断 | 已支持最小重启窗口；非进程内 HMR |
 | 离线 / 镜像 | `--force` 按当前版本重装；`DSH_LARK_UPGRADE_REGISTRY` | 已支持，需回归 |
 | Windows | `pnpm.cmd` 解析（#7 cross-spawn）；guardian 用启动项 | 已修复，需回归 |
 | 回滚 | `upgrade-state.json` + `--rollback` | 已支持 |
@@ -118,11 +130,13 @@
 **现状**：桥接引擎运行在 dsh 进程内（标准插件加载），插件代码在 boot 时装载，cordis hmr
 被禁用——**换包必须重启 dsh profile 进程**，重启会中断进程内会话。
 
-**当前方案（最小重启窗口 + 安全网）**：
+**当前方案（飞书自更新 + 最小重启窗口 + 安全网）**：
 1. 升级默认不中断会话：只记录 `pendingRestart` 并提示；`--restart` 走
    guardian 服务重启 → dsh profile 重启（systemd-run 重建）；
 2. 安全网守护在 dsh 下线期间接管飞书通道（standby→takeover），重启窗口内用户不失联；
 3. 升级失败 / 不满意可 `--rollback` 精确回退（`upgrade-state.json`）。
+4. 管理员可只在飞书发送 `/upgrade`，确认卡后由独立 worker 固定目标版本并完成更新/重载；
+   终态跨重启恢复。`/new` 只负责短提醒，绝不自动开始升级。
 
 **热重载边界与回退**：真正意义的进程内热重载需要把桥接引擎拆出 dsh 核心进程（或启用并验证
 cordis hmr 与 SDK runtime 的连接保持），属于架构演进方向，不在当前版本落地；在实现前，
@@ -142,6 +156,8 @@ cordis hmr 与 SDK runtime 的连接保持），属于架构演进方向，不�
 - [x] 架构审查文档落盘（本文）
 - [x] doctor 更新提醒（可关闭，`DSH_LARK_UPGRADE_CHECK=0`）
 - [x] `/version` 命令 + 桥接周期检测（日志 / 可选飞书通知，按版本去重）
+- [x] `/upgrade` 管理员 owner-bound 确认卡 + Guardian 持久交接 + 跨重启终态回执
+- [x] `/new` / `/reset` 每次 best-effort 检查，只有新版本时发送一条短文本
 - [x] `npx` 引导回归矩阵（镜像 / 离线 / 指定版本 / 回滚 / 406 / Windows 单测覆盖）
 - [x] 运行中实例：`pendingRestart` 记录 + doctor 提示 + `--restart` / `--rollback`
 - [x] 版本 pin / runtime 一致性：guardian 单元路径、runtime 链接与上游依赖、managed overlay
