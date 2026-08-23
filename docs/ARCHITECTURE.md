@@ -255,6 +255,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    把标准 `dsh --profile` 交给 systemd user / LaunchAgent / Windows 计划任务（Linux 无 user systemd
    时用 XDG supervisor）。原生入口启动 profile 内稳定 CLI runner，由其读取 0600 环境快照，避免
    plist / 计划任务泄露密钥（Windows 另以 owner-only ACL 收紧 env）。guardian 自动重启和 `upgrade --restart` 优先操作该受管服务，避免双实例。
+   portable supervisor 在 spawn 后、任何异步状态落盘之前即订阅 child 的 `exit/error`，因此停止信号与
+   状态写入并发时不会丢失一次性退出事件或永久挂起；该顺序由受控时钟竞态测试锁定。
    `service/<profile>.intent.json` 持久化 running/stopped 意图，stop/uninstall 后 guardian 不回拉；
    生命周期目录锁串行化 mutation，install/start 还会拒绝已存在的未受管同 profile 进程。
    WebSocket 在机器睡眠 / 断网期间无法收消息；恢复后仅向最近活跃 destination 发恢复通知。
