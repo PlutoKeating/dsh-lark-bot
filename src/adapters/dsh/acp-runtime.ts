@@ -213,11 +213,16 @@ export async function ensureAcpProfile(
 ): Promise<AcpProfileEnsureResult> {
   const profile = options.profile ?? DEFAULT_ACP_PROFILE;
   const root = acpProfileRoot(options.home, profile, options.env);
-  const provider = options.provider ?? 'deepseek-official';
-  const model = options.model ?? 'deepseek-v4-flash';
+  const provider = options.provider?.trim();
+  const model = options.model?.trim();
   const ready = isAcpProfileReady(root);
 
   try {
+    if (!provider || !model) {
+      throw new Error(
+        'ACP runtime requires a configured provider/model route; set DSH_LARK_PROVIDER and DSH_LARK_MODEL.',
+      );
+    }
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');

@@ -1,5 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { isHighRiskTool, type PlanPolicyExecution } from './plan-tool.js';
+import {
+  isHighRiskTool,
+  policyDenialText,
+  toolApprovalDenial,
+  type PlanPolicyExecution,
+  type PolicyDenial,
+} from '../policy/tool-policy.js';
 import type { ToolPluginContext } from './raw-tool.js';
 
 export const name = 'lark-approval-answerer';
@@ -11,6 +17,11 @@ export interface Config {
 }
 
 type Outcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
+
+interface ApprovalDecision {
+  outcome: Outcome;
+  denial?: PolicyDenial;
+}
 
 interface RawApprovalRequest {
   agent?: { session?: { id?: unknown } };
@@ -45,7 +56,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       inFlightGrant.delete(request.agent);
       return 'allowed-once';
     }
-    return requestBridgeApproval(config, request, next);
+    return (await requestBridgeApproval(config, request, next)).outcome;
   });
 
   approvalCtx.on('tools/pre-execute', async (execution, next) => {
@@ -58,13 +69,21 @@ export function apply(ctx: Context, config: Config = {}): void {
       reason: approvalReason(execution),
       toolInput: execution.arguments,
     };
-    const outcome = await requestBridgeApproval(config, request, async () => 'unavailable');
-    if (outcome !== 'allowed-once') {
+    const decision = await requestBridgeApproval(config, request, async () => 'unavailable');
+    if (decision.outcome !== 'allowed-once') {
       return {
         kind: 'deny',
-        reason: outcome === 'rejected'
-          ? 'The user rejected this one-shot tool execution. Continue with a safer alternative.'
-          : 'This tool execution was not approved and remains blocked.',
+        reason: policyDenialText(
+          decision.denial ?? (
+            decision.outcome === 'rejected'
+              ? toolApprovalDenial(execution.name)
+              : {
+                  layer: 'tool-approval',
+                  reason: `tool ${execution.name} did not receive approval (${decision.outcome})`,
+                  toChange: 'retry only after approval is available, or choose a safer alternative',
+                }
+          ),
+        ),
       };
     }
     if (execution.agent) inFlightGrant.set(execution.agent, execution.name);
@@ -80,12 +99,14 @@ async function requestBridgeApproval(
   config: Config,
   request: RawApprovalRequest,
   next: () => Promise<Outcome>,
-): Promise<Outcome> {
+): Promise<ApprovalDecision> {
     const endpoint = config.endpoint ?? process.env.DSH_LARK_APPROVAL_URL;
     const token = config.token ?? process.env.DSH_LARK_NOTIFY_TOKEN;
-    if (!endpoint || !token) return next();
+    if (!endpoint || !token) return { outcome: await next() };
     const sessionId = request.agent?.session?.id;
-    if (sessionId === undefined || typeof request.toolName !== 'string') return 'unavailable';
+    if (sessionId === undefined || typeof request.toolName !== 'string') {
+      return { outcome: 'unavailable' };
+    }
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -100,12 +121,19 @@ async function requestBridgeApproval(
         }),
         ...(request.signal === undefined ? {} : { signal: request.signal }),
       });
-      const body = await response.json() as { ok?: boolean; outcome?: unknown };
+      const body = await response.json() as {
+        ok?: boolean;
+        outcome?: unknown;
+        denial?: unknown;
+      };
       return response.ok && body.ok === true && isOutcome(body.outcome)
-        ? body.outcome
-        : 'unavailable';
+        ? {
+            outcome: body.outcome,
+            ...(isPolicyDenial(body.denial) ? { denial: body.denial } : {}),
+          }
+        : { outcome: 'unavailable' };
     } catch {
-      return request.signal?.aborted ? 'cancelled' : 'unavailable';
+      return { outcome: request.signal?.aborted ? 'cancelled' : 'unavailable' };
     }
 }
 
@@ -123,4 +151,13 @@ function approvalReason(execution: PlanPolicyExecution): string {
 function isOutcome(value: unknown): value is Outcome {
   return value === 'allowed-once' || value === 'rejected' ||
     value === 'cancelled' || value === 'unavailable';
+}
+
+function isPolicyDenial(value: unknown): value is PolicyDenial {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const denial = value as Partial<PolicyDenial>;
+  return (
+    denial.layer === 'plan-gate' || denial.layer === 'permission-policy' ||
+    denial.layer === 'tool-approval' || denial.layer === 'file-sandbox'
+  ) && typeof denial.reason === 'string' && typeof denial.toChange === 'string';
 }

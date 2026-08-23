@@ -77,8 +77,8 @@ export interface RuntimeEnv {
 
 const DEFAULTS = {
   tenant: 'feishu' as const,
-  provider: 'deepseek-official',
-  model: 'deepseek-v4-flash',
+  provider: '',
+  model: '',
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
   groupPollMs: 3_000,

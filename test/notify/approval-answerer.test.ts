@@ -56,7 +56,15 @@ describe('lark approval answerer', () => {
     };
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, outcome: 'rejected' }),
+      json: async () => ({
+        ok: true,
+        outcome: 'rejected',
+        denial: {
+          layer: 'permission-policy',
+          reason: 'scope policy is deny',
+          toChange: 'run /permission ask',
+        },
+      }),
     }) as never;
     apply({ on, tools: { get: vi.fn() } } as never, { endpoint: 'http://127.0.0.1/approval', token: 't' });
     await expect(listener?.({
@@ -76,7 +84,15 @@ describe('lark approval answerer', () => {
     };
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, outcome: 'rejected' }),
+      json: async () => ({
+        ok: true,
+        outcome: 'rejected',
+        denial: {
+          layer: 'permission-policy',
+          reason: 'scope policy is deny',
+          toChange: 'run /permission ask',
+        },
+      }),
     }) as never;
     apply({
       on,
@@ -86,7 +102,10 @@ describe('lark approval answerer', () => {
     await expect(preExecute?.({
       name: 'bash', arguments: { command: 'rm file', description: 'Remove generated file' },
       agent: { session: { id: 's' } },
-    }, next)).resolves.toMatchObject({ kind: 'deny', reason: expect.stringContaining('rejected') });
+    }, next)).resolves.toMatchObject({
+      kind: 'deny',
+      reason: expect.stringContaining('[policy-denial layer=permission-policy]'),
+    });
     expect(next).not.toHaveBeenCalled();
   });
 

@@ -1225,12 +1225,13 @@ export class GuardianService {
     if (mode === 'sdk' || mode === 'auto') {
       const launch = await this.provisionSafeSdk();
       if (launch) {
+        const route = this.safeRoute();
         this.log().info('guardian-safe', 'engine-selected', { engine: 'sdk' });
         return {
           adapter: new SdkDshAdapter({
             launch,
-            provider: this.options.env?.DSH_LARK_PROVIDER ?? 'deepseek-official',
-            model: this.safeModel(),
+            provider: route.provider,
+            model: route.model,
           }),
           kind: 'sdk',
         };
@@ -1281,12 +1282,16 @@ export class GuardianService {
     });
   }
 
-  private safeModel(): string {
-    const explicit = this.options.env?.DSH_LARK_MODEL;
-    if (explicit) return explicit;
-    return (
-      readDshDefaultModel(this.options.home, this.options.env ?? process.env) ??
-      'deepseek-v4-flash'
+  private safeRoute(): { provider: string; model: string } {
+    const configured = readDshDefaultSelection(
+      this.options.home,
+      this.options.env ?? process.env,
+    );
+    const provider = this.options.env?.DSH_LARK_PROVIDER ?? configured?.provider;
+    const model = this.options.env?.DSH_LARK_MODEL ?? configured?.model;
+    if (provider && model) return { provider, model };
+    throw new Error(
+      '安全模式缺少 provider/model：请设置 DSH_LARK_PROVIDER、DSH_LARK_MODEL，或配置对象形式的 dsh agent-default-model。',
     );
   }
 
@@ -1428,22 +1433,24 @@ function safeScopeForAction(event: CardActionEvent): string {
  * Read the dsh default model from the official settings store without
  * importing dsh code (mirrors the bridge's `agent-default-model` namespace).
  */
-function readDshDefaultModel(
+function readDshDefaultSelection(
   home: string,
   env: NodeJS.ProcessEnv,
-): string | undefined {
+): { provider: string; model: string } | undefined {
   try {
     const file = join(resolveDshHome(home, env), 'settings.yaml');
     const doc = parse(readFileSync(file, 'utf8')) as Record<string, unknown> | undefined;
     const value = doc?.['agent-default-model'];
-    if (typeof value === 'string' && value) return value;
     if (
       typeof value === 'object' &&
       value !== null &&
+      typeof (value as { provider?: unknown }).provider === 'string' &&
       typeof (value as { model?: unknown }).model === 'string'
     ) {
-      const model = (value as { model: string }).model;
-      return model.length > 0 ? model : undefined;
+      const selection = value as { provider: string; model: string };
+      return selection.provider.length > 0 && selection.model.length > 0
+        ? selection
+        : undefined;
     }
     return undefined;
   } catch {

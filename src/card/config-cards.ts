@@ -75,10 +75,52 @@ function wizardValue(flow: string, step: number, extra: Record<string, unknown>)
   return { cmd: 'wizard', flow, step, ...extra };
 }
 
+function commonModelPrefix(models: readonly { id: string }[]): string {
+  if (models.length < 2) return '';
+  let prefix = models[0]?.id ?? '';
+  for (const model of models.slice(1)) {
+    while (prefix && !model.id.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  }
+  const separator = Math.max(prefix.lastIndexOf('-'), prefix.lastIndexOf('/'));
+  return separator >= 0 ? prefix.slice(0, separator + 1) : '';
+}
+
+function providersWithDefault(input: ConfigHubInput): DshProviderSummary[] {
+  if (!input.defaultSelection) return input.providers;
+  const existing = input.providers.find(
+    (provider) => provider.id === input.defaultSelection?.provider,
+  );
+  if (existing?.models.some((model) => model.id === input.defaultSelection?.model)) {
+    return input.providers;
+  }
+  const defaultModel = {
+    id: input.defaultSelection.model,
+    name: undefined,
+    contextWindow: undefined,
+    maxTokens: undefined,
+  };
+  if (existing) {
+    return input.providers.map((provider) => provider.id === existing.id
+      ? { ...provider, models: [...provider.models, defaultModel] }
+      : provider);
+  }
+  return [...input.providers, {
+    id: input.defaultSelection.provider,
+    displayName: input.defaultSelection.provider,
+    namespace: 'agent-default-model',
+    configured: true,
+    credentialRef: undefined,
+    credentialReady: false,
+    models: [defaultModel],
+    managed: false,
+  }];
+}
+
 export function renderConfigHubCard(input: ConfigHubInput): object {
   const body = (locale: CardLocale) => {
     const zh = locale === 'zh_cn';
-    const providerLines = input.providers.map((provider) => {
+    const providers = providersWithDefault(input);
+    const providerLines = providers.map((provider) => {
     const models = provider.models.length > 0
       ? provider.models.map((model) => `\`${model.id}\``).join(' ')
       : zh ? '（无）' : '(none)';
@@ -93,27 +135,29 @@ export function renderConfigHubCard(input: ConfigHubInput): object {
     ? `\`${input.defaultSelection.model}\`（provider \`${input.defaultSelection.provider}\`）`
     : zh ? '（未设置）' : '(not set)';
   const modelIdCounts = new Map<string, number>();
-  for (const provider of input.providers) {
+  for (const provider of providers) {
     for (const model of provider.models) {
       modelIdCounts.set(model.id, (modelIdCounts.get(model.id) ?? 0) + 1);
     }
   }
-  const modelButtons = input.providers.flatMap((provider) =>
-    provider.models.map((model) => {
+  const modelButtons = providers.flatMap((provider) => {
+    const prefix = commonModelPrefix(provider.models);
+    return provider.models.map((model) => {
       const selection = `${provider.id}/${model.id}`;
       const current = selection === input.currentSelection;
+      const compactId = model.id.slice(prefix.length) || model.id;
       return (
       button(
-          `${current ? '✅ ' : ''}${model.id}${(modelIdCounts.get(model.id) ?? 0) > 1 ? ` · ${provider.displayName}` : ''}`,
+          `${current ? '✅ ' : ''}${compactId}${(modelIdCounts.get(model.id) ?? 0) > 1 ? ` · ${provider.displayName}` : ''}`,
           { cmd: 'cfg', action: 'model-use-direct', provider: provider.id, model: model.id },
           current ? 'primary' : 'default',
         )
       );
-    }),
-  );
+    });
+  });
   const modelRows: object[] = [];
-  for (let index = 0; index < modelButtons.length; index += 3) {
-    modelRows.push(buttonRow(modelButtons.slice(index, index + 3)));
+  for (let index = 0; index < modelButtons.length; index += 2) {
+    modelRows.push(buttonRow(modelButtons.slice(index, index + 2)));
   }
 
     return {

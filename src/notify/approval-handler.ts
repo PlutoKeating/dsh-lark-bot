@@ -8,6 +8,12 @@ import { bilingualMarkdown } from '../card/i18n.js';
 import { log } from '../core/logger.js';
 import type { SessionStore } from '../session/store.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
+import {
+  permissionPolicyDenial,
+  policyDenialText,
+  toolApprovalDenial,
+  type PolicyDenial,
+} from '../policy/tool-policy.js';
 
 export interface ApprovalPayload {
   token: string;
@@ -22,6 +28,7 @@ export interface ApprovalResult {
   ok: boolean;
   outcome?: ApprovalOutcome;
   error?: string;
+  denial?: PolicyDenial;
 }
 
 export interface ApprovalHandlerDeps {
@@ -48,6 +55,7 @@ export function buildApprovalHandler(
     const policy = deps.permissionPolicies?.get(scope) ?? 'ask';
     if (policy === 'allow') return { ok: true, outcome: 'allowed-once' };
     if (policy === 'deny') {
+      const denial = permissionPolicyDenial(scope, payload.toolName);
       const options = destination.threadId && destination.messageId
         ? { threadId: destination.threadId, replyTo: destination.messageId }
         : undefined;
@@ -55,15 +63,15 @@ export function buildApprovalHandler(
         await deps.channel.sendMarkdown?.(
           destination.chatId,
           bilingualMarkdown(
-            `⛔ 工具 \`${payload.toolName}\` 已按 scope \`${scope}\` 的 **deny** 策略拒绝；管理员可用 \`/permission ask ${scope}\` 恢复逐次审批。`,
-            `⛔ Tool \`${payload.toolName}\` was rejected by scope \`${scope}\`'s **deny** policy. An admin can use \`/permission ask ${scope}\` to restore per-operation approval.`,
+            `⛔ **权限策略拒绝**\n\n\`\`\`text\n${policyDenialText(denial)}\n\`\`\``,
+            `⛔ **Permission policy denial**\n\n\`\`\`text\n${policyDenialText(denial)}\n\`\`\``,
           ),
           options,
         );
       } catch (error) {
         log.warn('approval-policy', 'deny-notice-failed', { scope, error });
       }
-      return { ok: true, outcome: 'rejected' };
+      return { ok: true, outcome: 'rejected', denial };
     }
     const id = `approval-${randomUUID().replaceAll('-', '')}`;
     const request: ApprovalRequest = {
@@ -114,7 +122,13 @@ export function buildApprovalHandler(
         await settleCancelledCard(deps, destination.chatId, cardMessageId, options);
         return { ok: false, error: 'approval cancelled' };
       }
-      return { ok: true, outcome };
+      return {
+        ok: true,
+        outcome,
+        ...(outcome === 'rejected'
+          ? { denial: toolApprovalDenial(payload.toolName) }
+          : {}),
+      };
     } catch (error) {
       log.fail('approval-card', error, { scope, sessionId: payload.sessionId });
       cancel();

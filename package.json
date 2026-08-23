@@ -1,6 +1,6 @@
 {
   "name": "dsh-lark-bot",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "description": "把 DeepSeek Harness (dsh) 装进飞书/Lark 的 bot，扫码即用：dsh Web 可视化设置、流式卡片、项目工作区、并行任务、多角色 Agent、安全网守护。| Bridge DeepSeek Harness into Feishu/Lark with visual dsh Web settings, streaming cards, workspaces, parallel tasks, roles and a safety-net guardian.",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
@@ -40,6 +40,10 @@
     "./file": {
       "types": "./dist/file.d.ts",
       "import": "./dist/file.js"
+    },
+    "./sdk-server": {
+      "types": "./dist/sdk-server.d.ts",
+      "import": "./dist/sdk-server.js"
     }
   },
   "files": [
@@ -161,7 +165,10 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-attachment": "0.1.0-rc.8",
     "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-sdk-jsonrpc-server": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-sdk-protocol": "0.1.0-rc.8",
     "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
     "@deepseek-ai/schemastery": "3.18.1",
     "@larksuite/channel": "^0.4.1",

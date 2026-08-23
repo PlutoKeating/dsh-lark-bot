@@ -1,5 +1,12 @@
-import type { DeepSeekHarness, HarnessNotification } from '@deepseek-ai/dsh-sdk-client';
+import type {
+  ContentBlock,
+  DeepSeekHarness,
+  HarnessNotification,
+} from '@deepseek-ai/dsh-sdk-client';
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import type { AgentEvent } from '../types.js';
+import { detectImageType } from '../../media/image-file.js';
 import { EventChannel } from './event-channel.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -180,11 +187,56 @@ export interface SdkRunHandle {
   settled: Promise<void>;
 }
 
-function buildPromptText(prompt: string, images: readonly string[] | undefined): string {
-  return images?.length
-    ? `${prompt}\n\nImage attachments are available as local files:\n${images.join('\n')}\n` +
-      'The dsh SDK wire does not expose raw image upload yet; inspect these files with the available filesystem/image tools instead of assuming their pixels were sent to the model.'
-    : prompt;
+interface UploadedImageRef {
+  attachmentId: string;
+  mediaType: string;
+  bytes: number;
+  width: number;
+  height: number;
+  name?: string;
+}
+
+function uploadedImages(value: unknown, expected: number): UploadedImageRef[] {
+  if (!isRecord(value) || !Array.isArray(value.attachments) || value.attachments.length !== expected) {
+    throw new Error('dsh attachment upload returned an invalid response');
+  }
+  return value.attachments.map((item) => {
+    if (
+      !isRecord(item) ||
+      typeof item.attachmentId !== 'string' ||
+      typeof item.mediaType !== 'string' ||
+      typeof item.bytes !== 'number' ||
+      typeof item.width !== 'number' ||
+      typeof item.height !== 'number'
+    ) {
+      throw new Error('dsh attachment upload returned an invalid image reference');
+    }
+    return item as unknown as UploadedImageRef;
+  });
+}
+
+async function buildPromptInput(
+  harness: DeepSeekHarness,
+  prompt: string,
+  images: readonly string[] | undefined,
+): Promise<string | ContentBlock[]> {
+  if (!images?.length) return prompt;
+  const encoded = await Promise.all(images.map(async (path) => {
+    const [{ mediaType }, data] = await Promise.all([
+      detectImageType(path),
+      readFile(path),
+    ]);
+    return { mediaType, data: data.toString('base64'), name: basename(path) };
+  }));
+  await harness.start();
+  const refs = uploadedImages(
+    await harness.client.request('attachment/upload', { images: encoded }),
+    encoded.length,
+  );
+  return [
+    { type: 'text', text: prompt },
+    ...refs.map((attachment) => ({ type: 'image', attachment }) as ContentBlock),
+  ];
 }
 
 /**
@@ -201,16 +253,21 @@ export function createSdkRun(
   const tracker: ToolDeltaTracker = { emitted: new Set() };
   let hadError = false;
 
-  const task = harness
-    .run(buildPromptText(prompt, options.images), {
-      sessionId: options.sessionId,
-      onNotification: (notification) => {
-        for (const event of translateNotification(notification, options.sessionId, tracker)) {
-          if (event.type === 'error') hadError = true;
-          channel.push(event);
-        }
-      },
-    })
+  const runOptions = {
+    sessionId: options.sessionId,
+    onNotification: (notification: HarnessNotification) => {
+      for (const event of translateNotification(notification, options.sessionId, tracker)) {
+        if (event.type === 'error') hadError = true;
+        channel.push(event);
+      }
+    },
+  };
+  // Preserve the SDK's synchronous run registration for text-only turns;
+  // only image turns need the asynchronous upload admission first.
+  const task = (options.images?.length
+    ? buildPromptInput(harness, prompt, options.images)
+      .then((input) => harness.run(input, runOptions))
+    : harness.run(prompt, runOptions))
     .catch((error: unknown) => {
       if (!options.stopRequested.value) {
         channel.push({

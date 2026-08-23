@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client';
 import {
@@ -111,7 +114,7 @@ describe('translateSessionEvent', () => {
   });
 });
 
-function fakeHarness(): DeepSeekHarness {
+function fakeHarness(request = vi.fn().mockResolvedValue({ attachments: [] })): DeepSeekHarness {
   return {
     run: async (_input: string, options?: { sessionId?: string; onNotification?: (n: unknown) => void }) => {
       const sessionId = options?.sessionId ?? 's';
@@ -136,28 +139,58 @@ function fakeHarness(): DeepSeekHarness {
     session: () => {
       throw new Error('unused');
     },
-    client: undefined as never,
+    client: { request } as never,
     [Symbol.asyncDispose]: async () => undefined,
   } as unknown as DeepSeekHarness;
 }
 
 describe('createSdkRun', () => {
-  it('makes the SDK local-file image fallback explicit instead of claiming native upload', async () => {
-    const harness = fakeHarness();
-    const run = vi.spyOn(harness, 'run');
-    const handle = createSdkRun(harness, 'inspect this', {
-      sessionId: 's-image',
-      cwd: '/tmp',
-      model: 'm',
-      images: ['/tmp/image.png'],
-      stopRequested: { value: false },
-    });
-    for await (const _event of handle.events) void _event;
+  it('uploads image bytes and sends native SDK image blocks', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-sdk-image-'));
+    try {
+      const image = join(root, 'exact-image.png');
+      await writeFile(image, Buffer.from('89504e470d0a1a0a00000000', 'hex'));
+      const request = vi.fn().mockResolvedValue({
+        attachments: [{
+          attachmentId: 'attachment-1',
+          mediaType: 'image/png',
+          bytes: 12,
+          width: 1,
+          height: 1,
+          name: 'exact-image.png',
+        }],
+      });
+      const harness = fakeHarness(request);
+      const run = vi.spyOn(harness, 'run');
+      const handle = createSdkRun(harness, 'inspect this', {
+        sessionId: 's-image',
+        cwd: root,
+        model: 'm',
+        images: [image],
+        stopRequested: { value: false },
+      });
+      for await (const _event of handle.events) void _event;
 
-    expect(run).toHaveBeenCalledWith(
-      expect.stringMatching(/local files[\s\S]*\/tmp\/image\.png[\s\S]*does not expose raw image upload/),
-      expect.objectContaining({ sessionId: 's-image' }),
-    );
+      expect(request).toHaveBeenCalledWith('attachment/upload', {
+        images: [{
+          mediaType: 'image/png',
+          data: Buffer.from('89504e470d0a1a0a00000000', 'hex').toString('base64'),
+          name: 'exact-image.png',
+        }],
+      });
+      expect(run).toHaveBeenCalledWith(
+        [
+          { type: 'text', text: 'inspect this' },
+          {
+            type: 'image',
+            attachment: expect.objectContaining({ attachmentId: 'attachment-1' }),
+          },
+        ],
+        expect.objectContaining({ sessionId: 's-image' }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('streams events and settles with done', async () => {

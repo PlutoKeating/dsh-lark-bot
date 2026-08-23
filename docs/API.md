@@ -57,6 +57,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   `web`（本地 dsh web agent，单写者）。
 - `DSH_LARK_WEB_URL`：`web` 适配器的本地 dsh web base URL（默认
   `http://127.0.0.1:3080`）。
+- `DSH_LARK_MODEL_CATALOG_URL`：models.dev 兼容目录地址；默认使用公开 `api.json`。
 - `DSH_LARK_SESSION_PROJECTION`：显式 session 历史/实时投影开关，默认开启；它不允许
   WebUI/TUI 活动自动修改飞书 binding。旧 `DSH_LARK_WEB_PUSH` 仅在新开关缺失时作为兼容别名。
 - `DSH_LARK_SESSION_BACKFILL_MESSAGES` / `DSH_LARK_SESSION_BACKFILL_BYTES`：确认绑定后
@@ -316,6 +317,12 @@ export class DshProviderManager {
 
 pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` / `openai-responses` /
 `anthropic-messages`；自定义 provider 按官方 schema 需要 `api` + `baseURL` + 非空 `models`。
+`DshModelEntry` 读写 `inputModalities`、`imagePixelBudget`、`imageMaxBytes`，不会在 bot 管理模型时
+抹掉视觉能力。`ModelsDevCatalog` 从 `https://models.dev/api.json` 发现 provider 展示名、模型、
+模态、上下文和 `reasoning_options`，采用 5 秒超时、16 MiB 响应上限、15 分钟进程内缓存和
+stale-on-error；首次拉取失败时返回 settings 显式目录，不伪造内置名单。可用
+`DSH_LARK_MODEL_CATALOG_URL` 指向兼容镜像。`/model` 卡片另外把 `agent-default-model` 指向但目录
+缺失的模型合并进展示和快速切换路由。
 pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时
 自动补全为 `/v1`；误填 `.../chat/completions`、`.../responses`、`.../messages` 等完整接口地址时
 自动去掉末尾操作路径（dsh 的 pi-ai 适配器会自行追加 `/chat/completions` 等路径，保留完整端点
@@ -323,7 +330,7 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `normalizeDeepseekBaseUrl()`：同样去掉末尾操作路径，但保留裸根域名（官方 API 在根路径提供
 接口，不强制补 `/v1`）。
 模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
-`agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
+`agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL`；代码不提供固定模型默认值。
 `/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由
 `resolveModelRoute()` 从模型自动解析，找不到模型时报错）。每轮运行前
 `src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器
@@ -563,7 +570,9 @@ export async function buildAgentAdapter(
   显式确认的 binding；WebUI/TUI 的 open/resume/activity 不会自动切换或广播。
 
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
-`AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
+`AgentEvent`，并将本地图片上传为 durable attachment ref + 原生 image block）、
+`sdk-server.ts`（在官方 server 上仅扩展 `attachment/upload`，复用 dsh attachment store 的批量
+准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
 `event-channel.ts`（有序事件队列）。
 
 ### 3.1 显式 session 投影契约
@@ -653,8 +662,15 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
 `tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、非只读 shell 命令与 `run_code`。
+高风险分类、只读命令集合、persona 策略段落和结构化拒绝协议统一位于
+`src/policy/tool-policy.ts`。插件拒绝格式为 `[policy-denial layer=...] denied by ...`，下一行固定
+`to change: ...`；layer 目前为 `plan-gate`、`permission-policy` 或 `tool-approval`，persona 另把
+Harness `[sandbox: ...]` 标记为不可由插件改写的 `file-sandbox`。`POST /approval` 会把可用的
+`PolicyDenial` 元数据原样返回 nested runtime，使 agent 能区分 scope deny 与用户单次拒绝。
 `bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
-subcommand 位于只读白名单时才绕过计划和逐工具审批；未知参数或语法一律保持高风险。通过 token 鉴权的
+subcommand 位于只读白名单时才绕过计划和逐工具审批。真实 SDK 参数可额外携带字符串
+`description` / `workdir` 与 `run_in_background:false`；这些字段只作无副作用元数据校验，
+其他字段、未知语法一律保持高风险。通过 token 鉴权的
 一次批准只消费于随后一次高风险调用，不能解锁整个 turn；`DSH_LARK_PLAN_GATE=off` 可为可信部署关闭
 独立计划门禁，但不改变官方逐工具审批策略。
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并
@@ -687,7 +703,8 @@ session ID、底层错误或本机路径，fresh-session retry 另开正常过�
 - `DEFAULT_DENIED_INTERACTIVE_TOOLS` / `isDeniedTool(name)`：IM 不可回达工具默认拒绝。
 
 已接入：`src/core/logger.ts`（字段名 + 字符串正则双重脱敏）、`src/media/attachments.ts`
-（containment + UTF-8 安全读取）、`src/workspace/git-worktree.ts`（containment）、
+（containment + UTF-8 安全读取；图片下载后由 `image-file.ts` 按 magic bytes 限定为
+PNG/JPEG/WebP/GIF 并补扩展名）、`src/workspace/git-worktree.ts`（containment）、
 `src/bridge/channel.ts`（默认拒绝 dmMode + 过期消息）。详细威胁模型见根目录 `SECURITY.md`。
 
 ## 6. 结构化日志 · Structured logging

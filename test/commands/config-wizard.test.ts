@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,7 @@ import { ModelStore } from '../../src/bot/model-store.js';
 import { WizardStore } from '../../src/bot/wizard-store.js';
 import type { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
+import { TEST_MODEL_CATALOG } from '../fixtures/model-catalog.js';
 import type { CommandChannel } from '../../src/commands/index.js';
 import {
   beginWizard,
@@ -55,7 +56,7 @@ async function withContext(
     chatId: 'chat-a',
     senderId: overrides.senderId ?? 'ou_admin',
     channel,
-    dshConfig: new DshProviderManager({ home: root, env: {} }),
+    dshConfig: new DshProviderManager({ home: root, env: {}, catalog: TEST_MODEL_CATALOG }),
     accessManager: adminAccess(),
     models: new ModelStore(),
     wizards: new WizardStore(),
@@ -274,9 +275,41 @@ describe('config wizard', () => {
       expect(content).toContain('provider-add');
       expect(content).toContain('key-set');
       expect(content).toContain('model-use');
-      expect(content).toContain('✅ deepseek-v4-flash');
+      expect(content).toContain('✅ flash');
       expect(content).toContain('model-use-direct');
       expect(content).toContain('model-reset');
+    });
+  });
+
+  it('merges an absent dsh default into quick choices and uses compact distinguishing labels', async () => {
+    await withContext(async (ctx, root, channel) => {
+      const settingsFile = join(root, '.dsh', 'settings.yaml');
+      await mkdir(join(root, '.dsh'), { recursive: true });
+      await writeFile(settingsFile, [
+        'llm-deepseek:',
+        '  models:',
+        '    - id: deepseek-v4-flash',
+        '    - id: deepseek-v4-pro',
+        'agent-default-model:',
+        '  provider: deepseek-official',
+        '  model: deepseek-v4-flash-vision-exp',
+        '',
+      ].join('\n'));
+
+      await handleConfigHubAction('refresh', ctx);
+      const content = JSON.stringify(lastCard(channel));
+      expect(content).toContain('deepseek-v4-flash-vision-exp');
+      expect(content).toContain('content":"flash-vision-exp');
+      expect(content).toContain('content":"✅ flash"');
+      expect(content).toContain('content":"pro"');
+
+      await handleConfigHubAction('model-use-direct', ctx, {
+        provider: 'deepseek-official',
+        model: 'deepseek-v4-flash-vision-exp',
+      });
+      expect(ctx.models.get(ctx.scope)).toBe(
+        'deepseek-official/deepseek-v4-flash-vision-exp',
+      );
     });
   });
 
@@ -300,7 +333,7 @@ describe('config wizard', () => {
     await withContext(async (ctx, _root, channel) => {
       ctx.resolveDefaultModel = async () => 'deepseek-v4-pro';
       await handleConfigHubAction('refresh', ctx);
-      expect(JSON.stringify(lastCard(channel))).toContain('✅ deepseek-v4-pro');
+      expect(JSON.stringify(lastCard(channel))).toContain('✅ pro');
 
       ctx.models.set(ctx.scope, 'deepseek-official/deepseek-v4-flash');
       await handleConfigHubAction('model-reset', ctx);

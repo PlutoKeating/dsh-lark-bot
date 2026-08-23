@@ -11,10 +11,31 @@ import {
   normalizeBaseUrl,
   normalizeDeepseekBaseUrl,
 } from '../../src/config/dsh-config.js';
+import type { ModelCatalog } from '../../src/config/model-catalog.js';
+
+const catalog: ModelCatalog = {
+  listProviders: async () => [{
+    id: 'catalog-provider',
+    name: 'Catalog Provider',
+    api: 'https://api.catalog.example',
+    env: ['DEEPSEEK_API_KEY'],
+    models: [
+      { id: 'catalog-text', name: 'Catalog Text', contextWindow: 1000, maxTokens: 100 },
+      {
+        id: 'catalog-vision',
+        name: 'Catalog Vision',
+        contextWindow: 2000,
+        maxTokens: 200,
+        inputModalities: ['text', 'image'],
+        reasoningEfforts: ['small', 'large'],
+      },
+    ],
+  }],
+};
 
 async function withHome(run: (root: string, manager: DshProviderManager) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-lark-dsh-'));
-  const manager = new DshProviderManager({ home: root, env: {} });
+  const manager = new DshProviderManager({ home: root, env: {}, catalog });
   try {
     await run(root, manager);
   } finally {
@@ -23,16 +44,19 @@ async function withHome(run: (root: string, manager: DshProviderManager) => Prom
 }
 
 describe('DshProviderManager', () => {
-  it('reports the deepseek provider with default models when settings are empty', async () => {
+  it('discovers provider names, models, modalities, and efforts from the runtime catalog', async () => {
     await withHome(async (_root, manager) => {
       const providers = await manager.listProviders();
       expect(providers.length).toBe(1);
       const deepseek = providers[0];
       expect(deepseek?.id).toBe(DEEPSEEK_PROVIDER);
+      expect(deepseek?.displayName).toBe('Catalog Provider');
       expect(deepseek?.models.map((model) => model.id)).toEqual([
-        'deepseek-v4-flash',
-        'deepseek-v4-pro',
+        'catalog-text',
+        'catalog-vision',
       ]);
+      expect(deepseek?.models[1]?.inputModalities).toEqual(['text', 'image']);
+      expect(deepseek?.models[1]?.reasoningEfforts).toEqual(['small', 'large']);
       expect(deepseek?.credentialRef).toBe('DEEPSEEK_API_KEY');
       expect(deepseek?.credentialReady).toBe(false);
     });
@@ -40,18 +64,18 @@ describe('DshProviderManager', () => {
 
   it('writes provider+model into the official agent-default-model section without touching other namespaces', async () => {
     await withHome(async (_root, manager) => {
-      await manager.setDefaultModel('deepseek-v4-pro');
-      expect(await manager.defaultModel()).toBe('deepseek-v4-pro');
+      await manager.setDefaultModel('catalog-text');
+      expect(await manager.defaultModel()).toBe('catalog-text');
       expect(await manager.defaultModelSelection()).toEqual({
         provider: DEEPSEEK_PROVIDER,
-        model: 'deepseek-v4-pro',
+        model: 'catalog-text',
       });
 
       await manager.upsertDeepseekProvider({ baseURL: 'https://api.deepseek.com' });
       const settings = await manager.readSettings();
       expect(settings[AGENT_DEFAULT_MODEL_NAMESPACE]).toEqual({
         provider: DEEPSEEK_PROVIDER,
-        model: 'deepseek-v4-pro',
+        model: 'catalog-text',
       });
       expect((settings['llm-deepseek'] as { baseURL: string }).baseURL).toBe('https://api.deepseek.com');
     });
@@ -65,15 +89,15 @@ describe('DshProviderManager', () => {
 
   it('resolves a model to its owning provider, preferring explicit pi-ai entries over deepseek defaults', async () => {
     await withHome(async (_root, manager) => {
-      expect(await manager.resolveModelRoute('deepseek-v4-flash')).toEqual({
+      expect(await manager.resolveModelRoute('catalog-text')).toEqual({
         provider: DEEPSEEK_PROVIDER,
-        model: 'deepseek-v4-flash',
+        model: 'catalog-text',
       });
-      expect(await manager.resolveModelRoute('deepseek-official/deepseek-v4-flash')).toEqual({
+      expect(await manager.resolveModelRoute('deepseek-official/catalog-text')).toEqual({
         provider: DEEPSEEK_PROVIDER,
-        model: 'deepseek-v4-flash',
+        model: 'catalog-text',
       });
-      expect(await manager.resolveModelRoute('missing/deepseek-v4-flash')).toBeUndefined();
+      expect(await manager.resolveModelRoute('missing/catalog-text')).toBeUndefined();
 
       await manager.upsertPiAiProvider({
         id: 'kingapi',
@@ -87,7 +111,7 @@ describe('DshProviderManager', () => {
             maxTokens: undefined,
           },
           {
-            id: 'deepseek-v4-flash',
+            id: 'catalog-text',
             name: undefined,
             contextWindow: undefined,
             maxTokens: undefined,
@@ -99,9 +123,9 @@ describe('DshProviderManager', () => {
         model: 'doubao-seed-2-0-lite-260428',
       });
       // Explicitly configured model wins over the deepseek built-in catalog.
-      expect(await manager.resolveModelRoute('deepseek-v4-flash')).toEqual({
+      expect(await manager.resolveModelRoute('catalog-text')).toEqual({
         provider: 'kingapi',
-        model: 'deepseek-v4-flash',
+        model: 'catalog-text',
       });
     });
   });
@@ -203,6 +227,25 @@ describe('DshProviderManager', () => {
       }).providers['acme-gateway']!.models;
       expect(models.map((model) => model.id)).toEqual(['acme-large', 'extra']);
       expect(models[1]?.input).toEqual(['text', 'image']);
+    });
+  });
+
+  it('persists and reports model input modalities added through the bot', async () => {
+    await withHome(async (root, manager) => {
+      await manager.addDeepseekModel({
+        id: 'custom-vision',
+        name: 'Custom Vision',
+        contextWindow: undefined,
+        maxTokens: undefined,
+        inputModalities: ['text', 'image'],
+      });
+
+      const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
+      expect(settings).toContain('inputModalities:');
+      expect(settings).toContain('- image');
+      const provider = (await manager.listProviders())[0];
+      expect(provider?.models.find((model) => model.id === 'custom-vision')?.inputModalities)
+        .toEqual(['text', 'image']);
     });
   });
 

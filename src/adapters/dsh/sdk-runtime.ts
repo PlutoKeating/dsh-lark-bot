@@ -86,7 +86,7 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '# stdout is reserved for SDK JSON-RPC frames; no console logger may load.',
     '- insert:',
     '    - id: sdk-jsonrpc-server',
-    `      name: '${SDK_SERVER_PACKAGE}'`,
+    `      name: '${bridgeTools ? `${own.name}/sdk-server` : SDK_SERVER_PACKAGE}'`,
     '      config:',
     '        maxTokensAsSuccess: true',
     '',
@@ -232,7 +232,7 @@ function runPnpmInstall(profileRoot: string): Promise<void> {
 /**
  * Ensure the SDK runtime profile exists under the shared dsh installation.
  * The profile is a managed composition: `@deepseek-ai/dsh-base` bundle plus
- * the official `@deepseek-ai/dsh-sdk-jsonrpc-server` plugin. Idempotent.
+ * the official JSON-RPC server plus the bridge's attachment-upload extension. Idempotent.
  */
 export async function ensureSdkProfile(
   options: SdkRuntimeOptions,

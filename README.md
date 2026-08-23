@@ -141,14 +141,21 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；管理写操作走多轮向导）|
 | `/model use <provider/model>` | 热切换当前会话模型（也兼容唯一模型 ID；下一轮生效，无需重启）|
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
-| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员）|
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 的模型，可声明视觉输入能力（管理员）|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单（写操作需管理员）|
 | `/help` | 查看帮助|
 
-飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
+飞书消息中的图片会按文件内容识别 PNG/JPEG/WebP/GIF 并补全安全扩展名；默认 SDK 会经 dsh
+附件存储校验后发送原生 image block，而不是把路径当作图片。无法读取或模型不支持视觉时会明确
+失败，agent 被要求不得用工作区内其他图片替代。文本类文件会读取内容并注入任务上下文。
+`/model` 卡片会把 dsh 默认模型并入可切换目录（即使 provider 的显式列表尚未包含它），
+并用去除公共前缀后的短标签、每行最多两个按钮适配移动端。provider 名称、模型、输入模态和
+推理档位从 models.dev 运行时目录发现（15 分钟内存缓存）；网络失败时只使用 dsh settings 中的
+显式配置与默认选择，不回退到代码内置名单。通过命令或向导新增视觉模型时可声明 `text,image`，
+能力字段会原样写入 settings。目录地址可用 `DSH_LARK_MODEL_CATALOG_URL` 替换。
 
 **DSH session 消息级同步（`web` adapter）**：发送 `/session` 只会列出当前 canonical workspace
 的非 subagent session 元数据，不显示正文；选择后确认卡会列明标题、ID、workspace、更新时间、
@@ -235,12 +242,20 @@ guardian 仍只救援其配置的主实例。
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
 移动、非只读 shell 命令与 `run_code`。一次计划批准只放行随后一次高风险调用，计划外的后续调用必须
 重新确认。`date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等单条
-只读检查直接放行；包含串联、重定向、命令替换或未知程序的 shell 调用仍保守地走计划门禁。
+只读检查直接放行；SDK `bash` 自动附带的 `description`、`workdir` 与
+`run_in_background:false` 经无副作用校验后不会改变只读判定。包含未知参数、串联、重定向、
+命令替换或未知程序的 shell 调用仍保守地走计划门禁。
 bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
 继续规划”决策卡；卡内可填写修改意见。工具在等待期间阻塞且暂停空闲超时，批准后原任务自动继续；
 继续规划时 agent 会收到意见、修订计划并再次请求确认。门禁无固定十分钟截止，跟随所属 run 的取消
 信号；停止任务会精确取消该 session 的 pending 卡并撤回。可信部署可设置
 `DSH_LARK_PLAN_GATE=off` 关闭这层独立门禁（逐工具审批仍按原策略执行）；legacy headless adapter 不具备工具回调能力。
+
+插件可控的拒绝统一为 `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`，随后给出
+`reason` 与 `to change`；Harness 自己的 `[sandbox: ...]` 明确归类为 `file-sandbox`。高风险分类器、
+persona 中的只读说明和拒绝文本由 `src/policy/tool-policy.ts` 同一来源生成，因此策略调整不会只改
+提示词或只改执行钩子。计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，
+也不替代计划确认。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入任意文字；单选/多选没有合适项时，回复文字就是补充答案。系统按被回复的 card messageId 精确匹配 pending 问题，回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
@@ -401,8 +416,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   自动/人工验证边界见 [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md)。
 - **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
-- 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
-  token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
+- 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑、
+  token 级流式事件与 dsh attachment store 原生图片块）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
   子进程 fallback；`DSH_LARK_ADAPTER=web` 驱动**本地 dsh web agent**（`session.prompt` +
   `/api/events.mux`，网页端成为唯一写者，从根上消除多写者会话损坏）。首次启动自动在
   `~/.dsh/profiles/dsh-lark-sdk`（或 `dsh-lark-acp`）创建 runtime profile。
@@ -458,8 +473,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置|
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置|
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认，approval answerer）/ `acp`（协议原生审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者）|
-| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider|
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型|
+| `DSH_LARK_PROVIDER` | 未设置 | 模型 provider；可由对象形式的 dsh 默认模型提供|
+| `DSH_LARK_MODEL` | 未设置 | 默认模型；可由 dsh `agent-default-model` 提供|
+| `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | provider / 模型能力实时目录或兼容镜像|
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限|
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent 的 base URL|
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式绑定后的历史/实时消息投影；绝不自动切换（`0` 关闭）|

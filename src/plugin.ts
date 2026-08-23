@@ -75,7 +75,7 @@ export const Config = Schema.object({
   sessionProjection: Schema.boolean()
     .description('web 模式下同步 dsh 会话到飞书 / Mirror dsh sessions to Feishu in web mode'),
   model: Schema.string()
-    .description('新任务默认使用的模型，例如 deepseek-v4-flash / Default model for new tasks'),
+    .description('新任务默认使用的 provider/model 路由 / Default provider/model route for new tasks'),
   scopeConcurrency: Schema.number()
     .step(1)
     .min(1)

@@ -21,7 +21,7 @@ function message(resources: NormalizedMessage['resources']): NormalizedMessage {
   };
 }
 
-function fakeChannel(files: Record<string, string>): LarkChannel {
+function fakeChannel(files: Record<string, string | Buffer>): LarkChannel {
   return {
     downloadResourceToFile: vi.fn().mockImplementation(
       async (_messageId: string, fileKey: string, _type: string, destPath: string) => {
@@ -38,7 +38,7 @@ describe('prepareAttachments', () => {
     try {
       const result = await prepareAttachments(
         fakeChannel({
-          'img-key': 'fake-image-bytes',
+          'img-key': Buffer.from('89504e470d0a1a0a00000000', 'hex'),
           'txt-key': 'hello from file',
         }),
         message([
@@ -49,6 +49,7 @@ describe('prepareAttachments', () => {
       );
 
       expect(result.imagePaths).toHaveLength(1);
+      expect(result.imagePaths[0]).toMatch(/\.png$/);
       expect(result.textFileNotes[0]).toContain('notes.txt');
       expect(result.textFileNotes[0]).toContain('hello from file');
     } finally {

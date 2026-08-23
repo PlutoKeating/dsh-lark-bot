@@ -1,10 +1,11 @@
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isPathWithin, truncateUtf8Safe } from '../config/security.js';
 import type {
   LarkChannel,
   NormalizedMessage,
 } from '@larksuite/channel';
+import { detectImageType } from './image-file.js';
 
 export interface PreparedAttachments {
   imagePaths: string[];
@@ -31,15 +32,26 @@ export async function prepareAttachments(
     if (!channel || resource.type !== 'image' && resource.type !== 'file') continue;
     const destination = join(mediaDir, `${message.messageId}-${resource.fileKey}`);
     assertSafeMediaName(mediaDir, destination);
+    const downloadPath = resource.type === 'image' ? `${destination}.download` : destination;
+    assertSafeMediaName(mediaDir, downloadPath);
     await channel.downloadResourceToFile(
       message.messageId,
       resource.fileKey,
       resource.type,
-      destination,
+      downloadPath,
     );
 
     if (resource.type === 'image') {
-      result.imagePaths.push(destination);
+      try {
+        const detected = await detectImageType(downloadPath);
+        const imagePath = `${destination}${detected.extension}`;
+        assertSafeMediaName(mediaDir, imagePath);
+        await rename(downloadPath, imagePath);
+        result.imagePaths.push(imagePath);
+      } catch (error) {
+        await rm(downloadPath, { force: true });
+        throw error;
+      }
       continue;
     }
 

@@ -5,6 +5,7 @@ import {
   SUPPORTED_PI_AI_PROTOCOLS,
   normalizeDeepseekBaseUrl,
   normalizeBaseUrl,
+  type DshModelEntry,
   type DshProviderManager,
 } from '../config/dsh-config.js';
 import type { ModelStore } from '../bot/model-store.js';
@@ -475,17 +476,38 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
           return name ? name : undefined;
         },
       },
+      {
+        key: 'inputModalities',
+        kind: 'text',
+        question: '输入模态（可选，逗号分隔；视觉模型填写 text,image）',
+        placeholder: 'text,image',
+        optional: true,
+        parse: (raw) => {
+          const modalities = splitCsv(asString(raw) ?? '');
+          if (modalities.some((value) => value !== 'text' && value !== 'image')) {
+            throw new Error('输入模态仅支持 text 和 image');
+          }
+          return modalities.length > 0 ? modalities : undefined;
+        },
+      },
     ],
     summary: (_ctx, data) =>
       Promise.resolve(
-        `Provider：\`${asString(data.provider)}\`\n模型：${asStringList(data.models).map((id) => `\`${id}\``).join('、')}${data.name ? `\n名称：\`${asString(data.name)}\`` : ''}`,
+        `Provider：\`${asString(data.provider)}\`\n模型：${asStringList(data.models).map((id) => `\`${id}\``).join('、')}${data.name ? `\n名称：\`${asString(data.name)}\`` : ''}${data.inputModalities ? `\n输入模态：\`${asStringList(data.inputModalities).join(',')}\`` : ''}`,
       ),
     execute: async (ctx, data) => {
       const providerId = asString(data.provider)!;
       const name = asString(data.name);
       let added = 0;
       for (const modelId of asStringList(data.models)) {
-        const entry = { id: modelId, name, contextWindow: undefined, maxTokens: undefined };
+        const inputModalities = asStringList(data.inputModalities) as Array<'text' | 'image'>;
+        const entry: DshModelEntry = {
+          id: modelId,
+          name,
+          contextWindow: undefined,
+          maxTokens: undefined,
+          inputModalities: inputModalities.length > 0 ? inputModalities : undefined,
+        };
         if (providerId === DEEPSEEK_PROVIDER) {
           await ctx.dshConfig.addDeepseekModel(entry);
         } else {
@@ -958,7 +980,13 @@ export async function handleConfigHubAction(
       const provider = typeof value.provider === 'string' ? value.provider : '';
       const model = typeof value.model === 'string' ? value.model : '';
       const selection = provider ? `${provider}/${model}` : model;
-      const route = await ctx.dshConfig.resolveModelRoute(selection);
+      let route = await ctx.dshConfig.resolveModelRoute(selection);
+      if (!route) {
+        const defaultSelection = await ctx.dshConfig.defaultModelSelection();
+        if (defaultSelection?.provider === provider && defaultSelection.model === model) {
+          route = defaultSelection;
+        }
+      }
       if (!route) {
         await sendWizardMarkdown(ctx, '⚠️ 该模型已不可用，请刷新后重试。');
         return;

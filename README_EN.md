@@ -139,14 +139,23 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/model`, `/providers`, `/provider`, `/key` | Open the interactive hub (tap a model or restore the default; management writes use a multi-turn wizard) |
 | `/model use <provider/model>` | Hot-switch the current session model (a unique bare model ID also works; effective next message, no restart) |
 | `/model default <id>` | Write the dsh default model `agent-default-model` (admin) |
-| `/model add\|remove <provider> <modelId>` | Add / remove a provider model (admin) |
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | Add / remove a provider model and declare vision input (admin) |
 | `/provider add\|update\|remove <id>` | Manage providers (admin; deepseek-official and custom pi-ai) |
 | `/key set\|remove\|list <ref>` | Manage dsh credentials (set / remove require admin) |
 | `/ask <question>` | Send a Q&A card; the answer is written back to session context |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | Manage the access allowlist (mutating commands require admin) |
 | `/help` | Show help |
 
-Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+Feishu images are detected by content as PNG/JPEG/WebP/GIF and receive a safe extension. The default
+SDK validates them through dsh's attachment store and sends native image blocks instead of path text.
+Unreadable or unsupported images fail explicitly, and the agent is instructed never to substitute another
+workspace image. Text files are read and injected into the task context.
+The `/model` card merges the dsh default into its switchable catalogue even when a provider's explicit
+list omits it, and uses compact distinguishing labels with at most two buttons per mobile row. Provider
+names, models, input modalities, and reasoning-effort options are discovered from the models.dev runtime
+catalogue and cached in memory for 15 minutes. If it is unavailable, only explicit dsh settings and the
+configured default are shown—there is no hardcoded fallback list. Override the feed with
+`DSH_LARK_MODEL_CATALOG_URL`; model commands and the wizard preserve `inputModalities`.
 
 **Message-level DSH session sync (`web` adapter)**: `/session` lists metadata only for non-subagent sessions
 in the current canonical workspace—never message bodies. The confirmation card freezes the title, ID,
@@ -239,13 +248,21 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
 moves, non-read-only shell commands and `run_code` until a plan is approved. Each approval grants only the next
 high-risk call; later unplanned calls require approval again. Single read-only inspections such as `date`, `pwd`,
-`ls`, `find`, `rg`, and `git status/log/diff` run directly; shell chaining,
+`ls`, `find`, `rg`, and `git status/log/diff` run directly. Inert SDK `bash` metadata (`description`,
+`workdir`, and `run_in_background:false`) does not change that decision; unknown metadata, shell chaining,
 redirection, command substitution, and unknown executables remain behind the conservative plan gate. The bridge sends the complete Markdown plan as a normal
 message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
 and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires
 another plan. There is no fixed ten-minute deadline: the gate follows the owning run's cancellation signal, and
 stopping it cancels and recalls only that session's pending card. Trusted deployments may set
 `DSH_LARK_PLAN_GATE=off` to disable this separate gate (ordinary per-tool approval still applies). The legacy headless adapter cannot use callback tools.
+
+Plugin-controlled refusals now use `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`
+followed by `reason` and `to change`; Harness `[sandbox: ...]` errors are identified as the
+`file-sandbox` layer. The high-risk classifier, persona read-only guidance, and denial text share
+`src/policy/tool-policy.ts`, so policy changes cannot update only the prompt or only enforcement.
+The plan gate and per-tool approval retain distinct semantics: `/permission allow` neither expands
+the file sandbox nor replaces plan confirmation.
 
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
 
@@ -394,7 +411,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 - **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.8** (last verified 2026-08-22: clean temporary install, SDK JSON-RPC / ACP initialize, tool/approval, live-session resume, and restart-collision probes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md) for rc.8 risks and verification boundaries.
 - **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
 - **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public server, domain or tunneling required).
-- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, and the rc.8 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
+- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, dsh attachment-store image blocks, and the rc.8 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## Known limitations
 
@@ -429,8 +446,9 @@ Core environment variables:
 | `DSH_LARK_DSH_COMMAND` | auto-discovered | dsh launch command; usually not needed |
 | `DSH_LARK_DSH_ARGS` | auto-discovered | dsh launch args, comma-separated; usually not needed |
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk` (default, approval answerer) / `acp` (protocol-native approval) / `headless` (legacy) / `web` (local dsh web agent, single writer) |
-| `DSH_LARK_PROVIDER` | `deepseek-official` | Model provider |
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | Default model |
+| `DSH_LARK_PROVIDER` | unset | Model provider; may come from an object-form dsh default selection |
+| `DSH_LARK_MODEL` | unset | Default model; may come from dsh `agent-default-model` |
+| `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | Live provider/model capability feed or compatible mirror |
 | `DSH_LARK_MAX_TOKENS` | unset | Per-request output token cap for SDK agents |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` adapter: base URL of the local dsh web agent |
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` adapter: enable history/live message projection after explicit user binding; never auto-switches (`0` disables) |

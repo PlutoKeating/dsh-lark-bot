@@ -231,7 +231,11 @@ export class NotifyServer {
           respond(404, { ok: false, ...(result.error ? { error: result.error } : {}) });
           return;
         }
-        respond(200, { ok: true, outcome: result.outcome });
+        respond(200, {
+          ok: true,
+          outcome: result.outcome,
+          ...(result.denial === undefined ? {} : { denial: result.denial }),
+        });
         return;
       }
       if (req.url === '/file') {

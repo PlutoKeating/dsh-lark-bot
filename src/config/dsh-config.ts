@@ -3,7 +3,13 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Document, parseDocument } from 'yaml';
 import { writeFileAtomic } from '../platform/atomic-write.js';
+import { log } from '../core/logger.js';
 import { resolveDshHome } from './dsh-runtime.js';
+import {
+  ModelsDevCatalog,
+  type CatalogProvider,
+  type ModelCatalog,
+} from './model-catalog.js';
 
 export const DEEPSEEK_NAMESPACE = 'llm-deepseek';
 export const DEEPSEEK_PROVIDER = 'deepseek-official';
@@ -32,6 +38,11 @@ export interface DshModelEntry {
   name: string | undefined;
   contextWindow: number | undefined;
   maxTokens: number | undefined;
+  inputModalities?: Array<'text' | 'image'> | undefined;
+  imagePixelBudget?: number | undefined;
+  imageMaxBytes?: number | undefined;
+  /** Runtime catalog metadata; not written into the provider settings schema. */
+  reasoningEfforts?: string[] | undefined;
 }
 
 export interface DshProviderSummary {
@@ -51,6 +62,7 @@ export interface DshProviderManagerOptions {
   env?: NodeJS.ProcessEnv;
   settingsFile?: string;
   credentialsFile?: string;
+  catalog?: ModelCatalog;
 }
 
 export interface DshModelSelection {
@@ -67,12 +79,8 @@ export interface DshPiAiProviderInput {
   models?: DshModelEntry[];
 }
 
-const DEFAULT_DEEPSEEK_MODELS: DshModelEntry[] = [
-  { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: undefined, maxTokens: undefined },
-  { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', contextWindow: undefined, maxTokens: undefined },
-];
-
 const LOCK_TIMEOUT_MS = 10_000;
+const PUBLIC_MODEL_CATALOG = new ModelsDevCatalog();
 
 function isMapLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -93,6 +101,14 @@ function parseModels(value: unknown): DshModelEntry[] | undefined {
       contextWindow:
         typeof raw.contextWindow === 'number' ? raw.contextWindow : undefined,
       maxTokens: typeof raw.maxTokens === 'number' ? raw.maxTokens : undefined,
+      inputModalities: Array.isArray(raw.inputModalities)
+        ? raw.inputModalities.filter(
+          (modality): modality is 'text' | 'image' => modality === 'text' || modality === 'image',
+        )
+        : undefined,
+      imagePixelBudget:
+        typeof raw.imagePixelBudget === 'number' ? raw.imagePixelBudget : undefined,
+      imageMaxBytes: typeof raw.imageMaxBytes === 'number' ? raw.imageMaxBytes : undefined,
     });
   }
   return models;
@@ -109,7 +125,61 @@ function modelRecord(input: DshModelEntry): Record<string, unknown> {
   if (input.name !== undefined) record.name = input.name;
   if (input.contextWindow !== undefined) record.contextWindow = input.contextWindow;
   if (input.maxTokens !== undefined) record.maxTokens = input.maxTokens;
+  if (input.inputModalities !== undefined) record.inputModalities = input.inputModalities;
+  if (input.imagePixelBudget !== undefined) record.imagePixelBudget = input.imagePixelBudget;
+  if (input.imageMaxBytes !== undefined) record.imageMaxBytes = input.imageMaxBytes;
   return record;
+}
+
+function normalizedOrigin(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    return new URL(value).origin.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function catalogProviderFor(
+  providers: readonly CatalogProvider[],
+  input: { id: string; baseURL: unknown; credentialRef: string | undefined },
+): CatalogProvider | undefined {
+  const byId = providers.find((provider) => provider.id === input.id);
+  if (byId) return byId;
+  const byQualifiedId = providers.find(
+    (provider) => input.id.startsWith(`${provider.id}-`) || input.id.endsWith(`-${provider.id}`),
+  );
+  if (byQualifiedId) return byQualifiedId;
+  const origin = normalizedOrigin(input.baseURL);
+  const byApi = origin === undefined
+    ? undefined
+    : providers.find((provider) => normalizedOrigin(provider.api) === origin);
+  if (byApi) return byApi;
+  return input.credentialRef === undefined || origin !== undefined
+    ? undefined
+    : providers.find((provider) => provider.env.includes(input.credentialRef!));
+}
+
+function mergeCatalogModels(
+  catalog: CatalogProvider | undefined,
+  configured: DshModelEntry[] | undefined,
+): DshModelEntry[] {
+  const models = new Map<string, DshModelEntry>();
+  for (const model of catalog?.models ?? []) models.set(model.id, model);
+  for (const model of configured ?? []) {
+    const discovered = models.get(model.id);
+    models.set(model.id, {
+      id: model.id,
+      name: model.name ?? discovered?.name,
+      contextWindow: model.contextWindow ?? discovered?.contextWindow,
+      maxTokens: model.maxTokens ?? discovered?.maxTokens,
+      inputModalities: model.inputModalities ?? discovered?.inputModalities,
+      imagePixelBudget: model.imagePixelBudget ?? discovered?.imagePixelBudget,
+      imageMaxBytes: model.imageMaxBytes ?? discovered?.imageMaxBytes,
+      reasoningEfforts: model.reasoningEfforts ?? discovered?.reasoningEfforts,
+    });
+  }
+  return [...models.values()];
 }
 
 function validateProviderId(id: string): void {
@@ -285,6 +355,7 @@ export class DshProviderManager {
   private readonly env: NodeJS.ProcessEnv;
   private readonly settingsFile: string;
   private readonly credentialsFile: string;
+  private readonly catalog: ModelCatalog;
 
   constructor(options: DshProviderManagerOptions = {}) {
     this.home = options.home ?? homedir();
@@ -292,6 +363,10 @@ export class DshProviderManager {
     const dshHome = resolveDshHome(this.home, this.env);
     this.settingsFile = options.settingsFile ?? join(dshHome, 'settings.yaml');
     this.credentialsFile = options.credentialsFile ?? join(dshHome, '.credentials.yaml');
+    const catalogUrl = this.env.DSH_LARK_MODEL_CATALOG_URL;
+    this.catalog = options.catalog ?? (
+      catalogUrl ? new ModelsDevCatalog({ url: catalogUrl }) : PUBLIC_MODEL_CATALOG
+    );
   }
 
   async readSettings(): Promise<Record<string, unknown>> {
@@ -319,10 +394,24 @@ export class DshProviderManager {
 
   async listProviders(): Promise<DshProviderSummary[]> {
     const settings = await this.readSettings();
-    return [await this.describeDeepseek(settings), ...(await this.describePiAi(settings))];
+    let catalogProviders: CatalogProvider[] = [];
+    try {
+      catalogProviders = await this.catalog.listProviders();
+    } catch (error) {
+      log.warn('model-catalog', 'refresh-failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return [
+      await this.describeDeepseek(settings, catalogProviders),
+      ...(await this.describePiAi(settings, catalogProviders)),
+    ];
   }
 
-  private async describeDeepseek(settings: Record<string, unknown>): Promise<DshProviderSummary> {
+  private async describeDeepseek(
+    settings: Record<string, unknown>,
+    catalogProviders: readonly CatalogProvider[],
+  ): Promise<DshProviderSummary> {
     const deepseek = isMapLike(settings[DEEPSEEK_NAMESPACE])
       ? settings[DEEPSEEK_NAMESPACE]
       : {};
@@ -330,19 +419,27 @@ export class DshProviderManager {
       typeof deepseek.apiKeyEnv === 'string' && deepseek.apiKeyEnv.length > 0
         ? deepseek.apiKeyEnv
         : DEEPSEEK_DEFAULT_API_KEY_ENV;
+    const catalog = catalogProviderFor(catalogProviders, {
+      id: DEEPSEEK_PROVIDER,
+      baseURL: deepseek.baseURL,
+      credentialRef,
+    });
     return {
       id: DEEPSEEK_PROVIDER,
-      displayName: 'DeepSeek',
+      displayName: catalog?.name ?? DEEPSEEK_PROVIDER,
       namespace: DEEPSEEK_NAMESPACE,
       configured: Object.keys(deepseek).length > 0,
       credentialRef,
       credentialReady: await this.hasCredential(credentialRef),
-      models: parseModels(deepseek.models) ?? DEFAULT_DEEPSEEK_MODELS,
+      models: mergeCatalogModels(catalog, parseModels(deepseek.models)),
       managed: true,
     };
   }
 
-  private async describePiAi(settings: Record<string, unknown>): Promise<DshProviderSummary[]> {
+  private async describePiAi(
+    settings: Record<string, unknown>,
+    catalogProviders: readonly CatalogProvider[],
+  ): Promise<DshProviderSummary[]> {
     const piAi = isMapLike(settings[PIAI_NAMESPACE]) ? settings[PIAI_NAMESPACE] : {};
     const providers = isMapLike(piAi.providers) ? piAi.providers : {};
     const summaries: DshProviderSummary[] = [];
@@ -352,14 +449,21 @@ export class DshProviderManager {
         typeof profile.apiKeyEnv === 'string' && profile.apiKeyEnv.length > 0
           ? profile.apiKeyEnv
           : undefined;
+      const catalog = catalogProviderFor(catalogProviders, {
+        id,
+        baseURL: profile.baseURL,
+        credentialRef: ref,
+      });
       summaries.push({
         id,
-        displayName: typeof profile.displayName === 'string' ? profile.displayName : id,
+        displayName: typeof profile.displayName === 'string'
+          ? profile.displayName
+          : catalog?.name ?? id,
         namespace: PIAI_NAMESPACE,
         configured: true,
         credentialRef: ref,
         credentialReady: ref === undefined ? false : await this.hasCredential(ref),
-        models: parseModels(profile.models) ?? [],
+        models: mergeCatalogModels(catalog, parseModels(profile.models)),
         managed: true,
       });
     }
@@ -375,7 +479,7 @@ export class DshProviderManager {
     const settings = await this.readSettings();
     const section = settings[AGENT_DEFAULT_MODEL_NAMESPACE];
     if (typeof section === 'string') {
-      // Legacy string form (`agent-default-model: deepseek-v4-pro`).
+      // Legacy string form (`agent-default-model: model-id`).
       return { provider: DEEPSEEK_PROVIDER, model: section };
     }
     if (isMapLike(section) && typeof section.model === 'string') {
@@ -477,10 +581,7 @@ export class DshProviderManager {
     const current = isMapLike(settings[DEEPSEEK_NAMESPACE])
       ? settings[DEEPSEEK_NAMESPACE]
       : {};
-    const models =
-      rawModels(current.models).length > 0
-        ? rawModels(current.models)
-        : DEFAULT_DEEPSEEK_MODELS.map((model) => modelRecord(model));
+    const models = rawModels(current.models);
     if (models.some((model) => model.id === input.id)) {
       throw new Error(`模型 ${input.id} 已存在于 ${DEEPSEEK_PROVIDER}`);
     }

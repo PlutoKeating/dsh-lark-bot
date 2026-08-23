@@ -97,8 +97,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约；dsh 协议漂移集中在
    `src/adapters/dsh/`，宿主工具 registry 漂移集中在 `src/notify/` 的 raw-schema 注册边界。
    当前兼容基线为 rc.8；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
-   核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
-   block；出站图片在 channel 增加二进制能力前输出明确降级提示。
+   核对精确版本，旧 profile 进入幂等重装。入站图片按 magic bytes 识别格式；ACP 使用
+   capability-gated 原生 image block，默认 SDK profile 则以桥接扩展的 `attachment/upload` 调用
+   dsh 自带 attachment store 完成校验与持久化，再把 durable ref 作为原生 image block 发送。
+   图片从不退化为路径文本，也不得用工作区其他文件替代；安全模式仍装配未扩展的官方 SDK server。
+   出站图片在 channel 增加二进制能力前输出明确降级提示。
    SDK rc.8 没有 per-session cancel，adapter 因此以 `scope + workspace` 建立 runtime 取消域，
    同一 scope 的并发 fresh session 另开 runtime；run handle 捕获并只关闭自己的 entry。原生 resume
    还必须通过 adapter 的 live-owner 检查：只有当前进程仍持有同 runtime/session/route 时复用 ID；
@@ -205,9 +208,14 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
    `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；`bash` / `shell`
-   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行，串联、重定向、命令替换、
-   未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
+   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行；SDK 附带的
+   `description` / `workdir` / false background 元数据经显式校验后不改变判定，未知参数、串联、
+   重定向、命令替换、未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
+   `src/policy/tool-policy.ts` 是插件策略的单一判定/文案来源：计划门与逐工具审批共用高风险分类器，
+   runtime persona 从同一只读命令集合生成；拒绝统一携带 `[policy-denial layer=...]`、reason 与
+   to-change。计划门负责意图确认，`/permission` 负责逐工具决策，二者不互相冒充；Harness
+   `[sandbox: ...]` 作为上游 `file-sandbox` 层被明确识别但不由插件越权改写。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
    高风险工具，再以 structural listener 接入 rc.8
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；
@@ -274,7 +282,14 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     提交由官方 revision fence/持久 provider 负责，bridge lifecycle reload 失败只记结构化告警且不并发
     启动第二 generation。
 
-13. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
+14. **模型目录能力保真与卡片自洽（issue #80）**：bridge 仍以 provider/settings 的目录为权威，
+    models.dev 运行时目录只负责发现 provider 展示名、模型能力与供应商声明的推理档位；短 TTL
+    缓存与 stale-on-error 避免目录抖动阻断聊天，首次离线则只投影 settings，不存在代码内置模型
+    或展示名兜底。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段。
+    卡片把 `agent-default-model` 的缺席条目合并进本次投影与点击路由，不反向篡改 provider 配置；
+    按钮按 provider 去除公共前缀、每行最多两个，以保证移动端可辨认。
+
+15. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
     独占 binding、历史待确认水位/已确认交付 cursor、当前 turn 来源、近期消息映射和飞书 prompt
     `rpcId`；仅为崩溃后续写同一流式卡保存该卡未终态正文，不复制完整 transcript。
     `/session` 只列当前 canonical workspace 的非 subagent 元数据；确认 nonce 固化 operator、scope、

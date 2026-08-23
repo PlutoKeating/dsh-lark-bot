@@ -108,7 +108,10 @@ describe('lark_request_plan_approval tool', () => {
     const allow = async (): Promise<unknown> => ({ kind: 'allow' });
 
     await preStep({ agent, turn: 1 }, allow);
-    await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
+    await expect(preExecute(edit, allow)).resolves.toMatchObject({
+      kind: 'deny',
+      reason: expect.stringContaining('[policy-denial layer=plan-gate]'),
+    });
     await definitions[0]!.execute({ plan: 'Edit a.ts' }, { agent } as never);
     await expect(preExecute(edit, allow)).resolves.toEqual({ kind: 'allow' });
     await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
@@ -153,6 +156,32 @@ describe('lark_request_plan_approval tool', () => {
       });
     }
     expect(next).toHaveBeenCalledTimes(12);
+  });
+
+  it('allows the real SDK bash metadata shape for read-only commands', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn() },
+    } as never);
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+
+    for (const arguments_ of [
+      { command: 'date', description: 'Run date command' },
+      { command: 'pwd', description: 'Inspect the working directory', workdir: '/tmp' },
+      JSON.stringify({ command: 'git status --short', description: 'Inspect changes' }),
+      { command: 'ls -la', description: 'List files', run_in_background: false },
+    ]) {
+      await expect(preExecute({ name: 'bash', arguments: arguments_ }, next)).resolves.toEqual({
+        kind: 'allow',
+      });
+    }
+    expect(next).toHaveBeenCalledTimes(4);
   });
 
   it('keeps mutating, compound, redirected, and unknown shell commands behind the plan gate', async () => {
@@ -211,7 +240,7 @@ describe('lark_request_plan_approval tool', () => {
     for (const arguments_ of [
       { command: 'date', run_in_background: true },
       { command: 'pwd', sandbox_permissions: 'require_escalated' },
-      { command: 'git status', workdir: '/tmp' },
+      { command: 'git status', stdin: 'unexpected' },
     ]) {
       await expect(preExecute({ name: 'bash', arguments: arguments_ }, next)).resolves.toMatchObject({
         kind: 'deny',
