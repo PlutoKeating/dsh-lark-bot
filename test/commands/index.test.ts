@@ -1060,6 +1060,7 @@ describe('command router', () => {
     expect(card).toContain('offer-1');
     expect(card).toContain('确认更新');
     expect(card).toContain('取消');
+    expect(card).toContain('正在执行的任务会被中断');
   });
 
   it('/jobs only lists and retries jobs in the current scope and workspace', async () => {

@@ -42,4 +42,18 @@ describe('ChannelUpdateController', () => {
     await expect(controller.decide(input)).resolves.toEqual({ kind: 'stale' });
     expect(start).not.toHaveBeenCalled();
   });
+
+  it('fails closed when the guardian worker cannot be launched', async () => {
+    const controller = new ChannelUpdateController({
+      current: '0.18.0', probe: vi.fn().mockResolvedValue('0.19.0'),
+      handoff: { start: vi.fn().mockRejectedValue(new Error('spawn failed')) },
+      id: () => 'offer-failed',
+    });
+    await controller.check({ scope: 'chat-a', actorId: 'ou_admin' });
+
+    await expect(controller.decide({
+      offerId: 'offer-failed', scope: 'chat-a', actorId: 'ou_admin', decision: 'confirm',
+      route: { chatId: 'oc_chat', requesterId: 'ou_admin' },
+    })).resolves.toEqual({ kind: 'failed' });
+  });
 });

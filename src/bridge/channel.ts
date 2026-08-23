@@ -592,6 +592,9 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         if (outcome.kind === 'busy') {
           return { toast: { type: 'info', content: '已有更新正在进行 / An update is already running' } };
         }
+        if (outcome.kind === 'failed') {
+          return { toast: { type: 'error', content: '更新启动失败，请重新发送 /upgrade / Failed to start; send /upgrade again' } };
+        }
         if (event.messageId) {
           void settleActionCard(
             channel,

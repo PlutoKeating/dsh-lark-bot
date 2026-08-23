@@ -345,6 +345,27 @@ describe('dsh-lark-bot upgrade', () => {
     expect(harness.restartProfile).toHaveBeenCalledOnce();
   });
 
+  it('fails the upgrade and preserves pendingRestart when an explicit profile reload fails', async () => {
+    const harness = makeHarness();
+    harness.dshHome = await makeHome();
+    harness.larkHome = await makeHome();
+    harness.stateFile = join(harness.larkHome, 'upgrade-state.json');
+    await installFakePackage(harness.dshHome, 'dsh-lark', '0.10.2');
+    harness.restartProfile.mockResolvedValue({ ok: false, message: 'profile 重启失败' });
+
+    await expect(runWith(harness, {
+      yes: true,
+      restart: true,
+      fetchLatestFn: async () => '0.12.0',
+      listProcessesFn: async () => [{
+        pid: 4242,
+        cmdline: 'node /home/x/@deepseek-ai/dsh/lib/bin.js --profile dsh-lark',
+      }],
+    })).rejects.toThrow('profile reload failed');
+
+    expect((await loadUpgradeState(harness.stateFile))?.lastUpgrade.pendingRestart).toBe(true);
+  });
+
   it('--no-guardian skips the guardian install', async () => {
     const harness = makeHarness();
     harness.dshHome = await makeHome();

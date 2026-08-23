@@ -131,14 +131,20 @@ export async function runGuardianUpdateWorker(
     ],
     30 * 60_000,
   );
+  const latest = await loadState(request.stateFile);
+  if (!latest || latest.id !== request.id) return;
+  // The reloaded bridge may have reconciled and even delivered success while
+  // this worker was still unwinding from `npx`. Never reopen that terminal
+  // result or turn one successful update into duplicate notifications.
+  if (latest.status === 'succeeded') return;
   const finished: GuardianUpdateState = {
-    ...state,
+    ...latest,
     status: result.code === 0 ? 'succeeded' : 'failed',
     finishedAt: (options.now ?? (() => new Date()))().toISOString(),
     delivered: false,
     ...(result.code === 0
       ? {}
-      : { error: (result.stderr || result.stdout || `upgrade exited with code ${result.code}`).slice(0, 2_000) }),
+      : { error: `upgrade worker exited with code ${result.code}` }),
   };
   await saveState(request.stateFile, finished);
 }
@@ -152,6 +158,7 @@ export class GuardianUpdateHandoff {
   private readonly now: () => Date;
   private readonly id: () => string;
   private startQueue: Promise<void> = Promise.resolve();
+  private deliveryQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: GuardianUpdateHandoffOptions) {
     this.launch = options.launch ?? defaultLaunch;
@@ -216,7 +223,7 @@ export class GuardianUpdateHandoff {
         ...state,
         status: 'failed',
         finishedAt: this.now().toISOString(),
-        error: error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000),
+        error: 'failed to start guardian update worker',
         delivered: false,
       });
       throw error;
@@ -257,6 +264,22 @@ export class GuardianUpdateHandoff {
 
   /** Deliver an update result once; failed delivery remains pending. */
   async deliverResult(
+    deliver: (state: GuardianUpdateState) => Promise<void>,
+  ): Promise<boolean> {
+    let release!: () => void;
+    const previous = this.deliveryQueue;
+    this.deliveryQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await this.deliverResultExclusive(deliver);
+    } finally {
+      release();
+    }
+  }
+
+  private async deliverResultExclusive(
     deliver: (state: GuardianUpdateState) => Promise<void>,
   ): Promise<boolean> {
     const state = await loadState(this.options.file);

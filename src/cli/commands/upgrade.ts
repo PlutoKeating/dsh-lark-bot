@@ -408,6 +408,11 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
       record = { ...record, pendingRestart: false };
       await saveUpgradeState(stateFile, { schemaVersion: 1, lastUpgrade: record });
     }
+    if (!restarted.ok) {
+      throw new Error(
+        'profile reload failed after package upgrade; the new version is installed but pending restart',
+      );
+    }
   } else if (detection.profileProcess && !options.restart) {
     write(
       out,

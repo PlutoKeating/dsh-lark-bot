@@ -13,6 +13,7 @@ export type ChannelUpdateDecision =
   | { kind: 'cancelled' }
   | { kind: 'stale' }
   | { kind: 'busy'; updateId: string }
+  | { kind: 'failed' }
   | { kind: 'started'; updateId: string; targetVersion: string };
 
 export interface ChannelUpdateControllerOptions {
@@ -82,9 +83,13 @@ export class ChannelUpdateController {
     }
     this.offers.delete(input.offerId);
     if (input.decision === 'cancel') return { kind: 'cancelled' };
-    const started = await this.options.handoff.start(offer.targetVersion, input.route);
-    return started.accepted
-      ? { kind: 'started', updateId: started.id, targetVersion: offer.targetVersion }
-      : { kind: 'busy', updateId: started.id };
+    try {
+      const started = await this.options.handoff.start(offer.targetVersion, input.route);
+      return started.accepted
+        ? { kind: 'started', updateId: started.id, targetVersion: offer.targetVersion }
+        : { kind: 'busy', updateId: started.id };
+    } catch {
+      return { kind: 'failed' };
+    }
   }
 }

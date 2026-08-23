@@ -107,7 +107,7 @@ describe('GuardianUpdateHandoff', () => {
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ status: 'succeeded' }));
   });
 
-  it('records bounded worker output for local failure logging', async () => {
+  it('records only a generic exit code when the worker fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-failure-'));
     const file = join(root, 'guardian', 'update.json');
     const handoff = new GuardianUpdateHandoff({
@@ -123,7 +123,7 @@ describe('GuardianUpdateHandoff', () => {
     const deliver = vi.fn().mockResolvedValue(undefined);
     await handoff.deliverResult(deliver);
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'failed', error: 'x'.repeat(2_000),
+      status: 'failed', error: 'upgrade worker exited with code 1',
     }));
   });
 
@@ -144,5 +144,48 @@ describe('GuardianUpdateHandoff', () => {
 
     expect([first.accepted, second.accepted].sort()).toEqual([false, true]);
     expect(launch).toHaveBeenCalledOnce();
+  });
+
+  it('does not reopen a result already reconciled and delivered by the restarted bridge', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-restart-race-'));
+    const file = join(root, 'guardian', 'update.json');
+    const handoff = new GuardianUpdateHandoff({
+      file, dshProfile: 'dsh-lark', packageName: 'dsh-lark-bot',
+      launch: vi.fn().mockResolvedValue(undefined), id: () => 'update-6',
+    });
+    await handoff.start('0.19.0', { chatId: 'oc_chat', requesterId: 'ou_admin' });
+    const delivered = vi.fn().mockResolvedValue(undefined);
+    const run = vi.fn().mockImplementation(async () => {
+      await handoff.reconcile('0.19.0');
+      await handoff.deliverResult(delivered);
+      return { code: 0, stdout: '', stderr: '' };
+    });
+
+    await runGuardianUpdateWorker({ stateFile: file, id: 'update-6' }, { run, delayMs: 0 });
+
+    await expect(handoff.deliverResult(delivered)).resolves.toBe(false);
+    expect(delivered).toHaveBeenCalledOnce();
+  });
+
+  it('serializes overlapping result polls so a slow Feishu send is still delivered once', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-delivery-race-'));
+    const file = join(root, 'guardian', 'update.json');
+    const handoff = new GuardianUpdateHandoff({
+      file, dshProfile: 'dsh-lark', packageName: 'dsh-lark-bot',
+      launch: vi.fn().mockResolvedValue(undefined), id: () => 'update-7',
+    });
+    await handoff.start('0.19.0', { chatId: 'oc_chat', requesterId: 'ou_admin' });
+    await handoff.reconcile('0.19.0');
+    const deliver = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+
+    const outcomes = await Promise.all([
+      handoff.deliverResult(deliver),
+      handoff.deliverResult(deliver),
+    ]);
+
+    expect(outcomes.sort()).toEqual([false, true]);
+    expect(deliver).toHaveBeenCalledOnce();
   });
 });
