@@ -146,6 +146,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    按钮直接放 `body.elements`（横排用 `column_set` 自动宽列，兼容飞书 2.0 对旧
    `action` 容器的拒绝），需要文本/选择输入时以 `form` 容器包住组件与提交按钮，
    回调经 `action.form_value` 取输入值。
+   SDK / ACP managed runtime 在 profile provision 之前还会调用统一的 `resolveAdapterRoute()`：完整显式
+   route 直接使用；空 route 回退到 dsh 对象形式 `agent-default-model`；只有单边字段时必须能与模型目录
+   或默认 route 一致，否则在本项目边界给出配置错误，绝不把空 provider 交给上游。doctor 与真实 bridge
+   复用同一 adapter 工厂。OS service 重建 env snapshot 时先读取现有 0600 env 文件，再以当前 shell 的
+   已定义受管键覆盖，防止普通 restart 删除此前保存的 provider/model 或实例设置。
    dsh Web 的通用 bridge 设置走官方 settings 扩展契约：Host `src/plugin.ts` 以
    `@deepseek-ai/dsh-settings` 注册 `dsh-lark-bot` namespace 与 Schemastery schema，先把
    `ConfigStore` 中扫码绑定后实际生效的 profile 合入 composition base；`appSecret` 使用

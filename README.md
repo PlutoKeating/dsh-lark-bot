@@ -510,6 +510,11 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_UPGRADE_NOTIFY` | `false` | `true` 时发现新版本向指定 chat 推送飞书通知（默认仅日志）|
 | `DSH_LARK_UPGRADE_NOTIFY_CHAT` | — | 接收更新通知的 chat id（配合 `DSH_LARK_UPGRADE_NOTIFY=true`）|
 
+SDK / ACP 启动会先解析完整 provider/model route：显式双字段优先；缺失时读取 dsh 对象形式
+`agent-default-model: { provider, model }`；仍无法得到完整 route 时在 bridge/doctor 入口给出本项目的
+明确配置错误，不把空 provider 传给上游 runtime。受管 service 的 install/start/restart 会把旧 env
+文件中的受管键与当前 shell 合并（当前 shell 显式值优先），避免从另一个终端重启时静默丢失已有 route。
+
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
 ## 权限与数据

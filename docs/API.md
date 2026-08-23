@@ -341,6 +341,15 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `apiKeyEnv` 关联。dsh runtime 启动后异步注册 llm-pi-ai 路由（约几百毫秒），
 `SdkDshAdapter` 对 initialize 握手做同进程轮询重试（issue #47 二次修复）。
 
+`src/adapters/index.ts` 的 `resolveAdapterRoute()` 在 SDK / ACP profile provision 前解析启动 route：
+显式 provider+model 直接通过；仅 model 时用 `resolveModelRoute()` 找 owner；两者均为空时读取对象形式
+`defaultModelSelection()`；单边配置与默认 route 不一致或最终仍缺字段时，`buildAgentAdapter()` 抛出
+本项目可操作的配置错误。run 与 doctor 都走该工厂，因此不会出现 doctor 与消息路径行为漂移。
+
+`snapshotServiceEnv(source, extraKeys, inherited)` 只合并白名单受管键，顺序为旧 service env → 当前
+shell（后者覆盖）；`ServiceManager.buildSpec()` 每次 install/start/restart 都先读取原 0600 env 文件，
+所以稀疏 shell 不会擦除已有 `DSH_LARK_PROVIDER`，显式新值仍可正常替换。
+
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
 主卡将全部可用模型渲染为直接操作按钮，以 ✅ 标记按 scope / role / profile / dsh / env

@@ -8,16 +8,19 @@ const EXTRA_KEYS = ['PATH', 'HOME', 'DEEPSEEK_API_KEY', 'DSH_HOME'] as const;
 export function snapshotServiceEnv(
   source: NodeJS.ProcessEnv = process.env,
   extraKeys: readonly string[] = [],
+  inherited: NodeJS.ProcessEnv = {},
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (value === undefined) continue;
-    if (
-      key.startsWith('DSH_LARK_') ||
-      (EXTRA_KEYS as readonly string[]).includes(key) ||
-      extraKeys.includes(key)
-    ) {
-      env[key] = value;
+  for (const candidate of [inherited, source]) {
+    for (const [key, value] of Object.entries(candidate)) {
+      if (value === undefined) continue;
+      if (
+        key.startsWith('DSH_LARK_') ||
+        (EXTRA_KEYS as readonly string[]).includes(key) ||
+        extraKeys.includes(key)
+      ) {
+        env[key] = value;
+      }
     }
   }
   return env;

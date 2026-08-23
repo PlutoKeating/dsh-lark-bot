@@ -453,5 +453,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
-桥接引擎）。受管 bridge/guardian service 会在 install/start/restart 时把当前 `DSH_LARK_*` 环境
-快照进服务配置；修改后需在新环境下执行 service restart 才会持久生效。
+桥接引擎）。SDK / ACP 会先使用完整显式 provider/model；缺失时回退到 dsh 对象形式
+`agent-default-model`，仍不完整则给出明确配置错误。受管 bridge/guardian service 在
+install/start/restart 时把旧 service env 的受管键与当前 `DSH_LARK_*` 环境合并（当前 shell 显式值
+优先），因此稀疏 shell 重启不会删除已有 route；修改值后仍需在新环境下执行 service restart 才会生效。

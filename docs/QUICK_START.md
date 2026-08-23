@@ -145,6 +145,11 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 （Base URL 根域名自动补 `/v1`）；`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中
 显示，建议在私聊中使用。
 
+SDK / ACP 启动时若未显式设置 provider/model，会读取 dsh 对象形式的
+`agent-default-model: { provider, model }`；两处都没有完整 route 时 doctor/bridge 会直接给出配置错误。
+受管 service 重启会保留旧 env 文件中当前 shell 未覆盖的 `DSH_LARK_*`，因此从新终端执行 restart
+不会再把已有 provider/model 静默清空。
+
 任务强度用 `/mode` 双语卡片或 `/mode quick|balanced|deep` 切换：快速适合简单问答，平衡适合大多数任务，深度适合复杂重构与需要更多验证的工作。模式按 scope 持久化并显示在 `/status`；切换仅影响下一轮，不会中断当前任务或清空上下文。`/effort` 是等价别名。
 
 启动后如发现异常，先运行 `dsh-lark-bot doctor` 检查 profile、工作目录和本机 dsh 可用性。
