@@ -213,7 +213,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
    `policyCheckOnly` 则是同步协议分支，直接返回合法 `ask|allow|deny`，不要求 outcome、不卡片、不进入
-   heartbeat 人类等待。`tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
+   heartbeat 人类等待。兼容探针把 policy preflight、low-risk allow 与真正的一次性审批分开记录，
+   快速契约测试直接对照生产 handler 的响应；Release 上传包前必须再次通过完整真实探针。
+   `tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
    在任何快速通道前终止，`ask` 的低风险调用静默放行，高风险调用在计划确认后进入一次性审批，
    `allow` 仅自动通过逐工具审批。随后计划门会拒绝当前 turn 尚未批准的 mutating/execute/`run_code`
    调用；`bash` / `shell` 快速通道只保留无路径自省命令与受限仓库内只读 Git 子命令，文件内容读取、

@@ -23,6 +23,7 @@ import {
   PROTOCOL_VERSION,
 } from '@agentclientprotocol/sdk';
 import { Context } from '@deepseek-ai/cordis';
+import { resolveCompatApprovalRequest } from './compat-approval-fixture.mjs';
 import { readDshCompatibility, rootDir } from './dsh-compat.mjs';
 
 const textResponse = (text) => [
@@ -39,6 +40,8 @@ async function startCompatServer() {
   const questions = [];
   const plans = [];
   const approvals = [];
+  const policyChecks = [];
+  const lowRiskApprovals = [];
   const modelRequests = [];
   const server = createServer((request, response) => {
     let raw = '';
@@ -64,14 +67,12 @@ async function startCompatServer() {
       }
       if (request.url === '/approval') {
         const approval = JSON.parse(raw);
-        approvals.push(approval);
+        const route = resolveCompatApprovalRequest(approval);
+        if (route.kind === 'policy-check') policyChecks.push(approval);
+        else if (route.kind === 'low-risk') lowRiskApprovals.push(approval);
+        else approvals.push(approval);
         response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify({
-          ok: true,
-          outcome: approval.toolInput?.command === 'printf must-not-run-approval'
-            ? 'rejected'
-            : 'allowed-once',
-        }));
+        response.end(JSON.stringify(route.response));
         return;
       }
       if (request.url !== '/v1/chat/completions') {
@@ -217,6 +218,8 @@ async function startCompatServer() {
     questions,
     plans,
     approvals,
+    policyChecks,
+    lowRiskApprovals,
     modelRequests,
     close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   };
@@ -581,6 +584,13 @@ async function main() {
       modelRequests: compatServer.modelRequests,
     });
     console.log(`[probe] acp text task + permission callback ok (${acpResult.permissionCount} request)`);
+    if (!compatServer.policyChecks.some((request) =>
+      request.policyCheckOnly === true &&
+      request.toolName === 'lark_request_plan_approval' &&
+      typeof request.sessionId === 'string'
+    )) {
+      throw new Error('ACP plan tool did not complete the scope-policy preflight contract');
+    }
     console.log(acpResult.nativeImage
       ? '[probe] acp native PNG capability + content block ok'
       : '[probe] acp rc.8 advertises no image capability; bridge fail-closed attachment rejection remains required');
@@ -705,6 +715,17 @@ async function main() {
         throw new Error(
           `approval rejection recovery counts mismatch: plans=${compatServer.plans.length}, approvals=${compatServer.approvals.length}, notifications=${compatServer.notifications.length}`,
         );
+      }
+      if (!compatServer.policyChecks.some((request) =>
+        request.policyCheckOnly === true && request.toolName === 'bash' &&
+        typeof request.sessionId === 'string'
+      )) {
+        throw new Error('SDK bash tool did not complete the scope-policy preflight contract');
+      }
+      if (!compatServer.lowRiskApprovals.some((request) =>
+        request.lowRisk === true && request.toolName === 'lark_request_plan_approval'
+      )) {
+        throw new Error('SDK plan tool did not complete the low-risk approval contract');
       }
       console.log('[probe] sdk task/notify/ask/enforced-plan-gate/one-shot-approval/resume ok against local OpenAI-compatible fixture');
     } finally {
