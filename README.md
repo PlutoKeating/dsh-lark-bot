@@ -334,7 +334,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
 
 ### 升级
 
-**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时 bot 弹出只允许发起人操作的确认卡；点击“确认更新”后，Guardian 通过独立 worker 安装卡片中确认的精确 npm 版本，复用完整升级、runtime profile 修复、guardian/profile 重启和 doctor 验证链，并在重载后回到原会话报告结果。点击“取消”不会产生任何变更。更新会重启机器人，正在执行的任务可能被中断；配置、会话、归档和凭据保持不变。每次 `/new` / `/reset` 都会 best-effort 查询一次 npm；仅在有新版本时额外发送一条简短普通消息。
+**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时 bot 弹出只允许发起人操作的确认卡；点击“确认更新”后，Guardian 通过独立 worker 安装卡片中确认的精确 npm 版本，复用完整升级、runtime profile 修复、guardian/profile 重启和 doctor 验证链，并在重载后回到原会话报告结果。worker 使用 owner-only 中立工作目录与每次请求隔离的 npm cache，不依赖 bridge 启动目录或用户全局 npm cache；失败时只回传脱敏的可行动类别，不发送原始命令输出。点击“取消”不会产生任何变更。更新会重启机器人，正在执行的任务可能被中断；配置、会话、归档和凭据保持不变。每次 `/new` / `/reset` 都会 best-effort 查询一次 npm；仅在有新版本时额外发送一条简短普通消息。
 
 **推荐：一行命令彻底升级（v0.12.0+ 新增，issue #10）**
 
@@ -724,6 +724,8 @@ pnpm publish:dual
 默认安装的「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
 通道接收 `/safemode` 控制信号，以仅核心 profile（`dsh-base` + `dsh-headless`）拉起受限对话
 用于自愈，`/safemode exit` 重启完整 profile 并交还通道。
+`dsh-lark-bot guardian status` 只报告精确 `guardian run` 进程身份唯一且存活的常驻 PID，并在
+系统服务 PID 可用时交叉验证；身份不确定时显示“未发现”，不会把查询命令自身 PID 当成守护进程。
 
 ## 目录结构
 

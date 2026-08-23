@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 import { ownPackageInfo } from '../adapters/dsh/own-package.js';
@@ -31,8 +31,42 @@ export interface GuardianUpdateState {
   route: GuardianUpdateRoute;
   startedAt: string;
   finishedAt?: string;
+  errorCode?: GuardianUpdateErrorCode;
   error?: string;
   delivered?: boolean;
+}
+
+export type GuardianUpdateErrorCode =
+  | 'filesystem-access'
+  | 'registry-unavailable'
+  | 'bootstrap-unavailable'
+  | 'upgrade-failed';
+
+export function guardianUpdateFailureHint(
+  code: GuardianUpdateErrorCode | undefined,
+): { zh: string; en: string } {
+  switch (code) {
+    case 'filesystem-access':
+      return {
+        zh: '更新工作目录不可访问；请发送 `/doctor` 检查文件权限后重试。',
+        en: 'The private update workspace is inaccessible. Send `/doctor` to check file permissions, then retry.',
+      };
+    case 'registry-unavailable':
+      return {
+        zh: '无法连接 npm 正式源；请检查网络后重试。',
+        en: 'The npm registry is unreachable. Check the network, then retry.',
+      };
+    case 'bootstrap-unavailable':
+      return {
+        zh: '无法启动 npm/npx；请发送 `/doctor` 检查 Node.js 与 npm。',
+        en: 'npm/npx could not start. Send `/doctor` to check Node.js and npm.',
+      };
+    default:
+      return {
+        zh: '升级命令未完成；请发送 `/doctor` 检查后重试。',
+        en: 'The upgrade command did not complete. Send `/doctor`, then retry.',
+      };
+  }
 }
 
 export interface GuardianUpdateHandoffOptions {
@@ -78,6 +112,41 @@ function validVersion(value: string): boolean {
   return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value);
 }
 
+async function ensurePrivateDirectory(path: string): Promise<void> {
+  await mkdir(path, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') await chmod(path, 0o700);
+}
+
+function classifyWorkerFailure(
+  code: number,
+  stdout: string,
+  stderr: string,
+): Pick<GuardianUpdateState, 'errorCode' | 'error'> {
+  const output = `${stderr}\n${stdout}`;
+  if (/\b(?:EACCES|EPERM)\b|permission denied|access is denied/iu.test(output)) {
+    return {
+      errorCode: 'filesystem-access',
+      error: 'upgrade worker could not access its private working files',
+    };
+  }
+  if (/\b(?:ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT)\b|registry unavailable/iu.test(output)) {
+    return {
+      errorCode: 'registry-unavailable',
+      error: 'upgrade worker could not reach the npm registry',
+    };
+  }
+  if (/\bENOENT\b|not found|not recognized/iu.test(output)) {
+    return {
+      errorCode: 'bootstrap-unavailable',
+      error: 'upgrade worker could not start the npm bootstrap command',
+    };
+  }
+  return {
+    errorCode: 'upgrade-failed',
+    error: `upgrade worker exited with code ${code}`,
+  };
+}
+
 async function defaultLaunch(request: GuardianUpdateWorkerRequest): Promise<void> {
   // This module is bundled into several entry files (`plugin.js`, `cli.js`),
   // so import.meta.url is not a stable way to locate the CLI after build.
@@ -117,20 +186,44 @@ export async function runGuardianUpdateWorker(
   if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
   const spec = `${state.packageName}@${state.targetVersion}`;
   const run = options.run ?? captureOutput;
-  const result = await run(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    [
-      '--yes',
-      '--registry', defaultRegistryUrl(),
-      spec,
-      'upgrade',
-      '--profile', state.dshProfile,
-      '--yes',
-      '--restart',
-      '--package', spec,
-    ],
-    30 * 60_000,
+  const workerRoot = join(dirname(request.stateFile), 'update-worker');
+  const cacheRoot = join(workerRoot, 'npm-cache');
+  const cacheDir = join(
+    cacheRoot,
+    createHash('sha256').update(state.id).digest('hex'),
   );
+  const cwd = join(workerRoot, 'cwd');
+  let result: { code: number; stdout: string; stderr: string };
+  try {
+    await ensurePrivateDirectory(workerRoot);
+    await rm(cacheRoot, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+    await ensurePrivateDirectory(cacheRoot);
+    await ensurePrivateDirectory(cacheDir);
+    await ensurePrivateDirectory(cwd);
+    result = await run(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      [
+        '--yes',
+        '--cache', cacheDir,
+        '--registry', defaultRegistryUrl(),
+        spec,
+        'upgrade',
+        '--profile', state.dshProfile,
+        '--yes',
+        '--restart',
+        '--package', spec,
+      ],
+      30 * 60_000,
+      { cwd, umask: 0o077 },
+    );
+  } catch (error) {
+    result = {
+      code: 1,
+      stdout: '',
+      stderr: error instanceof Error ? `${error.name}: ${error.message}` : 'unknown worker failure',
+    };
+  }
   const latest = await loadState(request.stateFile);
   if (!latest || latest.id !== request.id) return;
   // The reloaded bridge may have reconciled and even delivered success while
@@ -144,7 +237,7 @@ export async function runGuardianUpdateWorker(
     delivered: false,
     ...(result.code === 0
       ? {}
-      : { error: `upgrade worker exited with code ${result.code}` }),
+      : classifyWorkerFailure(result.code, result.stdout, result.stderr)),
   };
   await saveState(request.stateFile, finished);
 }

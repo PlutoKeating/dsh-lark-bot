@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('guardian CLI commands', () => {
-  it('prints guardian status from local state', async () => {
+  it('prints the same verified resident PID on successive status calls', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-guardian-cli-'));
     tempDirs.push(dir);
     process.env.DSH_LARK_HOME = dir;
@@ -33,13 +33,39 @@ describe('guardian CLI commands', () => {
       return true;
     }) as typeof process.stdout.write;
     try {
-      await statusGuardianCommand({});
+      const deps = {
+        findGuardianProcess: async () => ({
+          pid: 4242,
+          cmdline: 'node /opt/dsh-lark-bot/dist/cli.js guardian run',
+        }),
+      };
+      await statusGuardianCommand({}, deps);
+      await statusGuardianCommand({}, deps);
       const output = stdout.join('');
       expect(output).toContain('dsh profile：dsh-lark');
       expect(output).toContain('安全 profile：dsh-lark-safe');
       expect(output).toContain('模式：standby');
-      expect(output).toContain('守护进程 pid：未发现');
+      expect(output.match(/守护进程 pid：4242/gu)).toHaveLength(2);
       expect(output).not.toContain(`守护进程 pid：${process.pid}`);
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+
+  it('reports unavailable when no resident guardian identity is provable', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-guardian-cli-'));
+    tempDirs.push(dir);
+    process.env.DSH_LARK_HOME = dir;
+    const stdout: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string) => {
+      stdout.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      await statusGuardianCommand({}, { findGuardianProcess: async () => undefined });
+      expect(stdout.join('')).toContain('守护进程 pid：未发现');
+      expect(stdout.join('')).not.toContain(`守护进程 pid：${process.pid}`);
     } finally {
       process.stdout.write = originalWrite;
     }
