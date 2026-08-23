@@ -50,6 +50,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Real dsh compatibility gate
+        run: node scripts/probe-dsh-compat.mjs
+
       - name: Verify publish bundle completeness
         run: node scripts/check-publish-bundle.mjs
 
