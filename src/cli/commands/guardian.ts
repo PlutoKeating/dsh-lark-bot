@@ -14,7 +14,11 @@ import {
   uninstallGuardian,
   type InstallResult,
 } from '../../guardian/install.js';
-import { findProfileProcess } from '../../guardian/process.js';
+import {
+  findGuardianProcess,
+  findProfileProcess,
+  type ProfileProcess,
+} from '../../guardian/process.js';
 import {
   loadGuardianState,
   newGuardianState,
@@ -24,6 +28,10 @@ import { resolveAppPaths } from '../../config/app-paths.js';
 export interface GuardianCommandOptions {
   dshProfile?: string;
   bridgeProfile?: string;
+}
+
+export interface GuardianStatusDeps {
+  findGuardianProcess?: () => Promise<ProfileProcess | undefined>;
 }
 
 function envWithOverrides(options: GuardianCommandOptions): RuntimeEnv {
@@ -77,6 +85,7 @@ export async function uninstallGuardianCommand(
 /** Print a human-readable guardian status without starting the service. */
 export async function statusGuardianCommand(
   options: GuardianCommandOptions = {},
+  deps: GuardianStatusDeps = {},
 ): Promise<void> {
   const env = envWithOverrides(options);
   const paths = resolveAppPaths(env.home);
@@ -88,6 +97,7 @@ export async function statusGuardianCommand(
   const layout = guardianLayoutFor(env, state.bridgeProfile);
   const heartbeat = await readHeartbeat(layout.heartbeatFile);
   const processFound = await findProfileProcess(state.dshProfile);
+  const guardianProcess = await (deps.findGuardianProcess ?? findGuardianProcess)();
   const up =
     isHeartbeatFresh(heartbeat, env.guardianStaleMs) || processFound !== undefined;
   printLines([
@@ -100,7 +110,9 @@ export async function statusGuardianCommand(
     `dsh 是否在线：${up ? '是' : '否'}${processFound ? `（pid ${processFound.pid}）` : ''}`,
     `心跳龄：${heartbeat ? `${heartbeatAgeMs(heartbeat)}ms` : '无'}`,
     `已观察过 dsh 运行：${state.profileSeenUp ? '是' : '否'}`,
-    '守护进程 pid：未发现（状态命令不会把自身 PID 冒充为守护进程）',
+    guardianProcess === undefined
+      ? '守护进程 pid：未发现（无法唯一证明 resident guardian 身份）'
+      : `守护进程 pid：${guardianProcess.pid}`,
     `状态文件：${layout.stateFile}`,
     `心跳文件：${layout.heartbeatFile}`,
   ]);

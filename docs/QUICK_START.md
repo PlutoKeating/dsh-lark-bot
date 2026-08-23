@@ -249,6 +249,10 @@ dsh-lark-bot guardian status
 dsh-lark-bot guardian uninstall
 ```
 
+`guardian status` 的“守护进程 pid”只报告精确 `guardian run` 命令行唯一且存活的常驻进程，
+并在系统服务 PID 可用时交叉验证；连续查询同一运行实例会得到同一 PID。无法唯一证明身份时显示“未发现”，不会把
+本次状态查询进程误报为守护进程。
+
 不需要守护时，安装命令加 `--no-guardian` 跳过。
 
 dsh 正常运行时守护保持静默（不占用飞书通道）；dsh 下线或无法 boot 后，守护自动接管通道，

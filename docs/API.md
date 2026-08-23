@@ -1023,6 +1023,17 @@ registry 失败和已是最新均保持静默，不影响新会话。
 export interface ProfileProcess { pid: number; cmdline: string }
 export function matchProfileProcess(cmdline: string, dshProfile: string): boolean;
 export async function findProfileProcess(dshProfile: string): Promise<ProfileProcess | undefined>;
+export interface GuardianProcessDiscoveryOptions {
+  platform?: NodeJS.Platform;
+  currentPid?: number;
+  uid?: number;
+  run?: typeof captureOutput;
+  isAlive?: (pid: number) => boolean;
+}
+export function matchGuardianProcess(cmdline: string): boolean;
+export async function findGuardianProcess(
+  options?: GuardianProcessDiscoveryOptions,
+): Promise<ProfileProcess | undefined>;
 export function isProcessAlive(pid: number): boolean;
 export async function captureOutput(command, args, timeoutMs?): Promise<{ code; stdout; stderr }>;
 export function spawnDetached(command, args, env?): { pid?: number };
@@ -1030,6 +1041,11 @@ export function spawnDetached(command, args, env?): { pid?: number };
 
 `matchProfileProcess` 匹配 `--profile <name>` 参数且命令行为 dsh launcher（包含
 `@deepseek-ai/dsh` 或独立 `dsh` 词元），不会把 `<name>-safe` 误判为完整 profile。
+
+`findGuardianProcess` 仅接受本包 `dist/cli.js guardian run` 的精确命令形状，排除当前查询进程并
+二次确认候选仍存活。Linux / macOS 会在服务 PID 可用时把唯一候选分别与 systemd `MainPID` /
+launchd `pid` 交叉验证；Windows 从 CIM JSON 读取完整命令行。候选不唯一、服务 PID 不一致或身份无法证明时
+返回 `undefined`，因此 `guardian status` 显示“未发现”，绝不使用状态命令自身 PID 兜底。
 
 ### 10.5 控制信号 · Control signals
 

@@ -292,6 +292,10 @@ dsh-lark-bot guardian status
 dsh-lark-bot guardian uninstall
 ```
 
+`guardian status` 只在能够唯一证明常驻 `guardian run` 进程身份时显示其 PID：Linux / macOS
+在服务 PID 可用时与 systemd / launchd 报告交叉验证，Windows 校验 CIM 中的完整命令行。无法证明、候选歧义或
+候选已经退出时显示“未发现”；状态查询进程自身永远不会被当作守护进程。
+
 工作方式：
 
 - 桥接引擎启动后每 5 秒向 `~/.dsh-lark/profiles/<profile>/guardian/heartbeat.json` 写入心跳。
