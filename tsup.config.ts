@@ -12,6 +12,7 @@ export default defineConfig([
       plan: 'src/notify/plan-tool.ts',
       approval: 'src/notify/approval-answerer.ts',
       file: 'src/notify/file-tool.ts',
+      'sdk-server': 'src/adapters/dsh/sdk-server.ts',
     },
     format: ['esm'],
     target: 'node22',
@@ -22,7 +23,13 @@ export default defineConfig([
     clean: false,
     // The cordis plugin modules run inside a dsh profile; let the runtime
     // resolve its own service seam copies from the host profile.
-    external: ['@deepseek-ai/cordis', '@deepseek-ai/dsh-settings'],
+    external: [
+      '@deepseek-ai/cordis',
+      '@deepseek-ai/dsh-attachment',
+      '@deepseek-ai/dsh-sdk-jsonrpc-server',
+      '@deepseek-ai/dsh-sdk-protocol',
+      '@deepseek-ai/dsh-settings',
+    ],
   },
   {
     name: 'dsh-lark-bot/client',

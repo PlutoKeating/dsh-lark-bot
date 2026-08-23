@@ -157,7 +157,9 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 
 默认 backend 为官方 `@deepseek-ai/dsh-sdk-client`（`DSH_LARK_ADAPTER=sdk`）：首次启动会自动在
 `~/.dsh/profiles/dsh-lark-sdk` 创建 SDK JSON-RPC runtime profile（bundle `dsh-base` +
-`dsh-sdk-jsonrpc-server`），需要本机可用 `pnpm`；默认 SDK 已通过 rc.8 approval answerer 支持逐工具审批。
+基于官方 server 的最小附件上传扩展），需要本机可用 `pnpm`；默认 SDK 已通过 rc.8 approval
+answerer 支持逐工具审批。扩展只把图片交给 dsh attachment store 入库，其他 SDK 方法仍由官方
+server 处理；core-only 安全模式继续使用未扩展的官方 server。
 也可切换 `DSH_LARK_ADAPTER=acp`（`~/.dsh/profiles/dsh-lark-acp`，改用 ACP
 `session/request_permission` 原生回调）；`headless` 保留旧版子进程 fallback；
 `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`，
@@ -179,7 +181,9 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 归档到 `~/.dsh-lark/profiles/<profile>/archives/`（Markdown + JSONL + Git commit，`/archive`
 可手动导出）；`/new` 只清空当前 `scope + workspace` 的会话记忆，其他工作区可切回续接。
 
-发送图片时，bot 会先下载到本地 media 目录；发送文本类文件时，会把文件内容注入给 dsh 处理。
+发送图片时，bot 会先下载到本地 media 目录，按内容识别 PNG/JPEG/WebP/GIF 并补全扩展名；默认
+SDK 经 dsh attachment store 校验后发送原生 image block，不发送路径文本，也不会改用工作区内
+其他图片。发送文本类文件时，会把文件内容注入给 dsh 处理。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过 `lark_ask_user`
 工具主动向当前会话弹一张问答卡（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入

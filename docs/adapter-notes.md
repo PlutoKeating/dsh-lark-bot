@@ -91,7 +91,8 @@ type AgentEvent =
 | `src/adapters/types.ts` | `AgentAdapter` / `AgentRun` / `AgentEvent` / 审批类型契约 |
 | `src/adapters/index.ts` | `buildAgentAdapter(env, prefs)` 按 `DSH_LARK_ADAPTER` 构建 |
 | `src/adapters/dsh/sdk-adapter.ts` | `SdkDshAdapter`（默认）：`DeepSeekHarness` runtime 池 |
-| `src/adapters/dsh/sdk-translate.ts` | SDK `session.event` → `AgentEvent`（chunk 流式翻译） |
+| `src/adapters/dsh/sdk-translate.ts` | SDK `session.event` → `AgentEvent`；图片上传后组成原生 image block |
+| `src/adapters/dsh/sdk-server.ts` | 官方 JSON-RPC server 的最小 `attachment/upload` 扩展 |
 | `src/adapters/dsh/sdk-runtime.ts` | `ensureSdkProfile` / `resolveSdkLaunch`（`dsh-lark-sdk` profile） |
 | `src/adapters/dsh/acp-adapter.ts` | `AcpDshAdapter`：ACP client + `session/request_permission` |
 | `src/adapters/dsh/acp-runtime.ts` | `ensureAcpProfile` / `resolveAcpLaunch`（`dsh-lark-acp` profile） |
@@ -167,7 +168,7 @@ SDK / ACP 模式需要对应 runtime profile：
 
 | 模式 | profile | 组合 |
 | --- | --- | --- |
-| sdk | `~/.dsh/profiles/dsh-lark-sdk` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-jsonrpc-server` overlay |
+| sdk | `~/.dsh/profiles/dsh-lark-sdk` | bundle `@deepseek-ai/dsh-base` + 基于官方 server 的附件上传扩展 |
 | acp | `~/.dsh/profiles/dsh-lark-acp` | bundle `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-acp` overlay |
 
 `ensureSdkProfile` / `ensureAcpProfile`（`src/adapters/dsh/sdk-runtime.ts` /
@@ -206,9 +207,12 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
 7. **宿主注册单实例边界**：`lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 使用宿主接受的 raw JSON Schema，approval answerer 使用 structural event listener；
    definition，本包不直接 import `dsh-tools`，避免 scheduler Symbol 双实例。
 8. **rc.8 图片边界**：入站文件按 magic bytes 识别 PNG/JPEG/GIF/WebP；ACP 只有在 runtime 宣告
-   image capability 后才发送原生 base64 block，否则显式失败。真实 rc.8 ACP 当前未宣告该能力；
-   SDK wire 也没有本地原始图片 upload API，因此 SDK 明确走本地文件工具 fallback。当前 channel 尚无
-   图片出站契约，ACP assistant 图片显示降级文本。详见 `DSH_RC8_AUDIT.md`。
+   image capability 后才发送原生 base64 block，否则显式失败。真实 rc.8 ACP 当前未宣告该能力。
+   SDK client 可发送 durable image block，但官方 server 缺少原始图片上传方法；managed profile 因此
+   仅扩展 `attachment/upload`，调用 dsh `admitEncodedImages` / attachment store 得到 durable ref 后再
+   走官方 `session/prompt`。它不把路径作为图片、不替换附件，也不改变其余 SDK 方法。core-only safe
+   profile 仍加载未扩展的官方 server。当前 channel 尚无图片出站契约，ACP assistant 图片显示降级文本。
+   详见 `DSH_RC8_AUDIT.md`。
 9. **多机器人交接**：adapter 契约不增加 bot 专用事件；bridge 先验证飞书 bot sender、真实 @ 与
    fleet peer 身份，再把带来源标记的文本交给普通 run。运行 prompt 只注入登记 peer 的 name/open_id，
    agent 通过既有 `lark_notify` + `mention_user_ids` 交接；跨进程回合限制位于 bridge/bot seam，

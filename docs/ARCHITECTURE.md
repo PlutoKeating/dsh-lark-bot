@@ -97,8 +97,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约；dsh 协议漂移集中在
    `src/adapters/dsh/`，宿主工具 registry 漂移集中在 `src/notify/` 的 raw-schema 注册边界。
    当前兼容基线为 rc.8；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并
-   核对精确版本，旧 profile 进入幂等重装。ACP 图片输入使用 capability-gated 原生 image
-   block；出站图片在 channel 增加二进制能力前输出明确降级提示。
+   核对精确版本，旧 profile 进入幂等重装。入站图片按 magic bytes 识别格式；ACP 使用
+   capability-gated 原生 image block，默认 SDK profile 则以桥接扩展的 `attachment/upload` 调用
+   dsh 自带 attachment store 完成校验与持久化，再把 durable ref 作为原生 image block 发送。
+   图片从不退化为路径文本，也不得用工作区其他文件替代；安全模式仍装配未扩展的官方 SDK server。
+   出站图片在 channel 增加二进制能力前输出明确降级提示。
    SDK rc.8 没有 per-session cancel，adapter 因此以 `scope + workspace` 建立 runtime 取消域，
    同一 scope 的并发 fresh session 另开 runtime；run handle 捕获并只关闭自己的 entry。原生 resume
    还必须通过 adapter 的 live-owner 检查：只有当前进程仍持有同 runtime/session/route 时复用 ID；

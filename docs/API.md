@@ -570,7 +570,9 @@ export async function buildAgentAdapter(
   显式确认的 binding；WebUI/TUI 的 open/resume/activity 不会自动切换或广播。
 
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
-`AgentEvent`）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
+`AgentEvent`，并将本地图片上传为 durable attachment ref + 原生 image block）、
+`sdk-server.ts`（在官方 server 上仅扩展 `attachment/upload`，复用 dsh attachment store 的批量
+准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
 `event-channel.ts`（有序事件队列）。
 
 ### 3.1 显式 session 投影契约
@@ -696,7 +698,8 @@ session ID、底层错误或本机路径，fresh-session retry 另开正常过�
 - `DEFAULT_DENIED_INTERACTIVE_TOOLS` / `isDeniedTool(name)`：IM 不可回达工具默认拒绝。
 
 已接入：`src/core/logger.ts`（字段名 + 字符串正则双重脱敏）、`src/media/attachments.ts`
-（containment + UTF-8 安全读取）、`src/workspace/git-worktree.ts`（containment）、
+（containment + UTF-8 安全读取；图片下载后由 `image-file.ts` 按 magic bytes 限定为
+PNG/JPEG/WebP/GIF 并补扩展名）、`src/workspace/git-worktree.ts`（containment）、
 `src/bridge/channel.ts`（默认拒绝 dmMode + 过期消息）。详细威胁模型见根目录 `SECURITY.md`。
 
 ## 6. 结构化日志 · Structured logging

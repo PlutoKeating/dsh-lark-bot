@@ -40,6 +40,9 @@ const DIST_FILES = [
   'file.js',
   'file.d.ts',
   'file.js.map',
+  'sdk-server.js',
+  'sdk-server.d.ts',
+  'sdk-server.js.map',
 ] as const;
 
 const tempRoots: string[] = [];
@@ -86,6 +89,7 @@ function manifestFor(name = 'dsh-lark-bot'): PublishManifest {
       './plan': { types: './dist/plan.d.ts', import: './dist/plan.js' },
       './approval': { types: './dist/approval.d.ts', import: './dist/approval.js' },
       './file': { types: './dist/file.d.ts', import: './dist/file.js' },
+      './sdk-server': { types: './dist/sdk-server.d.ts', import: './dist/sdk-server.js' },
     },
     files: ['dist', 'bin', 'cordis.patch.yml', 'README.md', 'README_EN.md', 'SECURITY.md', 'LICENSE'],
     dsh: {
@@ -150,6 +154,8 @@ describe('publish bundle', () => {
     expect(required).toContain('plan.js');
     expect(required).toContain('approval.js');
     expect(required).toContain('file.js');
+    expect(required).toContain('sdk-server.js');
+    expect(required).toContain('sdk-server.d.ts');
     expect(required).toContain('approval.d.ts');
   });
 

@@ -147,7 +147,9 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单（写操作需管理员）|
 | `/help` | 查看帮助|
 
-飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
+飞书消息中的图片会按文件内容识别 PNG/JPEG/WebP/GIF 并补全安全扩展名；默认 SDK 会经 dsh
+附件存储校验后发送原生 image block，而不是把路径当作图片。无法读取或模型不支持视觉时会明确
+失败，agent 被要求不得用工作区内其他图片替代。文本类文件会读取内容并注入任务上下文。
 `/model` 卡片会把 dsh 默认模型并入可切换目录（即使 provider 的显式列表尚未包含它），
 并用去除公共前缀后的短标签、每行最多两个按钮适配移动端。provider 名称、模型、输入模态和
 推理档位从 models.dev 运行时目录发现（15 分钟内存缓存）；网络失败时只使用 dsh settings 中的
@@ -407,8 +409,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   自动/人工验证边界见 [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md)。
 - **运行时**：Node.js ≥ 22.19（见 `package.json` engines）。
 - **平台**：Linux / macOS / Windows（飞书 WebSocket 出站长连接，免公网服务器 / 域名 / 内网穿透）。
-- 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑 +
-  token 级流式事件）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
+- 默认 adapter 为官方 **`@deepseek-ai/dsh-sdk-client`**（SDK JSON-RPC runtime，原生 session 续跑、
+  token 级流式事件与 dsh attachment store 原生图片块）；`DSH_LARK_ADAPTER=acp` 切到官方 **ACP server**（审批卡）；`headless` 保留旧版
   子进程 fallback；`DSH_LARK_ADAPTER=web` 驱动**本地 dsh web agent**（`session.prompt` +
   `/api/events.mux`，网页端成为唯一写者，从根上消除多写者会话损坏）。首次启动自动在
   `~/.dsh/profiles/dsh-lark-sdk`（或 `dsh-lark-acp`）创建 runtime profile。

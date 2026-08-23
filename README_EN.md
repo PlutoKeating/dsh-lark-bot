@@ -145,7 +145,10 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | Manage the access allowlist (mutating commands require admin) |
 | `/help` | Show help |
 
-Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+Feishu images are detected by content as PNG/JPEG/WebP/GIF and receive a safe extension. The default
+SDK validates them through dsh's attachment store and sends native image blocks instead of path text.
+Unreadable or unsupported images fail explicitly, and the agent is instructed never to substitute another
+workspace image. Text files are read and injected into the task context.
 The `/model` card merges the dsh default into its switchable catalogue even when a provider's explicit
 list omits it, and uses compact distinguishing labels with at most two buttons per mobile row. Provider
 names, models, input modalities, and reasoning-effort options are discovered from the models.dev runtime
@@ -400,7 +403,7 @@ See [`docs/QUICK_START.md`](docs/QUICK_START.md) for installation details, state
 - **DeepSeek Harness (`dsh`)**: verified against **dsh 0.1.0-rc.8** (last verified 2026-08-22: clean temporary install, SDK JSON-RPC / ACP initialize, tool/approval, live-session resume, and restart-collision probes), connected through the official `@deepseek-ai/dsh-sdk-client` / `@deepseek-ai/dsh-acp`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for exact pins and probing, [`docs/adapter-notes.md`](docs/adapter-notes.md) for adapter details, and [`docs/DSH_RC8_AUDIT.md`](docs/DSH_RC8_AUDIT.md) for rc.8 risks and verification boundaries.
 - **Runtime**: Node.js ≥ 22.19 (see `engines` in `package.json`).
 - **Platform**: Linux / macOS / Windows (Feishu outbound WebSocket long connection; no public server, domain or tunneling required).
-- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, and the rc.8 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
+- The default adapter is the official **`@deepseek-ai/dsh-sdk-client`** (SDK JSON-RPC runtime with native continuation, streaming events, dsh attachment-store image blocks, and the rc.8 approval answerer); `DSH_LARK_ADAPTER=acp` switches to the official **ACP server** with protocol-native approval; `headless` keeps the legacy subprocess fallback; `DSH_LARK_ADAPTER=web` drives the **local dsh web agent** (`session.prompt` + `/api/events.mux` — the web agent becomes the single writer, eliminating multi-writer session-log corruption at the root). On first start the bot creates the runtime profile at `~/.dsh/profiles/dsh-lark-sdk` (or `dsh-lark-acp`).
 
 ## Known limitations
 

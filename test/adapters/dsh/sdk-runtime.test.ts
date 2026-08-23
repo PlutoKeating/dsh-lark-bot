@@ -24,6 +24,7 @@ describe('resolveSdkLaunch', () => {
   it('writes the runtime overlay with the notify and ask tools', () => {
     const patch = patchYamlFor();
     expect(patch).toContain("id: sdk-jsonrpc-server");
+    expect(patch).toContain("name: 'dsh-lark-bot/sdk-server'");
     expect(patch).toContain("id: lark-notify");
     expect(patch).toContain("id: lark-file");
     expect(patch).toContain("name: 'dsh-lark-bot/file'");
@@ -43,6 +44,8 @@ describe('resolveSdkLaunch', () => {
   it('omits the bridge tools from the core-only safe SDK overlay', () => {
     const patch = patchYamlFor({ bridgeTools: false });
     expect(patch).toContain("id: sdk-jsonrpc-server");
+    expect(patch).toContain(`name: '${SDK_SERVER_PACKAGE}'`);
+    expect(patch).not.toContain("name: 'dsh-lark-bot/sdk-server'");
     expect(patch).toContain('id: user-questions');
     expect(patch).not.toContain('id: lark-notify');
     expect(patch).not.toContain('id: lark-file');

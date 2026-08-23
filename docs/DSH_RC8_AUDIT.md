@@ -56,9 +56,12 @@ binding 后以自身 transcript 在新 session 继续，而不是把空上下文
 - rc.8 ACP runtime 的真实 initialize 当前仍**未声明** `promptCapabilities.image`。桥接继续 fail closed：
   有图片时不发送不受支持的 block，并显示明确错误；fake ACP protocol tests 保留 capability=true 时的
   PNG/JPEG/GIF/WebP 原生 base64 block 契约，以便上游真正开放后不需改桥接协议。
-- rc.8 SDK client 的高层 `run()` 可接受 durable `ContentBlock[]`，但 SDK wire 没有把本地原始图片上传为
-  runtime attachment ref 的 API。本项目因此明确把图片作为本地文件路径交给 filesystem/image tools，
-  不声称像素已原生发送给模型。
+- rc.8 SDK client 的高层 `run()` 可接受 durable `ContentBlock[]`，但官方 SDK server 没有把本地原始
+  图片上传为 runtime attachment ref 的 API。普通 managed SDK profile 现在只扩展一个
+  `attachment/upload` 方法：复用 rc.8 `admitEncodedImages` 与 attachment store 完成批量限制、字节校验
+  和持久化，然后把 durable ref 交给官方 `session/prompt` 的原生 image block。下载文件先按 magic bytes
+  确认 PNG/JPEG/GIF/WebP 并补扩展名；不再发送路径文本，也禁止替换为工作区其他图片。core-only safe
+  profile 保持未扩展的官方 server。
 - reasoning/text/tool/usage 翻译回归与真实 local OpenAI-compatible task probe 通过。取消后前缀进入后续
   prompt/fork 属于上游 session 行为；SDK 当前没有 prompt-level cancel，bridge stop 会关闭 runtime，故保留
   “中断后由 transcript fallback/新 runtime 继续”的既有边界，不伪造原生 cancel 验证。
