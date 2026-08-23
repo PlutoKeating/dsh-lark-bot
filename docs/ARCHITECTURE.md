@@ -180,6 +180,15 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    中间气泡成功送达后触发 `reanchor()`：先 best-effort 撤回原卡，再以顶层消息在会话末尾重建同内容卡，
    并把控制器重定向到新 `message_id`，后续 patch 全部落到新卡；召回失败则保持原卡不重复建卡。
    仅在 `state.terminal === 'running'` 时触发，因此最终回答（在 finalize 之后发送）不会把卡拽到其下方。
+   **运行时流式文本气泡（issue #95）**：`run-flow::consume` 把连续的 `text` delta 折叠为一条“逻辑消息”，
+   在消息边界（`tool_use` / `tool_result` / `thinking`，或 `final_text` 覆盖缓冲）或流停顿超过
+   `INTERIM_BUBBLE_PAUSE_MS`（默认 1200 ms，可用 `interimDebounceMs` 覆盖）时，将该段文本以独立的
+   Feishu 气泡经 `channel.sendMarkdown` 实时下发，而不是等到任务收尾一次性合并发送。已下发内容由
+   `delivered` 前缀跟踪，收尾的最终回答只发送“尚未下发”的尾部（`assistantOutput.slice(delivered.length)`），
+   因此中间气泡与最终回答各自独立、绝不重复：一次 agent 文本输出 = 一条独立 Feishu 消息气泡。每个中间
+   气泡下发后都会经 `RunCardAnchors` 把过程卡重锚到会话末尾；`final_text` 是所在段的完整正文，会清空
+   缓冲并仅经最终剩余尾部下发一次，避免重复。一旦 `state.terminal !== 'running'`（错误 / 中断 / 收尾），
+   停顿冲刷即失效，杜绝在最终回答之后出现游离气泡。
    **任务执行模式**由 `ExecutionModeStore` 在 profile 的 `execution-modes.json` 以 0600 原子写入，按 immutable scope 保存 `quick|balanced|deep`。`/mode`/`/effort` 与卡片回调写入时复检当前 scope/操作者，`/status` 读取有效值。队列开始新 run 时取一次快照，并由 `run-flow` 注入统一模式前置指令，因此 SDK、ACP、Web 行为一致；运行中的任务不被切换打断，安全、工具权限与计划门禁也不因模式降低。
    managed runtime persona 还要求 Git 写入前读取目标仓库适用的 `AGENTS.md`、检查状态并仅暂存明确审查过的路径，禁止 `git add .` / `git add -A`。
 5. **bot UI 国际化 seam**：`src/card/i18n.ts` 把中文与英文 variant 组合为同一 Card JSON 2.0
