@@ -47,6 +47,7 @@ export interface ConfigWizardContext {
   resolveDefaultModel?: () => Promise<string | undefined>;
   /** Persist the admin default into the bridge profile preferences. */
   setDefaultModelPreference?: (model: string) => Promise<void>;
+  requestSecret?: (reference: string, purpose: string) => Promise<void>;
 }
 
 type StepAnswer = string | string[] | undefined;
@@ -230,31 +231,6 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
             return ref;
           },
         },
-        {
-          key: 'set-key-now',
-          kind: 'options',
-          hidden: true,
-          if: (data) => Boolean(data['api-key-env']),
-          question: '现在就设置密钥值吗？',
-          options: [
-            { label: '🔑 现在设置', value: 'now' },
-            { label: '稍后 /key set', value: 'later' },
-          ],
-        },
-        {
-          key: 'api-key-value',
-          kind: 'text',
-          hidden: true,
-          if: (data) => data['set-key-now'] === 'now',
-          question: '粘贴 API Key 值',
-          placeholder: 'sk-…',
-          hint: '⚠️ 群聊中输入的密钥对群成员可见，建议私聊操作；回复中不会回显',
-          parse: (raw) => {
-            const value = asString(raw)?.trim();
-            if (!value) throw new Error('密钥值不能为空');
-            return value;
-          },
-        },
       ];
     },
     summary: async (_ctx, data) => {
@@ -265,7 +241,7 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
         ...(data['display-name'] ? [`显示名称：\`${asString(data['display-name'])}\``] : []),
         `模型：${asStringList(data.models).map((id) => `\`${id}\``).join('、')}`,
         data['api-key-env']
-          ? `凭据引用：\`${asString(data['api-key-env'])}\`${data['api-key-value'] ? '（本次写入值）' : '（未写入值）'}`
+          ? `凭据引用：\`${asString(data['api-key-env'])}\`（值通过安全表单设置）`
           : '凭据：暂不关联',
       ];
       return lines.join('\n');
@@ -288,19 +264,10 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
         baseURL: asString(data['base-url'])!,
         models,
       });
-      const apiKeyValue = stringField(data, 'api-key-value');
-      if (apiKeyEnv && apiKeyValue) {
-        await ctx.dshConfig.setCredential(
-          apiKeyEnv,
-          apiKeyValue,
-        );
-      }
-      const credentialNote =
-        apiKeyEnv && apiKeyValue
-          ? `凭据已写入 \`.credentials.yaml\`（值已隐藏）`
-          : apiKeyEnv
-            ? `凭据引用 \`${apiKeyEnv}\` 已关联，值请用 /key set 写入`
-            : '尚未关联凭据';
+      if (apiKeyEnv) await ctx.requestSecret?.(apiKeyEnv, 'Configure the new provider credential');
+      const credentialNote = apiKeyEnv
+        ? `凭据引用 \`${apiKeyEnv}\` 已关联，安全表单已请求`
+        : '尚未关联凭据';
       return [
         `✅ 已添加 provider：\`${id}\`（协议 \`${asString(data.api)}\`，模型 ${models.length} 个）。`,
         '',
@@ -630,46 +597,13 @@ const FLOWS: Record<ConfigWizardFlowId, WizardFlow> = {
           return ref;
         },
       },
-      {
-        key: 'value',
-        kind: 'text',
-        question: '粘贴密钥值',
-        placeholder: 'sk-…',
-        hint: '⚠️ 群聊中输入的密钥对群成员可见，建议私聊操作；回复中不会回显',
-        parse: (raw) => {
-          const value = asString(raw)?.trim();
-          if (!value) throw new Error('密钥值不能为空');
-          return value;
-        },
-      },
     ],
     summary: (_ctx, data) =>
-      Promise.resolve(`凭据引用：\`${asString(data.ref)}\`\n值：**（已隐藏）**`),
+      Promise.resolve(`凭据引用：\`${asString(data.ref)}\`\n值：将通过安全表单采集`),
     execute: async (ctx, data) => {
       const ref = asString(data.ref)!;
-      const value = asString(data.value)!;
-      await ctx.dshConfig.setCredential(ref, value);
-      const providers = await ctx.dshConfig.listProviders();
-      const target = providers.find(
-        (provider) =>
-          provider.id === ref &&
-          provider.namespace === 'llm-pi-ai' &&
-          provider.credentialRef === undefined,
-      );
-      let autoLinked = false;
-      if (target) {
-        await ctx.dshConfig.upsertPiAiProvider({ id: ref, apiKeyEnv: ref });
-        autoLinked = true;
-      }
-      return [
-        `已写入凭据 \`${ref}\` 到 \`~/.dsh/.credentials.yaml\`（0600，值已隐藏）。建议在私聊中使用；群聊里粘贴的密钥会对群成员可见。`,
-        ...(autoLinked
-          ? [
-              '',
-              `🔗 已自动把 provider \`${ref}\` 的 apiKeyEnv 关联到 \`${ref}\`（下一请求生效）。`,
-            ]
-          : []),
-      ].join('\n');
+      await ctx.requestSecret?.(ref, 'Configure a dsh provider credential');
+      return `已为凭据 \`${ref}\` 请求安全表单；值不会进入 Agent 上下文。`;
     },
   },
 

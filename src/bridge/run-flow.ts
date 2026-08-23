@@ -34,6 +34,7 @@ import type { SendOptions } from './send-options.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { ExecutionMode } from '../bot/execution-mode-store.js';
 import { permissionPolicyDenial, policyDenialText } from '../policy/tool-policy.js';
+import { renderChannelContext, type ChannelContext } from './channel-context.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -83,6 +84,8 @@ export interface RunFlowInput {
   scopeOwner?: string;
   /** Trusted peer identities available for an explicit lark_notify handoff. */
   collaborationPeers?: Array<{ name: string; openId: string; displayName?: string }>;
+  /** Non-secret bridge metadata injected on every fresh and resumed turn. */
+  channelContext?: ChannelContext;
   onCheckpoint?: (checkpoint: {
     runId: string;
     stage: 'starting' | 'thinking' | 'tool' | 'responding' | 'finalizing';
@@ -210,7 +213,7 @@ async function runAttempt(
   // the dsh session; replaying the transcript would duplicate it and can drift
   // from the runtime log. Fresh runs (and non-resuming adapters) replay it.
   const history = resuming ? [] : input.sessions.historyFor(input.scope, workspaceCwd);
-  const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers, input.executionMode ?? 'balanced');
+  const prompt = buildPrompt(history, input.messages, input.role, input.collaborationPeers, input.executionMode ?? 'balanced', input.channelContext);
   const runId = randomUUID();
 
   const run = input.adapter.run({
@@ -841,6 +844,7 @@ function buildPrompt(
   role: RoleDefinition | undefined,
   collaborationPeers: RunFlowInput['collaborationPeers'],
   executionMode: ExecutionMode,
+  channelContext?: ChannelContext,
 ): string {
   const rolePreamble = role ? renderRolePreamble(role) : undefined;
   const collaborationPreamble = renderCollaborationPreamble(collaborationPeers);
@@ -852,6 +856,7 @@ function buildPrompt(
     .join('\n\n');
 
   const parts: string[] = [];
+  if (channelContext) parts.push(renderChannelContext(channelContext), '');
   parts.push(executionPreamble, '');
   if (rolePreamble) parts.push(rolePreamble, '');
   if (collaborationPreamble) parts.push(collaborationPreamble, '');

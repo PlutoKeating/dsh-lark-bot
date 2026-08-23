@@ -83,8 +83,8 @@ function withV2CallbackBehaviors(value: unknown): unknown {
 }
 
 /** Plain-message fallback for surfaces where per-viewer locale is unavailable. */
-export function bilingualMarkdown(zhCn: string, enUs: string): string {
-  const preference = process.env.DSH_LARK_REPLY_LANG?.trim().toLowerCase();
+export function bilingualMarkdown(zhCn: string, enUs: string, configured?: 'bilingual' | 'zh' | 'en'): string {
+  const preference = configured ?? process.env.DSH_LARK_REPLY_LANG?.trim().toLowerCase();
   if (preference === 'zh') return zhCn;
   if (preference === 'en') return enUs;
   if (zhCn === enUs) return zhCn;

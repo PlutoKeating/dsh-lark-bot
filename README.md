@@ -142,10 +142,18 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 的模型，可声明视觉输入能力（管理员）|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
+| `/key set <引用名>`、`/key remove\|list <引用名>` | 通过仅请求者可提交的安全表单设置 dsh 凭据；remove 需管理员 |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <引用>` | 查询状态或安全采集/删除受支持密钥（写操作需管理员；值不进入 Agent） |
+| `/language show\|set plain\|agent …\|reset …` | 管理普通文本与 Agent 回答语言策略（写操作需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单（写操作需管理员）|
 | `/help` | 查看帮助|
+
+每轮 SDK / ACP / Web 请求都会注入结构化、无密钥的频道上下文，并注册官方 runtime Skill
+`dsh-lark-bot`。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
+工具 `lark_request_secret` 打开的密码表单提交；普通聊天、旧 `/key set <引用名> <值>` 与
+`--api-key` 不再消费值。表单只允许发起者提交，值直接写入本机受支持目标，不进入 prompt、session、
+任务账本、归档、日志、诊断包或回复。Guardian 安全模式是降级恢复面，不提供该完整配置与密钥工具。
 
 飞书消息中的图片会按文件内容识别 PNG/JPEG/WebP/GIF 并补全安全扩展名；默认 SDK 会经 dsh
 附件存储校验后发送原生 image block，而不是把路径当作图片。无法读取或模型不支持视觉时会明确
@@ -306,7 +314,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
   （需 `--api` / `--base-url` / 至少一个 `--model`，与官方 schema 一致）或 `deepseek-official`。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（0600）；settings 只存 `apiKeyEnv` 引用，
   字面密钥不进 settings / 聊天记录。
-- **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要生效还须在其
+- **凭据引用必须关联**：`/key set <引用名>` 通过安全表单写入凭据文件；provider 要生效还须在其
   `apiKeyEnv` 字段引用同一名字（`/provider add|update ... --api-key-env <引用名>`，或向导中填写）。
   引用名与 provider ID 相同且 provider 未设 `apiKeyEnv` 时，`/key set` 会自动补关联；
   已存在的老配置在下次运行时也会自动补齐。
@@ -315,7 +323,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
   `https://www.kingapi.xyz`）会自动补全为 `/v1`。dsh runtime 启动后需几百毫秒才注册
   pi-ai 路由，桥接会重试握手直到注册完成（避免 “no adapter registered for provider”）。
 
-安全提醒：在飞书会话输入密钥会对可见成员暴露，建议私聊使用或 `--api-key-env` 引用环境变量；bot 不在任何回复中回显密钥值。
+安全提醒：不要在普通飞书消息中输入密钥；使用安全表单或 `--api-key-env` 引用环境变量。bot 不读取旧式带值命令，也不在回复中回显密钥值。
 
 ## 升级、禁用与卸载
 

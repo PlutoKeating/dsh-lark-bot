@@ -44,6 +44,18 @@
         endpoint: !!js process.env.DSH_LARK_FILE_URL
         token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
 
+    - id: lark-secret
+      name: 'dsh-lark-bot/secret'
+      config:
+        endpoint: !!js process.env.DSH_LARK_SECRET_URL
+        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
+
+    - id: lark-ask
+      name: 'dsh-lark-bot/ask'
+      config:
+        endpoint: !!js process.env.DSH_LARK_ASK_URL
+        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN
+
     - id: lark-plan-approval
       name: 'dsh-lark-bot/plan'
       config:

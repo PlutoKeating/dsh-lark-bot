@@ -132,7 +132,9 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 管理 provider 模型及视觉输入能力（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
-| `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
+| `/key set <引用名>`、`/key remove\|list <引用名>` | 用安全表单设置 / 删除 / 列出 dsh 凭据引用（写需管理员） |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <引用>` | 安全采集受支持密钥或仅查询配置状态 |
+| `/language show\|set plain\|agent …\|reset …` | 设置普通文本与 Agent 回答语言策略 |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看命令帮助 |
@@ -142,8 +144,9 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 `/model use` 按会话热切换模型（桥接每轮解析 provider 路由并传给 dsh runtime，SDK 适配器
 路由变化时自动重建，下一轮真实生效）；`/model default` 写入 `{ provider, model }` 双字段的
 `agent-default-model`；`/provider add|update` 管理 `deepseek-official` 与自定义 pi-ai provider
-（Base URL 根域名自动补 `/v1`）；`/key set|remove` 写读凭据文件（0600）。密钥不会在聊天回复中
-显示，建议在私聊中使用。
+（Base URL 根域名自动补 `/v1`）；`/key set <引用名>` 打开仅请求者可提交的密码表单，bridge 直接写入
+0600 凭据文件。普通消息中的值（包括旧 `/key set <引用名> <值>` 与 `--api-key`）不会被读取或保存；
+密钥不进入 Agent prompt、session、任务账本、归档、日志、诊断包或回复。
 
 SDK / ACP 启动时若未显式设置 provider/model，会读取 dsh 对象形式的
 `agent-default-model: { provider, model }`；两处都没有完整 route 时 doctor/bridge 会直接给出配置错误。

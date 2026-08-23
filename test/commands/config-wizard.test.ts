@@ -171,18 +171,6 @@ describe('config wizard', () => {
         { answer: 'KINGAI_API_KEY' },
         ctx,
       );
-      expect(wizardValue(lastCard(channel)).step).toBe(6);
-
-      // 7. set key now -> now
-      await handleWizardCardAction(choose(lastCard(channel), 0), undefined, ctx);
-      expect(wizardValue(lastCard(channel)).step).toBe(7);
-
-      // 8. key value
-      await handleWizardCardAction(
-        wizardValue(lastCard(channel)),
-        { answer: 'sk-test-secret' },
-        ctx,
-      );
       // All steps done -> confirm card.
       expect(confirmValue(lastCard(channel)).confirm).toBe(true);
 
@@ -190,8 +178,8 @@ describe('config wizard', () => {
       await handleWizardCardAction(confirmValue(lastCard(channel)), undefined, ctx);
       expect(ctx.wizards.get('chat-a')).toBeUndefined();
       expect(channel.markdowns.join('\n')).toContain('已添加 provider：`kingapi`');
-      expect(channel.markdowns.join('\n')).toContain('值已隐藏');
-      expect(channel.cards.length).toBeGreaterThan(9); // final hub card re-rendered
+      expect(channel.markdowns.join('\n')).toContain('安全表单');
+      expect(channel.cards.length).toBeGreaterThan(6); // final hub card re-rendered
 
       const settings = await ctx.dshConfig.readSettings();
       const provider = (
@@ -201,8 +189,7 @@ describe('config wizard', () => {
       expect(provider?.['baseURL']).toBe('https://www.kingapi.xyz/v1');
       expect(provider?.['models']).toHaveLength(2);
 
-      const credentialsText = await readFile(join(root, '.dsh', '.credentials.yaml'), 'utf8');
-      expect(credentialsText).toContain('KINGAI_API_KEY: sk-test-secret');
+      await expect(readFile(join(root, '.dsh', '.credentials.yaml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
     });
   });
 
@@ -424,7 +411,7 @@ describe('config wizard', () => {
     });
   });
 
-  it('key-set auto-links the ref to the matching pi-ai provider', async () => {
+  it('key-set requests the secure collection seam without collecting a value', async () => {
     await withContext(async (ctx, _root, channel) => {
       await ctx.dshConfig.upsertPiAiProvider({
         id: 'kingapi',
@@ -440,25 +427,16 @@ describe('config wizard', () => {
         ],
       });
       await beginWizard(ctx, 'key-set');
+      const requestSecret = vi.fn().mockResolvedValue(undefined);
+      ctx.requestSecret = requestSecret;
       await handleWizardCardAction(
         wizardValue(lastCard(channel)),
         { answer: 'kingapi' },
         ctx,
       );
-      await handleWizardCardAction(
-        wizardValue(lastCard(channel)),
-        { answer: 'sk-auto-link' },
-        ctx,
-      );
       await handleWizardCardAction(confirmValue(lastCard(channel)), undefined, ctx);
-      expect(channel.markdowns.join('\n')).toContain('已自动把 provider `kingapi` 的 apiKeyEnv 关联');
-      const settings = await ctx.dshConfig.readSettings();
-      expect(
-        (
-          (settings['llm-pi-ai'] as { providers: Record<string, Record<string, unknown>> })
-            .providers
-        )['kingapi']?.['apiKeyEnv'],
-      ).toBe('kingapi');
+      expect(requestSecret).toHaveBeenCalledWith('kingapi', expect.any(String));
+      expect(channel.markdowns.join('\n')).not.toContain('sk-auto-link');
     });
   });
 });

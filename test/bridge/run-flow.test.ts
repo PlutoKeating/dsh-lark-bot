@@ -78,6 +78,22 @@ function makeChannel(): {
 }
 
 describe('runAgentBatch', () => {
+  it.each(['sdk', 'acp', 'web'] as const)('injects secret-free %s channel context on every turn', async (adapterId) => {
+    let prompt = '';
+    const base = fakeAdapter([{ type: 'done', sessionId: `session-${adapterId}`, terminationReason: 'normal' }]);
+    const adapter = { ...base, id: adapterId, run: (options: Parameters<AgentAdapter['run']>[0]) => { prompt = options.prompt; return base.run(options); } } as AgentAdapter;
+    await runAgentBatch({
+      scope: 'chat-context', chatId: 'chat-context', messages: ['hello'], adapter,
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: makeChannel().channel, defaultWorkspace: '/tmp/project',
+      channelContext: { channel: 'dsh-lark-bot', tenant: 'feishu', chatType: 'p2p', scope: 'chat-context', bridgeProfile: 'default', adapter: adapterId, tools: ['lark_request_secret'], language: { ui: 'per-viewer', plain: 'bilingual', agent: 'auto' }, secretCollection: 'available' },
+    });
+    expect(prompt).toContain('[Channel context — trusted bridge metadata]');
+    expect(prompt).toContain(`adapter: ${adapterId}`);
+    expect(prompt).toContain('lark_request_secret');
+    expect(prompt).not.toContain('sentinel-secret');
+  });
+
   it.each([
     ['quick', 'Answer directly with only the necessary investigation'],
     ['balanced', 'Balance speed with reasonable investigation and verification'],

@@ -18,11 +18,13 @@ describe('dsh bundle manifest', () => {
     expect(pkg.exports?.['./plan']).toBeDefined();
     expect(pkg.exports?.['./approval']).toBeDefined();
     expect(pkg.exports?.['./file']).toBeDefined();
+    expect(pkg.exports?.['./secret']).toBeDefined();
     expect(pkg.files).toContain('cordis.patch.yml');
     expect(pkg.peerDependencies?.['@deepseek-ai/cordis']).toMatch(/^(\^|>=)/);
     // Tool plugins register raw JSON-Schema definitions against the host
     // registry; a direct dsh-tools dependency can create a second Symbol realm.
     expect(pkg.dependencies?.['@deepseek-ai/dsh-tools']).toBeUndefined();
+    expect(pkg.dependencies?.['@deepseek-ai/dsh-skill']).toBe('0.1.0-rc.8');
   });
 
   it('ships a bundle patch whose row references the plugin entry', async () => {
@@ -33,6 +35,7 @@ describe('dsh bundle manifest', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/notify'");
     expect(patch).toContain("name: 'dsh-lark-bot/file'");
     expect(patch).toContain("name: 'dsh-lark-bot/approval'");
+    expect(patch).toContain("name: 'dsh-lark-bot/secret'");
     expect(patch).toContain('DSH_LARK_DISABLED');
   });
 });

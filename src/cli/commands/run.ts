@@ -25,6 +25,7 @@ import {
 } from '../../bot/notification-preference-store.js';
 import { ReplyPolicyStore } from '../../bot/reply-policy-store.js';
 import { ExecutionModeStore } from '../../bot/execution-mode-store.js';
+import { LanguagePolicyStore } from '../../bot/language-policy-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
@@ -74,6 +75,9 @@ import {
   knownSecretsFromEnv,
 } from '../../diagnostics/bundle.js';
 import { ServiceManager } from '../../service/manager.js';
+import { SecretRequestRegistry } from '../../secret/registry.js';
+import { SecretTargetManager } from '../../secret/targets.js';
+import { buildSecretHandler } from '../../notify/secret-handler.js';
 
 const DEBOUNCE_MS = 600;
 
@@ -229,6 +233,7 @@ export async function startBridgeEngine(
   const notificationPreferences = new NotificationPreferenceStore(paths.notificationPreferencesFile(profileName));
   const replyPolicies = new ReplyPolicyStore(paths.replyPoliciesFile(profileName));
   const executionModes = new ExecutionModeStore(paths.executionModesFile(profileName));
+  const languagePolicies = new LanguagePolicyStore(paths.languagePoliciesFile(profileName));
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
   });
@@ -244,7 +249,9 @@ export async function startBridgeEngine(
     notificationPreferences.load(),
     replyPolicies.load(),
     executionModes.load(),
+    languagePolicies.load(),
   ]);
+  process.env.DSH_LARK_REPLY_LANG = languagePolicies.get().plain;
   // Freeze the recovery set before the channel can deliver live events. A
   // message accepted after connect then belongs only to the live path and
   // cannot be pushed once more by the startup replay.
@@ -302,6 +309,11 @@ export async function startBridgeEngine(
   const models = new ModelStore();
   const wizardStore = new WizardStore();
   const dshConfig = new DshProviderManager({ env: process.env });
+  const secretRequests = new SecretRequestRegistry(new SecretTargetManager({
+    dsh: dshConfig, profiles: configStore, profileName,
+  }));
+  const accessManager = new AccessManager(configStore, profileName);
+  const sessionActors = new Map<string, string>();
   let defaultModel = env.model;
   let liveSettingsModel: string | undefined;
   let defaultScopeConcurrency = env.scopeConcurrency;
@@ -418,6 +430,17 @@ export async function startBridgeEngine(
         },
       },
     }),
+    secret: buildSecretHandler({
+      sessions,
+      scopes: scopeDirectory,
+      requests: secretRequests,
+      actorForSession: (sessionId) => sessionActors.get(sessionId),
+      isAdmin: (actor) => accessManager.isAdmin(actor),
+      sendCard: async (chatId, card, options) => {
+        if (!streaming?.sendCard) throw new Error('bridge channel does not support cards');
+        return streaming.sendCard(chatId, card, options);
+      },
+    }),
   });
   process.env.DSH_LARK_NOTIFY_TOKEN = notifyToken;
 
@@ -461,6 +484,8 @@ export async function startBridgeEngine(
           ...attachments.textFileNotes,
         ]).filter(Boolean);
         const role = roleStore.roleForScope(scope);
+        const resumedSessionId = sessions.resumeFor(scope, first.workspaceCwd);
+        if (first.senderId && resumedSessionId) sessionActors.set(resumedSessionId, first.senderId);
         const collaborationPeers = await fleet.peersFor(profileName);
         const dshDefault = await dshConfig.defaultModelSelection().catch(() => undefined);
         const resolvedModel =
@@ -542,17 +567,31 @@ export async function startBridgeEngine(
             : { provider: modelRoute.provider }),
           model: modelRoute?.model ?? resolvedModel,
           executionMode: executionModes.get(scope),
-          onCheckpoint: (checkpoint) => jobs.checkpoint(
-            ledgerMessageIds,
-            {
-              stage: checkpoint.stage,
-              ...(checkpoint.detail ? { detail: checkpoint.detail } : {}),
-              ...(checkpoint.nativeSessionId
-                ? { nativeSessionId: checkpoint.nativeSessionId }
-                : {}),
-            },
-            checkpoint.runId,
-          ),
+          channelContext: {
+            channel: 'dsh-lark-bot',
+            tenant: activeProfile.tenant,
+            chatType: first.chatMode ?? first.chatType,
+            scope,
+            bridgeProfile: profileName,
+            adapter: adapter.id,
+            tools: ['lark_notify', 'lark_send_file', 'lark_ask_user', 'lark_request_plan_approval', 'lark_request_secret'],
+            language: languagePolicies.get(),
+            secretCollection: 'available',
+          },
+          onCheckpoint: (checkpoint) => {
+            if (first.senderId && checkpoint.nativeSessionId) sessionActors.set(checkpoint.nativeSessionId, first.senderId);
+            return jobs.checkpoint(
+              ledgerMessageIds,
+              {
+                stage: checkpoint.stage,
+                ...(checkpoint.detail ? { detail: checkpoint.detail } : {}),
+                ...(checkpoint.nativeSessionId
+                  ? { nativeSessionId: checkpoint.nativeSessionId }
+                  : {}),
+              },
+              checkpoint.runId,
+            );
+          },
         };
         if (activeProfile.preferences.stopGraceMs !== undefined) {
           runInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
@@ -611,12 +650,14 @@ export async function startBridgeEngine(
       : {}),
     replyPolicies,
     executionModes,
+    languagePolicies,
     questions,
     plans,
     densityStore,
     models,
     wizardStore,
     dshConfig,
+    secretRequests,
     defaultRunTimeoutMs: activeProfile.preferences.runTimeoutMs ?? env.runTimeoutMs,
     defaultModel: effectiveProfileModel(liveSettingsModel, activeProfile.preferences.model, defaultModel),
     resolveDefaultModel: async (scope: string) => {
@@ -635,7 +676,7 @@ export async function startBridgeEngine(
         model,
       });
     },
-    accessManager: new AccessManager(configStore, profileName),
+    accessManager,
     pending,
     defaultWorkspace,
     accessDefaultDeny: env.accessDefaultDeny,
@@ -739,6 +780,7 @@ export async function startBridgeEngine(
   process.env.DSH_LARK_PLAN_URL = notifyServer.planUrl ?? '';
   process.env.DSH_LARK_APPROVAL_URL = notifyServer.approvalUrl ?? '';
   process.env.DSH_LARK_FILE_URL = notifyServer.fileUrl ?? '';
+  process.env.DSH_LARK_SECRET_URL = notifyServer.secretUrl ?? '';
   const heartbeat = startHeartbeat(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,

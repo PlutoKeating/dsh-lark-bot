@@ -105,6 +105,14 @@ export function acpPatchYaml(provider: string, model: string): string {
     '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
     '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
     '',
+    // Owner-only secure value collection; values bypass the agent process.
+    '- insert:',
+    '    - id: lark-secret',
+    `      name: '${own.name}/secret'`,
+    '      config:',
+    '        endpoint: !!js process.env.DSH_LARK_SECRET_URL',
+    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+    '',
     // Question-card tool (same contract as the SDK runtime).
     '- insert:',
     '    - id: lark-ask',

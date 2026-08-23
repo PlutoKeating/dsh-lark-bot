@@ -41,6 +41,10 @@
       "types": "./dist/file.d.ts",
       "import": "./dist/file.js"
     },
+    "./secret": {
+      "types": "./dist/secret.d.ts",
+      "import": "./dist/secret.js"
+    },
     "./sdk-server": {
       "types": "./dist/sdk-server.d.ts",
       "import": "./dist/sdk-server.js"
@@ -170,6 +174,7 @@
     "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.8",
     "@deepseek-ai/dsh-sdk-jsonrpc-server": "0.1.0-rc.8",
     "@deepseek-ai/dsh-sdk-protocol": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-skill": "0.1.0-rc.8",
     "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
     "@deepseek-ai/schemastery": "3.18.1",
     "@larksuite/channel": "^0.4.1",

@@ -12,6 +12,7 @@ export default defineConfig([
       plan: 'src/notify/plan-tool.ts',
       approval: 'src/notify/approval-answerer.ts',
       file: 'src/notify/file-tool.ts',
+      secret: 'src/notify/secret-tool.ts',
       'sdk-server': 'src/adapters/dsh/sdk-server.ts',
     },
     format: ['esm'],

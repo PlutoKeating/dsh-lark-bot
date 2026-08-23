@@ -17,6 +17,7 @@ import {
   statusCardInputFor,
   tryHandleCommand,
   type CommandChannel,
+  type CommandContext,
 } from '../commands/index.js';
 import { renderStatusCard } from '../card/status-card.js';
 import {
@@ -55,6 +56,9 @@ import {
 } from '../session/projection-bridge.js';
 import { SessionProjectionController } from '../commands/session-projection.js';
 import type { ExecutionModeStore } from '../bot/execution-mode-store.js';
+import type { LanguagePolicyStore } from '../bot/language-policy-store.js';
+import type { SecretRequestRegistry } from '../secret/registry.js';
+import { renderSecretCard } from '../card/secret-card.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
 
@@ -89,6 +93,8 @@ export interface StartChannelDeps {
   defaultNotificationPreference?: NotificationPreference;
   replyPolicies?: ReplyPolicyStore;
   executionModes?: ExecutionModeStore;
+  languagePolicies?: LanguagePolicyStore;
+  secretRequests?: SecretRequestRegistry;
   models: ModelStore;
   wizardStore: WizardStore;
   dshConfig: DshProviderManager;
@@ -369,6 +375,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         : {}),
       ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
       ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
+      ...(deps.languagePolicies ? { languagePolicies: deps.languagePolicies } : {}),
       models: deps.models,
       wizardStore: deps.wizardStore,
       dshConfig: deps.dshConfig,
@@ -396,6 +403,29 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         ? { setDefaultModelPreference: deps.setDefaultModelPreference }
         : {}),
       senderId: msg.senderId,
+      ...(deps.secretRequests
+        ? { secretService: {
+            request: async (input: Parameters<NonNullable<CommandContext['secretService']>['request']>[0]) => {
+              if (!commandChannel.sendCard) throw new Error('secure cards are unavailable');
+              const request = deps.secretRequests!.register({
+                scope: input.scope, ownerId: input.ownerId, target: input.target,
+                reference: input.reference, purpose: input.purpose,
+              });
+              const view = deps.secretRequests!.get(input.scope, request.id)!;
+              try {
+                await commandChannel.sendCard(input.chatId, renderSecretCard(view), {
+                  ...(input.threadId ? { threadId: input.threadId } : {}),
+                });
+              } catch (error) {
+                deps.secretRequests!.cancel(input.scope, request.id);
+                throw error;
+              }
+              void request.promise;
+            },
+            configured: (target: Parameters<NonNullable<CommandContext['secretService']>['configured']>[0], reference: string) => deps.secretRequests!.configured(target, reference),
+            remove: (target: Parameters<NonNullable<CommandContext['secretService']>['remove']>[0], reference: string) => deps.secretRequests!.remove(target, reference),
+          } }
+        : {}),
       ...(sessionProjection ? { sessionProjection } : {}),
     };
 
@@ -531,6 +561,35 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
         };
       }
       const scope = requestedScope ?? currentScope;
+      if ((value?.cmd === 'secret-submit' || value?.cmd === 'secret-cancel') && deps.secretRequests) {
+        const id = typeof value.id === 'string' ? value.id : '';
+        const receipt = value.cmd === 'secret-cancel'
+          ? deps.secretRequests.cancel(scope, id, event.operator?.openId)
+          : await deps.secretRequests.submit({
+              scope,
+              id,
+              operatorId: event.operator?.openId,
+              value: typeof event.action.formValue?.secret === 'string'
+                ? event.action.formValue.secret
+                : '',
+            });
+        if (receipt.error === 'cancelled') {
+          if (event.messageId) void settleActionCard(channel, event.chatId, event.messageId, threadId,
+            bilingualMarkdown('已取消安全密钥请求。', 'Secure secret request cancelled.'), scope, 'secret');
+          return { toast: { type: 'success', content: '已取消 / Cancelled' } };
+        }
+        if (!receipt.ok) {
+          return { toast: { type: 'error', content: receipt.error === 'forbidden'
+            ? '仅请求者可以提交 / Only the requester can submit'
+            : '提交失败或请求已过期 / Submission failed or expired' } };
+        }
+        if (event.messageId) {
+          void settleActionCard(channel, event.chatId, event.messageId, threadId,
+            bilingualMarkdown('✅ **已安全保存** — 密钥值未发送给 Agent', '✅ **Saved securely** — the value was not sent to the agent'),
+            scope, 'secret');
+        }
+        return { toast: { type: 'success', content: '已安全保存 / Saved securely' } };
+      }
       if (value?.cmd === 'status-refresh') {
         if (!event.messageId || !commandChannel.updateCard) {
           return { toast: { type: 'error', content: '当前渠道不支持原位刷新 / In-place refresh is unavailable' } };
@@ -938,7 +997,7 @@ async function settleActionCard(
   threadId: string | undefined,
   markdown: string,
   scope: string,
-  kind: 'approval' | 'question' | 'plan',
+  kind: 'approval' | 'question' | 'plan' | 'secret',
 ): Promise<void> {
   try {
     await channel.send(chatId, { markdown }, {
