@@ -323,7 +323,9 @@ pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` 
 `DshModelEntry` 读写 `inputModalities`、`imagePixelBudget`、`imageMaxBytes`，不会在 bot 管理模型时
 抹掉视觉能力。`ModelsDevCatalog` 从 `https://models.dev/api.json` 发现 provider 展示名、模型、
 模态、上下文和 `reasoning_options`，采用 5 秒超时、16 MiB 响应上限、15 分钟进程内缓存和
-stale-on-error；首次拉取失败时返回 settings 显式目录，不伪造内置名单。可用
+stale-on-error；首次拉取失败时返回 settings 显式目录，并把对象形式
+`agent-default-model` 指向的模型作为所属已配置 provider 的最小离线条目，保证明确默认 route
+仍可解析，但不接受其他未知模型，也不伪造内置名单。可用
 `DSH_LARK_MODEL_CATALOG_URL` 指向兼容镜像。`/model` 卡片另外把 `agent-default-model` 指向但目录
 缺失的模型合并进展示和快速切换路由。
 pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时

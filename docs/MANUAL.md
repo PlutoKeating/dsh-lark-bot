@@ -471,3 +471,5 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `agent-default-model`，仍不完整则给出明确配置错误。受管 bridge/guardian service 在
 install/start/restart 时把旧 service env 的受管键与当前 `DSH_LARK_*` 环境合并（当前 shell 显式值
 优先），因此稀疏 shell 重启不会删除已有 route；修改值后仍需在新环境下执行 service restart 才会生效。
+模型目录冷启动请求失败时，对象形式 `agent-default-model` 仍作为所属 provider 的最小离线条目参与
+解析；未在 settings 中明确出现的未知模型继续拒绝。
