@@ -225,6 +225,50 @@ describe('ensureSdkProfile', () => {
     expect(install).toHaveBeenCalledWith(profileRoot, { force: true });
   });
 
+  it('repairs the linked bridge package dependency tree when its SDK server is stale', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-stale-own-deps-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const ownRoot = join(home, 'installed-dsh-lark-bot');
+    const own = { name: 'dsh-lark-bot', root: ownRoot, version: '0.19.4' };
+    await mkdir(join(ownRoot, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(ownRoot, 'package.json'),
+      JSON.stringify({ name: own.name, version: own.version, dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    );
+    await writeFile(join(ownRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+    await writeFile(
+      join(ownRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: '0.1.0-rc.6' }),
+    );
+    const installOwnDependencies = vi.fn(async (root: string, options?: { force?: boolean }) => {
+      await writeFile(
+        join(ownRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+        JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+      );
+      expect(root).toBe(ownRoot);
+      expect(options).toEqual({ force: true });
+    });
+
+    const result = await ensureSdkProfile({
+      home,
+      ownPackage: own,
+      installOwnDependencies,
+      install: async (root) => {
+        expect(root).toBe(profileRoot);
+        await mkdir(join(root, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+        await writeFile(
+          join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+          JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+        );
+        await symlink(ownRoot, join(root, 'node_modules', own.name), 'dir');
+      },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(installOwnDependencies).toHaveBeenCalledOnce();
+  });
+
   it('does not let a matching hoisted package hide a stale profile-local copy', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-home-shadowed-server-'));
     tempDirs.push(home);
