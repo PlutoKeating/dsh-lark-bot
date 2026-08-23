@@ -130,7 +130,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 选择当前会话任务强度；下一轮生效 |
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` `/model default <id>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID）/ 写入 dsh 默认模型 |
-| `/model add\|remove <provider> <modelId>` | 管理 provider 的模型（管理员） |
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 管理 provider 模型及视觉输入能力（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |

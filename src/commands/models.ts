@@ -86,11 +86,19 @@ function deepseekModelInput(args: {
   id: string;
   flags: Record<string, string | undefined>;
 }): DshModelEntry {
+  const rawModalities = args.flags['input-modalities'];
+  const inputModalities = rawModalities === undefined
+    ? undefined
+    : rawModalities.split(',').map((value) => value.trim()).filter(Boolean);
+  if (inputModalities?.some((value) => value !== 'text' && value !== 'image')) {
+    throw new Error('--input-modalities 仅支持逗号分隔的 text,image');
+  }
   return {
     id: args.id,
     name: args.flags.name,
     contextWindow: undefined,
     maxTokens: undefined,
+    inputModalities: inputModalities as Array<'text' | 'image'> | undefined,
   };
 }
 
@@ -116,7 +124,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
         '**可用模型**（dsh 已配置）：',
         ...(modelLines.length > 0 ? modelLines : ['（暂无）']),
         '',
-        '用法：`/model use <provider/model>`（也兼容唯一模型 ID）、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>]`',
+        '用法：`/model use <provider/model>`（也兼容唯一模型 ID）、`/model default <id>`、`/model reset`、`/model add|remove <provider> <modelId> [--name <name>] [--input-modalities text,image]`',
       ].join('\n'),
       [
         `**Current session model**: \`${active}\`${override ? ` (session override; falls back to \`${ctx.defaultModel}\` after a bot restart)` : ' (default source)'}`,
@@ -126,7 +134,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
         '**Available models** (configured in dsh):',
         ...(modelLines.length > 0 ? modelLines : ['(none)']),
         '',
-        'Usage: `/model use <provider/model>` (a unique bare model ID also works), `/model default <id>`, `/model reset`, or `/model add|remove <provider> <modelId> [--name <name>]`',
+        'Usage: `/model use <provider/model>` (a unique bare model ID also works), `/model default <id>`, `/model reset`, or `/model add|remove <provider> <modelId> [--name <name>] [--input-modalities text,image]`',
       ].join('\n'),
     );
     return;
@@ -182,7 +190,7 @@ export async function handleModel(args: string, ctx: CommandContext): Promise<vo
     const providerId = rest[0];
     const id = rest[1];
     if (!providerId || !id) {
-      await reply(ctx, `用法：\`/model ${sub} <provider> <modelId> [--name <name>]\``, `Usage: \`/model ${sub} <provider> <modelId> [--name <name>]\``);
+      await reply(ctx, `用法：\`/model ${sub} <provider> <modelId> [--name <name>] [--input-modalities text,image]\``, `Usage: \`/model ${sub} <provider> <modelId> [--name <name>] [--input-modalities text,image]\``);
       return;
     }
     if (sub === 'add') {

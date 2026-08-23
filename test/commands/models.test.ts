@@ -10,6 +10,7 @@ import { RoleStore } from '../../src/bot/role-store.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import type { AccessManager } from '../../src/config/access-manager.js';
 import { DshProviderManager } from '../../src/config/dsh-config.js';
+import { TEST_MODEL_CATALOG } from '../fixtures/model-catalog.js';
 import type { CommandChannel, CommandContext } from '../../src/commands/index.js';
 import { handleKey, handleModel, handleProvider, handleProviders } from '../../src/commands/models.js';
 
@@ -53,7 +54,7 @@ async function withContext(
     densityStore: undefined,
     models: new ModelStore(),
     wizardStore: new WizardStore(),
-    dshConfig: new DshProviderManager({ home: root, env: {} }),
+    dshConfig: new DshProviderManager({ home: root, env: {}, catalog: TEST_MODEL_CATALOG }),
     defaultRunTimeoutMs: 300_000,
     defaultModel: 'deepseek-v4-flash',
     senderId: overrides.senderId,
@@ -160,6 +161,14 @@ describe('model slash commands', () => {
       const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
       expect(settings).toContain('deepseek-r1');
       expect(lastReply(ctx)).toContain('已添加模型');
+
+      await handleModel(
+        'add deepseek-official custom-vision --input-modalities text,image',
+        ctx,
+      );
+      const updated = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
+      expect(updated).toContain('inputModalities:');
+      expect(updated).toContain('- image');
     });
   });
 

@@ -57,6 +57,7 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
   `web`（本地 dsh web agent，单写者）。
 - `DSH_LARK_WEB_URL`：`web` 适配器的本地 dsh web base URL（默认
   `http://127.0.0.1:3080`）。
+- `DSH_LARK_MODEL_CATALOG_URL`：models.dev 兼容目录地址；默认使用公开 `api.json`。
 - `DSH_LARK_SESSION_PROJECTION`：显式 session 历史/实时投影开关，默认开启；它不允许
   WebUI/TUI 活动自动修改飞书 binding。旧 `DSH_LARK_WEB_PUSH` 仅在新开关缺失时作为兼容别名。
 - `DSH_LARK_SESSION_BACKFILL_MESSAGES` / `DSH_LARK_SESSION_BACKFILL_BYTES`：确认绑定后
@@ -316,6 +317,12 @@ export class DshProviderManager {
 
 pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` / `openai-responses` /
 `anthropic-messages`；自定义 provider 按官方 schema 需要 `api` + `baseURL` + 非空 `models`。
+`DshModelEntry` 读写 `inputModalities`、`imagePixelBudget`、`imageMaxBytes`，不会在 bot 管理模型时
+抹掉视觉能力。`ModelsDevCatalog` 从 `https://models.dev/api.json` 发现 provider 展示名、模型、
+模态、上下文和 `reasoning_options`，采用 5 秒超时、16 MiB 响应上限、15 分钟进程内缓存和
+stale-on-error；首次拉取失败时返回 settings 显式目录，不伪造内置名单。可用
+`DSH_LARK_MODEL_CATALOG_URL` 指向兼容镜像。`/model` 卡片另外把 `agent-default-model` 指向但目录
+缺失的模型合并进展示和快速切换路由。
 pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时
 自动补全为 `/v1`；误填 `.../chat/completions`、`.../responses`、`.../messages` 等完整接口地址时
 自动去掉末尾操作路径（dsh 的 pi-ai 适配器会自行追加 `/chat/completions` 等路径，保留完整端点
@@ -323,7 +330,7 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `normalizeDeepseekBaseUrl()`：同样去掉末尾操作路径，但保留裸根域名（官方 API 在根路径提供
 接口，不强制补 `/v1`）。
 模型优先级：scope 覆盖（`/model use`）> profile `preferences.model` > dsh
-`agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL` / 环境默认。
+`agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL`；代码不提供固定模型默认值。
 `/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由
 `resolveModelRoute()` 从模型自动解析，找不到模型时报错）。每轮运行前
 `src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器

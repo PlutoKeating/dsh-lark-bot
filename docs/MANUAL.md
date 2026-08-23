@@ -118,7 +118,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID；下一轮生效） |
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
-| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员） |
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 模型并声明视觉输入能力（管理员） |
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员） |
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员） |
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文 |
@@ -161,7 +161,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
   自定义 provider 需要 `--api`（`openai-completions` / `openai-responses` / `anthropic-messages`）、
   `--base-url`（根域名如 `https://www.kingapi.xyz` 自动补全为 `/v1`）与至少一个 `--model`。
   `/provider remove <id>` 删除 provider。
-- `/model add|remove <provider> <modelId>`：增删 provider 的模型目录。
+- `/model add|remove <provider> <modelId> [--input-modalities text,image]`：增删 provider 的模型目录；
+  视觉模型的 `inputModalities` 会被写入并从 settings 读回，交互向导也提供相同字段。
+- provider 展示名、实时模型目录、模态与推理档位来自 models.dev，并缓存 15 分钟；目录不可用时
+  仅显示 dsh settings 的显式配置和默认选择。可用 `DSH_LARK_MODEL_CATALOG_URL` 切换兼容镜像。
 - `/key set|remove|list`：读写 `~/.dsh/.credentials.yaml`（目录 0700、文件 0600）；settings
   只保存 `apiKeyEnv` 引用，字面密钥不进入 settings 或聊天记录。
 - **凭据引用必须关联**：`/key set <引用名> <值>` 只写入凭据文件；provider 要使用该密钥，其
@@ -414,8 +417,9 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_DSH_COMMAND` | 自动发现 | dsh 启动命令 |
 | `DSH_LARK_DSH_ARGS` | 自动发现 | dsh 启动参数 |
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认，逐操作审批）/ `acp`（协议原生审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者） |
-| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider |
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型 |
+| `DSH_LARK_PROVIDER` | 未设置 | 模型 provider；可由对象形式的 dsh 默认模型提供 |
+| `DSH_LARK_MODEL` | 未设置 | 默认模型；可由 dsh `agent-default-model` 提供 |
+| `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | provider / 模型能力实时目录或兼容镜像 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
 | `DSH_LARK_PLAN_GATE` | `strict` | `strict` 启用独立计划门禁；可信 profile 可设 `off`，仅关闭计划门禁，不关闭逐工具审批；受管服务需在该环境下 restart 以重新快照 |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent base URL |

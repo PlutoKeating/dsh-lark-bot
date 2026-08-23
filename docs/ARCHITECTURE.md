@@ -275,7 +275,14 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     提交由官方 revision fence/持久 provider 负责，bridge lifecycle reload 失败只记结构化告警且不并发
     启动第二 generation。
 
-13. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
+14. **模型目录能力保真与卡片自洽（issue #80）**：bridge 仍以 provider/settings 的目录为权威，
+    models.dev 运行时目录只负责发现 provider 展示名、模型能力与供应商声明的推理档位；短 TTL
+    缓存与 stale-on-error 避免目录抖动阻断聊天，首次离线则只投影 settings，不存在代码内置模型
+    或展示名兜底。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段。
+    卡片把 `agent-default-model` 的缺席条目合并进本次投影与点击路由，不反向篡改 provider 配置；
+    按钮按 provider 去除公共前缀、每行最多两个，以保证移动端可辨认。
+
+15. **显式 DSH session 消息投影（issue #53）**：`SessionProjectionStore` 以原子 0600 文件保存
     独占 binding、历史待确认水位/已确认交付 cursor、当前 turn 来源、近期消息映射和飞书 prompt
     `rpcId`；仅为崩溃后续写同一流式卡保存该卡未终态正文，不复制完整 transcript。
     `/session` 只列当前 canonical workspace 的非 subagent 元数据；确认 nonce 固化 operator、scope、

@@ -138,7 +138,7 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/model`, `/providers`, `/provider`, `/key` | Open the interactive hub (tap a model or restore the default; management writes use a multi-turn wizard) |
 | `/model use <provider/model>` | Hot-switch the current session model (a unique bare model ID also works; effective next message, no restart) |
 | `/model default <id>` | Write the dsh default model `agent-default-model` (admin) |
-| `/model add\|remove <provider> <modelId>` | Add / remove a provider model (admin) |
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | Add / remove a provider model and declare vision input (admin) |
 | `/provider add\|update\|remove <id>` | Manage providers (admin; deepseek-official and custom pi-ai) |
 | `/key set\|remove\|list <ref>` | Manage dsh credentials (set / remove require admin) |
 | `/ask <question>` | Send a Q&A card; the answer is written back to session context |
@@ -146,6 +146,12 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/help` | Show help |
 
 Images in Feishu messages are downloaded to the local media directory and passed to dsh; text files are read and their content is injected into the task context.
+The `/model` card merges the dsh default into its switchable catalogue even when a provider's explicit
+list omits it, and uses compact distinguishing labels with at most two buttons per mobile row. Provider
+names, models, input modalities, and reasoning-effort options are discovered from the models.dev runtime
+catalogue and cached in memory for 15 minutes. If it is unavailable, only explicit dsh settings and the
+configured default are shown—there is no hardcoded fallback list. Override the feed with
+`DSH_LARK_MODEL_CATALOG_URL`; model commands and the wizard preserve `inputModalities`.
 
 **Message-level DSH session sync (`web` adapter)**: `/session` lists metadata only for non-subagent sessions
 in the current canonical workspace—never message bodies. The confirmation card freezes the title, ID,
@@ -429,8 +435,9 @@ Core environment variables:
 | `DSH_LARK_DSH_COMMAND` | auto-discovered | dsh launch command; usually not needed |
 | `DSH_LARK_DSH_ARGS` | auto-discovered | dsh launch args, comma-separated; usually not needed |
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk` (default, approval answerer) / `acp` (protocol-native approval) / `headless` (legacy) / `web` (local dsh web agent, single writer) |
-| `DSH_LARK_PROVIDER` | `deepseek-official` | Model provider |
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | Default model |
+| `DSH_LARK_PROVIDER` | unset | Model provider; may come from an object-form dsh default selection |
+| `DSH_LARK_MODEL` | unset | Default model; may come from dsh `agent-default-model` |
+| `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | Live provider/model capability feed or compatible mirror |
 | `DSH_LARK_MAX_TOKENS` | unset | Per-request output token cap for SDK agents |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` adapter: base URL of the local dsh web agent |
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` adapter: enable history/live message projection after explicit user binding; never auto-switches (`0` disables) |

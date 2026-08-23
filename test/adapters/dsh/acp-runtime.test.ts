@@ -149,6 +149,8 @@ describe('ensureAcpProfile', () => {
     tempDirs.push(home);
     const result = await ensureAcpProfile({
       home,
+      provider: 'test-provider',
+      model: 'test-model',
       install: async () => {
         throw new Error('registry unreachable');
       },

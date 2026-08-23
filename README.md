@@ -140,7 +140,7 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；管理写操作走多轮向导）|
 | `/model use <provider/model>` | 热切换当前会话模型（也兼容唯一模型 ID；下一轮生效，无需重启）|
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员）|
-| `/model add\|remove <provider> <modelId>` | 添加 / 删除 provider 的模型（管理员）|
+| `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 的模型，可声明视觉输入能力（管理员）|
 | `/provider add\|update\|remove <id>` | 管理 provider（管理员；deepseek-official 与自定义 pi-ai）|
 | `/key set\|remove\|list <引用名>` | 管理 dsh 凭据（set / remove 需管理员）|
 | `/ask <问题>` | 发送问答卡，回答写入会话上下文|
@@ -148,6 +148,11 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/help` | 查看帮助|
 
 飞书消息中的图片会下载到本地 media 目录并传给 dsh；文本类文件会读取内容并注入任务上下文。
+`/model` 卡片会把 dsh 默认模型并入可切换目录（即使 provider 的显式列表尚未包含它），
+并用去除公共前缀后的短标签、每行最多两个按钮适配移动端。provider 名称、模型、输入模态和
+推理档位从 models.dev 运行时目录发现（15 分钟内存缓存）；网络失败时只使用 dsh settings 中的
+显式配置与默认选择，不回退到代码内置名单。通过命令或向导新增视觉模型时可声明 `text,image`，
+能力字段会原样写入 settings。目录地址可用 `DSH_LARK_MODEL_CATALOG_URL` 替换。
 
 **DSH session 消息级同步（`web` adapter）**：发送 `/session` 只会列出当前 canonical workspace
 的非 subagent session 元数据，不显示正文；选择后确认卡会列明标题、ID、workspace、更新时间、
@@ -459,8 +464,9 @@ SDK 模式下 dsh 原生 session 续跑，headless 模式则把历史注入下�
 | `DSH_LARK_DSH_COMMAND` | `自动发现` | dsh 启动命令；通常无需设置|
 | `DSH_LARK_DSH_ARGS` | `自动发现` | dsh 启动参数，逗号分隔；通常无需设置|
 | `DSH_LARK_ADAPTER` | `sdk` | `sdk`（默认，approval answerer）/ `acp`（协议原生审批）/ `headless`（legacy）/ `web`（本地 dsh web agent，单写者）|
-| `DSH_LARK_PROVIDER` | `deepseek-official` | 模型 provider|
-| `DSH_LARK_MODEL` | `deepseek-v4-flash` | 默认模型|
+| `DSH_LARK_PROVIDER` | 未设置 | 模型 provider；可由对象形式的 dsh 默认模型提供|
+| `DSH_LARK_MODEL` | 未设置 | 默认模型；可由 dsh `agent-default-model` 提供|
+| `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | provider / 模型能力实时目录或兼容镜像|
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 每请求输出 token 上限|
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent 的 base URL|
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式绑定后的历史/实时消息投影；绝不自动切换（`0` 关闭）|

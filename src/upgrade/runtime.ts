@@ -85,8 +85,8 @@ export async function repairRuntimeProfiles(
   const acpRoot = acpProfileRoot(options.dshHome, DEFAULT_ACP_PROFILE, managedEnv);
   const preservedAcpRoute = existingAcpRoute(acpRoot);
   const acpRoute = {
-    provider: preservedAcpRoute?.provider ?? options.provider ?? 'deepseek-official',
-    model: preservedAcpRoute?.model ?? options.model ?? 'deepseek-v4-flash',
+    provider: preservedAcpRoute?.provider ?? options.provider ?? '',
+    model: preservedAcpRoute?.model ?? options.model ?? '',
   };
 
   const targets = [

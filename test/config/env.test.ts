@@ -12,8 +12,8 @@ describe('loadRuntimeEnv', () => {
     expect(env.tenant).toBe('feishu');
     expect(env.dshCommand).toBe('node');
     expect(env.dshArgs).toEqual(['lib/bin.js', 'cordis.yml']);
-    expect(env.provider).toBe('deepseek-official');
-    expect(env.model).toBe('deepseek-v4-flash');
+    expect(env.provider).toBe('');
+    expect(env.model).toBe('');
     expect(env.runTimeoutMs).toBe(300_000);
     expect(env.stopGraceMs).toBe(5_000);
     expect(env.groupNoAt).toBe(false);

@@ -29,7 +29,7 @@ export const SETTINGS_FIELDS: readonly SettingsField[] = [
   { key: 'appId', label: '应用 ID / App ID', help: '飞书开放平台中以 cli_ 开头的应用 ID。', timing: '保存后自动重连生效' },
   { key: 'appSecret', label: '应用密钥 / App Secret', help: '只写不回显；留空不会覆盖已保存密钥。', timing: '保存后自动重连生效', secret: true },
   { key: 'workspace', label: '默认项目文件夹 / Workspace', help: '新会话默认打开的本机项目目录，例如 /Users/me/project。', timing: '新会话生效（保存后自动重连）' },
-  { key: 'model', label: '默认模型 / Model', help: '新任务使用的模型，例如 deepseek-v4-flash。', timing: '保存后热更新，下一任务生效' },
+  { key: 'model', label: '默认模型 / Model', help: '新任务使用的 provider/model 路由。', timing: '保存后热更新，下一任务生效' },
   { key: 'scopeConcurrency', label: '并行任务数 / Parallel tasks', help: '每个飞书会话同时运行的任务数，建议 1–4。', timing: '保存后立即生效于新任务' },
   { key: 'adapter', label: '运行方式 / Runtime mode', help: '一般选择 sdk；只有连接现有 dsh Web 会话时选择 web。', timing: '保存后自动重连生效' },
   { key: 'notificationDefault', label: '默认提醒 / Notifications', help: '会话未单独设置时，是否主动提醒完成、失败和审批。', timing: '保存后立即生效于新提醒' },
@@ -180,7 +180,7 @@ function SettingsCard({ scope }: { scope: SettingsScope<BrowserSettings> }) {
         <TextField field={SETTINGS_FIELDS[1]!} value={draft.appId ?? ''} placeholder="cli_xxxxxxxxx" onChange={update} />
         <TextField field={SETTINGS_FIELDS[2]!} value={draft.appSecret ?? ''} placeholder="填写新密钥（已保存的不会显示）" onChange={update} />
         <TextField field={SETTINGS_FIELDS[3]!} value={draft.workspace ?? ''} placeholder="/Users/me/project" onChange={update} />
-        <TextField field={SETTINGS_FIELDS[4]!} value={draft.model ?? ''} placeholder="deepseek-v4-flash" onChange={update} />
+        <TextField field={SETTINGS_FIELDS[4]!} value={draft.model ?? ''} placeholder="provider/model" onChange={update} />
         <TextField field={SETTINGS_FIELDS[5]!} value={draft.scopeConcurrency ?? ''} placeholder="2" inputMode="numeric" onChange={update} />
         <SelectField field={SETTINGS_FIELDS[6]!} value={draft.adapter ?? 'sdk'} options={[['sdk', 'SDK（推荐）'], ['web', 'dsh Web 会话'], ['acp', 'ACP'], ['headless', '命令行兼容']]} onChange={update} />
         <SelectField field={SETTINGS_FIELDS[7]!} value={draft.notificationDefault ?? 'off'} options={[['off', '关闭（默认）'], ['completed', '完成与失败'], ['all', '完成、失败和审批']]} onChange={update} />
