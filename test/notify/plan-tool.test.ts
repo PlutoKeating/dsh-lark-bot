@@ -226,6 +226,43 @@ describe('lark_request_plan_approval tool', () => {
     );
   });
 
+  it('continues after verified ask or allow policies and fails closed when verification is unavailable', async () => {
+    let preExecute: (
+      execution: { name: string; arguments: unknown; agent?: object },
+      next: () => Promise<unknown>,
+    ) => Promise<unknown> = async (_execution, next) => next();
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, policy: 'ask' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, policy: 'allow' }),
+      })
+      .mockRejectedValueOnce(new Error('bridge offline')) as never;
+    apply({
+      on: (event: string, listener: unknown) => {
+        if (event === 'tools/pre-execute') preExecute = listener as typeof preExecute;
+      },
+      tools: { register: vi.fn() },
+    } as never, {
+      policyEndpoint: 'http://127.0.0.1/approval', token: 'secret', mode: 'off',
+    });
+    const next = vi.fn(async () => ({ kind: 'allow' }));
+    const execution = {
+      name: 'bash', arguments: { command: 'date' }, agent: { session: { id: 's' } },
+    };
+
+    await expect(preExecute(execution, next)).resolves.toEqual({ kind: 'allow' });
+    await expect(preExecute(execution, next)).resolves.toEqual({ kind: 'allow' });
+    await expect(preExecute(execution, next)).resolves.toMatchObject({
+      kind: 'deny',
+      reason: expect.stringContaining('the bridge could not verify the scope policy'),
+    });
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps mutating, compound, redirected, and unknown shell commands behind the plan gate', async () => {
     let preExecute: (
       execution: { name: string; arguments: unknown; agent?: object },

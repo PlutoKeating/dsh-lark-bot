@@ -397,26 +397,31 @@ describe('NotifyServer', () => {
     );
   });
 
-  it('returns policy-only approval checks without requiring an approval outcome', async () => {
-    const approval = vi.fn().mockResolvedValue({ ok: true, policy: 'allow' });
+  it('returns ask and allow policy-only checks without requiring an approval outcome', async () => {
+    const approval = vi.fn()
+      .mockResolvedValueOnce({ ok: true, policy: 'ask' })
+      .mockResolvedValueOnce({ ok: true, policy: 'allow' });
     const server = new NotifyServer({
       token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
     });
     servers.push(server);
     await server.start();
 
-    const response = await fetch(server.approvalUrl!, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        token: 'test-token', sessionId: 'session-1', toolName: 'skill',
-        policyCheckOnly: true,
-      }),
-    });
+    for (const policy of ['ask', 'allow'] as const) {
+      const response = await fetch(server.approvalUrl!, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          token: 'test-token', sessionId: 'session-1', toolName: 'skill',
+          policyCheckOnly: true,
+        }),
+      });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, policy: 'allow' });
-    expect(approval).toHaveBeenCalledWith(expect.objectContaining({ policyCheckOnly: true }));
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ ok: true, policy });
+    }
+    expect(approval).toHaveBeenCalledTimes(2);
+    expect(approval).toHaveBeenLastCalledWith(expect.objectContaining({ policyCheckOnly: true }));
   });
 
   it('preserves deny metadata and rejects malformed policy-only handler responses', async () => {
