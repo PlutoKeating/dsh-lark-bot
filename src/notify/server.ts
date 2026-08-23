@@ -7,6 +7,7 @@ import type { AskPayload, AskResult } from './ask-handler.js';
 import type { PlanPayload, PlanResult } from './plan-handler.js';
 import type { ApprovalPayload, ApprovalResult } from './approval-handler.js';
 import type { FilePayload, FileResult } from './file-handler.js';
+import type { SecretPayload, SecretResult } from './secret-handler.js';
 
 export interface NotifyMessage {
   token: string;
@@ -44,6 +45,7 @@ export interface NotifyServerDeps {
   approval?: (payload: ApprovalPayload, signal?: AbortSignal) => Promise<ApprovalResult>;
   /** Optional handler for the `lark_send_file` channel. */
   file?: (payload: FilePayload) => Promise<FileResult>;
+  secret?: (payload: SecretPayload, signal?: AbortSignal) => Promise<SecretResult>;
 }
 
 /**
@@ -62,6 +64,7 @@ export class NotifyServer {
   planUrl: string | undefined;
   approvalUrl: string | undefined;
   fileUrl: string | undefined;
+  secretUrl: string | undefined;
 
   constructor(deps: NotifyServerDeps) {
     this.deps = deps;
@@ -83,6 +86,7 @@ export class NotifyServer {
         this.planUrl = `http://127.0.0.1:${String(address.port)}/plan`;
         this.approvalUrl = `http://127.0.0.1:${String(address.port)}/approval`;
         this.fileUrl = `http://127.0.0.1:${String(address.port)}/file`;
+        this.secretUrl = `http://127.0.0.1:${String(address.port)}/secret`;
         resolve();
       });
     });
@@ -262,6 +266,17 @@ export class NotifyServer {
           ...(result.fileName ? { fileName: result.fileName } : {}),
           ...(result.size === undefined ? {} : { size: result.size }),
         });
+        return;
+      }
+      if (req.url === '/secret') {
+        if (!this.deps.secret) { respond(404, { ok: false, error: 'secret channel is not wired' }); return; }
+        const payload = JSON.parse(body) as SecretPayload;
+        if (payload.token !== this.token) { respond(401, { ok: false, error: 'invalid token' }); return; }
+        if (!payload.sessionId || !payload.reference?.trim() || (payload.target !== 'dsh-credential' && payload.target !== 'app-secret')) {
+          respond(400, { ok: false, error: 'sessionId, supported target, and reference are required' }); return;
+        }
+        const result = await waitForHuman((signal) => this.deps.secret!(payload, signal));
+        respond(result.ok ? 200 : 400, { ...result });
         return;
       }
       if (req.url !== '/notify') {

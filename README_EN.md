@@ -140,10 +140,21 @@ Send a normal message to the bot in Feishu to get started. Common commands:
 | `/model default <id>` | Write the dsh default model `agent-default-model` (admin) |
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | Add / remove a provider model and declare vision input (admin) |
 | `/provider add\|update\|remove <id>` | Manage providers (admin; deepseek-official and custom pi-ai) |
-| `/key set\|remove\|list <ref>` | Manage dsh credentials (set / remove require admin) |
+| `/key set <ref>`, `/key remove\|list <ref>` | Set dsh credentials through an owner-only secure form; remove requires admin |
+| `/secret status\|set\|remove <dsh-credential\|app-secret> <ref>` | Inspect status or securely collect/remove a supported secret (admin writes) |
+| `/language show\|set plain\|agent …\|reset …` | Manage plain-message and agent-answer language policy (admin writes) |
 | `/ask <question>` | Send a Q&A card; the answer is written back to session context |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | Manage the access allowlist (mutating commands require admin) |
 | `/help` | Show help |
+
+Every SDK, ACP, and Web turn receives structured, secret-free channel context and the official runtime
+`dsh-lark-bot` skill. API keys, tokens, and App Secrets must be entered through the owner-only password form opened
+by `/key set <ref>`, `/secret set …`, or `lark_request_secret`. Ordinary chat, legacy `/key set <ref> <value>`, and
+`--api-key` no longer consume values. The value never enters prompts, sessions, jobs, archives, logs, diagnostics,
+or replies. Guardian safe mode is a degraded recovery surface without the full configuration/secret seam.
+The form payload still traverses Feishu/Lark; platform-side auditing and retention are outside this project's control,
+so use a trusted direct chat. The bridge guarantees that the value is not an ordinary chat message and is never sent
+to the cloud LLM.
 
 Feishu images are detected by content as PNG/JPEG/WebP/GIF and receive a safe extension. The default
 SDK validates them through dsh's attachment store and sends native image blocks instead of path text.
@@ -318,7 +329,7 @@ Configuration is persisted the official dsh way (the same storage protocol as th
   changes (effective on the next message). A bare pi-ai Base URL (e.g. `https://www.kingapi.xyz`)
   is completed with `/v1` automatically.
 
-Security note: typing a key in a Feishu conversation exposes it to everyone who can see that chat; prefer private chats or `--api-key-env` references to environment variables. The bot never echoes key values in any reply.
+Security note: never type a key in ordinary Feishu chat. Use the secure form or an `--api-key-env` environment reference. Legacy value-bearing commands are not consumed, and replies never echo values.
 
 ## Upgrade, Disable & Uninstall
 

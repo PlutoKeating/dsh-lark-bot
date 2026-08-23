@@ -125,6 +125,14 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
+      // Owner-only secure value collection; values bypass the agent process.
+      '- insert:',
+      '    - id: lark-secret',
+      `      name: '${own.name}/secret'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_SECRET_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
       // Question-card tool: the agent asks the user for decisions / missing
       // information; the bridge shows a card and returns the answer.
       '- insert:',

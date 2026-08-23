@@ -322,6 +322,16 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     写入，永不拼接或执行 shell。单源故障可显式降级，所有来源均失败或 Issue API 失败才令任务失败；
     workflow 仅授予 `contents: read` / `issues: write` 并用 concurrency group 串行化。
 
+17. **频道自描述、runtime Skill 与密钥数据平面（issue #85）**：SDK / ACP / Web 共用的
+    `run-flow` 在每次 fresh/resume prompt 前注入有界 `ChannelContext`，仅含 tenant、chat type、scope、
+    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。Cordis `ctx.skills`
+    注册 lifecycle-bound `dsh-lark-bot` runtime Skill，命令索引与 `/help` 共享单一目录。
+    `lark_request_secret` 只传 target/reference/purpose/sessionId；localhost callback 把 session 映射为
+    scope、校验当前 actor 为管理员并发送 owner-only password form。回调在异步写前 claim 一次性请求，
+    仅 allowlist `dsh-credential` 与当前 profile `app-secret`，结果只返回 configured 状态。原始值不经过
+    adapter/prompt/session/jobs/archive/logger/diagnostics/response。Guardian 明确为降级面。profile 语言策略
+    以 0600 原子文件保存：UI 固定 per-viewer，plain 可 bilingual/zh/en，agent 可 auto/zh/en。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |
@@ -342,7 +352,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载、文本注入与出站文件边界校验 |
-| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` `/secret` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/secret/`、`src/skill/` | 安全密钥请求/allowlist 写入边界与官方 runtime Skill 注册 |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |

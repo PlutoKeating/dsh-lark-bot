@@ -1075,3 +1075,13 @@ dsh 重新在线时（用户手动启动或退出安全模式后），守护立�
 
 CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
 `dsh-lark-bot guardian run|install|uninstall|status`。
+
+## 11. Channel context、Skill、语言与安全密钥 API
+
+- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块。
+- `registerDshLarkBotSkill(ctx.skills)`：注册 model/user invocable 的 runtime Skill，并返回 disposer。
+- `LanguagePolicyStore.get|set|reset|flush`：profile 级 `{ui:'per-viewer', plain, agent}` 策略。
+- `SecretRequestRegistry.register|get|submit|cancel`：10 分钟 owner/scope-bound 一次性请求；submit 在写入前 claim，回执无 value。
+- `SecretTargetManager`：仅允许 `dsh-credential/<validated-ref>` 与 `app-secret/current|<profile>`。
+- localhost `POST /secret` 与 `lark_request_secret({target, reference, purpose?})`：用 sessionId 路由 scope，管理员授权后等待安全表单；响应仅含配置状态。
+- `/secret …`、`/language …` 与 `/key set <ref>` 是人工入口；普通聊天和 provider `--api-key` 不接受值。

@@ -11,6 +11,7 @@ import { loadRuntimeEnv, type RuntimeEnv } from './config/env.js';
 import { resolveAppPaths } from './config/app-paths.js';
 import { ConfigStore } from './config/profile-store.js';
 import { attachOptionalTuiSeams } from './tui/optional-seams.js';
+import { registerDshLarkBotSkill } from './skill/dsh-lark-bot.js';
 
 /** Cordis plugin name; stable across releases (referenced by the bundle patch). */
 export const name = 'dsh-lark-bot';
@@ -65,7 +66,7 @@ export const Config = Schema.object({
     .description('飞书/Lark 应用 ID，例如 cli_xxx；保存后自动重连 / App ID; reconnects after saving'),
   appSecret: Schema.string()
     .role('secret')
-    .description('应用密钥；只写不回显，保存后自动重连 / App Secret; write-only and reconnects after saving'),
+    .description('应用密钥；Web 启动入口只写不回显；聊天中请用 /secret set app-secret current / App Secret; write-only Web bootstrap; use /secret set app-secret current in chat'),
   workspace: Schema.string()
     .description('新会话默认打开的项目文件夹 / Default project folder for new sessions'),
   adapter: Schema.union(['sdk', 'acp', 'headless', 'web'])
@@ -235,6 +236,13 @@ export function apply(ctx: Context, config: Config = {}, deps: PluginDeps = {}) 
       `[dsh-lark-bot] failed to hydrate Web settings: ${error instanceof Error ? error.message : String(error)}`,
     );
     if (!disposed) reconcile();
+  });
+
+  ctx.inject(['skills'], (skillsContext) => {
+    const registry = (skillsContext as unknown as { skills?: { register: Parameters<typeof registerDshLarkBotSkill>[0]['register'] } }).skills;
+    if (!registry) return;
+    const disposeSkill = registerDshLarkBotSkill(registry);
+    skillsContext.effect(() => disposeSkill);
   });
 
   ctx.inject(['settings'], async (settingsContext) => {
