@@ -19,28 +19,46 @@ describe('runSupervise', () => {
     };
     child.pid = 777;
     child.kill = vi.fn().mockImplementation((signal: string) => {
-      if (signal === 'SIGKILL') queueMicrotask(() => child.emit('exit', null, 'SIGKILL'));
+      if (signal === 'SIGKILL') child.emit('exit', null, 'SIGKILL');
       return true;
     });
     let markSpawned: (() => void) | undefined;
     const spawned = new Promise<void>((resolve) => {
       markSpawned = resolve;
     });
-    const run = runSupervise(
-      { profile: 'work', envFile },
-      {
-        dshBin: '/opt/dsh.js',
-        childStopGraceMs: 5,
-        spawn: vi.fn().mockImplementation(() => {
-          markSpawned?.();
-          return child;
-        }) as never,
-      },
-    );
-    await spawned;
-    process.emit('SIGTERM');
-    await run;
-    expect(child.kill.mock.calls.map((call) => call[0])).toEqual(['SIGTERM', 'SIGKILL']);
-    await rm(root, { recursive: true, force: true });
-  });
+    let releaseSpawnedStatus: (() => void) | undefined;
+    const spawnedStatusBlocked = new Promise<void>((resolve) => {
+      releaseSpawnedStatus = resolve;
+    });
+    const readProcessIdentity = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(async () => {
+        await spawnedStatusBlocked;
+        return undefined;
+      });
+    vi.useFakeTimers();
+    try {
+      const run = runSupervise(
+        { profile: 'work', envFile },
+        {
+          dshBin: '/opt/dsh.js',
+          childStopGraceMs: 5,
+          readProcessIdentity,
+          spawn: vi.fn().mockImplementation(() => {
+            markSpawned?.();
+            return child;
+          }) as never,
+        },
+      );
+      await spawned;
+      process.emit('SIGTERM');
+      vi.advanceTimersByTime(5);
+      releaseSpawnedStatus?.();
+      await run;
+      expect(child.kill.mock.calls.map((call) => call[0])).toEqual(['SIGTERM', 'SIGKILL']);
+    } finally {
+      vi.useRealTimers();
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 1_000);
 });
