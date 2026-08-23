@@ -176,6 +176,7 @@ describe('ServiceManager', () => {
       paths: resolveAppPaths(root),
       controller,
       env: {},
+      providerManager: { listProviders: async () => [] },
     });
     try {
       await manager.uninstall();
@@ -194,6 +195,7 @@ describe('ServiceManager', () => {
       paths: resolveAppPaths(root),
       controller: new FakeController(),
       dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
     });
     try {
       await expect(manager.restart()).rejects.toThrow(/service install/);
@@ -209,6 +211,7 @@ describe('ServiceManager', () => {
       paths: resolveAppPaths(root),
       controller,
       dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
     });
     try {
       await manager.install();
@@ -233,6 +236,7 @@ describe('ServiceManager', () => {
       controller: new FakeController(),
       dshBin: '/opt/dsh.js',
       findProcess: async () => ({ pid: 4242, cmdline: 'dsh --profile dsh-lark' }),
+      providerManager: { listProviders: async () => [] },
     });
     try {
       await expect(manager.install()).rejects.toThrow(/pid 4242/);
@@ -252,6 +256,7 @@ describe('ServiceManager', () => {
       paths: resolveAppPaths(root),
       controller,
       dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
     });
     try {
       const first = manager.install();
@@ -273,6 +278,7 @@ describe('ServiceManager', () => {
       paths: resolveAppPaths(root),
       controller,
       dshBin: '/opt/dsh.js',
+      providerManager: { listProviders: async () => [] },
     });
     let entered!: () => void;
     let release!: () => void;
