@@ -206,6 +206,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
    `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
+   渠道 skill 同理以 `dsh-lark-bot/skill` 子入口挂进 SDK / ACP runtime overlay（`inject: ['skills']`），
+   使模型的 `skill` 工具能在 agent 会话自己的 `ctx.skills` 注册表里读到 `dsh-lark-bot` 操作指南；
+   bridge 引擎（`dsh-lark` profile）虽也注册同名 skill，但那是另一条 cordis 上下文，模型并不会读取。
    `/ask`、`/plan`、需要用户决策的 `/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
    JSON 合法空白心跳；这同时避开 Node/Undici 默认 300 秒 headers/body idle timeout。连接真正断开时
    AbortSignal 仍精确取消该 session/id 的 pending 项，而不会靠 agent 重试生成重复卡。

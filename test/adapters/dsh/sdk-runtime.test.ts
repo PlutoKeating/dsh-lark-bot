@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { parseDocument } from 'yaml';
 import {
   DEFAULT_SDK_PROFILE,
   ensureSdkProfile,
@@ -41,6 +42,17 @@ describe('resolveSdkLaunch', () => {
     expect(patch).toContain('use lark_ask_user and wait for the answer');
     expect(patch).toContain('[policy-denial layer=...]');
     expect(patch).toContain('uses lark_ask_user for interactive answers');
+    // Regression guard (channel-skill bug): the model-invocable channel skill
+    // must be mounted on the agent runtime context, not only the bridge engine.
+    expect(patch).toContain('id: lark-skill');
+    expect(patch).toContain("name: 'dsh-lark-bot/skill'");
+
+    // The generated overlay must parse as valid YAML (guards the new row's
+    // indentation against silently producing a malformed patch).
+    const document = parseDocument(patch, {
+      customTags: [{ tag: 'tag:yaml.org,2002:js', resolve: (value: string) => value }],
+    });
+    expect(document.errors).toEqual([]);
   });
 
   it('omits the bridge tools from the core-only safe SDK overlay', () => {
@@ -55,6 +67,10 @@ describe('resolveSdkLaunch', () => {
     expect(patch).not.toContain('id: lark-plan-approval');
     expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).not.toContain('use lark_request_plan_approval');
+    // The channel skill is not a bridge callback tool, so it stays mounted in
+    // the core-only safe overlay too (guardian recovery guidance).
+    expect(patch).toContain('id: lark-skill');
+    expect(patch).toContain("name: 'dsh-lark-bot/skill'");
   });
 
   it('uses the discovered bin with the SDK profile', () => {

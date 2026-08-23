@@ -105,6 +105,18 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '- id: hmr',
     '  disabled: true',
     '',
+    // Model-invocable channel skill: expose the dsh-lark-bot operations guide
+    // to THIS agent session's skill catalog — the one the `skill` tool reads.
+    // The bridge engine registers the same skill on its own cordis context
+    // (plugin.ts), but that context is never the one the model reads. This row
+    // ensures the skill also lands on the agent runtime's context so that
+    // `skill("dsh-lark-bot")` resolves in a live SDK session. It is kept
+    // outside the bridgeTools gate because it needs no callback endpoint and
+    // is also useful to the guardian's core-only safe profile.
+    '- insert:',
+    '    - id: lark-skill',
+    `      name: '${own.name}/skill'`,
+    '',
   ];
   if (bridgeTools) {
     lines.push(

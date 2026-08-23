@@ -14,6 +14,7 @@ export default defineConfig([
       file: 'src/notify/file-tool.ts',
       secret: 'src/notify/secret-tool.ts',
       'sdk-server': 'src/adapters/dsh/sdk-server.ts',
+      skill: 'src/skill/index.ts',
     },
     format: ['esm'],
     target: 'node22',
