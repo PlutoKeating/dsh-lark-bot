@@ -45,7 +45,7 @@ describe('renderCard', () => {
       body: { elements: Array<Record<string, unknown>> };
     };
     const panel = running.body.elements.find((element) => element.tag === 'collapsible_panel');
-    expect(panel).toMatchObject({ tag: 'collapsible_panel', expanded: true });
+    expect(panel).toMatchObject({ tag: 'collapsible_panel', expanded: false });
     expect(JSON.stringify(panel)).toContain('read');
     expect(JSON.stringify(panel)).not.toContain('inspect the code');
     expect(JSON.stringify(panel)).not.toContain('src');
