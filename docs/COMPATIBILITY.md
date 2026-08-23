@@ -51,8 +51,10 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 3. **同步锁定**：把 `package.json` 的 `@deepseek-ai/dsh-sdk-client` 改为同一精确版本，
    执行 `pnpm install` 更新锁文件。
 4. **全量回归**：`pnpm release:check`（diff 检查 + typecheck + 全部测试 + 构建 +
-   上游一致性检查）。
-5. **真实可用性探测**：`pnpm compat:probe`（本机）或推送后 CI `compat-probe` 任务：
+   上游一致性检查 + 真实 dsh 可用性探测）。发布 workflow 在上传任何包之前也会独立执行同一探针，
+   因而普通 CI 失败时不能绕过兼容门禁继续发布。
+5. **单独复跑真实可用性探测**：需要定位兼容问题时可运行 `pnpm compat:probe`（本机），或检查推送后
+   CI `compat-probe` 任务：
    在临时 DSH_HOME 安装锁定版 dsh，走 SDK / ACP runtime 初始化握手，并用本地
    OpenAI-compatible fixture 验证 ACP 文本任务 + plan + one-shot permission 拒绝，以及 SDK 任务、`lark_notify` / `lark_ask_user` /
    `lark_request_plan_approval` 回调、计划前 `bash` 强制拒绝 → 计划批准 → rc.8 one-shot approval → 实际执行的顺序、
@@ -71,8 +73,8 @@ DeepSeek Harness 处于 developer preview（0.1.0-rc 系列），接口频繁破
 | 机制 | 位置 | 作用 |
 | :--- | :--- | :--- |
 | 上游雷达 | `scripts/check-dsh-upstream.mjs` + `scripts/upstream-release-config.mjs` + `.github/workflows/dsh-upstream.yml`（每日 03:17 UTC + 手动触发） | dsh + dsh-TUI 双源归一；逐版本创建/补充 `upstream-update` Issue；同时校验本地矩阵、workshop、lockfile 与无直接 dsh-tools 依赖 |
-| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision；模拟模型回合设有请求上限，状态断言漂移时快速失败而不耗尽内存 |
-| 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性） | 本地全量门禁 |
+| 真实探测 | `scripts/probe-dsh-compat.mjs` + `.github/workflows/ci.yml`（`compat-probe` 任务）+ `.github/workflows/release.yml`（发布前门禁） | 临时 DSH_HOME 安装锁定 dsh，验证 rc.7 SQLite 被 rc.8 原样拒绝、SDK / ACP initialize、ACP task/permission/image capability，以及 SDK notify/ask/plan/approval、live resume/restart collision；策略预检、低风险静默放行和真实一次性审批分别计数，并由快速单测对照生产 handler 契约；模拟模型回合设有请求上限，状态断言漂移时快速失败而不耗尽内存 |
+| 发版前检查 | `pnpm release:check`（= `ci:local` + 上游一致性 + 真实兼容探针） | 本地全量门禁；GitHub Release 在发布包之前重复真实探针 |
 
 ## 5. 风险披露
 

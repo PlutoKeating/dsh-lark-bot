@@ -31,6 +31,7 @@ export interface SuperviseDeps {
   spawn?: typeof spawn;
   dshBin?: string;
   childStopGraceMs?: number;
+  readProcessIdentity?: typeof readLinuxProcessIdentity;
 }
 
 function waitForExit(child: ChildProcess): Promise<void> {
@@ -73,7 +74,7 @@ export async function runSupervise(
     childPid: number | undefined,
     restarts: number,
   ): Promise<void> => {
-    const processIdentity = await readLinuxProcessIdentity(process.pid);
+    const processIdentity = await (deps.readProcessIdentity ?? readLinuxProcessIdentity)(process.pid);
     const status: SupervisorStatus = {
       pid: process.pid,
       childPid,
@@ -110,8 +111,12 @@ export async function runSupervise(
         stdio: ['ignore', logFd, logFd],
       });
       child = spawned;
+      // Subscribe before the first post-spawn await. A stop can otherwise
+      // terminate the child while status persistence is pending, losing the
+      // one-shot exit event and hanging the supervisor forever.
+      const exited = waitForExit(spawned);
       await writeStatus('running', spawned.pid, restarts);
-      await waitForExit(spawned);
+      await exited;
       if (forceStopTimer) {
         clearTimeout(forceStopTimer);
         forceStopTimer = undefined;
