@@ -24,7 +24,7 @@ export interface AcpRuntimeOptions {
   profile?: string;
   provider?: string;
   model?: string;
-  install?: (profileRoot: string) => Promise<void>;
+  install?: (profileRoot: string, options?: { force?: boolean }) => Promise<void>;
 }
 
 export interface AcpLaunchSpec {
@@ -184,9 +184,9 @@ function ownPackageLinked(profileRoot: string, own: OwnPackageInfo): boolean {
   }
 }
 
-function runPnpmInstall(profileRoot: string): Promise<void> {
+function runPnpmInstall(profileRoot: string, options: { force?: boolean } = {}): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['install'], {
+    const child = spawn('pnpm', ['install', ...(options.force ? ['--force'] : [])], {
       cwd: profileRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -238,7 +238,7 @@ export async function ensureAcpProfile(
     await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
     if (!ready) {
       const install = options.install ?? runPnpmInstall;
-      await install(root);
+      await install(root, { force: true });
     }
     if (!isAcpProfileReady(root)) {
       return {

@@ -38,7 +38,7 @@ export interface SdkRuntimeOptions {
    */
   bridgeTools?: boolean;
   /** Injectable installer for tests. */
-  install?: (profileRoot: string) => Promise<void>;
+  install?: (profileRoot: string, options?: { force?: boolean }) => Promise<void>;
 }
 
 export interface SdkLaunchSpec {
@@ -223,9 +223,9 @@ function ownPackageLinked(profileRoot: string, own: OwnPackageInfo): boolean {
   }
 }
 
-function runPnpmInstall(profileRoot: string): Promise<void> {
+function runPnpmInstall(profileRoot: string, options: { force?: boolean } = {}): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['install'], {
+    const child = spawn('pnpm', ['install', ...(options.force ? ['--force'] : [])], {
       cwd: profileRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -279,7 +279,10 @@ export async function ensureSdkProfile(
     );
     const install = options.install ?? runPnpmInstall;
     if (!isSdkProfileReady(root)) {
-      await install(root);
+      // A lockfile-consistent install may leave a physically stale/corrupt
+      // package untouched. Readiness is based on node_modules itself, so a
+      // failed readiness check must force pnpm to refresh package contents.
+      await install(root, { force: true });
     }
     if (!isSdkProfileReady(root)) {
       return {

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ACP_PACKAGE,
   ACP_VERSION,
@@ -175,5 +175,35 @@ describe('ensureAcpProfile', () => {
       JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.6' }),
     );
     expect(isAcpProfileReady(root)).toBe(false);
+  });
+
+  it('forces pnpm to refresh a stale physical ACP package', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-acp-corrupt-version-'));
+    tempDirs.push(home);
+    const root = acpProfileRoot(home, DEFAULT_ACP_PROFILE);
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, 'package.json'), '{}');
+    await writeFile(join(root, 'cordis.yml'), '[]\n');
+    await writeFile(join(root, 'cordis.patch.yml'), '[]\n');
+    await installPlugin(root)();
+    await writeFile(
+      join(root, 'node_modules', ACP_PACKAGE, 'package.json'),
+      JSON.stringify({ name: ACP_PACKAGE, version: '0.1.0-rc.6' }),
+    );
+    const install = vi.fn(async (installRoot: string, options?: { force?: boolean }) => {
+      if (!options?.force) return;
+      await writeFile(
+        join(installRoot, 'node_modules', ACP_PACKAGE, 'package.json'),
+        JSON.stringify({ name: ACP_PACKAGE, version: ACP_VERSION }),
+      );
+    });
+
+    await expect(ensureAcpProfile({
+      home,
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      install,
+    })).resolves.toMatchObject({ ok: true });
+    expect(install).toHaveBeenCalledWith(root, { force: true });
   });
 });

@@ -27,6 +27,7 @@ describe('guardian service units', () => {
     expect(unit).toContain('ExecStart=/usr/bin/node /home/u/dsh-lark-bot/dist/cli.js guardian run');
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('WantedBy=default.target');
+    expect(unit).toContain('Environment=PATH=/usr/bin');
   });
 
   it('renders a launchd plist and a Windows startup script', () => {
