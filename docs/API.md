@@ -700,7 +700,9 @@ headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch fail
 发送普通降级提示，不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
-  路由。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
+  路由。正常结束但任一工具 block 为 `error` 时，所有 renderer/locale 的汇总使用
+  “已完成（含警告）/Completed with warnings”；run terminal 仍为 done，真正的 run error/interrupted/timeout
+  保持更高显示优先级。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
   原本面向用户的回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
 `src/card/session-recovery-card.ts` 提供已知 native resume 零活动失败时的双语中性恢复卡；它不包含

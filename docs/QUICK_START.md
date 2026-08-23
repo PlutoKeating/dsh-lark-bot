@@ -146,6 +146,9 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
 | `/help` | 查看 bridge 直接处理的当前版本权威命令清单 |
 
+过程卡正常结束但含失败工具时显示“已完成（含警告）”；这表示 Agent 已给出本轮结果，同时提醒并非
+所有工具步骤成功，不会把整个 job 改记为失败。
+
 模型 / provider / 凭据管理直接读写 dsh 官方配置（`~/.dsh/settings.yaml` 与
 `~/.dsh/.credentials.yaml`，与 dsh Web Settings→Models 同协议），改动下一请求生效：
 `/model use` 按会话热切换模型（桥接每轮解析 provider 路由并传给 dsh runtime，SDK 适配器

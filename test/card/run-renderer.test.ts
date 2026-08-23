@@ -79,6 +79,40 @@ describe('renderCard', () => {
     expect(JSON.stringify(renderCard(state, 'detailed'))).not.toContain('final answer');
   });
 
+  it('labels completed runs with failed tools as completed with warnings', () => {
+    let warned = reduce(initialState, {
+      type: 'tool_use', id: 'tool-failed', name: 'skill', input: {},
+    });
+    warned = reduce(warned, {
+      type: 'tool_result', id: 'tool-failed', output: 'permission denied', isError: true,
+    });
+    warned = reduce(warned, { type: 'final_text', content: 'fallback answer' });
+    warned = reduce(warned, { type: 'done', sessionId: 's1', terminationReason: 'normal' });
+
+    for (const card of [
+      renderCard(warned, 'compact'),
+      renderCard(warned, 'standard'),
+      renderCard(warned, 'detailed'),
+      renderLegacyCard(warned),
+    ]) {
+      const serialized = JSON.stringify(card);
+      expect(serialized).toContain('已完成（含警告）');
+      expect(serialized).toContain('Completed with warnings');
+    }
+
+    const successful = reduce(initialState, {
+      type: 'done', sessionId: 's2', terminationReason: 'normal',
+    });
+    expect(JSON.stringify(renderCard(successful))).not.toContain('含警告');
+    expect(JSON.stringify(renderCard(successful))).not.toContain('with warnings');
+
+    const failed = reduce(warned, {
+      type: 'error', message: 'runtime failed', terminationReason: 'failed',
+    });
+    expect(JSON.stringify(renderCard(failed))).toContain('Failed');
+    expect(JSON.stringify(renderCard(failed))).not.toContain('Completed with warnings');
+  });
+
   it('keeps untrusted agent and tool payloads out of every process-card variant', () => {
     let state = reduce(initialState, { type: 'thinking', delta: 'PRIVATE_REASONING_CANARY' });
     state = reduce(state, {

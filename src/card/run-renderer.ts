@@ -53,7 +53,13 @@ function summaryText(state: RunState, locale: CardLocale): string {
   if (state.terminal === 'interrupted') return zh ? '已中断' : 'Interrupted';
   if (state.terminal === 'idle_timeout') return zh ? '已超时' : 'Timed out';
   if (state.terminal === 'error') return zh ? '出错' : 'Failed';
-  if (state.terminal === 'done') return zh ? '已完成' : 'Completed';
+  if (state.terminal === 'done') {
+    const hasToolWarning = state.blocks.some(
+      (block) => block.kind === 'tool' && block.tool.status === 'error',
+    );
+    if (hasToolWarning) return zh ? '已完成（含警告）' : 'Completed with warnings';
+    return zh ? '已完成' : 'Completed';
+  }
   if (state.footer === 'tool_running') return zh ? '正在调用工具' : 'Running tools';
   if (state.footer === 'streaming') return zh ? '正在输出' : 'Responding';
   return zh ? '思考中' : 'Thinking';
