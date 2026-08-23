@@ -205,8 +205,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
    `tools/pre-execute` 会拒绝当前 turn 尚未批准的 mutating/execute/`run_code` 调用；`bash` / `shell`
-   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行，串联、重定向、命令替换、
-   未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
+   仅对无控制符且命中明确命令/`git` 子命令白名单的单条只读检查放行；SDK 附带的
+   `description` / `workdir` / false background 元数据经显式校验后不改变判定，未知参数、串联、
+   重定向、命令替换、未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
    高风险工具，再以 structural listener 接入 rc.8

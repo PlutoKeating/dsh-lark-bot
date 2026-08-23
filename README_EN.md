@@ -238,7 +238,8 @@ reject `web`, because a shared Web agent broadcast stream cannot isolate session
 changes, scripts, or other substantial/high-risk actions. A runtime pre-execute policy denies writes, deletes,
 moves, non-read-only shell commands and `run_code` until a plan is approved. Each approval grants only the next
 high-risk call; later unplanned calls require approval again. Single read-only inspections such as `date`, `pwd`,
-`ls`, `find`, `rg`, and `git status/log/diff` run directly; shell chaining,
+`ls`, `find`, `rg`, and `git status/log/diff` run directly. Inert SDK `bash` metadata (`description`,
+`workdir`, and `run_in_background:false`) does not change that decision; unknown metadata, shell chaining,
 redirection, command substitution, and unknown executables remain behind the conservative plan gate. The bridge sends the complete Markdown plan as a normal
 message, then a card with **Approve and execute** / **Continue planning** plus optional feedback. The tool blocks
 and pauses the idle watchdog; approval resumes the original turn, while revision returns the feedback and requires

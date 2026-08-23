@@ -15,6 +15,8 @@ export interface Config {
   mode?: 'strict' | 'off';
 }
 
+type PlanGateMode = NonNullable<Config['mode']>;
+
 export interface PlanPolicyExecution {
   name: string;
   arguments: unknown;
@@ -81,7 +83,7 @@ export function apply(ctx: Context, config: Config = {}) {
   const policyCtx = ctx as PlanPolicyContext;
   const currentTurns = new WeakMap<object, number>();
   const approvedCalls = new WeakMap<object, number>();
-  const gateDisabled = (config.mode ?? process.env.DSH_LARK_PLAN_GATE) === 'off';
+  const gateDisabled = planGateMode(config.mode ?? process.env.DSH_LARK_PLAN_GATE) === 'off';
 
   policyCtx.on('agent/pre-step', async (payload, next) => {
     currentTurns.set(payload.agent, payload.turn);
@@ -260,9 +262,13 @@ function isSimpleReadOnlyShellCommand(rawArguments: unknown): boolean {
 
 function shellCommand(rawArguments: unknown): string | undefined {
   if (typeof rawArguments === 'object' && rawArguments !== null && !Array.isArray(rawArguments)) {
-    const entries = Object.entries(rawArguments);
-    if (entries.length !== 1 || entries[0]?.[0] !== 'command') return undefined;
-    const command = entries[0][1];
+    const record = rawArguments as Record<string, unknown>;
+    const allowedKeys = new Set(['command', 'description', 'workdir', 'run_in_background']);
+    if (Object.keys(record).some((key) => !allowedKeys.has(key))) return undefined;
+    if (record.description !== undefined && typeof record.description !== 'string') return undefined;
+    if (record.workdir !== undefined && typeof record.workdir !== 'string') return undefined;
+    if (record.run_in_background !== undefined && record.run_in_background !== false) return undefined;
+    const command = record.command;
     return typeof command === 'string' ? command : undefined;
   }
   if (typeof rawArguments !== 'string') return undefined;
@@ -271,6 +277,10 @@ function shellCommand(rawArguments: unknown): string | undefined {
   } catch {
     return rawArguments;
   }
+}
+
+function planGateMode(value: unknown): PlanGateMode {
+  return value === 'off' ? 'off' : 'strict';
 }
 
 function isReadOnlyGitCommand(words: readonly string[]): boolean {

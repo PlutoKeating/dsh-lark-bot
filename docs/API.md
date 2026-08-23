@@ -654,7 +654,9 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
 `tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、非只读 shell 命令与 `run_code`。
 `bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
-subcommand 位于只读白名单时才绕过计划和逐工具审批；未知参数或语法一律保持高风险。通过 token 鉴权的
+subcommand 位于只读白名单时才绕过计划和逐工具审批。真实 SDK 参数可额外携带字符串
+`description` / `workdir` 与 `run_in_background:false`；这些字段只作无副作用元数据校验，
+其他字段、未知语法一律保持高风险。通过 token 鉴权的
 一次批准只消费于随后一次高风险调用，不能解锁整个 turn；`DSH_LARK_PLAN_GATE=off` 可为可信部署关闭
 独立计划门禁，但不改变官方逐工具审批策略。
 `POST /plan` 回调，以 session id 反查 scope。`buildPlanHandler` 先发送完整 Markdown 计划，再注册并

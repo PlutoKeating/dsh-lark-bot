@@ -234,7 +234,9 @@ guardian 仍只救援其配置的主实例。
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
 移动、非只读 shell 命令与 `run_code`。一次计划批准只放行随后一次高风险调用，计划外的后续调用必须
 重新确认。`date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等单条
-只读检查直接放行；包含串联、重定向、命令替换或未知程序的 shell 调用仍保守地走计划门禁。
+只读检查直接放行；SDK `bash` 自动附带的 `description`、`workdir` 与
+`run_in_background:false` 经无副作用校验后不会改变只读判定。包含未知参数、串联、重定向、
+命令替换或未知程序的 shell 调用仍保守地走计划门禁。
 bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准，开始执行 /
 继续规划”决策卡；卡内可填写修改意见。工具在等待期间阻塞且暂停空闲超时，批准后原任务自动继续；
 继续规划时 agent 会收到意见、修订计划并再次请求确认。门禁无固定十分钟截止，跟随所属 run 的取消

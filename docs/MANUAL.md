@@ -319,7 +319,9 @@ dsh-lark-bot guardian uninstall
   POSIX shell 使用 `DSH_LARK_PLAN_GATE=off dsh-lark-bot service restart --profile dsh-lark`，
   Windows PowerShell 先执行 `$env:DSH_LARK_PLAN_GATE = "off"`，再执行
   `dsh-lark-bot service restart --profile dsh-lark`。默认 `strict`；
-  `date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等受限单条只读检查无需计划审批。
+  `date`、`pwd`、`ls`、`find`、`rg`、`git status/log/diff` 等受限单条只读检查无需计划审批；
+  SDK 的 `description`、`workdir` 与 `run_in_background:false` 无副作用元数据不会改变只读判定，
+  未知参数继续失败关闭。
 
 - 私聊始终独立；群聊默认按话题隔离 scope。管理员可用 `/isolation group|topic|member` 改为
   整群共享、话题独立或成员独立；切换只影响后续消息路由，旧 scope 数据与已经发出的停止 / 审批 /
