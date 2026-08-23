@@ -20,7 +20,7 @@
 | **P15 安全模式实时可见性** Safe-mode live visibility | 安全模式优先预置官方 SDK 流式 runtime（`dsh-lark-safe-sdk`）、headless 活动卡回退、单任务空闲超时看门狗、`/safemode stop` 与卡片 ⏹、忙碌回执、正常模式排队回执与卡住提示 | ✅ 已完成 Done（0.10.0） |
 | **P16 Web 单写者适配器** Web single-writer adapter | `DSH_LARK_ADAPTER=web` 驱动本地 dsh web agent（`session.prompt` + `/api/events.mux`），网页端成为**唯一写者**；旧 turn watcher 已由 #53 的用户显式 session 消息投影取代，禁止自动切换 | ✅ 已完成 Done（0.11.0；#53 加固） |
 | **P17 一键彻底升级** One-command upgrade | `dsh-lark-bot upgrade`：包本体 + guardian 幂等重装重启 + runtime profile 链接修复及陈旧 SDK/ACP 依赖即时重装 + doctor 验证；`--check` / `--restart` / `--rollback` / `--force` / `--no-guardian`；运行中实例安全；旧版本经 `npx dsh-lark-bot@latest upgrade` 引导（issue #10） | ✅ 已完成 Done（0.12.0；runtime 版本迁移于 #51 补强） |
-| **P18 更新体验与热管理** Update experience & hot management | 更新链路架构审查（docs/UPGRADE.md）；doctor 更新提醒（`DSH_LARK_UPGRADE_CHECK`）；guardian 单元稳定路径（避免 npx 缓存）；运行中实例排队重启 / 热重载 / 版本 pin 漂移自愈（issue #15） | 🚧 进行中 In progress |
+| **P18 更新体验与热管理** Update experience & hot management | 更新链路架构审查；doctor/`/version` 提醒；`/new` 单次短提醒；管理员 `/upgrade` owner-bound 确认卡；Guardian 持久交接、精确版本后台更新、跨重启协调与终态回执；稳定 guardian 路径和版本 pin/runtime 漂移自愈（issue #15） | ✅ 已完成 Done |
 | **P19 群聊会话隔离** Group session isolation | `/isolation group|topic|member` 持久化选择；消息与卡片动作共用 scope 路由；成员轮次在群卡中明确标记，既有各级会话数据保持可恢复（issue #17） | ✅ 已完成 Done |
 | **P20 计划门禁** Plan approval gate | 关键任务先发完整计划，再以 approve/revise + feedback 决策卡暂停并续接原 agent turn；等待期间暂停 idle watchdog（issue #18） | ✅ 已完成 Done |
 | **P21 原生折叠过程** Native collapsible process | schema 2.0 原生折叠面板实时承载 reasoning / tools，最终回答单独发送并保留 reply/thread 路由（issue #19） | ✅ 已完成 Done |
