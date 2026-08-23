@@ -333,7 +333,7 @@ profile 的前台进程会拒绝并提示先停止，生命周期锁阻止并发
 
 ### 升级
 
-**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时 bot 弹出只允许发起人操作的确认卡；点击“确认更新”后，Guardian 通过独立 worker 安装卡片中确认的精确 npm 版本，复用完整升级、runtime profile 修复、guardian/profile 重启和 doctor 验证链，并在重载后回到原会话报告结果。点击“取消”不会产生任何变更。更新会重启机器人，正在执行的任务可能被中断；配置、会话、归档和凭据保持不变。每次 `/new` / `/reset` 都会 best-effort 查询一次 npm；仅在有新版本时额外发送一条简短普通消息。
+**完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时 bot 弹出只允许发起人操作的确认卡；点击“确认更新”后，Guardian 通过独立 worker 安装卡片中确认的精确 npm 版本，复用完整升级、runtime profile 修复、guardian/profile 重启和 doctor 验证链，并在重载后回到原会话报告结果。worker 使用 owner-only 中立工作目录与每次请求隔离的 npm cache，不依赖 bridge 启动目录或用户全局 npm cache；失败时只回传脱敏的可行动类别，不发送原始命令输出。点击“取消”不会产生任何变更。更新会重启机器人，正在执行的任务可能被中断；配置、会话、归档和凭据保持不变。每次 `/new` / `/reset` 都会 best-effort 查询一次 npm；仅在有新版本时额外发送一条简短普通消息。
 
 **推荐：一行命令彻底升级（v0.12.0+ 新增，issue #10）**
 

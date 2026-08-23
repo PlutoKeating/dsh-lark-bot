@@ -19,7 +19,8 @@ npx dsh-lark-bot@latest setup --profile dsh-lark
 
 **完全不接触命令行：** profile 管理员在飞书发送 `/upgrade`。有新版本时点击只允许发起人操作的
 确认卡，Guardian 会安装卡片中确认的精确 npm 版本、修复 runtime profiles、重启并验证，然后回到
-原 chat/thread 报告结果；取消不会更改任何内容。重载可能中断正在执行的任务，但配置、会话、归档
+原 chat/thread 报告结果。升级 worker 使用 0700 中立工作目录和按请求隔离的 npm cache，不受当前
+工作目录或 `~/.npm` 历史权限损坏影响；失败时只显示脱敏的可行动类别。取消不会更改任何内容。重载可能中断正在执行的任务，但配置、会话、归档
 和凭据保留。每次 `/new` / `/reset` 也会检查一次 npm，只有发现更新才追加一条简短文本提醒。
 
 **一行命令彻底升级（包本体 + guardian + 升级后验证）：**

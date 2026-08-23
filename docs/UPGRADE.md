@@ -73,12 +73,19 @@
    即使被重启终止，回滚记录与 doctor 也已经完成。
 
 独立 worker 通过目标版本的 `npx <name>@<version> upgrade --restart --package <name>@<version>`
-复用上述完整链路。受管 profile 的 systemd cgroup 重启可能同时终止 worker；新 bridge 以实际加载的
+复用上述完整链路。它不继承 bridge cwd，也不复用 `~/.npm`：固定从
+`profiles/<bridge>/guardian/update-worker/cwd`（0700）运行，npm cache 按 request id 的 SHA-256
+隔离在相邻目录（0700），并以显式 0077 umask 启动 npx，避免历史 cache 权限损坏、源码目录同名
+package 遮蔽或异常宿主 umask 破坏 npm 子目录。失败输出只映射为有界安全类别，原始 stdout/stderr
+不会落盘或发往飞书。受管 profile 的 systemd cgroup 重启可能同时终止 worker；新 bridge 以实际加载的
 包版本协调仍为 running 的交接状态，确认目标已生效后标记 succeeded。终态发送失败保持未交付，
 下一次轮询或重启继续向原 chat/thread 重试，因此结果最多成功交付一次。
 
 ## 5. 生效机制与关键修复 · Activation & hardening
 
+- **飞书 worker 执行环境（issue #90）**：旧实现继承 bridge cwd 并复用用户全局 npm cache，源码目录
+  同名包遮蔽或任一无 execute 位的 cache 目录都会让 `/upgrade` 在数秒内失败，状态却只有 exit code。
+  现使用上述中立 cwd、逐请求 cache 与安全 umask，并只保存/回传脱敏的可行动失败类别。
 - **guardian 单元路径（issue #15 发现并修复）**：通过 `npx` 引导安装时，`guardian install`
   曾把 ExecStart 指向 `~/.npm/_npx/<hash>/...`——npm 清理缓存后服务失效。现改为优先解析
   `~/.dsh/profiles/<profile>/node_modules/<name>/dist/cli.js`（稳定路径），仅在 profile 内

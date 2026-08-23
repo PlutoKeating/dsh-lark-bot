@@ -1,13 +1,24 @@
-import { mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   GuardianUpdateHandoff,
+  guardianUpdateFailureHint,
   runGuardianUpdateWorker,
 } from '../../src/guardian/update-handoff.js';
 
 describe('GuardianUpdateHandoff', () => {
+  it.each([
+    ['filesystem-access', '文件权限', 'file permissions'],
+    ['registry-unavailable', 'npm 正式源', 'npm registry'],
+    ['bootstrap-unavailable', 'npm/npx', 'npm/npx'],
+    ['upgrade-failed', '/doctor', '/doctor'],
+  ] as const)('renders an actionable safe hint for %s', (code, zh, en) => {
+    expect(guardianUpdateFailureHint(code).zh).toContain(zh);
+    expect(guardianUpdateFailureHint(code).en).toContain(en);
+  });
+
   it('durably accepts one in-flight update and hands it to an isolated worker', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-'));
     const file = join(root, 'guardian', 'update.json');
@@ -55,11 +66,20 @@ describe('GuardianUpdateHandoff', () => {
 
     await runGuardianUpdateWorker({ stateFile: file, id: 'update-2' }, { run, delayMs: 0 });
 
+    const workerRoot = join(root, 'guardian', 'update-worker');
+    const requestCache = join(workerRoot, 'npm-cache', '1c3a6f1f63695bd1c77d59ad9ce128913d4ad733d132f1b4f6b68b05acd0b4cf');
     expect(run).toHaveBeenCalledWith(
       process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      ['--yes', '--registry', 'https://registry.npmjs.org', 'dsh-lark-bot@0.19.0', 'upgrade', '--profile', 'dsh-lark', '--yes', '--restart', '--package', 'dsh-lark-bot@0.19.0'],
+      ['--yes', '--cache', requestCache, '--registry', 'https://registry.npmjs.org', 'dsh-lark-bot@0.19.0', 'upgrade', '--profile', 'dsh-lark', '--yes', '--restart', '--package', 'dsh-lark-bot@0.19.0'],
       30 * 60_000,
+      { cwd: join(workerRoot, 'cwd'), umask: 0o077 },
     );
+    if (process.platform !== 'win32') {
+      expect((await stat(workerRoot)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(workerRoot, 'npm-cache'))).mode & 0o777).toBe(0o700);
+      expect((await stat(requestCache)).mode & 0o777).toBe(0o700);
+      expect((await stat(join(workerRoot, 'cwd'))).mode & 0o777).toBe(0o700);
+    }
     const saved = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
     expect(saved).toMatchObject({ id: 'update-2', status: 'succeeded', delivered: false });
     expect(saved.finishedAt).toEqual(expect.any(String));
@@ -107,7 +127,7 @@ describe('GuardianUpdateHandoff', () => {
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ status: 'succeeded' }));
   });
 
-  it('records only a generic exit code when the worker fails', async () => {
+  it('records a bounded safe failure category without persisting raw worker output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-failure-'));
     const file = join(root, 'guardian', 'update.json');
     const handoff = new GuardianUpdateHandoff({
@@ -117,14 +137,84 @@ describe('GuardianUpdateHandoff', () => {
     await handoff.start('0.19.0', { chatId: 'oc_chat', requesterId: 'ou_admin' });
     await runGuardianUpdateWorker(
       { stateFile: file, id: 'update-5' },
-      { run: vi.fn().mockResolvedValue({ code: 1, stdout: '', stderr: 'x'.repeat(3_000) }), delayMs: 0 },
+      {
+        run: vi.fn().mockResolvedValue({
+          code: 1,
+          stdout: '',
+          stderr: `npm ERR! EACCES token=super-secret /home/private/${'x'.repeat(3_000)}`,
+        }),
+        delayMs: 0,
+      },
     );
 
     const deliver = vi.fn().mockResolvedValue(undefined);
     await handoff.deliverResult(deliver);
     expect(deliver).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'failed', error: 'upgrade worker exited with code 1',
+      status: 'failed',
+      errorCode: 'filesystem-access',
+      error: 'upgrade worker could not access its private working files',
     }));
+    const saved = await readFile(file, 'utf8');
+    expect(saved).not.toContain('super-secret');
+    expect(saved).not.toContain('/home/private');
+    expect(saved.length).toBeLessThan(1_000);
+  });
+
+  it('turns an unexpected runner rejection into a durable terminal failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-rejection-'));
+    const file = join(root, 'guardian', 'update.json');
+    const handoff = new GuardianUpdateHandoff({
+      file, dshProfile: 'dsh-lark', packageName: 'dsh-lark-bot',
+      launch: vi.fn().mockResolvedValue(undefined), id: () => 'update-rejected',
+    });
+    await handoff.start('0.19.0', { chatId: 'oc_chat', requesterId: 'ou_admin' });
+
+    await expect(runGuardianUpdateWorker(
+      { stateFile: file, id: 'update-rejected' },
+      { run: vi.fn().mockRejectedValue(new Error('EACCES: private path')), delayMs: 0 },
+    )).resolves.toBeUndefined();
+
+    const saved = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
+    expect(saved).toMatchObject({
+      status: 'failed',
+      delivered: false,
+      errorCode: 'filesystem-access',
+    });
+    expect(saved.error).not.toContain('private path');
+  });
+
+  it('restores owner-only worker directory modes under a hostile umask', async () => {
+    if (process.platform === 'win32') return;
+    const root = await mkdtemp(join(tmpdir(), 'dsh-channel-upgrade-umask-'));
+    const file = join(root, 'guardian', 'update.json');
+    const handoff = new GuardianUpdateHandoff({
+      file, dshProfile: 'dsh-lark', packageName: 'dsh-lark-bot',
+      launch: vi.fn().mockResolvedValue(undefined), id: () => 'update-umask',
+    });
+    await handoff.start('0.19.0', { chatId: 'oc_chat', requesterId: 'ou_admin' });
+    const staleCache = join(root, 'guardian', 'update-worker', 'npm-cache', 'stale');
+    await mkdir(staleCache, { recursive: true });
+    const staleCwd = join(root, 'guardian', 'update-worker', 'cwd');
+    await mkdir(staleCwd, { recursive: true });
+    await writeFile(join(staleCwd, 'package.json'), '{"name":"dsh-lark-bot"}\n');
+    const previousUmask = process.umask(0o177);
+    try {
+      await runGuardianUpdateWorker(
+        { stateFile: file, id: 'update-umask' },
+        { run: vi.fn().mockResolvedValue({ code: 0, stdout: '', stderr: '' }), delayMs: 0 },
+      );
+    } finally {
+      process.umask(previousUmask);
+    }
+    const workerRoot = join(root, 'guardian', 'update-worker');
+    expect((await stat(workerRoot)).mode & 0o777).toBe(0o700);
+    expect((await stat(join(workerRoot, 'npm-cache'))).mode & 0o777).toBe(0o700);
+    const requestCaches = await readdir(join(workerRoot, 'npm-cache'));
+    expect(requestCaches).toHaveLength(1);
+    expect(requestCaches).not.toContain('stale');
+    expect((await stat(join(workerRoot, 'npm-cache', requestCaches[0] ?? ''))).mode & 0o777).toBe(0o700);
+    expect((await stat(join(workerRoot, 'cwd'))).mode & 0o777).toBe(0o700);
+    expect(await readdir(join(workerRoot, 'cwd'))).toEqual([]);
   });
 
   it('serializes simultaneous confirmations so only one worker can start', async () => {

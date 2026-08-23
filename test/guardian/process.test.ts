@@ -1,3 +1,6 @@
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   captureOutput,
@@ -195,6 +198,30 @@ describe('guardian process watch', () => {
     const result = await captureOutput('node', ['-e', 'console.log("ok")'], 5_000);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('ok');
+  });
+
+  it('applies an explicit umask to child-created private directories', async () => {
+    if (process.platform === 'win32') return;
+    const root = await mkdtemp(join(tmpdir(), 'dsh-capture-umask-'));
+    try {
+      const previousUmask = process.umask(0o117);
+      let pending: ReturnType<typeof captureOutput>;
+      try {
+        pending = captureOutput(
+          process.execPath,
+          ['-e', 'require("node:fs").mkdirSync("private-child", { mode: 0o777 })'],
+          5_000,
+          { cwd: root, umask: 0o077 },
+        );
+      } finally {
+        process.umask(previousUmask);
+      }
+      const result = await pending;
+      expect(result.code).toBe(0);
+      expect((await stat(join(root, 'private-child'))).mode & 0o777).toBe(0o700);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('checks process liveness for the current process', () => {
