@@ -375,7 +375,8 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
 当前 rc.8 runtime profile 会校验物理安装包的精确版本，不能仅凭目录或 lockfile 存在判定 ready；
-不匹配时 `ensureSdkProfile` / `ensureAcpProfile` 使用 `pnpm install --force` 刷新物理内容；
+不匹配时 `ensureSdkProfile` / `ensureAcpProfile` 使用 `pnpm install --force` 刷新物理内容；SDK 路径
+还校验 `dsh-lark-bot/sdk-server` 实际解析的主插件依赖树，损坏时向上定位其 pnpm project 并强制刷新；
 `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 直接向宿主 registry 注册 raw JSON Schema tool definition；
 `dsh-lark-bot/approval` 以 structural listener 接入宿主 `approval/request` waterfall；两者都不携带
 第二份 `dsh-tools`。完整审计见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
@@ -781,7 +782,7 @@ export interface Logger {
   [--rollback] [--force] [--package <spec>]`：一行命令彻底升级（issue #10）——检测已装 /
   运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → **修复
   `dsh-lark-sdk` / `dsh-lark-acp` runtime profile 的 own-package 链接并重装陈旧的
-  SDK server / ACP 依赖（物理版本不匹配时强制刷新）** → 幂等重装并
+  SDK server / ACP 依赖（含被链接主插件依赖树；物理版本不匹配时强制刷新）** → 幂等重装并
   重启 guardian 服务 → `doctor` 验证。运行中实例默认只提示重启命令（不中断会话）；
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；

@@ -36,7 +36,8 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 确认卡，由 Guardian 独立 worker 更新卡片中确认的精确 npm 版本、修复 runtime profiles、重启并
 验证，再回到原 chat/thread 报告结果。worker 使用 0700 中立工作目录和按请求隔离的 npm cache，
 不继承 bridge cwd 或用户全局 cache；重载后只在通道、callback server 与 Guardian 心跳均就绪时
-报告成功，且自动强制刷新 runtime profile 中与锁定版本不一致的物理包。失败回执只显示脱敏的
+报告成功，且自动强制刷新 runtime profile 与被链接主插件依赖树中不符合锁定版本的物理包。
+失败回执只显示脱敏的
 可行动原因。取消不做任何变更。每次 `/new` / `/reset` 也会 best-effort
 检查一次 npm，只有存在更新时才额外发送一条简短普通文本提醒。
 

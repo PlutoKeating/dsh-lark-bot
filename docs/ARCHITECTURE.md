@@ -275,7 +275,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    WebSocket 在机器睡眠 / 断网期间无法收消息；恢复后仅向最近活跃 destination 发恢复通知。
 10. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
-   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复与陈旧/物理损坏上游依赖强制刷新
+   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复，以及 runtime profile 与被链接
+   主插件依赖树中陈旧/物理损坏上游依赖的强制刷新
    → `doctor` 升级后验证；
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
