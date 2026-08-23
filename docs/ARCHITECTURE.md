@@ -265,6 +265,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    把标准 `dsh --profile` 交给 systemd user / LaunchAgent / Windows 计划任务（Linux 无 user systemd
    时用 XDG supervisor）。原生入口启动 profile 内稳定 CLI runner，由其读取 0600 环境快照，避免
    plist / 计划任务泄露密钥（Windows 另以 owner-only ACL 收紧 env）。guardian 自动重启和 `upgrade --restart` 优先操作该受管服务，避免双实例。
+   环境快照排除 bridge callback URL/token、测试开关和 update-worker 标记；飞书内更新重启时沿用
+   既有稳定 PATH，避免 npx 私有 cache 路径污染后续服务。Guardian systemd unit 显式携带 Node
+   所在目录及安装时 PATH，以保证安全模式可调用同工具链中的 pnpm。
    portable supervisor 在 spawn 后、任何异步状态落盘之前即订阅 child 的 `exit/error`，因此停止信号与
    状态写入并发时不会丢失一次性退出事件或永久挂起；该顺序由受控时钟竞态测试锁定。
    `service/<profile>.intent.json` 持久化 running/stopped 意图，stop/uninstall 后 guardian 不回拉；
@@ -272,7 +275,7 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    WebSocket 在机器睡眠 / 断网期间无法收消息；恢复后仅向最近活跃 destination 发恢复通知。
 10. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
-   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复与陈旧上游依赖幂等重装
+   runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复与陈旧/物理损坏上游依赖强制刷新
    → `doctor` 升级后验证；
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
@@ -280,8 +283,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    飞书内 `/upgrade` 在同一升级链前增加管理员与 owner-bound 确认卡：`ChannelUpdateController`
    只生成十分钟有效的一次性 offer，确认后把精确 npm 版本与原 chat/thread 路由以 0600 状态交给
    `GuardianUpdateHandoff`。独立 worker 运行最新版 CLI 的 `upgrade --restart`，因此可以跨越 bridge
-   自身和 guardian/profile 重启；新 bridge 按实际运行版本协调可能被 service cgroup 重启中断的
-   worker，并只向原会话交付一次终态。worker 在 0700 中立 cwd 中运行、使用按请求哈希隔离的 0700
+   自身和 guardian/profile 重启；新 bridge 仅在通道、callback server 和 heartbeat 全部就绪后，
+   才按实际运行版本协调可能被 service cgroup 重启中断的 worker，并只向原会话交付一次终态。
+   worker 在 0700 中立 cwd 中运行、使用按请求哈希隔离的 0700
    npm cache 和显式 0077 子进程 umask，不信任 bridge cwd、`~/.npm` 或宿主 umask；失败只跨边界传递
    脱敏错误类别，不传原始输出。`/new` / `/reset` 每次强制一次 best-effort npm 查询，只有
    严格更新时追加短文本，不改变建会话结果。

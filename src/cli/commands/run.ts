@@ -246,7 +246,6 @@ export async function startBridgeEngine(
     packageName: ownPackageInfo().name,
     dshProfile: dshProfileName,
   });
-  await updateHandoff.reconcile(currentVersion());
   const channelUpdates = new ChannelUpdateController({ handoff: updateHandoff });
   const worktreeManager = new GitWorktreeManager({
     worktreesRoot: paths.profilePath(profileName, 'worktrees'),
@@ -833,6 +832,11 @@ export async function startBridgeEngine(
     process.pid,
     env.heartbeatMs,
   );
+  // Version equality only proves that replacement files were loaded. Mark the
+  // handoff successful after the channel, callback server, and heartbeat are
+  // all ready so a bridge that fails during startup cannot report success.
+  await updateHandoff.reconcile(currentVersion());
+  void deliverUpdateResult().catch((error) => log.fail('upgrade', error, { step: 'deliver-result' }));
   // Periodic new-version detection (issue #15): logs by default; pushes a
   // Feishu notification when DSH_LARK_UPGRADE_NOTIFY=1 and a target chat is
   // configured.

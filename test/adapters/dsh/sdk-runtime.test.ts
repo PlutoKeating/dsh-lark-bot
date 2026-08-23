@@ -199,6 +199,32 @@ describe('ensureSdkProfile', () => {
     expect(isSdkProfileReady(profileRoot)).toBe(false);
   });
 
+  it('forces pnpm to refresh a stale physical server package', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-corrupt-server-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const own = ownPackageInfo();
+    await mkdir(join(profileRoot, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: '0.1.0-rc.6' }),
+    );
+    await symlink(own.root, join(profileRoot, 'node_modules', own.name), 'dir');
+    await writeFile(join(profileRoot, 'package.json'), '{}');
+    await writeFile(join(profileRoot, 'cordis.yml'), '[]\n');
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), '[]\n');
+    const install = vi.fn(async (root: string, options?: { force?: boolean }) => {
+      if (!options?.force) return;
+      await writeFile(
+        join(root, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+        JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+      );
+    });
+
+    await expect(ensureSdkProfile({ home, install })).resolves.toMatchObject({ ok: true });
+    expect(install).toHaveBeenCalledWith(profileRoot, { force: true });
+  });
+
   it('does not let a matching hoisted package hide a stale profile-local copy', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-home-shadowed-server-'));
     tempDirs.push(home);
