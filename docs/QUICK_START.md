@@ -157,6 +157,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 
 SDK / ACP 启动时若未显式设置 provider/model，会读取 dsh 对象形式的
 `agent-default-model: { provider, model }`；两处都没有完整 route 时 doctor/bridge 会直接给出配置错误。
+首次模型目录刷新失败时，对象形式默认 route 仍作为最小离线条目可用；其他未知模型不会因此被接受。
 受管 service 重启会保留旧 env 文件中当前 shell 未覆盖的 `DSH_LARK_*`，因此从新终端执行 restart
 不会再把已有 provider/model 静默清空。
 

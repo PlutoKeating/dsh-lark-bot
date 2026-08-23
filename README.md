@@ -527,6 +527,8 @@ SDK / ACP 启动会先解析完整 provider/model route：显式双字段优先�
 `agent-default-model: { provider, model }`；仍无法得到完整 route 时在 bridge/doctor 入口给出本项目的
 明确配置错误，不把空 provider 传给上游 runtime。受管 service 的 install/start/restart 会把旧 env
 文件中的受管键与当前 shell 合并（当前 shell 显式值优先），避免从另一个终端重启时静默丢失已有 route。
+模型目录在进程冷启动时暂时不可达，也会保留该对象形式默认 route 作为最小离线条目；这不会放行
+settings 中没有明确配置的未知模型。
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 
