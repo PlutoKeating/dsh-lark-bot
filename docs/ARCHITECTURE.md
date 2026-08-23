@@ -288,7 +288,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    守护检测到 dsh 下线时会先自动重启完整 profile：spawn 前二次进程探测防双实例，就绪窗口
    （默认 15s）内等待桥接恢复（心跳新鲜或进程存活），失败才转交接管；重启冷却默认 60s。
    守护以 systemd user unit / LaunchAgent / Windows 启动项注册，进程本身不依赖任何 dsh /
-   Cordis 代码。
+   Cordis 代码。状态查询采用 fail-closed 身份证明：只接受本包精确 `guardian run` 命令形状的唯一
+   存活进程，排除查询进程自身；systemd / launchd 的服务 PID 可用时必须与进程快照一致，任何歧义或
+   查询期间退出都报告“未发现”。
 
 12. **会话内诊断导出（issue #29）**：`src/diagnostics/bundle.ts` 接收 bridge 已有的只读运行快照，
    输出内存 Markdown `Buffer`；`CommandChannel.sendFile` 通过 `@larksuite/channel` 的 Buffer 上传能力

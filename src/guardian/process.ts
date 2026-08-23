@@ -14,6 +14,65 @@ export interface ProfileProcess {
   cmdline: string;
 }
 
+function commandTokens(cmdline: string): string[] {
+  const tokens: string[] = [];
+  let token = '';
+  let quote: '"' | "'" | undefined;
+  const input = cmdline.trim();
+  for (let index = 0; index < input.length; index += 1) {
+    const character = input[index] ?? '';
+    const next = input[index + 1];
+    if (character === '\\' && quote === undefined && next !== undefined && /[\s\\"']/u.test(next)) {
+      token += next;
+      index += 1;
+    } else if (character === '\\' && quote === '"' && next === '"') {
+      token += next;
+      index += 1;
+    } else if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+      else token += character;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (/\s/u.test(character)) {
+      if (token !== '') {
+        tokens.push(token);
+        token = '';
+      }
+    } else {
+      token += character;
+    }
+  }
+  if (token !== '') tokens.push(token);
+  return tokens;
+}
+
+function isGuardianCliEntry(token: string): boolean {
+  const normalized = token.replace(/\\/gu, '/').toLowerCase();
+  return (
+    normalized.endsWith('/dist/cli.js') &&
+    (normalized.includes('/dsh-lark-bot/') || normalized.includes('/dsh-feishu-bot/'))
+  );
+}
+
+function hasOnlyGuardianRunOptions(tokens: readonly string[]): boolean {
+  for (let index = 0; index < tokens.length; index += 2) {
+    if (tokens[index] !== '--dsh-profile' && tokens[index] !== '--bridge-profile') return false;
+    if (tokens[index + 1] === undefined || tokens[index + 1]?.startsWith('--')) return false;
+  }
+  return true;
+}
+
+/** Match only this package's resident `guardian run` CLI shape. */
+export function matchGuardianProcess(cmdline: string): boolean {
+  const tokens = commandTokens(cmdline);
+  const cliIndex = tokens.findIndex(isGuardianCliEntry);
+  if (cliIndex < 1) return false;
+  const executable = tokens[cliIndex - 1]?.replace(/\\/gu, '/').split('/').pop()?.toLowerCase();
+  if (executable !== 'node' && executable !== 'node.exe') return false;
+  if (tokens[cliIndex + 1] !== 'guardian' || tokens[cliIndex + 2] !== 'run') return false;
+  return hasOnlyGuardianRunOptions(tokens.slice(cliIndex + 3));
+}
+
 function hasProfileFlag(cmdline: string, dshProfile: string): boolean {
   // Match `--profile <name>` with either `=` or space separation; token-level
   // so `--profile dsh-lark-safe` never matches `dsh-lark`.
@@ -53,15 +112,18 @@ export function matchProfileProcess(
  * POSIX and PowerShell's CIM query on Windows; both are available on the
  * supported platforms.
  */
-export async function listProcesses(): Promise<ProfileProcess[]> {
-  if (process.platform === 'win32') {
-    return listProcessesWindows();
+export async function listProcesses(
+  platform: NodeJS.Platform = process.platform,
+  run: typeof captureOutput = captureOutput,
+): Promise<ProfileProcess[]> {
+  if (platform === 'win32') {
+    return listProcessesWindows(run);
   }
-  return listProcessesPosix();
+  return listProcessesPosix(run);
 }
 
-async function listProcessesPosix(): Promise<ProfileProcess[]> {
-  const { stdout } = await captureOutput('ps', ['-axo', 'pid=,args='], 10_000);
+async function listProcessesPosix(run: typeof captureOutput): Promise<ProfileProcess[]> {
+  const { stdout } = await run('ps', ['-axo', 'pid=,args='], 10_000);
   const result: ProfileProcess[] = [];
   for (const line of stdout.split('\n')) {
     const match = /^\s*(\d+)\s+(.+)$/.exec(line);
@@ -72,27 +134,32 @@ async function listProcessesPosix(): Promise<ProfileProcess[]> {
   return result;
 }
 
-async function listProcessesWindows(): Promise<ProfileProcess[]> {
-  const { stdout } = await captureOutput(
+async function listProcessesWindows(run: typeof captureOutput): Promise<ProfileProcess[]> {
+  const { stdout } = await run(
     'powershell.exe',
     [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      'Get-CimInstance Win32_Process | Select-Object ProcessId, CommandLine | ConvertTo-Csv -NoTypeInformation',
+      'Get-CimInstance Win32_Process | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress',
     ],
     10_000,
   );
-  const result: ProfileProcess[] = [];
-  for (const line of stdout.split('\n').slice(1)) {
-    const [pid, ...rest] = line.trim().split(',');
-    const numeric = Number(pid?.replace(/"/g, ''));
-    if (Number.isInteger(numeric) && rest.length > 0) {
-      // Csv quoting can split command lines; join everything after the pid.
-      result.push({ pid: numeric, cmdline: rest.join(',').replace(/^"|"$/g, '') });
-    }
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    return rows.flatMap((row): ProfileProcess[] => {
+      if (typeof row !== 'object' || row === null) return [];
+      const record = row as Record<string, unknown>;
+      const pid = Number(record.ProcessId);
+      const cmdline = record.CommandLine;
+      return Number.isInteger(pid) && pid > 0 && typeof cmdline === 'string'
+        ? [{ pid, cmdline }]
+        : [];
+    });
+  } catch {
+    return [];
   }
-  return result;
 }
 
 export async function captureOutput(
@@ -132,6 +199,69 @@ export async function findProfileProcess(
 ): Promise<ProfileProcess | undefined> {
   const processes = await listProcesses();
   return processes.find((entry) => matchProfileProcess(entry.cmdline, dshProfile));
+}
+
+/** Return a resident guardian only when exactly one live identity is provable. */
+export interface GuardianProcessDiscoveryOptions {
+  platform?: NodeJS.Platform;
+  currentPid?: number;
+  uid?: number;
+  run?: typeof captureOutput;
+  isAlive?: (pid: number) => boolean;
+}
+
+async function managedGuardianPid(
+  platform: NodeJS.Platform,
+  run: typeof captureOutput,
+  uid: number,
+): Promise<number | undefined> {
+  let result: { code: number; stdout: string };
+  if (platform === 'linux') {
+    result = await run(
+      'systemctl',
+      ['--user', 'show', 'dsh-lark-guardian.service', '--property=MainPID', '--value'],
+      10_000,
+    );
+  } else if (platform === 'darwin') {
+    result = await run(
+      'launchctl',
+      ['print', `gui/${uid}/io.dsh-lark.dsh-lark-guardian`],
+      10_000,
+    );
+  } else {
+    return undefined;
+  }
+  if (result.code !== 0) return undefined;
+  const raw = platform === 'darwin'
+    ? /(?:^|\n)\s*pid\s*=\s*(\d+)\s*(?:\n|$)/u.exec(result.stdout)?.[1]
+    : /^(\d+)\s*$/u.exec(result.stdout.trim())?.[1];
+  const pid = Number(raw);
+  return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+}
+
+export async function findGuardianProcess(
+  options: GuardianProcessDiscoveryOptions = {},
+): Promise<ProfileProcess | undefined> {
+  const platform = options.platform ?? process.platform;
+  const run = options.run ?? captureOutput;
+  const isAlive = options.isAlive ?? isProcessAlive;
+  const currentPid = options.currentPid ?? process.pid;
+  const candidates = (await listProcesses(platform, run)).filter(
+    (entry) =>
+      entry.pid !== currentPid &&
+      matchGuardianProcess(entry.cmdline) &&
+      isAlive(entry.pid),
+  );
+  if (candidates.length !== 1) return undefined;
+  const candidate = candidates[0];
+  if (candidate === undefined) return undefined;
+  const servicePid = await managedGuardianPid(
+    platform,
+    run,
+    options.uid ?? process.getuid?.() ?? 0,
+  );
+  if (servicePid !== undefined && servicePid !== candidate.pid) return undefined;
+  return isAlive(candidate.pid) ? candidate : undefined;
 }
 
 export function isProcessAlive(pid: number): boolean {

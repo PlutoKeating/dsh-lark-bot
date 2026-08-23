@@ -723,6 +723,8 @@ pnpm publish:dual
 默认安装的「安全网守护」（`src/guardian/`）独立于 dsh 进程常驻：dsh 在线时静默，下线时接管飞书
 通道接收 `/safemode` 控制信号，以仅核心 profile（`dsh-base` + `dsh-headless`）拉起受限对话
 用于自愈，`/safemode exit` 重启完整 profile 并交还通道。
+`dsh-lark-bot guardian status` 只报告精确 `guardian run` 进程身份唯一且存活的常驻 PID，并在
+系统服务 PID 可用时交叉验证；身份不确定时显示“未发现”，不会把查询命令自身 PID 当成守护进程。
 
 ## 目录结构
 
