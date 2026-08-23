@@ -79,7 +79,10 @@ import { SecretRequestRegistry } from '../../secret/registry.js';
 import { SecretTargetManager } from '../../secret/targets.js';
 import { buildSecretHandler } from '../../notify/secret-handler.js';
 import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
-import { GuardianUpdateHandoff } from '../../guardian/update-handoff.js';
+import {
+  GuardianUpdateHandoff,
+  guardianUpdateFailureHint,
+} from '../../guardian/update-handoff.js';
 import { ChannelUpdateController } from '../../upgrade/channel-update.js';
 
 const DEBOUNCE_MS = 600;
@@ -787,14 +790,15 @@ export async function startBridgeEngine(
   const deliverUpdateResult = async (): Promise<void> => {
     await updateHandoff.deliverResult(async (state) => {
       if (!streaming) throw new Error('channel is not ready');
+      const failureHint = guardianUpdateFailureHint(state.errorCode);
       const markdown = state.status === 'succeeded'
         ? bilingualMarkdown(
             `✅ dsh-lark-bot 已更新到 \`${state.targetVersion}\`，机器人已完成重载。`,
             `✅ dsh-lark-bot was updated to \`${state.targetVersion}\` and reloaded.`,
           )
         : bilingualMarkdown(
-            `⚠️ dsh-lark-bot 更新到 \`${state.targetVersion}\` 失败。请重新发送 \`/upgrade\`；如仍失败，发送 \`/doctor\` 检查。`,
-            `⚠️ Failed to update dsh-lark-bot to \`${state.targetVersion}\`. Send \`/upgrade\` to retry, or \`/doctor\` if it still fails.`,
+            `⚠️ dsh-lark-bot 更新到 \`${state.targetVersion}\` 失败。${failureHint.zh}`,
+            `⚠️ Failed to update dsh-lark-bot to \`${state.targetVersion}\`. ${failureHint.en}`,
           );
       await streaming.sendMarkdown(state.route.chatId, markdown, {
         ...(state.route.threadId ? { threadId: state.route.threadId } : {}),

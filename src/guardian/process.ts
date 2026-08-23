@@ -166,12 +166,24 @@ export async function captureOutput(
   command: string,
   args: readonly string[],
   timeoutMs: number = 30_000,
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; umask?: number } = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(command, [...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+    const previousUmask = options.umask !== undefined && process.platform !== 'win32'
+      ? process.umask(options.umask)
+      : undefined;
+    const child = (() => {
+      try {
+        return spawn(command, [...args], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          ...(options.cwd ? { cwd: options.cwd } : {}),
+          ...(options.env ? { env: options.env } : {}),
+        });
+      } finally {
+        if (previousUmask !== undefined) process.umask(previousUmask);
+      }
+    })();
     let stdout = '';
     let stderr = '';
     child.stdout?.on('data', (chunk: Buffer) => {

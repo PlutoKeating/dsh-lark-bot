@@ -271,7 +271,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    只生成十分钟有效的一次性 offer，确认后把精确 npm 版本与原 chat/thread 路由以 0600 状态交给
    `GuardianUpdateHandoff`。独立 worker 运行最新版 CLI 的 `upgrade --restart`，因此可以跨越 bridge
    自身和 guardian/profile 重启；新 bridge 按实际运行版本协调可能被 service cgroup 重启中断的
-   worker，并只向原会话交付一次终态。`/new` / `/reset` 每次强制一次 best-effort npm 查询，只有
+   worker，并只向原会话交付一次终态。worker 在 0700 中立 cwd 中运行、使用按请求哈希隔离的 0700
+   npm cache 和显式 0077 子进程 umask，不信任 bridge cwd、`~/.npm` 或宿主 umask；失败只跨边界传递
+   脱敏错误类别，不传原始输出。`/new` / `/reset` 每次强制一次 best-effort npm 查询，只有
    严格更新时追加短文本，不改变建会话结果。
 11. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh

@@ -987,6 +987,11 @@ export function heartbeatAgeMs(payload: HeartbeatPayload, now?: number): number;
 飞书内 `/upgrade` 使用 `profiles/<bridge-profile>/guardian/update.json`（0600）保存精确目标版本、
 请求者与 chat/thread 回复路由、执行状态和终态是否已交付。卡片 offer 只在内存保存十分钟并绑定
 scope + profile admin open_id；确认后由独立 worker 运行目标 npm 包的完整 `upgrade --restart` 链。
+worker 固定在 `guardian/update-worker/cwd`（0700）执行，并为每个请求使用
+`guardian/update-worker/npm-cache/<sha256(request-id)>`（0700）；子进程显式使用 0077 umask，
+因此不继承 bridge cwd、用户全局 npm cache 或异常宿主 umask。失败只持久化
+`filesystem-access | registry-unavailable | bootstrap-unavailable | upgrade-failed` 类别和有界安全摘要，
+原始 stdout/stderr 不进入状态文件或飞书消息。
 重载后的 bridge 以自身实际版本协调被 service cgroup 重启中断的 worker，并向原路由只回执一次。
 `/new` / `/reset` 每次执行一次 best-effort npm 查询，仅在严格新版本存在时发送一条短文本提醒；
 registry 失败和已是最新均保持静默，不影响新会话。
@@ -1035,7 +1040,9 @@ export async function findGuardianProcess(
   options?: GuardianProcessDiscoveryOptions,
 ): Promise<ProfileProcess | undefined>;
 export function isProcessAlive(pid: number): boolean;
-export async function captureOutput(command, args, timeoutMs?): Promise<{ code; stdout; stderr }>;
+export async function captureOutput(command, args, timeoutMs?, options?: {
+  cwd?: string; env?: NodeJS.ProcessEnv; umask?: number;
+}): Promise<{ code; stdout; stderr }>;
 export function spawnDetached(command, args, env?): { pid?: number };
 ```
 
