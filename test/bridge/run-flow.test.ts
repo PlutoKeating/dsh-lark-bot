@@ -27,6 +27,7 @@ const tempDirs: string[] = [];
 
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.useRealTimers();
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
@@ -1694,5 +1695,149 @@ describe('questionHandlerFor', () => {
     expect(questions.pendingForMessage('other-card')?.id).toBe(other.id);
     questions.resolve('chat-a', other.id, 'answer');
     await expect(other.promise).resolves.toBe('answer');
+  });
+});
+
+describe('interim text bubbles (issue #95)', () => {
+  function makeGenAdapter(events: AgentEvent[]): AgentAdapter {
+    return {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(): AgentRun {
+        return {
+          runId: 'run-interim',
+          events: (async function* () {
+            yield* events;
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+  }
+
+  function baseInput(
+    scope: string,
+    events: AgentEvent[],
+    channel: StreamingChannel,
+  ): Parameters<typeof runAgentBatch>[0] {
+    return {
+      scope,
+      chatId: scope,
+      messages: ['do the work'],
+      adapter: makeGenAdapter(events),
+      sessions: new SessionStore(':memory:'),
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel,
+      defaultWorkspace: '/tmp/project',
+    };
+  }
+
+  it('emits each text segment as an independent interim bubble across tool calls', async () => {
+    const fake = makeChannel();
+    await runAgentBatch(
+      baseInput('chat-bubbles', [
+        { type: 'system', sessionId: 's', cwd: '/tmp/project', model: undefined },
+        { type: 'text', delta: 'I will search' },
+        { type: 'tool_use', id: 't1', name: 'grep', input: {} },
+        { type: 'text', delta: 'Found it' },
+        { type: 'tool_use', id: 't2', name: 'edit', input: {} },
+        { type: 'done', sessionId: 's', terminationReason: 'normal' },
+      ], fake.channel),
+    );
+    // Each pre-tool segment is its own bubble; nothing is held back.
+    expect(fake.messages).toEqual(['I will search', 'Found it']);
+  });
+
+  it('sends only the as-yet-unsent tail as the final answer (no duplicate)', async () => {
+    const fake = makeChannel();
+    await runAgentBatch(
+      baseInput('chat-tail', [
+        { type: 'system', sessionId: 's', cwd: '/tmp/project', model: undefined },
+        { type: 'text', delta: 'Hello ' },
+        { type: 'text', delta: 'world' },
+        { type: 'tool_use', id: 't1', name: 'grep', input: {} },
+        { type: 'text', delta: ' Done' },
+        { type: 'done', sessionId: 's', terminationReason: 'normal' },
+      ], fake.channel),
+    );
+    // "Hello world" was flushed as an interim bubble; the final answer is only
+    // the remaining " Done" — never a re-send of the whole output.
+    expect(fake.messages).toEqual(['Hello world', ' Done']);
+  });
+
+  it('keeps a single uninterrupted answer as one final bubble', async () => {
+    const fake = makeChannel();
+    await runAgentBatch(
+      baseInput('chat-answer', [
+        { type: 'system', sessionId: 's', cwd: '/tmp/project', model: undefined },
+        { type: 'text', delta: 'The answer.' },
+        { type: 'done', sessionId: 's', terminationReason: 'normal' },
+      ], fake.channel),
+    );
+    // No message boundary and no stream pause -> exactly one final bubble.
+    expect(fake.messages).toEqual(['The answer.']);
+  });
+
+  it('flushes an interim bubble after a pause in the stream', async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const adapter: AgentAdapter = {
+      id: 'dsh',
+      displayName: 'DeepSeek Harness',
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(): AgentRun {
+        return {
+          runId: 'run-pause',
+          events: (async function* () {
+            yield { type: 'system', sessionId: 's', cwd: '/tmp/project', model: undefined };
+            yield { type: 'text', delta: 'part one' };
+            await gate;
+            yield { type: 'done', sessionId: 's', terminationReason: 'normal' };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const fake = makeChannel();
+    const settled = runAgentBatch({
+      ...baseInput('chat-pause', [], fake.channel),
+      adapter,
+      interimDebounceMs: 500,
+    });
+    // Let the consume loop reach the gate, then pass the pause threshold.
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(700);
+    expect(fake.messages).toContain('part one');
+    release();
+    await settled;
+    // The final answer holds nothing further: the flushed text is the tail.
+    expect(fake.messages).toEqual(['part one']);
+  });
+
+  it('does not emit a straggler interim bubble after the run errors', async () => {
+    const fake = makeChannel();
+    await runAgentBatch(
+      baseInput('chat-err', [
+        { type: 'system', sessionId: 's', cwd: '/tmp/project', model: undefined },
+        { type: 'text', delta: 'before the failure' },
+        { type: 'error', message: 'boom', terminationReason: 'failed' },
+      ], fake.channel),
+    );
+    expect(fake.messages).not.toContain('before the failure');
   });
 });
