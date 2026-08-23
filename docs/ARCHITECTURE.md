@@ -206,13 +206,14 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
    `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
-   `/ask`、`/plan`、`/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
+   `/ask`、`/plan`、需要用户决策的 `/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
    JSON 合法空白心跳；这同时避开 Node/Undici 默认 300 秒 headers/body idle timeout。连接真正断开时
    AbortSignal 仍精确取消该 session/id 的 pending 项，而不会靠 agent 重试生成重复卡。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
-   `tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
+   `policyCheckOnly` 则是同步协议分支，直接返回合法 `ask|allow|deny`，不要求 outcome、不卡片、不进入
+   heartbeat 人类等待。`tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
    在任何快速通道前终止，`ask` 的低风险调用静默放行，高风险调用在计划确认后进入一次性审批，
    `allow` 仅自动通过逐工具审批。随后计划门会拒绝当前 turn 尚未批准的 mutating/execute/`run_code`
    调用；`bash` / `shell` 快速通道只保留无路径自省命令与受限仓库内只读 Git 子命令，文件内容读取、

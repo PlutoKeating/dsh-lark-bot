@@ -269,7 +269,8 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调读取 scope 策略。
+- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调同步读取 scope 策略；
+  该查询只返回 `ask|allow|deny`，不要求审批 outcome，也不会创建或等待卡片。
   当前 scope 默认 `ask`：低风险自省静默放行，高风险调用弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
   `/permission deny` 直接拒绝并得到明确反馈，`/permission ask` 恢复逐次询问。member 模式下
   管理员可用 `/permission <策略> <scope>` 修改同一聊天内其他成员 scope。策略写入成功后才回执，

@@ -397,6 +397,64 @@ describe('NotifyServer', () => {
     );
   });
 
+  it('returns policy-only approval checks without requiring an approval outcome', async () => {
+    const approval = vi.fn().mockResolvedValue({ ok: true, policy: 'allow' });
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+
+    const response = await fetch(server.approvalUrl!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'test-token', sessionId: 'session-1', toolName: 'skill',
+        policyCheckOnly: true,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, policy: 'allow' });
+    expect(approval).toHaveBeenCalledWith(expect.objectContaining({ policyCheckOnly: true }));
+  });
+
+  it('preserves deny metadata and rejects malformed policy-only handler responses', async () => {
+    const denial = {
+      layer: 'permission-policy' as const,
+      reason: 'scope policy is deny',
+      toChange: 'run /permission ask',
+    };
+    const approval = vi.fn()
+      .mockResolvedValueOnce({ ok: true, policy: 'deny', denial })
+      .mockResolvedValueOnce({ ok: true, outcome: 'allowed-once' });
+    const server = new NotifyServer({
+      token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
+    });
+    servers.push(server);
+    await server.start();
+    const payload = {
+      token: 'test-token', sessionId: 'session-1', toolName: 'bash', policyCheckOnly: true,
+    };
+
+    const denied = await fetch(server.approvalUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(denied.status).toBe(200);
+    await expect(denied.json()).resolves.toEqual({ ok: true, policy: 'deny', denial });
+
+    const malformed = await fetch(server.approvalUrl!, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(malformed.status).toBe(404);
+    await expect(malformed.json()).resolves.toEqual({
+      ok: false,
+      error: 'invalid policy response',
+    });
+  });
+
   it('rejects invalid approval callbacks before invoking the handler', async () => {
     const approval = vi.fn();
     const server = new NotifyServer({
