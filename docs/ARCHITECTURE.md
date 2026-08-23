@@ -375,4 +375,5 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
 | `src/service/` | 正常 dsh profile 的 systemd / launchd / Windows / portable 生命周期、0600 环境快照、状态与日志 |
+| `test/setup.ts` | vitest 启动前隔离现场 `DSH_HOME`：profile 构建类测试必须落在各自临时 home，绝不解析到（或穿透写坏）现场 dsh profile 的 `node_modules/dsh-lark-bot`（该符号链接回到仓库，会把真实 `package.json` 覆盖成夹具内容）。见 `test/test-hermeticity.test.ts` |
 | `docs/conformance/` | TUI local/remote Host Descriptor 与发布 artifact conformance evidence |
