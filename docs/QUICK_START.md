@@ -144,7 +144,10 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 | `/language show\|set plain\|agent …\|reset …` | 设置普通文本与 Agent 回答语言策略 |
 | `/ask <问题>` | 你主动发送结构化问答卡（回答写入会话上下文） |
 | `/invite user\|admin\|group <id>`、`/invite list`、`/invite remove user\|group <id>` | 管理访问白名单 |
-| `/help` | 查看命令帮助 |
+| `/help` | 查看 bridge 直接处理的当前版本权威命令清单 |
+
+过程卡正常结束但含失败工具时显示“已完成（含警告）”；这表示 Agent 已给出本轮结果，同时提醒并非
+所有工具步骤成功，不会把整个 job 改记为失败。
 
 模型 / provider / 凭据管理直接读写 dsh 官方配置（`~/.dsh/settings.yaml` 与
 `~/.dsh/.credentials.yaml`，与 dsh Web Settings→Models 同协议），改动下一请求生效：
@@ -157,6 +160,7 @@ bot 自带卡片使用 Card JSON 2.0 原生 `zh_cn` / `en_us` variant，同一�
 
 SDK / ACP 启动时若未显式设置 provider/model，会读取 dsh 对象形式的
 `agent-default-model: { provider, model }`；两处都没有完整 route 时 doctor/bridge 会直接给出配置错误。
+首次模型目录刷新失败时，对象形式默认 route 仍作为最小离线条目可用；其他未知模型不会因此被接受。
 受管 service 重启会保留旧 env 文件中当前 shell 未覆盖的 `DSH_LARK_*`，因此从新终端执行 restart
 不会再把已有 provider/model 静默清空。
 

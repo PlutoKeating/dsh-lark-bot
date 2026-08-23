@@ -49,7 +49,7 @@
 **基础能力**：
 
 - 私聊、群聊、话题（thread）里指挥本机 dsh coding agent，图片 / 文本文件直接发给 bot 即可；
-- 流式过程卡以飞书原生折叠面板实时展示阶段、耗时以及工具名称与状态，完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；原始推理、工具输入输出与底层错误不会进入卡片；卡片更新失败会有限重试并降级为普通提示，Agent 与最终回答继续，不会拖垮 bridge 进程；
+- 流式过程卡以飞书原生折叠面板实时展示阶段、耗时以及工具名称与状态；完成但存在失败工具时汇总为“已完成（含警告）/Completed with warnings”，不把“任务轮次结束”冒充为“所有工具成功”。完成后最终回答单独发送，支持交互按钮（停止 / 计划门禁 / 审批 / 问答卡）；原始推理、工具输入输出与底层错误不会进入卡片；卡片更新失败会有限重试并降级为普通提示，Agent 与最终回答继续，不会拖垮 bridge 进程；
 - Git 仓库内为每个会话自动创建隔离 worktree 项目工作区，多项目互不干扰。
 
 **十二项全网独有组合**：
@@ -154,7 +154,8 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 | `/help` | 查看帮助|
 
 每轮 SDK / ACP / Web 请求都会注入结构化、无密钥的频道上下文，并注册官方 runtime Skill
-`dsh-lark-bot`。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
+`dsh-lark-bot`。上下文明确区分 bridge 预处理的用户斜杠命令与 Agent 可调用工具；后者的列表不代表
+前者不存在，Skill 暂时不可加载时仍以 `/help` 为当前版本权威命令入口。API Key、token 与 App Secret 必须经 `/key set <引用名>`、`/secret set …` 或 Agent
 工具 `lark_request_secret` 打开的密码表单提交；普通聊天、旧 `/key set <引用名> <值>` 与
 `--api-key` 不再消费值。表单只允许发起者提交，值直接写入本机受支持目标，不进入 prompt、session、
 任务账本、归档、日志、诊断包或回复。Guardian 安全模式是降级恢复面，不提供该完整配置与密钥工具。
@@ -247,7 +248,7 @@ guardian 仍只救援其配置的主实例。
 
 **结果文件直接回传**：SDK / ACP / Web agent 可调用 `lark_send_file`，把当前会话 workspace、实际执行 worktree、当前 scope 归档或实例日志中的文件直接上传到原飞书聊天 / 话题；普通 `/archive [note]` 会在落盘后立即发送 Markdown + JSONL，失败时保留路径并可用 `/archive send <id> [scope|chatId]` 重试或由管理员转发到指定会话。上传只接受普通文件，默认单文件不超过 20 MiB；真实路径必须位于 bridge 计算的会话目录内，runtime 自报 cwd 不能扩大边界。
 
-**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环读取当前 immutable scope 的 `ask|allow|deny`。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
+**逐操作审批与 scope 权限策略**：SDK / ACP / Web runtime 在任何本地快速通道和计划门裁决前，先通过鉴权回环同步读取当前 immutable scope 的 `ask|allow|deny`；该 policy-only 查询不创建卡片或进入人类等待传输。`deny` 对低风险与高风险工具都先行拒绝并返回 `permission-policy` 来源；`ask` 对保守只读自省静默放行、对高风险调用弹“允许执行一次 / 拒绝”卡；`allow` 自动放行逐工具审批，但仍不替代高风险任务的计划确认或 Harness 文件沙箱。管理员可用 `/permission allow|deny|ask [scope]` 修改当前聊天内 scope；策略成功落盘后才确认，持久化到 profile 的 `permission-policies.json`（0600），重启不丢并显示在 `/status`。legacy `headless` 不具备工具回调能力。
 
 **关键任务计划门禁**：SDK / ACP / Web agent 在修改文件、运行脚本等较大或高风险动作前使用
 `lark_request_plan_approval`；同一 turn 未获批准时，runtime pre-execute 策略会拒绝写入、删除、
@@ -528,6 +529,8 @@ SDK / ACP 启动会先解析完整 provider/model route：显式双字段优先�
 `agent-default-model: { provider, model }`；仍无法得到完整 route 时在 bridge/doctor 入口给出本项目的
 明确配置错误，不把空 provider 传给上游 runtime。受管 service 的 install/start/restart 会把旧 env
 文件中的受管键与当前 shell 合并（当前 shell 显式值优先），避免从另一个终端重启时静默丢失已有 route。
+模型目录在进程冷启动时暂时不可达，也会保留该对象形式默认 route 作为最小离线条目；这不会放行
+settings 中没有明确配置的未知模型。
 
 启动时会自动查找本机常见的 `@deepseek-ai/dsh` 安装位置。只有自动发现失败或需要指定特殊 profile 时，才需要设置这两个变量。
 

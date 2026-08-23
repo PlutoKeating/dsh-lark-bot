@@ -206,13 +206,14 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    重发；管理员可把当前 scope + workspace 的归档转发到 `ScopeDirectory` 已登记的指定会话。
    `lark_notify` / `lark_send_file` / `lark_ask_user` / `lark_request_plan_approval` 以宿主支持的 raw JSON Schema
    definition 注册，不运行时导入 `dsh-tools`，避免插件与宿主各自持有 scheduler Symbol 的双实例故障。
-   `/ask`、`/plan`、`/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
+   `/ask`、`/plan`、需要用户决策的 `/approval` 在鉴权和参数校验通过后立即 flush JSON 响应头，并在人工等待期间发送
    JSON 合法空白心跳；这同时避开 Node/Undici 默认 300 秒 headers/body idle timeout。连接真正断开时
    AbortSignal 仍精确取消该 session/id 的 pending 项，而不会靠 agent 重试生成重复卡。
    计划工具通过同一 server 的 `/plan` 端点以 session 反查 immutable scope：完整计划先作为普通
    Markdown 消息发送，再由 `PlanApprovalRegistry` + schema 2.0 form card 等待 approve/revise 与
    可选 feedback；工具返回后原 agent turn 自动续跑，等待期间 idle watchdog 仅为所属 session 暂停。
-   `tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
+   `policyCheckOnly` 则是同步协议分支，直接返回合法 `ask|allow|deny`，不要求 outcome、不卡片、不进入
+   heartbeat 人类等待。`tools/pre-execute` 先经鉴权回环取得 immutable scope 的 permission policy，再判断计划门：`deny`
    在任何快速通道前终止，`ask` 的低风险调用静默放行，高风险调用在计划确认后进入一次性审批，
    `allow` 仅自动通过逐工具审批。随后计划门会拒绝当前 turn 尚未批准的 mutating/execute/`run_code`
    调用；`bash` / `shell` 快速通道只保留无路径自省命令与受限仓库内只读 Git 子命令，文件内容读取、
@@ -275,7 +276,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
    安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
    `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致、仅展示阶段 / 耗时 / 工具名与状态的
-   原生折叠过程卡和独立最终回答，SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
+   原生折叠过程卡和独立最终回答；turn 正常结束但存在失败工具时只把用户可见汇总标为
+   “已完成（含警告）”，不改变 completed job terminal，真正的 run failure 仍独立显示。SDK runtime 不可用时回退 `~/.dsh/profiles/<profile>-safe`
    （`dsh-base` + `dsh-headless`）并以活动状态卡兜底；单任务空闲超时（默认 10 分钟，
    持续无活动事件才终止，活跃的流式任务不会被误杀）、
    `/safemode stop` 与卡片 ⏹ 按钮可随时终止；`/safemode exit` 重启完整 profile 并交还通道。
@@ -298,8 +300,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 
 14. **模型目录能力保真与卡片自洽（issue #80）**：bridge 仍以 provider/settings 的目录为权威，
     models.dev 运行时目录只负责发现 provider 展示名、模型能力与供应商声明的推理档位；短 TTL
-    缓存与 stale-on-error 避免目录抖动阻断聊天，首次离线则只投影 settings，不存在代码内置模型
-    或展示名兜底。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段。
+    缓存与 stale-on-error 避免目录抖动阻断聊天；首次离线时只投影 settings，并将对象形式
+    `agent-default-model` 作为其已配置 provider 的最小可解析条目，不存在代码内置模型或展示名兜底，
+    其他未知模型仍拒绝。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段。
     卡片把 `agent-default-model` 的缺席条目合并进本次投影与点击路由，不反向篡改 provider 配置；
     按钮按 provider 去除公共前缀、每行最多两个，以保证移动端可辨认。
 
@@ -330,7 +333,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 
 17. **频道自描述、runtime Skill 与密钥数据平面（issue #85）**：SDK / ACP / Web 共用的
     `run-flow` 在每次 fresh/resume prompt 前注入有界 `ChannelContext`，仅含 tenant、chat type、scope、
-    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。Cordis `ctx.skills`
+    bridge profile、adapter、可用 channel tools 与三层语言策略，不含 credential。上下文明确说明
+    bridge 预处理的斜杠命令不属于 Agent tool list；Skill 失败时 `/help` 仍是权威清单。Cordis `ctx.skills`
     注册 lifecycle-bound `dsh-lark-bot` runtime Skill，命令索引与 `/help` 共享单一目录。
     `lark_request_secret` 只传 target/reference/purpose/sessionId；localhost callback 把 session 映射为
     scope、校验当前 actor 为管理员并发送 owner-only password form。回调在异步写前 claim 一次性请求，

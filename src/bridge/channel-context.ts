@@ -32,5 +32,6 @@ export function renderChannelContext(context: ChannelContext): string {
     `secure_value_collection: ${context.secretCollection}`,
     agentLanguage,
     'This turn arrived through the dsh-lark-bot Feishu/Lark channel. Use the dsh-lark-bot skill for channel setup, configuration, and diagnostics. Never ask for a secret in ordinary chat; use lark_request_secret when secure value collection is available.',
+    'Slash commands are handled by the bridge before the agent and are separate from model-callable tools: do not infer their absence from available_channel_tools. If the runtime skill cannot be loaded, tell the user to run /help for the authoritative command list.',
   ].join('\n');
 }

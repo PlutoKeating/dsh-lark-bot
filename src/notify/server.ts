@@ -228,6 +228,22 @@ export class NotifyServer {
           respond(400, { ok: false, error: 'sessionId and toolName are required' });
           return;
         }
+        if (payload.policyCheckOnly) {
+          const result: ApprovalResult = await this.deps.approval(payload);
+          if (!result.ok || !isPermissionPolicy(result.policy)) {
+            respond(404, {
+              ok: false,
+              ...(result.error ? { error: result.error } : { error: 'invalid policy response' }),
+            });
+            return;
+          }
+          respond(200, {
+            ok: true,
+            policy: result.policy,
+            ...(result.denial === undefined ? {} : { denial: result.denial }),
+          });
+          return;
+        }
         const result: ApprovalResult = await waitForHuman((signal) =>
           this.deps.approval!(payload, signal)
         );
@@ -307,6 +323,10 @@ export class NotifyServer {
       respond(500, { ok: false, error: error instanceof Error ? error.message : String(error) });
     }
   }
+}
+
+function isPermissionPolicy(value: unknown): value is 'ask' | 'allow' | 'deny' {
+  return value === 'ask' || value === 'allow' || value === 'deny';
 }
 
 function readBody(req: IncomingMessage): Promise<string> {

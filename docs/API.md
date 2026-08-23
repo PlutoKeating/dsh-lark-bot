@@ -323,7 +323,9 @@ pi-ai 协议白名单对齐官方 `supportedProtocols()`：`openai-completions` 
 `DshModelEntry` 读写 `inputModalities`、`imagePixelBudget`、`imageMaxBytes`，不会在 bot 管理模型时
 抹掉视觉能力。`ModelsDevCatalog` 从 `https://models.dev/api.json` 发现 provider 展示名、模型、
 模态、上下文和 `reasoning_options`，采用 5 秒超时、16 MiB 响应上限、15 分钟进程内缓存和
-stale-on-error；首次拉取失败时返回 settings 显式目录，不伪造内置名单。可用
+stale-on-error；首次拉取失败时返回 settings 显式目录，并把对象形式
+`agent-default-model` 指向的模型作为所属已配置 provider 的最小离线条目，保证明确默认 route
+仍可解析，但不接受其他未知模型，也不伪造内置名单。可用
 `DSH_LARK_MODEL_CATALOG_URL` 指向兼容镜像。`/model` 卡片另外把 `agent-default-model` 指向但目录
 缺失的模型合并进展示和快速切换路由。
 pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `https://www.kingapi.xyz`）时
@@ -691,14 +693,17 @@ plan gate 之前终止。`bash` / `shell` 只有在命令不含换行、串联�
 发送决策卡；返回 `{decision:'approved'|'revise', feedback?}` 后原 tool call 结束，agent 自动续跑。
 SDK / ACP managed runtime 与宿主 bundle 均装配 `./plan` export；等待期间与问答卡一样暂停 idle watchdog。
 `NotifyServer` 在鉴权和参数校验通过后立即开始 chunked JSON 响应，并每 30 秒写入 JSON 允许的空白；
-最终才写入结果对象。该保活同时覆盖 `/ask`、`/plan`、`/approval`，避免 Node/Undici 默认 300 秒
+最终才写入结果对象。该保活覆盖 `/ask`、`/plan` 和需要用户决策的 `/approval`，避免 Node/Undici 默认 300 秒
 headers/body inactivity timeout 把仍有效的人机决策误判为 `fetch failed`。
 
 `src/bridge/run-flow.ts` 将事件持续归约到上述过程卡；卡片 update 失败会有限重试，仍失败则冻结该卡并
 发送普通降级提示，不会中断事件消费或最终
 回答，原生折叠卡初始发送失败则重试 `renderLegacyCard`。正常结束且回答非空时，再通过
 `sendMarkdown(chatId, assistantOutput, replyOptions)` 发送独立最终回答，继承原消息的 reply/thread
-  路由。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
+  路由。正常结束但任一工具 block 为 `error` 时，所有 renderer/locale 的汇总使用
+  “已完成（含警告）/Completed with warnings”，并在 legacy 兼容正文中重复该终态，避免旧客户端忽略
+  card summary 后只看到孤立的 `tool · error`；run terminal 仍为 done，真正的 run error/interrupted/timeout
+  保持更高显示优先级。发送失败不会丢失已记录的 exchange，过程卡仅显示通用失败提示，并在总卡片预算内截断回填
   原本面向用户的回答正文；中断、超时和
 agent 错误不会发送不完整的最终回答。
 `src/card/session-recovery-card.ts` 提供已知 native resume 零活动失败时的双语中性恢复卡；它不包含
@@ -928,7 +933,7 @@ topic/group scope，避免无人能操作 bot-owned 审批/问答卡。
 回到 agent 循环。问答卡按 native session 归属；等待期间仅暂停所属 run 的超时看门狗，run 结束
 调用 `settleSession`，单卡发送失败或 callback 断开调用 `cancel(scope,id)`，不会取消同 scope 的并发问题；用户答完卡后重新计时。
 
-`/ask`、`/plan`、`/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
+`/ask`、`/plan`、需要用户决策的 `/approval` 共用人机等待传输：鉴权和必填字段通过后立即以 HTTP 200 flush JSON
 响应头，之后每 30 秒写入一个 JSON 合法空白换行，最终追加单个 JSON 结果对象。这样既不会触发
 Node/Undici 默认 300 秒响应头或响应体空闲超时，现有 `response.json()` 客户端也无需特殊解析；
 客户端真正断开时仍通过 AbortSignal 精确清理对应 pending 项。鉴权和参数错误发生在 flush 前，继续
@@ -944,7 +949,9 @@ run 的 AbortSignal）；决策作为工具结果返回同一 agent turn。pendi
 idle watchdog；plan 按 session 计数/结算，callback 断开或 run 结束只取消对应 session，并终态提示、撤回失效卡。
 
 同一服务器的 `POST /approval`（`server.approvalUrl` / `DSH_LARK_APPROVAL_URL`）接受
-`sessionId`、`toolName`、可选 `callId` / `reason` / `toolInput`；`buildApprovalHandler` 反查 scope 与 topic anchor，
+`sessionId`、`toolName`、可选 `callId` / `reason` / `toolInput` / `policyCheckOnly`。policy-only 请求同步返回
+`{ok:true, policy:'ask'|'allow'|'deny', denial?}`，不要求 approval outcome、不 flush 人类等待响应头；
+缺失或非法 policy 失败关闭。实际审批请求由 `buildApprovalHandler` 反查 scope 与 topic anchor，
 注册固定 allow-once/reject-once 选项并等待按钮。answerer 返回官方 outcome；`rejected` 不抛异常，
 agent 可把它作为工具结果继续。可取得的 `tool_use` input 按 session+callId 关联进卡片；官方 request
 未重复参数时仍显示 call id 并指向运行卡。HTTP 断连返回 cancelled，不遗留 pending；允许不写入规则或 grant store。
@@ -1087,7 +1094,9 @@ CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
 
 ## 11. Channel context、Skill、语言与安全密钥 API
 
-- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块。
+- `renderChannelContext(ChannelContext): string`：生成每轮 fresh/resume 注入的非敏感频道元数据块；
+  `available_channel_tools` 只表示模型可调用工具，bridge 在 Agent 前预处理的斜杠命令是独立能力，
+  Skill 不可加载时 Agent 必须引导 `/help`，不得从工具清单推断命令不存在。
 - `registerDshLarkBotSkill(ctx.skills)`：注册 model/user invocable 的 runtime Skill，并返回 disposer。
 - `LanguagePolicyStore.get|set|reset|flush`：profile 级 `{ui:'per-viewer', plain, agent}` 策略。
 - `SecretRequestRegistry.register|get|submit|cancel`：10 分钟 owner/scope-bound 一次性请求；submit 在写入前 claim，回执无 value。

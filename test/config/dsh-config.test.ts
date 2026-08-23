@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
@@ -44,6 +44,43 @@ async function withHome(run: (root: string, manager: DshProviderManager) => Prom
 }
 
 describe('DshProviderManager', () => {
+  it('keeps the configured default route available when the first catalog refresh fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-lark-dsh-offline-'));
+    const settingsFile = join(root, '.dsh', 'settings.yaml');
+    await mkdir(join(root, '.dsh'), { recursive: true });
+    await writeFile(settingsFile, stringify({
+      [AGENT_DEFAULT_MODEL_NAMESPACE]: {
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash-vision-exp',
+      },
+    }), { mode: 0o600 });
+    const manager = new DshProviderManager({
+      home: root,
+      env: {},
+      catalog: {
+        listProviders: async () => {
+          throw new Error('catalog offline');
+        },
+      },
+    });
+
+    try {
+      const providers = await manager.listProviders();
+      expect(providers.find((provider) => provider.id === DEEPSEEK_PROVIDER)?.models)
+        .toContainEqual(expect.objectContaining({ id: 'deepseek-v4-flash-vision-exp' }));
+      expect(await manager.resolveModelRoute(
+        `${DEEPSEEK_PROVIDER}/deepseek-v4-flash-vision-exp`,
+      )).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash-vision-exp',
+      });
+      expect(await manager.resolveModelRoute(`${DEEPSEEK_PROVIDER}/unknown-model`))
+        .toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('discovers provider names, models, modalities, and efforts from the runtime catalog', async () => {
     await withHome(async (_root, manager) => {
       const providers = await manager.listProviders();

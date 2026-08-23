@@ -134,7 +134,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/invite user\|admin\|group <id>` | 添加白名单 |
 | `/invite list` | 查看白名单 |
 | `/invite remove user\|group <id>` | 移除白名单 |
-| `/help` | 查看帮助 |
+| `/help` | 查看当前版本权威命令清单；即使 Agent runtime Skill 暂不可用仍由 bridge 直接处理 |
 
 安全网守护接管期间（dsh 下线后）的额外命令：
 
@@ -269,7 +269,8 @@ dsh-lark-bot bot remove reviewer
   发送完整计划，再等待批准 / 继续规划与可选意见；批准后同一任务自动续跑，等待期间暂停超时。
   pre-execute 策略拒绝当前 turn 未批准的写入、删除、移动、命令执行与 `run_code`；门禁无固定十分钟
   截止，停止 run 时按 session 取消并撤回失效卡，不影响同 scope 的其他并发任务。
-- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调读取 scope 策略。
+- SDK / ACP / Web 在任何只读快速通道和计划门前先经 `/approval` policy-only 回调同步读取 scope 策略；
+  该查询只返回 `ask|allow|deny`，不要求审批 outcome，也不会创建或等待卡片。
   当前 scope 默认 `ask`：低风险自省静默放行，高风险调用弹出“允许执行一次 / 拒绝”卡；管理员可用 `/permission allow` 自动放行，或
   `/permission deny` 直接拒绝并得到明确反馈，`/permission ask` 恢复逐次询问。member 模式下
   管理员可用 `/permission <策略> <scope>` 修改同一聊天内其他成员 scope。策略写入成功后才回执，
@@ -323,7 +324,9 @@ dsh-lark-bot guardian uninstall
 - 正常任务与安全模式任务都使用飞书 Card JSON 2.0 原生折叠面板实时展示推理、工具调用与结果；
   运行中默认展开，结束后默认收起。最终回答另发一条 Markdown 消息并保持原回复/话题位置，便于
   直接引用和转发。面板外始终有最新推理尾部与最近工具结果的兼容快照；若平台拒绝折叠组件，bot 会
-  自动重试不含该组件的 legacy 流式卡。若最终消息发送失败，过程卡会明确提示并回填回答正文，已写入
+  自动重试不含该组件的 legacy 流式卡。若轮次完成但任一工具失败，标题与摘要显示
+  “已完成（含警告）/Completed with warnings”，legacy 兼容正文也会显示同一终态，而不会把 job
+  误标为失败。若最终消息发送失败，过程卡会明确提示并回填回答正文，已写入
   的会话记录不会丢失。
 
 - SDK / ACP / Web agent 对修改文件、运行脚本等较大或高风险动作使用计划门禁：先发送完整计划，
@@ -471,3 +474,5 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `agent-default-model`，仍不完整则给出明确配置错误。受管 bridge/guardian service 在
 install/start/restart 时把旧 service env 的受管键与当前 `DSH_LARK_*` 环境合并（当前 shell 显式值
 优先），因此稀疏 shell 重启不会删除已有 route；修改值后仍需在新环境下执行 service restart 才会生效。
+模型目录冷启动请求失败时，对象形式 `agent-default-model` 仍作为所属 provider 的最小离线条目参与
+解析；未在 settings 中明确出现的未知模型继续拒绝。

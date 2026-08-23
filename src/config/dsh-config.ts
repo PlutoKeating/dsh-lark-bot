@@ -86,6 +86,22 @@ function isMapLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function defaultModelSelectionFromSettings(
+  settings: Record<string, unknown>,
+): DshModelSelection | undefined {
+  const section = settings[AGENT_DEFAULT_MODEL_NAMESPACE];
+  if (typeof section === 'string') {
+    return { provider: DEEPSEEK_PROVIDER, model: section };
+  }
+  if (isMapLike(section) && typeof section.model === 'string') {
+    return {
+      provider: typeof section.provider === 'string' ? section.provider : DEEPSEEK_PROVIDER,
+      model: section.model,
+    };
+  }
+  return undefined;
+}
+
 function deepEqualJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -402,10 +418,27 @@ export class DshProviderManager {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    return [
+    const providers = [
       await this.describeDeepseek(settings, catalogProviders),
       ...(await this.describePiAi(settings, catalogProviders)),
     ];
+    const configuredDefault = defaultModelSelectionFromSettings(settings);
+    if (!configuredDefault) return providers;
+    return providers.map((provider) => {
+      if (
+        provider.id !== configuredDefault.provider
+        || provider.models.some((model) => model.id === configuredDefault.model)
+      ) return provider;
+      return {
+        ...provider,
+        models: [...provider.models, {
+          id: configuredDefault.model,
+          name: undefined,
+          contextWindow: undefined,
+          maxTokens: undefined,
+        }],
+      };
+    });
   }
 
   private async describeDeepseek(
@@ -476,19 +509,7 @@ export class DshProviderManager {
 
   /** Read the full `agent-default-model` selection (provider + model). */
   async defaultModelSelection(): Promise<DshModelSelection | undefined> {
-    const settings = await this.readSettings();
-    const section = settings[AGENT_DEFAULT_MODEL_NAMESPACE];
-    if (typeof section === 'string') {
-      // Legacy string form (`agent-default-model: model-id`).
-      return { provider: DEEPSEEK_PROVIDER, model: section };
-    }
-    if (isMapLike(section) && typeof section.model === 'string') {
-      return {
-        provider: typeof section.provider === 'string' ? section.provider : DEEPSEEK_PROVIDER,
-        model: section.model,
-      };
-    }
-    return undefined;
+    return defaultModelSelectionFromSettings(await this.readSettings());
   }
 
   /**

@@ -53,7 +53,13 @@ function summaryText(state: RunState, locale: CardLocale): string {
   if (state.terminal === 'interrupted') return zh ? '已中断' : 'Interrupted';
   if (state.terminal === 'idle_timeout') return zh ? '已超时' : 'Timed out';
   if (state.terminal === 'error') return zh ? '出错' : 'Failed';
-  if (state.terminal === 'done') return zh ? '已完成' : 'Completed';
+  if (state.terminal === 'done') {
+    const hasToolWarning = state.blocks.some(
+      (block) => block.kind === 'tool' && block.tool.status === 'error',
+    );
+    if (hasToolWarning) return zh ? '已完成（含警告）' : 'Completed with warnings';
+    return zh ? '已完成' : 'Completed';
+  }
   if (state.footer === 'tool_running') return zh ? '正在调用工具' : 'Running tools';
   if (state.footer === 'streaming') return zh ? '正在输出' : 'Responding';
   return zh ? '思考中' : 'Thinking';
@@ -155,7 +161,10 @@ function thinkingPanel(
 
 function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTools: number): object {
   const zh = locale === 'zh_cn';
-  const lines = [zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_'];
+  const lines = [
+    zh ? '_执行状态（兼容显示）_' : '_Execution status (compatibility view)_',
+    summaryText(state, locale),
+  ];
   const toolBlocks = state.blocks.filter((block) => block.kind === 'tool');
   const visibleCount = Math.min(3, maxTools);
   const tools = visibleCount === 0 ? [] : toolBlocks.slice(-visibleCount);
@@ -168,9 +177,6 @@ function compatibilityProcessSnapshot(state: RunState, locale: CardLocale, maxTo
   for (const block of tools) {
     lines.push(`🧰 ${boundedText(block.tool.name, MAX_TOOL_NAME_LENGTH)} · ${block.tool.status}`);
   }
-  if (lines.length === 1) lines.push(state.terminal === 'running'
-    ? zh ? '正在处理请求…' : 'Processing the request…'
-    : zh ? '执行过程已结束' : 'Execution finished');
   return noteMd(lines.join('\n'));
 }
 
