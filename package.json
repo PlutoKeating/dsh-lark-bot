@@ -48,6 +48,10 @@
     "./sdk-server": {
       "types": "./dist/sdk-server.d.ts",
       "import": "./dist/sdk-server.js"
+    },
+    "./skill": {
+      "types": "./dist/skill.d.ts",
+      "import": "./dist/skill.js"
     }
   },
   "files": [

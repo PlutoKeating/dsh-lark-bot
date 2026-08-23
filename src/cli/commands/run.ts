@@ -29,6 +29,7 @@ import { LanguagePolicyStore } from '../../bot/language-policy-store.js';
 import { startChannel, type QueuedMessage } from '../../bridge/channel.js';
 import { adaptLarkChannel } from '../../bridge/lark-channel.js';
 import { runAgentBatch } from '../../bridge/run-flow.js';
+import { attachRunCardAnchors, RunCardAnchors } from '../../bridge/run-card-anchors.js';
 import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import { memberOwnerForScope } from '../../bridge/scope-isolation.js';
 import type { StreamingChannel } from '../../bridge/types.js';
@@ -319,6 +320,7 @@ export async function startBridgeEngine(
   const questions = new QuestionRegistry();
   const plans = new PlanApprovalRegistry();
   const densityStore = new DensityStore();
+  const runCardAnchors = new RunCardAnchors();
   const models = new ModelStore();
   const wizardStore = new WizardStore();
   const dshConfig = new DshProviderManager({ env: process.env });
@@ -566,6 +568,7 @@ export async function startBridgeEngine(
           plans,
           densityStore,
           channel: streaming,
+          runCardAnchors,
           defaultWorkspace,
           replyTo: first.messageId,
           deliverFinalReply: (replyScope, chatId, markdown, options) => replyDispatcher.deliver(replyScope, chatId, markdown, options),
@@ -785,7 +788,7 @@ export async function startBridgeEngine(
       error: 'channel does not expose getBotIdentity',
     });
   }
-  streaming = adaptLarkChannel(bridge.channel);
+  streaming = attachRunCardAnchors(adaptLarkChannel(bridge.channel), runCardAnchors);
   larkChannel = bridge.channel;
   const deliverUpdateResult = async (): Promise<void> => {
     await updateHandoff.deliverResult(async (state) => {

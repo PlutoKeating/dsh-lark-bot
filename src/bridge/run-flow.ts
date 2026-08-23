@@ -27,6 +27,7 @@ import type { RoleDefinition } from '../bot/role-store.js';
 import type { WorkspaceStore } from '../workspace/store.js';
 import type { GitWorktreeManager } from '../workspace/git-worktree.js';
 import type { CardStreamController, StreamingChannel } from './types.js';
+import type { RunCardAnchors } from './run-card-anchors.js';
 import type { ApprovalOutcome, ApprovalRequest } from '../adapters/types.js';
 import type { QuestionCardInput } from '../card/question-card.js';
 import { archiveSessionDir, classifySessionError } from '../session/heal.js';
@@ -63,6 +64,13 @@ export interface RunFlowInput {
   plans?: PlanApprovalRegistry;
   densityStore?: DensityStore;
   channel: StreamingChannel;
+  /**
+   * Optional per-chat run-card anchor registry. When present the in-progress
+   * process card is re-anchored to the tail whenever a new user-facing bubble
+   * is delivered to the chat (see `run-card-anchors.ts`); omitted in the
+   * guardian's core-only profile and in tests.
+   */
+  runCardAnchors?: RunCardAnchors;
   defaultWorkspace: string;
   /** Provider route resolved from `model` (hot-switch support). */
   provider?: string;
@@ -319,6 +327,19 @@ async function runAttempt(
             log.warn('run-flow', 'card-update-failed', { scope: input.scope, error });
           }
         };
+        // Let an interim message bubble move the in-progress card to the tail of
+        // the conversation so the user does not have to scroll up to confirm the
+        // task is still running. Guard on `state.terminal === 'running'` so the
+        // final answer (sent after finalization) never pulls the card below it.
+        const unregisterReanchor = input.runCardAnchors?.register(input.chatId, async () => {
+          if (state.terminal !== 'running') return;
+          try {
+            await controller.update(renderer(state, density, Date.now()));
+            if (typeof controller.reanchor === 'function') await controller.reanchor();
+          } catch (error) {
+            log.warn('run-flow', 'card-reanchor-failed', { scope: input.scope, error });
+          }
+        });
         const showResumeRecovery = async (error: unknown): Promise<void> => {
           if (classifySessionError(errorMessage(error)) === undefined) throw error;
           resumeFailure = errorMessage(error);
@@ -554,6 +575,7 @@ async function runAttempt(
           unsubscribeQuestion?.();
           unsubscribePlan?.();
           unsubscribeApproval?.();
+          unregisterReanchor?.();
         }
     };
     let producerStarted = false;

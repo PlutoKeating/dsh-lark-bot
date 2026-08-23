@@ -110,4 +110,51 @@ describe('adaptLarkChannel', () => {
     expect(updateCard).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledOnce();
   });
+
+  it('re-anchors a streaming card to the tail and rebinds updates to the new id', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce({ messageId: 'card-1' })
+      .mockResolvedValueOnce({ messageId: 'card-2' });
+    const updateCard = vi.fn().mockResolvedValue(undefined);
+    const recallMessage = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'running' });
+      const newId = await controller.reanchor?.();
+      expect(newId).toBe('card-2');
+      await controller.update({ state: 'streaming-2' });
+    }, { replyTo: 'user-msg' });
+
+    expect(send).toHaveBeenCalledTimes(2);
+    // Initial card is still a reply to the user message.
+    expect(send.mock.calls[0]?.[1]).toMatchObject({ card: { state: 'initial' } });
+    // Re-anchor re-creates the card as a top-level message at the tail.
+    expect(send.mock.calls[1]?.[1]).toMatchObject({ card: { state: 'running' } });
+    expect(send.mock.calls[1]?.[2]).toEqual({});
+    expect(recallMessage).toHaveBeenCalledWith('card-1');
+    // Further updates target the fresh message id, never the recalled one.
+    const patchedIds = updateCard.mock.calls.map((call) => call[0]);
+    expect(patchedIds).toContain('card-2');
+    expect(patchedIds).not.toContain('card-1');
+  });
+
+  it('keeps the original card when the recall fails (no duplicate)', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: 'card-1' });
+    const updateCard = vi.fn().mockResolvedValue(undefined);
+    const recallMessage = vi.fn().mockRejectedValue(new Error('not found'));
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'running' });
+      const newId = await controller.reanchor?.();
+      expect(newId).toBe('card-1');
+    });
+
+    // No duplicate card is created; the original card keeps receiving updates.
+    expect(send).toHaveBeenCalledOnce();
+    expect(updateCard.mock.calls.map((call) => call[0])).toContain('card-1');
+  });
 });

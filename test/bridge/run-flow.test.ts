@@ -19,6 +19,7 @@ import {
   runAgentBatch,
 } from '../../src/bridge/run-flow.js';
 import type { StreamingChannel } from '../../src/bridge/types.js';
+import { attachRunCardAnchors, RunCardAnchors } from '../../src/bridge/run-card-anchors.js';
 import { SessionStore } from '../../src/session/store.js';
 import { WorkspaceStore } from '../../src/workspace/store.js';
 
@@ -1483,6 +1484,70 @@ describe('runAgentBatch', () => {
     expect(prompt).toContain('Tools guidance: fs,search');
     expect(prompt).toContain('Never invent APIs.');
     expect(prompt).toContain('do it');
+  });
+
+  it('re-anchors the running process card to the tail when an interim bubble is delivered', async () => {
+    const reanchor = vi.fn(async () => 'card-2');
+    let streamCardStarted: () => void;
+    const started = new Promise<void>((resolve) => {
+      streamCardStarted = resolve;
+    });
+    const channel: StreamingChannel = {
+      async sendMarkdown(_chatId, markdown) {
+        void markdown;
+      },
+      async streamCard(_chatId, initial, producer) {
+        void initial;
+        streamCardStarted!();
+        await producer({
+          update: async () => undefined,
+          reanchor: reanchor,
+        });
+      },
+    };
+    const anchors = new RunCardAnchors();
+    const wrapped = attachRunCardAnchors(channel, anchors);
+
+    // The run yields one text delta (state -> running), then parks on `gate`
+    // until the test releases it, so the in-flight state is deterministic.
+    let gate!: () => void;
+    const gatePromise = new Promise<void>((resolve) => {
+      gate = resolve;
+    });
+    const adapter = fakeAdapter([
+      { type: 'text', delta: 'working' },
+    ]);
+    adapter.run = () => ({
+      runId: 'run-reanchor',
+      events: (async function* () {
+        yield { type: 'text', delta: 'working' };
+        await gatePromise;
+        yield { type: 'done', sessionId: 'session-reanchor', terminationReason: 'normal' };
+      })(),
+      stop: vi.fn().mockResolvedValue(undefined),
+      waitForExit: async () => true,
+    });
+
+    const runPromise = runAgentBatch({
+      scope: 'reanchor', chatId: 'reanchor', messages: ['go'], adapter,
+      sessions: new SessionStore(':memory:'), workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(), channel: wrapped, defaultWorkspace: '/tmp/project',
+      runCardAnchors: anchors,
+    });
+    await started;
+    // Once the text event is consumed the run is 'running'; park on the gate, then
+    // deliver an interim bubble that must pull the card to the tail.
+    const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+    await tick();
+    await tick();
+    await wrapped.sendMarkdown('reanchor', 'mid-run progress');
+    expect(reanchor).toHaveBeenCalledTimes(1);
+
+    // Releasing the gate finalizes the run; the final answer (terminal done) must
+    // NOT pull the card again.
+    gate();
+    await runPromise;
+    expect(reanchor).toHaveBeenCalledTimes(1);
   });
 });
 

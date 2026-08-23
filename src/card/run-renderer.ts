@@ -147,7 +147,11 @@ function thinkingPanel(
 ): object {
   return {
     tag: 'collapsible_panel',
-    expanded: state.terminal === 'running',
+    // Default to collapsed: the top-level compatibility snapshot already shows
+    // the latest status and current tools, so keep the detailed per-tool list
+    // collapsed to avoid two overlapping expanded surfaces. (Both sections are
+    // retained for now.)
+    expanded: false,
     header: {
       title: { tag: 'plain_text', content: `⚙️ ${locale === 'zh_cn' ? '执行过程' : 'Execution'} · ${summaryText(state, locale)}` },
       icon: { tag: 'standard_icon', token: 'down-small-ccm_outlined' },
