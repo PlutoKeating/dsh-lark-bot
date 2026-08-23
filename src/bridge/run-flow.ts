@@ -33,6 +33,7 @@ import { archiveSessionDir, classifySessionError } from '../session/heal.js';
 import type { SendOptions } from './send-options.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { ExecutionMode } from '../bot/execution-mode-store.js';
+import { permissionPolicyDenial, policyDenialText } from '../policy/tool-policy.js';
 
 export interface RunFlowInput {
   scope: string;
@@ -743,12 +744,13 @@ export function approvalHandlerFor(
     const policy = input.permissionPolicies?.get(input.scope) ?? 'ask';
     if (policy === 'allow') return 'allowed-once';
     if (policy === 'deny') {
+      const denial = permissionPolicyDenial(input.scope, request.toolName);
       try {
         await input.channel.sendMarkdown?.(
           input.chatId,
           bilingualMarkdown(
-            `⛔ 工具 \`${request.toolName}\` 已按 scope \`${input.scope}\` 的 **deny** 策略拒绝；管理员可用 \`/permission ask ${input.scope}\` 恢复逐次审批。`,
-            `⛔ Tool \`${request.toolName}\` was rejected by scope \`${input.scope}\`'s **deny** policy. An admin can use \`/permission ask ${input.scope}\` to restore per-operation approval.`,
+            `⛔ **权限策略拒绝**\n\n\`\`\`text\n${policyDenialText(denial)}\n\`\`\``,
+            `⛔ **Permission policy denial**\n\n\`\`\`text\n${policyDenialText(denial)}\n\`\`\``,
           ),
           input.sendOptions,
         );

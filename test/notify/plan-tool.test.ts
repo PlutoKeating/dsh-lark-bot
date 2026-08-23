@@ -108,7 +108,10 @@ describe('lark_request_plan_approval tool', () => {
     const allow = async (): Promise<unknown> => ({ kind: 'allow' });
 
     await preStep({ agent, turn: 1 }, allow);
-    await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });
+    await expect(preExecute(edit, allow)).resolves.toMatchObject({
+      kind: 'deny',
+      reason: expect.stringContaining('[policy-denial layer=plan-gate]'),
+    });
     await definitions[0]!.execute({ plan: 'Edit a.ts' }, { agent } as never);
     await expect(preExecute(edit, allow)).resolves.toEqual({ kind: 'allow' });
     await expect(preExecute(edit, allow)).resolves.toMatchObject({ kind: 'deny' });

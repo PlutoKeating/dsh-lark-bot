@@ -662,6 +662,11 @@ toast 在网络收尾前立即返回，发送与撤回则是独立的 best-effor
 
 `src/notify/plan-tool.ts` 注册 `lark_request_plan_approval` raw-schema dsh 工具，并通过
 `tools/pre-execute` 强制拒绝当前 turn 尚未批准的写入、删除、移动、非只读 shell 命令与 `run_code`。
+高风险分类、只读命令集合、persona 策略段落和结构化拒绝协议统一位于
+`src/policy/tool-policy.ts`。插件拒绝格式为 `[policy-denial layer=...] denied by ...`，下一行固定
+`to change: ...`；layer 目前为 `plan-gate`、`permission-policy` 或 `tool-approval`，persona 另把
+Harness `[sandbox: ...]` 标记为不可由插件改写的 `file-sandbox`。`POST /approval` 会把可用的
+`PolicyDenial` 元数据原样返回 nested runtime，使 agent 能区分 scope deny 与用户单次拒绝。
 `bash` / `shell` 只有在命令不含换行、串联、管道、重定向、命令替换，且 executable 或 `git`
 subcommand 位于只读白名单时才绕过计划和逐工具审批。真实 SDK 参数可额外携带字符串
 `description` / `workdir` 与 `run_in_background:false`；这些字段只作无副作用元数据校验，

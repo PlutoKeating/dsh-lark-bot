@@ -23,9 +23,17 @@ describe('buildApprovalHandler', () => {
       sessions, scopeDirectory: directory, approvals: new ApprovalRegistry(), channel: { sendCard, sendMarkdown },
       permissionPolicies: { get: () => 'deny' } as unknown as PermissionPolicyStore,
     });
-    await expect(deny(payload)).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    await expect(deny(payload)).resolves.toMatchObject({
+      ok: true,
+      outcome: 'rejected',
+      denial: { layer: 'permission-policy' },
+    });
     expect(sendCard).not.toHaveBeenCalled();
-    expect(sendMarkdown).toHaveBeenCalledWith('chat-a', expect.stringContaining('deny'), undefined);
+    expect(sendMarkdown).toHaveBeenCalledWith(
+      'chat-a',
+      expect.stringContaining('[policy-denial layer=permission-policy]'),
+      undefined,
+    );
   });
 
   it('routes a default-runtime request to a detailed one-shot card', async () => {
@@ -56,7 +64,11 @@ describe('buildApprovalHandler', () => {
     )?.[1];
     expect(id).toBeTruthy();
     approvals.resolve('chat-a:thread-a', id!, 'rejected');
-    await expect(result).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    await expect(result).resolves.toMatchObject({
+      ok: true,
+      outcome: 'rejected',
+      denial: { layer: 'tool-approval' },
+    });
     expect(onApprovalWaiting).toHaveBeenCalledWith('chat-a:thread-a', 'bash');
     expect(cancelReminder).toHaveBeenCalledOnce();
   });

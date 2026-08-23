@@ -47,9 +47,9 @@ describe('resolveAcpLaunch', () => {
     expect(patch).toContain("name: 'dsh-lark-bot/plan'");
     expect(patch).not.toContain('id: lark-approval-answerer');
     expect(patch).toContain('use lark_request_plan_approval');
-    expect(patch).toContain('Read-only inspections with simple shell commands do not need plan approval');
+    expect(patch).toContain('The bridge policy treats one uncomposed shell call as read-only');
     expect(patch).toContain('use lark_ask_user and wait for the answer');
-    expect(patch).toContain('Do not invent a sandbox, policy, or permission restriction');
+    expect(patch).toContain('[policy-denial layer=...]');
     expect(patch).toContain('uses lark_ask_user for interactive answers');
   });
 

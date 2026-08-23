@@ -212,6 +212,10 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    `description` / `workdir` / false background 元数据经显式校验后不改变判定，未知参数、串联、
    重定向、命令替换、未知程序与所有其他终端调用保持 fail closed。run 或 HTTP request
    取消时精确撤销并终态化该 session 的卡，因此 SDK、ACP、Web 宿主路径都不是仅靠提示词约束。
+   `src/policy/tool-policy.ts` 是插件策略的单一判定/文案来源：计划门与逐工具审批共用高风险分类器，
+   runtime persona 从同一只读命令集合生成；拒绝统一携带 `[policy-denial layer=...]`、reason 与
+   to-change。计划门负责意图确认，`/permission` 负责逐工具决策，二者不互相冒充；Harness
+   `[sandbox: ...]` 作为上游 `file-sandbox` 层被明确识别但不由插件越权改写。
    默认 SDK 与 host bundle 还装配 `dsh-lark-bot/approval`：它先以 `tools/pre-execute` 强制拦截
    高风险工具，再以 structural listener 接入 rc.8
    `approval/request` waterfall，经 `/approval` 路由到 scope/session 精确的 `ApprovalRegistry`；

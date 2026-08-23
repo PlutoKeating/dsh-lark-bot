@@ -370,7 +370,12 @@ describe('NotifyServer', () => {
   });
 
   it('serves authenticated one-shot approval outcomes', async () => {
-    const approval = vi.fn().mockResolvedValue({ ok: true, outcome: 'rejected' });
+    const denial = {
+      layer: 'permission-policy' as const,
+      reason: 'scope policy is deny',
+      toChange: 'run /permission ask',
+    };
+    const approval = vi.fn().mockResolvedValue({ ok: true, outcome: 'rejected', denial });
     const server = new NotifyServer({
       token: 'test-token', resolve: () => undefined, send: vi.fn(), approval,
     });
@@ -385,7 +390,7 @@ describe('NotifyServer', () => {
       }),
     });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, outcome: 'rejected' });
+    await expect(response.json()).resolves.toEqual({ ok: true, outcome: 'rejected', denial });
     expect(approval).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolName: 'bash' }),
       expect.any(AbortSignal),

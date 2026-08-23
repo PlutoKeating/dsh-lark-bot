@@ -250,6 +250,12 @@ bridge 先把完整 Markdown 计划作为普通消息发出，再弹出“批准
 信号；停止任务会精确取消该 session 的 pending 卡并撤回。可信部署可设置
 `DSH_LARK_PLAN_GATE=off` 关闭这层独立门禁（逐工具审批仍按原策略执行）；legacy headless adapter 不具备工具回调能力。
 
+插件可控的拒绝统一为 `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`，随后给出
+`reason` 与 `to change`；Harness 自己的 `[sandbox: ...]` 明确归类为 `file-sandbox`。高风险分类器、
+persona 中的只读说明和拒绝文本由 `src/policy/tool-policy.ts` 同一来源生成，因此策略调整不会只改
+提示词或只改执行钩子。计划门与逐工具审批仍保留不同语义，`/permission allow` 不扩大文件沙箱，
+也不替代计划确认。
+
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具弹**问答卡**（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入任意文字；单选/多选没有合适项时，回复文字就是补充答案。系统按被回复的 card messageId 精确匹配 pending 问题，回答后任务自动继续，等待期间运行超时看门狗暂停。（与 `/ask` 的“你主动提问”方向相反。）
 
 计划、审批与问答卡提交后会立即显示成功提示、发送一条终态确认并撤回原卡，避免按钮仍停留在聊天中造成“未生效”的误解；失效卡会返回明确错误提示，入站点击与失效原因写入结构化日志。确认或撤回失败不会影响已经提交给 agent 的决策、审批结果或答案。本地人机决策回调会以 JSON 空白流保活，避免 Node HTTP 客户端在等待 5 分钟后切断仍有效的卡片。

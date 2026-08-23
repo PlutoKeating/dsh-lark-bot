@@ -256,6 +256,13 @@ another plan. There is no fixed ten-minute deadline: the gate follows the owning
 stopping it cancels and recalls only that session's pending card. Trusted deployments may set
 `DSH_LARK_PLAN_GATE=off` to disable this separate gate (ordinary per-tool approval still applies). The legacy headless adapter cannot use callback tools.
 
+Plugin-controlled refusals now use `[policy-denial layer=<plan-gate|permission-policy|tool-approval>]`
+followed by `reason` and `to change`; Harness `[sandbox: ...]` errors are identified as the
+`file-sandbox` layer. The high-risk classifier, persona read-only guidance, and denial text share
+`src/policy/tool-policy.ts`, so policy changes cannot update only the prompt or only enforcement.
+The plan gate and per-tool approval retain distinct semantics: `/permission allow` neither expands
+the file sandbox nor replaces plan confirmation.
+
 **Mid-task questions (question cards)**: when the agent needs a decision, confirmation, or missing information, it sends a **question card** via the `lark_ask_user` tool (single choice / multi choice / free text). Submit the form or reply directly to that card with any text—even when none of the listed choices fits. The replied card message id selects the exact pending question, the agent resumes automatically, and the run-timeout watchdog pauses while it waits. (The opposite direction of `/ask`, where you ask the agent.)
 
 Plan, approval and question-card submissions immediately show a native toast, post a terminal confirmation and recall the original card. Stale cards return an explicit error toast, while received actions and stale reasons are written to structured logs. Confirmation/recall failures do not change the decision already delivered to the agent. Local human-decision callbacks stream insignificant JSON whitespace while waiting so Node's HTTP client cannot invalidate a live card after five minutes.

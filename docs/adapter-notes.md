@@ -98,6 +98,7 @@ type AgentEvent =
 | `src/adapters/dsh/acp-runtime.ts` | `ensureAcpProfile` / `resolveAcpLaunch`（`dsh-lark-acp` profile） |
 | `src/adapters/dsh/event-channel.ts` | 有序事件队列（流式事件中转） |
 | `src/adapters/dsh/adapter.ts` | legacy `DshAdapter`（headless 子进程，保留兼容） |
+| `src/policy/tool-policy.ts` | 高风险分类、生成式 persona 策略段落与统一拒绝协议 |
 
 参考实现（**照抄结构**）：[`../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/codex/adapter.ts)
 （spawn 子进程 → JSONL 翻译成事件流）、[`claude/adapter.ts`](../reference/lark-coding-agent-bridge/src/agent/claude/adapter.ts)（同理）。
@@ -194,7 +195,9 @@ SDK / ACP runtime 均自动装配；SDK 还装配 `dsh-lark-bot/approval`，ACP 
    仍保留中性恢复 fallback，不把底层错误暴露给用户。ACP 仅全新会话。
 3. **审批**：ACP 的 `session/request_permission` 与默认 SDK/Web 的 rc.8 `approval/request` answerer
    都映射一次性 allow/reject 飞书卡；registry 按 scope + owner session + request id 精确结算，
-   并发 run、单卡失败与 callback abort 不会取消其他任务。
+   并发 run、单卡失败与 callback abort 不会取消其他任务。计划门与逐工具审批共用
+   `tool-policy.ts` 的高风险分类器但保留不同语义；拒绝用 `[policy-denial layer=...]` 署名并经
+   `/approval` 回传结构化 reason/to-change。上游 `[sandbox: ...]` 只被识别，不被插件覆盖。
 4. **dsh 是 developer preview**：接口会破坏性变更；协议 adapter 隔离在
    `src/adapters/dsh/`，宿主工具 registry 兼容 seam 隔离在 `src/notify/` 的 raw-schema 边界。
    锁定版本、升级政策与自动化探测见 [`COMPATIBILITY.md`](COMPATIBILITY.md)；
