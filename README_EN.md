@@ -46,10 +46,9 @@ app → once bound, message the bot directly; groups / threads default to `@bot`
 ## Core capabilities
 
 > **Strongest Feishu-only channel in the ecosystem**: among the DSH "channels & notify × Feishu" plugins, ours is the
-> **most feature-complete and best maintained** — both feature completeness and maintenance activity score a full 5.0/5.0,
-> with a **96% Issue close rate (first in the whole field)**, high-frequency v0.19.6 releases, and same-day updates
-> (54k lines / 325 files, with `ARCHITECTURE.md` + `API.md`). We don't chase multi-platform breadth (WeChat / DingTalk /
-> QQ etc. is a different game) — instead we make **the Feishu channel the deepest, the most painless, and the most durable**.
+> **most feature-complete** (a full 5.0/5.0 feature-completeness score), backed by `ARCHITECTURE.md` + `API.md`
+> engineering docs. We don't chase multi-platform breadth (WeChat / DingTalk / QQ etc. is a different game) — instead
+> we make **the Feishu channel the deepest, the most painless, and the most durable**.
 
 - **Safety-net guardian** (**unique in the ecosystem**): Feishu still replies if dsh crashes; `/safemode` opens a core-only safe mode to self-heal — most bridges are "serial single chat + lost on crash".
 - **Parallel tasks**: many tasks run concurrently in the same group with isolated sessions; others only queue serially.
