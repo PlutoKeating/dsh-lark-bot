@@ -14,7 +14,7 @@ describe('SecretTargetManager', () => {
     const root = await mkdtemp(join(tmpdir(), 'secret-target-')); roots.push(root);
     const profiles = new ConfigStore(join(root, 'config.json')); await profiles.load();
     await profiles.saveProfile('default', { tenant: 'feishu', appId: 'cli_x', appSecret: 'old' });
-    const dsh = new DshProviderManager({ home: root, env: {} });
+    const dsh = new DshProviderManager({ home: root, env: {}, catalog: { listProviders: async () => [] } });
     await dsh.upsertPiAiProvider({ id: 'gateway', api: 'openai-completions', baseURL: 'https://example.test/v1', models: [{ id: 'model', name: undefined, contextWindow: undefined, maxTokens: undefined }] });
     const targets = new SecretTargetManager({ dsh, profiles, profileName: 'default' });
     await targets.set('dsh-credential', 'gateway', 'sentinel-value');
@@ -28,7 +28,7 @@ describe('SecretTargetManager', () => {
     const root = await mkdtemp(join(tmpdir(), 'app-secret-target-')); roots.push(root);
     const profiles = new ConfigStore(join(root, 'config.json')); await profiles.load();
     await profiles.saveProfile('default', { tenant: 'lark', appId: 'cli_x', appSecret: 'old' });
-    const targets = new SecretTargetManager({ dsh: new DshProviderManager({ home: root, env: {} }), profiles, profileName: 'default' });
+    const targets = new SecretTargetManager({ dsh: new DshProviderManager({ home: root, env: {}, catalog: { listProviders: async () => [] } }), profiles, profileName: 'default' });
     await targets.set('app-secret', 'current', 'new-sentinel');
     expect(await targets.configured('app-secret', 'current')).toBe(true);
     expect(profiles.getProfile('default')?.accounts.appSecret).toBe('new-sentinel');

@@ -602,7 +602,9 @@ export async function buildAgentAdapter(
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
 `AgentEvent`，并将本地图片上传为 durable attachment ref + 原生 image block）、
 `sdk-server.ts`（在官方 server 上仅扩展 `attachment/upload`，复用 dsh attachment store 的批量
-准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
+准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈；managed overlay 的 bridge
+工具行按已安装包实际导出的 subpath 生成，回滚到导出 subpath 更少的旧版本时只保留其确实导出的行，
+`./sdk-server` 缺失时回退官方 server，避免 `ERR_PACKAGE_PATH_NOT_EXPORTED`）、
 `event-channel.ts`（有序事件队列）。
 
 ### 3.1 显式 session 投影契约
