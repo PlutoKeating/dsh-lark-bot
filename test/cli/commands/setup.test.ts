@@ -38,7 +38,7 @@ describe('dsh-lark-bot setup', () => {
     );
     await writeFile(
       join(profileDir, 'node_modules', '.modules.yaml'),
-      `${JSON.stringify({ packageManager: 'pnpm@10.33.0', storeDir: '/store/v10' }, null, 2)}\n`,
+      `${JSON.stringify({ packageManager: 'pnpm@10.33.0-rc.1+managed.2', storeDir: '/store/v10' }, null, 2)}\n`,
       'utf8',
     );
 
@@ -47,7 +47,7 @@ describe('dsh-lark-bot setup', () => {
     const profilePackage = JSON.parse(
       await readFile(join(profileDir, 'package.json'), 'utf8'),
     ) as { packageManager?: string };
-    expect(profilePackage.packageManager).toBe('pnpm@10.33.0');
+    expect(profilePackage.packageManager).toBe('pnpm@10.33.0-rc.1+managed.2');
   });
 
   it('does not create package.json for a fresh profile without pnpm install metadata', async () => {

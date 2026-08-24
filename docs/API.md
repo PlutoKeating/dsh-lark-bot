@@ -1126,8 +1126,10 @@ dsh 重新在线时（用户手动启动或退出安全模式后），守护立�
 - `installGuardian({ env, dshProfile?, bridgeProfile?, dryRun?, run?, rootOverride? })`：
   写入 `~/.dsh-lark/guardian.json`，并按平台写 systemd user unit / LaunchAgent plist /
   Windows 启动项，尝试激活（`systemctl --user enable --now` / `launchctl bootstrap`），失败时
-  打印手动命令。
+  打印手动命令；Linux systemd unit 的 PATH 必须先经 `stableGuardianServicePath` 过滤。
 - `uninstallGuardian({ env, run?, rootOverride? })`：停用并删除服务文件，保留状态文件。
+- `stableGuardianServicePath(nodeBin, inheritedPath?)`：把 Node 可执行文件目录置于首位，过滤
+  `_npx`、Guardian update-worker npm cache 与所有 `node_modules/.bin`，并对剩余稳定 PATH 去重。
 - `systemdUnit` / `launchdPlist` / `windowsStartupCmd`：纯函数生成单元文件内容（可测试）。
 
 CLI：`dsh-lark-bot setup`（默认安装守护，`--no-guardian` 跳过）、
