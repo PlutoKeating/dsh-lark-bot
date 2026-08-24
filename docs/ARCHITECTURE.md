@@ -94,6 +94,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    `@deepseek-ai/dsh-sdk-client`（`dsh-sdk-jsonrpc-server` runtime，原生 session + 流式事件）；
    `DSH_LARK_ADAPTER=acp` 走官方 `@deepseek-ai/dsh-acp`（审批卡）；`headless` 保留 legacy fallback；
    `DSH_LARK_ADAPTER=web` 走本地 dsh web agent（`session.prompt` + `/api/events.mux`，单写者，根治双写）。
+   `web` adapter 声明 `resumeCapable = true` 并实现 `canResume`（web 服务端是每个 session 的单写者，
+   跨连接持留），因此 run-flow 会复用同一 native session，前一轮记忆得以延续；adapter 被 dispose 后
+   才拒绝复用，其余情况交给 run-flow 的 fresh-session 兜底。
    桥接核心只依赖 `AgentAdapter` / `AgentEvent` 契约；dsh 协议漂移集中在
    `src/adapters/dsh/`，宿主工具 registry 漂移集中在 `src/notify/` 的 raw-schema 注册边界。
    当前兼容基线为 rc.8；托管 SDK/ACP profile 的 ready 判定读取实际 package manifest 并

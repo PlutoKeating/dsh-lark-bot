@@ -54,3 +54,25 @@ describe('WebDshAdapter prompt provenance', () => {
     await adapter.dispose();
   });
 });
+
+describe('WebDshAdapter resume capability', () => {
+  it('declares resumeCapable so the run-flow reuses the native session', async () => {
+    const adapter = new WebDshAdapter({ provider: 'p', model: 'm' });
+    expect(adapter.resumeCapable).toBe(true);
+    expect(adapter.canResume({ cwd: '/repo', sessionId: 's1', model: 'm' })).toBe(true);
+    expect(adapter.canResume({
+      runtimeKey: 'scope-a\0/repo',
+      cwd: '/repo',
+      sessionId: 's1',
+      provider: 'p',
+      model: 'm',
+    })).toBe(true);
+    await adapter.dispose();
+  });
+
+  it('denies resume once the adapter is disposed (bridge shutdown)', async () => {
+    const adapter = new WebDshAdapter({ provider: 'p', model: 'm' });
+    await adapter.dispose();
+    expect(adapter.canResume({ cwd: '/repo', sessionId: 's1', model: 'm' })).toBe(false);
+  });
+});
