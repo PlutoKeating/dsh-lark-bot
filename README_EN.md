@@ -1,9 +1,9 @@
 <h1 align="center">dsh-lark-bot</h1>
 
-<p align="center">🌏 中文版：[README.md](README.md)</p>
+<p align="center">🌏 <a href="README.md">中文</a> · 🌐 Official wiki <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a></p>
 
 <p align="center">
-  <strong>Put DeepSeek Harness into Feishu / Lark</strong> · scan to connect in 30 s · drive your local coding agent from your phone · Feishu still answers you if dsh goes down
+  <strong>Put DeepSeek Harness into Feishu</strong> · scan to connect in 30 s · drive your coding agent from your phone · Feishu still answers you if dsh crashes
 </p>
 
 <p align="center">
@@ -18,14 +18,9 @@
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
 </p>
 
-<p align="center">
-  🌐 Landing page <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a>
-  · mirror <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
-</p>
+## Overview
 
-**Overview**: make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly
-from phone, group, or thread. It uses a Feishu WebSocket long connection, so you need **no public IP, domain,
-server, or NAT-tunnelling**; Linux / macOS / Windows, Node.js ≥ 22.
+Make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly from phone, group, or thread. It uses a Feishu WebSocket long connection, so you need **no public IP, domain, server, or NAT-tunnelling**; Linux / macOS / Windows, Node.js ≥ 22.
 
 ---
 

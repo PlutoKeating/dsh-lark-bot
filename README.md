@@ -1,9 +1,9 @@
 <h1 align="center">dsh-lark-bot</h1>
 
-<p align="center">🌏 英文版：[README_EN.md](README_EN.md)</p>
+<p align="center">🌏 <a href="README_EN.md">English</a> · 🌐 官网wiki <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a></p>
 
 <p align="center">
-  <strong>把 DeepSeek Harness 装进飞书 / Lark</strong> · 扫码 30 秒 · 手机指挥本机 coding agent · dsh 崩溃后飞书里依然叫得应
+  <strong>把 DeepSeek Harness 装进飞书</strong> · 扫码 30 秒 · 手机指挥本机 coding agent · 崩溃了飞书也照样回你
 </p>
 
 <p align="center">
@@ -18,12 +18,9 @@
   <a href="https://github.com/PlutoKeating/dsh-lark-bot/releases"><img src="https://img.shields.io/github/v/release/PlutoKeating/dsh-lark-bot?sort=semver&label=latest%20release" alt="Latest release"></a>
 </p>
 
-<p align="center">
-  🌐 落地页 <a href="https://dsh-lark-bot.arr2018.dpdns.org">dsh-lark-bot.arr2018.dpdns.org</a>
-  · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
-</p>
+## 产品简介
 
-**产品简介**：让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
+让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
 走飞书 WebSocket 长连接，**不需要公网 IP、域名、服务器或内网穿透**；Linux / macOS / Windows 通用，Node.js ≥ 22。
 
 ---
