@@ -179,8 +179,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     运行过程卡不使用 `@larksuite/channel` 的 whole-card timer controller：其 timer 不观察异步
     `patchCard` rejection，弱网超时会升级为进程级 unhandled rejection。`adaptLarkChannel` 自己按
     100 ms 合并并串行更新；re-anchor 的撤回/重建与 patch 同样在控制器内串行，并发 re-anchor 合并为
-    一次，因此 patch 不会命中已经撤回的旧 message ID。patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
-    producer、Agent 与单独的最终 Markdown 继续运行。
+    一次，因此 patch 不会命中已经撤回的旧 message ID。patch 失败会有限重试；若飞书返回
+    `230011 / message withdrawn`（目标消息已被撤回/替换/清除，属正常可恢复状态），控制器识别该
+    分类并按最新快照在会话尾部**重建**卡片、重定向到新 `message_id` 后继续流式更新（有恢复预算防
+    无限重建），不弹“更新失败”提示。仅当真正不可恢复的失败（网络/超时且重试仍失败）时才记录脱敏
+    日志、冻结该卡并发送普通降级提示；无论哪种情况 producer、Agent 与单独的最终 Markdown 均继续运行。
    **过程卡跟随会话末尾**：飞书不能重排已存在消息，运行中 agent 发出的中间气泡（`lark_notify`、
    问答/计划/审批卡等）会被追加到会话底部，而只做原位更新的过程卡停留在顶部，用户查看新气泡后需
    上滑才能确认任务仍在继续。为此 `run-flow` 把过程卡的流式控制器注册进 `RunCardAnchors`，
