@@ -244,8 +244,9 @@ describe('ensureSdkProfile', () => {
     const installOwnDependencies = vi.fn(async (root: string, options?: { force?: boolean }) => {
       await writeFile(
         join(ownRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
-        JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+        JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION, main: 'index.js' }),
       );
+      await writeFile(join(ownRoot, 'node_modules', SDK_SERVER_PACKAGE, 'index.js'), 'export {};\n');
       expect(root).toBe(ownRoot);
       expect(options).toEqual({ force: true });
     });
@@ -267,6 +268,46 @@ describe('ensureSdkProfile', () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(installOwnDependencies).toHaveBeenCalledOnce();
+  });
+
+  it('accepts the npm/npx flat dependency layout without trying pnpm repair', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-npx-flat-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const nodeModules = join(home, 'npx', 'node_modules');
+    const ownRoot = join(nodeModules, 'dsh-lark-bot');
+    const own = { name: 'dsh-lark-bot', root: ownRoot, version: '0.19.5' };
+    await mkdir(ownRoot, { recursive: true });
+    await mkdir(join(nodeModules, ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(ownRoot, 'package.json'),
+      JSON.stringify({ name: own.name, version: own.version, dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    );
+    await writeFile(
+      join(nodeModules, SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION, main: 'index.js' }),
+    );
+    await writeFile(join(nodeModules, SDK_SERVER_PACKAGE, 'index.js'), 'export {};\n');
+    await mkdir(join(profileRoot, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+    );
+    await symlink(ownRoot, join(profileRoot, 'node_modules', own.name), 'dir');
+    await writeFile(join(profileRoot, 'package.json'), '{}');
+    await writeFile(join(profileRoot, 'cordis.yml'), '[]\n');
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), patchYamlFor());
+    const install = vi.fn();
+    const installOwnDependencies = vi.fn();
+
+    await expect(ensureSdkProfile({
+      home,
+      ownPackage: own,
+      install,
+      installOwnDependencies,
+    })).resolves.toMatchObject({ ok: true, created: false });
+    expect(install).not.toHaveBeenCalled();
+    expect(installOwnDependencies).not.toHaveBeenCalled();
   });
 
   it('does not let a matching hoisted package hide a stale profile-local copy', async () => {

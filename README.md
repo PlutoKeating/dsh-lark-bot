@@ -353,7 +353,8 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - `--no-guardian`：跳过守护升级；
 - **runtime profile 一致性修复**：升级后自动把 `dsh-lark-sdk` / `dsh-lark-acp` 的
   own-package 链接重指到新版本，并当场强制刷新 runtime profile 及被链接主插件中版本陈旧或物理
-  内容损坏的 SDK server / ACP 依赖；
+  内容损坏的 SDK server / ACP 依赖；修复目标以 dsh profile 中重新读取并验证的安装包为准，
+  不会链接到临时 npx worker。npm/npx 扁平依赖按 Node 的真实模块解析结果校验；
 - **受管服务安全重载**：更新 worker 的临时 callback URL/token 与 npx cache PATH 不会写入持久
   service env；只有飞书通道、callback server 和 Guardian 心跳均已就绪后才确认更新成功。
 

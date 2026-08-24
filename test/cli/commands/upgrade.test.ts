@@ -37,6 +37,7 @@ interface Harness {
   restartGuardian: ReturnType<typeof vi.fn>;
   restartProfile: ReturnType<typeof vi.fn>;
   repairRuntime: ReturnType<typeof vi.fn>;
+  readInstalledPackage: ReturnType<typeof vi.fn>;
   runDoctor: ReturnType<typeof vi.fn>;
 }
 
@@ -53,6 +54,11 @@ function makeHarness(): Harness {
     { profile: 'dsh-lark-sdk', existed: true, repaired: true, ok: true },
     { profile: 'dsh-lark-acp', existed: false, repaired: false, ok: true },
   ]);
+  const readInstalledPackage = vi.fn(async (dshHome: string, profile: string, name: string) => {
+    const spec = pluginSpawn.mock.calls.at(-1)?.[2] as string | undefined;
+    const version = spec?.slice(spec.lastIndexOf('@') + 1) ?? '0.0.0';
+    return { name, version, root: join(dshHome, 'profiles', profile, 'node_modules', name) };
+  });
   const runDoctor = vi.fn().mockResolvedValue({
     lines: ['dsh-lark-bot doctor', 'version: 0.11.0', 'config: missing'],
     critical: false,
@@ -68,6 +74,7 @@ function makeHarness(): Harness {
     restartGuardian,
     restartProfile,
     repairRuntime,
+    readInstalledPackage,
     runDoctor,
   };
 }
@@ -88,6 +95,7 @@ async function runWith(
     restartGuardianFn: harness.restartGuardian,
     restartProfileFn: harness.restartProfile,
     repairRuntimeFn: harness.repairRuntime,
+    readInstalledPackageFn: harness.readInstalledPackage,
     runDoctorFn: harness.runDoctor,
     listProcessesFn: async () => [],
     ...options,
@@ -148,7 +156,14 @@ describe('dsh-lark-bot upgrade', () => {
       expect.objectContaining({ dshProfile: 'dsh-lark' }),
     );
     expect(harness.repairRuntime).toHaveBeenCalledWith(
-      expect.objectContaining({ dshHome: harness.dshHome }),
+      expect.objectContaining({
+        dshHome: harness.dshHome,
+        ownPackage: {
+          name: 'dsh-lark-bot',
+          version: '0.12.0',
+          root: join(harness.dshHome, 'profiles', 'dsh-lark', 'node_modules', 'dsh-lark-bot'),
+        },
+      }),
     );
     // Post-upgrade verification also inspects the bridge state profile.
     expect(harness.runDoctor).toHaveBeenCalledWith(

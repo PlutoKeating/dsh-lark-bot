@@ -299,6 +299,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    npm cache 和显式 0077 子进程 umask，不信任 bridge cwd、`~/.npm` 或宿主 umask；失败只跨边界传递
    脱敏错误类别，不传原始输出。`/new` / `/reset` 每次强制一次 best-effort npm 查询，只有
    严格更新时追加短文本，不改变建会话结果。
+   `dsh plugin add` 后升级器重新读取 profile 内包清单并校验精确目标版本，再把该稳定安装根传给
+   SDK/ACP runtime repair；运行于 npm/npx 扁平树的 worker 只负责执行，不会成为 runtime 链接目标，
+   其依赖就绪性按 Node 从 worker package 实际解析到的模块入口与清单判断。
 11. **安全网守护（issue #6）**：dsh 采用「一切皆插件」架构，任一第三方插件都可能让整个组合
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/

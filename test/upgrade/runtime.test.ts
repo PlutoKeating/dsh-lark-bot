@@ -100,6 +100,40 @@ describe('repairRuntimeProfiles', () => {
     });
   });
 
+  it('relinks runtime profiles to the newly installed package instead of the npx worker', async () => {
+    const home = await makeHome();
+    await buildSdkProfileWithStaleLink(home);
+    const installedRoot = join(home, 'profiles', 'dsh-lark', 'node_modules', 'dsh-lark-bot');
+    const installed = { name: 'dsh-lark-bot', root: installedRoot, version: '0.19.5' };
+    await mkdir(join(installedRoot, 'node_modules', '@deepseek-ai', 'dsh-sdk-jsonrpc-server'), {
+      recursive: true,
+    });
+    await writeFile(
+      join(installedRoot, 'package.json'),
+      JSON.stringify({ name: installed.name, version: installed.version, dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    );
+    await writeFile(join(installedRoot, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+    await writeFile(
+      join(installedRoot, 'node_modules', '@deepseek-ai', 'dsh-sdk-jsonrpc-server', 'package.json'),
+      JSON.stringify({
+        name: '@deepseek-ai/dsh-sdk-jsonrpc-server',
+        version: SDK_SERVER_VERSION,
+        main: 'index.js',
+      }),
+    );
+    await writeFile(
+      join(installedRoot, 'node_modules', '@deepseek-ai', 'dsh-sdk-jsonrpc-server', 'index.js'),
+      'export {};\n',
+    );
+
+    const states = await repairRuntimeProfiles({ dshHome: home, ownPackage: installed });
+
+    expect(states.find((state) => state.profile === DEFAULT_SDK_PROFILE)).toMatchObject({ ok: true });
+    expect(realpathSync(join(sdkRoot(home), 'node_modules', installed.name))).toBe(
+      realpathSync(installedRoot),
+    );
+  });
+
   it('leaves an already-ready profile untouched', async () => {
     const home = await makeHome();
     await buildSdkProfileWithStaleLink(home);

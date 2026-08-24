@@ -1,4 +1,5 @@
 import { spawn } from 'cross-spawn';
+import { createRequire } from 'node:module';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -208,7 +209,27 @@ export function isSdkManagedProfileCurrent(
 
 /** The wrapper exported as `dsh-lark-bot/sdk-server` resolves from this package. */
 function ownSdkServerDependencyReady(own: OwnPackageInfo): boolean {
-  return profilePackageMatches(own.root, SDK_SERVER_PACKAGE, SDK_SERVER_VERSION);
+  try {
+    const entry = createRequire(join(own.root, 'package.json')).resolve(SDK_SERVER_PACKAGE);
+    let current = dirname(entry);
+    for (let depth = 0; depth < 8; depth += 1) {
+      try {
+        const parsed = JSON.parse(readFileSync(join(current, 'package.json'), 'utf8')) as {
+          name?: unknown;
+          version?: unknown;
+        };
+        if (parsed.name === SDK_SERVER_PACKAGE) return parsed.version === SDK_SERVER_VERSION;
+      } catch {
+        // The entry is normally below lib/; keep walking toward its package root.
+      }
+      const parent = dirname(current);
+      if (parent === current) return false;
+      current = parent;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function findPnpmProjectRoot(start: string): string | undefined {

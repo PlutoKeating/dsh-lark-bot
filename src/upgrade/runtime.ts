@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ownPackageInfo } from '../adapters/dsh/own-package.js';
+import { ownPackageInfo, type OwnPackageInfo } from '../adapters/dsh/own-package.js';
 import {
   DEFAULT_SDK_PROFILE,
   ensureSdkProfile,
@@ -44,6 +44,8 @@ export interface RepairRuntimeOptions {
   /** dsh home containing `profiles/<name>`. */
   dshHome: string;
   env?: NodeJS.ProcessEnv;
+  /** Newly installed profile package; never point managed runtimes at a transient npx worker. */
+  ownPackage?: OwnPackageInfo;
   /** Injectable link replacement (tests). */
   relinkFn?: (linkPath: string, target: string) => Promise<void>;
   /** Current route used when regenerating the managed ACP overlay. */
@@ -74,7 +76,7 @@ function existingAcpRoute(profileRoot: string): { provider: string; model: strin
 export async function repairRuntimeProfiles(
   options: RepairRuntimeOptions,
 ): Promise<RuntimeProfileState[]> {
-  const own = ownPackageInfo();
+  const own = options.ownPackage ?? ownPackageInfo();
   const env = options.env ?? process.env;
   const relink = options.relinkFn ?? defaultRelink;
   const managedEnv = { ...env, DSH_HOME: options.dshHome };
@@ -93,19 +95,20 @@ export async function repairRuntimeProfiles(
     {
       profile: DEFAULT_SDK_PROFILE as 'dsh-lark-sdk',
       root: sdkRoot,
-      isReady: isSdkManagedProfileCurrent,
-      ensure: () => ensureSdk({ home: options.dshHome, env: managedEnv }),
+      isReady: (root: string) => isSdkManagedProfileCurrent(root, undefined, own),
+      ensure: () => ensureSdk({ home: options.dshHome, env: managedEnv, ownPackage: own }),
     },
     {
       profile: DEFAULT_ACP_PROFILE as 'dsh-lark-acp',
       root: acpRoot,
       isReady: (root: string) =>
-        isAcpManagedProfileCurrent(root, acpRoute.provider, acpRoute.model),
+        isAcpManagedProfileCurrent(root, acpRoute.provider, acpRoute.model, own),
       ensure: () => ensureAcp({
         home: options.dshHome,
         env: managedEnv,
         provider: acpRoute.provider,
         model: acpRoute.model,
+        ownPackage: own,
       }),
     },
   ];
