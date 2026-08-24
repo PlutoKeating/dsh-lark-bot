@@ -21,7 +21,7 @@
 2026-08-17 发现假冒仓库 **`tarraencompassing61/dsh-lark-bot`**：
 
 - 非 fork 重新上传，114 个 commit 中 113 个作者为 PlutoKeating（GitHub contributors API 可查）；
-- 删除全部 CI、关闭 Issues、Releases 为 0，README 却是“下载 Windows exe 双击运行”的 SEO 诱饵；
+- 删除全部 CI、关闭 Issues、Releases 为 0，README 却是“下载 Windows exe 双击运行”的诱导性文案；
 - **任何声称“Download dsh-lark-bot → 双击运行”的页面均为假冒 / 恶意来源，请勿下载或运行。**
 
 取证存档与证据包（含完整 git bundle）：
