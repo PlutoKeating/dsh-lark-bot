@@ -27,7 +27,7 @@
   · mirror <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
-> **What it is**: make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly
+> **Overview**: make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly
 > from phone, group, or thread. It uses a Feishu WebSocket long connection, so you need **no public IP, domain,
 > server, or NAT-tunnelling**; Linux / macOS / Windows, Node.js ≥ 22.
 
@@ -35,11 +35,11 @@
 > and the only official npm packages are `dsh-lark-bot` / `dsh-feishu-bot` (maintainer `plutokeating`). This project
 > **never ships a Windows .exe or a "download & run" installer** — any page or repo distributing one under its name
 > is **fake / malicious**. The only official install command is `npx dsh-lark-bot@latest setup --profile dsh-lark`.
-> See the Impostor Repository Warning below.
+> See the Security notice below.
 
 ---
 
-## Get started in 30 seconds
+## Quick start
 
 **Prerequisites:** DeepSeek Harness (`dsh`) is installed with `DEEPSEEK_API_KEY` configured; Node.js ≥ 22.19; a Feishu / Lark account.
 
@@ -62,7 +62,7 @@ app → once bound, message the bot directly; groups / threads default to `@bot`
 
 ---
 
-## What you get
+## Core capabilities
 
 - **Safety-net guardian**: Feishu still replies if dsh crashes; `/safemode` opens a core-only safe mode to self-heal.
 - **Parallel tasks**: many tasks run concurrently in the same group with isolated sessions; others only queue serially.
@@ -79,7 +79,7 @@ app → once bound, message the bot directly; groups / threads default to `@bot`
 
 > Each session auto-creates an isolated git worktree project workspace; streaming process cards render in a native Feishu collapsible panel.
 
-## Common commands
+## Command reference
 
 Command help, status, and cards are bilingual; `/help` is the full authoritative list. All commands are in [`docs/MANUAL.md`](docs/MANUAL.md).
 
@@ -133,12 +133,12 @@ Command help, status, and cards are bilingual; `/help` is the full authoritative
 > Behavior details (crash reconciliation, session isolation, plan gate, per-tool approval, multi-bot hand-off, safety-net guardian) are in [`docs/FEATURES.md`](docs/FEATURES.md);
 > permissions & data in [`docs/MANUAL.md`](docs/MANUAL.md) §6 and [`SECURITY.md`](SECURITY.md).
 
-## License & security
+## Security & licensing
 
 - **License**: GNU AGPL-3.0 (see [`LICENSE`](LICENSE)). Open source and self-hostable, free for personal / internal use; **commercial / SaaS / closed-source reuse needs a separate license**.
 - **Security**: default-deny, secret redaction, path containment, SSRF protection, stale-event rejection, interaction tools disabled by default — see [`SECURITY.md`](SECURITY.md); report vulnerabilities privately via GitHub Security Advisory.
 
-## Upgrade, disable & uninstall
+## Upgrade & uninstall
 
 ```bash
 npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # upgrade (or admin /upgrade in Feishu)
@@ -149,13 +149,13 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # upgrade (or admin /
 
 ---
 
-## More (development / author / docs)
+## About the project
 
 - **Development**: `pnpm install && pnpm typecheck && pnpm test && pnpm build`; delivery standards in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md), AI-agent workflow in [`AGENTS.md`](AGENTS.md). Dual-package publish `pnpm publish:dual` (`dsh-lark-bot` + `dsh-feishu-bot`, shared dist).
 - **Author**: **PlutoKeating** ([profile](https://github.com/PlutoKeating)). Thanks to [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) (web single-writer + self-heal v2 + guardian auto-restart) and [Normanyin](https://github.com/Normanyin) (`/newg`).
 - **Docs**: `QUICK_START` (install / quick start) · `MANUAL` (full manual + commands + env vars) · `FEATURES` (capability behavior) · `COMPATIBILITY` · `ARCHITECTURE` · `API` · `roadmap`.
 
-## Community listings
+## Community & ecosystem
 
 | Platform | Status |
 | :--- | :--- |
@@ -166,7 +166,7 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # upgrade (or admin /
 | [dsh-plugin.org](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot) | ✅ listed · official source verified |
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ accepted · active |
 
-## Impostor Repository Warning
+## Security notice
 
 > On 2026-08-17 a fake repo **`tarraencompassing61/dsh-lark-bot`** was found: a non-fork re-upload, 113 of 114
 > commits authored as PlutoKeating, all CI removed, Issues closed, 0 Releases, yet posing as the official
