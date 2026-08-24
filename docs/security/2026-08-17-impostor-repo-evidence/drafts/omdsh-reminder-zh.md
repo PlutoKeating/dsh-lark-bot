@@ -26,7 +26,7 @@
 - 非 fork 重新上传（`fork: false`），114 个 commit 中 **113 个作者是 PlutoKeating**——
   克隆后重推的“去 fork 化”副本，伪装成独立原创项目；
 - 与上游 v0.7.0 快照相比仅改 4 个文件：删除全部 CI（含上游雷达）、README 重写为
-  “下载 Windows exe 双击运行”的 SEO 诱饵（实际 Releases 为 0）；
+  “下载 Windows exe 双击运行”的诱导性文案（实际 Releases 为 0）；
 - Issues 被关闭，访客无法纠错；唯一马甲提交借用了上游 commit 标题作伪装。
 
 **最危险的一点**：GitHub 贡献者统计会把爬虫同步的 commit 归到原作者头上——自动雷达完全可能
@@ -43,7 +43,7 @@ https://github.com/PlutoKeating/dsh-lark-bot/blob/staging/docs/security/2026-08-
 - `heyumeng154-alt` 被添加为 `omdsh-dev/dsh-lark` 的 collaborator（MemberEvent，2026-08-14）；
 - `omdsh-dev/dsh-lark` 的 push 事件全部由 Roy-oss1 本人执行；
 - `heyumeng154-alt` 账号有真实的 larksuite/cli PR 贡献史（2026-04 至 2026-08）；
-- 两仓库均无伪装提交、无 SEO README、无异常发布资产；npm 侧
+- 两仓库均无伪装提交、无诱导性 README、无异常发布资产；npm 侧
   `dsh-lark-channel` / `dsh-lark` / `dsh-feishu` 归属一致。
 
 **结论：这两个仓库是同一作者（Roy-oss1）的“开发版 → 组织发布版”，不是寄生重传。**

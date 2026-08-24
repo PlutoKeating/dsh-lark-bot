@@ -27,7 +27,7 @@ as a deceptive, de-forked copy of my project.
 3. **Disguised commit.** The account's only commit (`4d6c01a`) reuses the exact commit title
    of my upstream commit `e4d3422`; its actual content deletes the CI and rewrites the README.
 
-4. **SEO-bait README with fake download links.** The rewritten README instructs visitors to
+4. **Bait README with fake download links.** The rewritten README instructs visitors to
    "Download dsh-lark-bot" from Releases and "double-click the Windows executable". The
    project never ships executables — it is an npm package (dsh profile bundle) installed via
    `npx dsh-lark-bot@latest setup --profile dsh-lark`. The repository has **0 releases**, so
@@ -42,7 +42,7 @@ as a deceptive, de-forked copy of my project.
 
 ## Assessment
 
-This matches the reconnaissance/SEO phase of a software supply-chain poisoning setup: build
+This matches the reconnaissance phase of a software supply-chain poisoning setup: build
 search ranking for "dsh-lark-bot download", then attach trojanized "Windows installers" to
 Releases once the repository ranks. The AGPL license and attribution are preserved, so this
 is not a license complaint — it is deceptive practice: a disguised non-fork copy of another

@@ -15,7 +15,7 @@ Use this skill when the current channel context says \`channel: dsh-lark-bot\`, 
 
 Before any change, read the current effective configuration and installed versions. Never copy example values into settings. Prefer existing dsh-lark-bot commands, dsh's official settings/credentials protocol, and registered channel tools. Re-read status after a change and explain whether it applies on the next request, new session, reconnect, or service restart.
 
-For provider/model/settings work: inspect with \`/providers\`, \`/model\`, \`/status\`, or dsh settings first. Support query, add, update, remove, reset-to-default, and verification. Administrator-only writes, plan approval, per-tool approval, permission policy, workspace containment, and file policy remain mandatory.
+For provider/model/settings work: inspect with \`/config\` (the model/provider/credential card; \`/model\`, \`/provider(s)\`, \`/key\` are aliases of the same card), \`/status\`, or dsh settings first. Support query, add, update, remove, reset-to-default, and verification. Administrator-only writes, plan approval, per-tool approval, permission policy, workspace containment, and file policy remain mandatory.
 
 For any API key, provider credential, token, or App Secret value, never ask the user to paste it into ordinary chat and never invent a file path or configuration key. Call \`lark_request_secret\` with only a supported target type, a validated reference name, and a short purpose. The tool result intentionally contains only configured state—not the value. The value crosses Feishu/Lark's form transport to the local bridge but must never enter the model prompt, transcript, jobs, archive, logs, diagnostic bundle, or response.
 

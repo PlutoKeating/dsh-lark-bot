@@ -30,6 +30,7 @@ export const COMMAND_CATALOG: readonly CommandDefinition[] = [
   { names: ['/archive'], area: 'session', zh: '`[note]|send|list|clean …` — 管理归档', en: '`[note]|send|list|clean …` — manage archives' },
   { names: ['/density'], area: 'configuration', zh: '`[compact|standard|detailed]` — 卡片密度', en: '`[compact|standard|detailed]` — card density' },
   { names: ['/mode', '/effort'], area: 'configuration', zh: '`[quick|balanced|deep]` — 下一轮任务强度', en: '`[quick|balanced|deep]` — next-turn execution strength' },
+  { names: ['/config'], area: 'configuration', zh: '模型 / Provider / 凭据管理卡片（`/model`、`/provider(s)`、`/key` 为同一张卡片的别名）', en: 'model / provider / credential management card (`/model`, `/provider(s)`, `/key` are aliases of the same card)' },
   { names: ['/model'], area: 'configuration', zh: '`[use|default|reset|add|remove …]` — 查询与管理模型', en: '`[use|default|reset|add|remove …]` — query and manage models' },
   { names: ['/providers', '/provider'], area: 'configuration', zh: '`[add|update|remove …]` — 查询与管理 provider', en: '`[add|update|remove …]` — query and manage providers' },
   { names: ['/key'], area: 'configuration', zh: '`list|set <引用名>|remove <引用名>` — 凭据引用；值用安全表单', en: '`list|set <reference>|remove <reference>` — credential references; values use a secure form' },

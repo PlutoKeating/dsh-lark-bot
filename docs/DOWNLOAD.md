@@ -53,7 +53,7 @@ Get-FileHash dsh-lark-bot-<version>.tgz -Algorithm SHA256
 - 页面无法访问 Issues、或要求通过第三方链接下载 → **假冒**。
 
 > [!WARNING]
-> 2026-08-17 已发现假冒仓库 `tarraencompassing61/dsh-lark-bot`：非 fork 重新上传、删除全部 CI、关闭 Issues、Releases 为 0，却用“下载 Windows exe 双击运行”的 SEO 诱饵 README 冒充官方分发。取证存档见 [`docs/security/2026-08-17-impostor-repo-evidence/`](security/2026-08-17-impostor-repo-evidence/README.md)。
+> 2026-08-17 已发现假冒仓库 `tarraencompassing61/dsh-lark-bot`：非 fork 重新上传、删除全部 CI、关闭 Issues、Releases 为 0，却用“下载 Windows exe 双击运行”的诱导性 README 冒充官方分发。取证存档见 [`docs/security/2026-08-17-impostor-repo-evidence/`](security/2026-08-17-impostor-repo-evidence/README.md)。
 
 ## 遇到假冒来源怎么办
 

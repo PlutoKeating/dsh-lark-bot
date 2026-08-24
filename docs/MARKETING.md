@@ -1,4 +1,4 @@
-# 推广与 SEO 手册 · Marketing & SEO Playbook
+# 推广与搜索可见度手册 · Marketing Playbook
 
 > 本文档服务于 dsh-lark-bot 的全网宣传矩阵建设：诊断结论、关键词与渠道矩阵、可直接发布的稿件、
 > 平台执行步骤与效果跟踪。维护人：项目所有者；创建：2026-08-17。
@@ -25,7 +25,7 @@
    这些竞品 star 数很多低于我们（如 zhbdream 仅 1 star），但**内容先发=搜索可见**。
 3. **品牌词被劫持**：Bing 搜「dsh-lark-bot」，第一页是 dshbase（我们的目录页，尚可）、zhihu、
    dsh-launcher、dsh.do、dsh-plugin.shop（无内容的空壳站）等；百度完全无收录。
-4. **缺官网/落地页**：仓库 `homepage` 为空，无 GitHub Pages、无 sitemap、无结构化数据 → SEO/AEO/GEO 地基缺失。
+4. **缺官网/落地页**：仓库 `homepage` 为空，无 GitHub Pages、无 sitemap、无结构化数据 → 搜索引擎与 AI 助手都难以抓取与引用。
 5. **缺中国站点镜像**：竞品 zhbdream 在 Gitee 同步发布；我们没有 Gitee 镜像（百度对 Gitee 收录好于 GitHub）。
 6. **缺英文媒体**：dsh 生态英文教程（orcarouter.ai、dev.to 等）均未提及我们。
 
@@ -49,7 +49,7 @@
 | deepseek harness 插件推荐 | 盘点 | 无（V2EX 盘点文已出现） | 投稿「插件盘点」类文章/回答 |
 | 手机远程用 deepseek harness | 场景 | 无 | 小红书/抖音场景化内容 |
 
-英文（GEO/AEO 用）：
+英文（供搜索引擎与 AI 助手收录）：
 
 | 关键词 | 目标载体 |
 | --- | --- |
@@ -93,7 +93,7 @@
 3. `README.md`：徽章行增加 dshbase；「社区收录情况」增加 awesome-dsh-plugin（PR 待合并）与 dshbase 两行。
 4. 新增落地页 `docs/index.html`：中英双语、OG/Twitter 卡片、SoftwareApplication + FAQPage 结构化数据、FAQ 覆盖长尾问题。
 5. 产品内 bot 固定 UI 也完成双语：共享 Card JSON 2.0 按读者客户端语言显示中文 / English，Markdown/toast 降级中英并列；不翻译 agent 生成内容。
-5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（AEO/GEO：给 AI 引擎可直接读取的项目摘要）。
+5. 新增 `docs/sitemap.xml`、`docs/robots.txt`、`docs/llms.txt`（供搜索引擎与 AI 助手直接读取的项目摘要）。
 6. 新增本文档 `docs/MARKETING.md`。
 7. 已向 awesome-dsh-plugin 提交收录 PR（见 §6.2 状态）。
 8. IndexNow 即时收录已配置：密钥文件 `docs/2a7bb299d031c8950416360bfa35cd94.txt`（**勿删**，删除后
@@ -113,7 +113,7 @@
     （v0.8.0 → v0.15.1）；dshfind #6 跟进评论（v0.10.1 → v0.15.1 一次刷新）；awesome-dsh-plugin
     PR #1408 跟进评论（v0.15.1 数据）；omdsh-dev Discussion #11 更新说明备妥待人工粘贴
     （org 级 discussion 无 REST/GraphQL 写接口）。状态与链接见 README「社区收录情况」。
-15. **README 单语化（中文优先，v0.15.2）**：为对齐 SEO/GEO/AEO 目标，README.md 删除全部英文
+15. **README 单语化（中文优先，v0.15.2）**：为提升搜索可见度，README.md 删除全部英文
     标题/描述/正文，仅保留中文（技术术语、命令、代码与 GitHub Topics 关键词除外）；新增
     `README_EN.md` 为最终中文版的完整英文翻译，并在中文 README 顶部提供「英文版」入口；
     npm 包自 v0.15.3 起同时携带两份 README（发布管线 `PUBLISH_FILES` 同步）。
@@ -362,7 +362,7 @@ DeepSeek Harness 栏目由 runoob 编辑决定。引用地址填栏目首页可�
 
 ---
 
-## 8. GEO / AEO 清单（面向 AI 搜索引擎）
+## 8. 面向搜索引擎与 AI 助手的清单
 
 - [x] llms.txt 提供项目摘要（docs/llms.txt）
 - [x] 落地页 FAQPage + SoftwareApplication 结构化数据

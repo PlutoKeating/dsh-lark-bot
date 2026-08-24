@@ -123,7 +123,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/archive clean` | 清理当前 workspace 的过期归档 |
 | `/density [compact\|standard\|detailed]` | 查看或设置卡片密度 |
 | `/mode [quick\|balanced\|deep]`（兼容 `/effort`） | 选择当前会话任务强度；下一轮生效 |
-| `/model`、`/providers`、`/provider`、`/key` | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
+| `/config`（`/model`、`/providers`、`/provider`、`/key` 为到达同一张卡片的别名） | 打开交互式管理卡片（模型直接点选/恢复默认；写操作走多轮向导） |
 | `/model use <provider/model>` | 精确路由并热切换当前会话模型（也兼容唯一模型 ID；下一轮生效） |
 | `/model default <id>` | 写入 dsh 默认模型 `agent-default-model`（管理员） |
 | `/model add\|remove <provider> <modelId> [--input-modalities text,image]` | 添加 / 删除 provider 模型并声明视觉输入能力（管理员） |
@@ -158,7 +158,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 `~/.dsh/.credentials.yaml`，与 dsh Web **Settings → Models** 页面同一协议），改动在下一个
 请求生效、无需重启 bot：
 
-- **交互式管理卡片（推荐）**：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片；
+- **交互式管理卡片（推荐）**：`/config`（或 `/providers`、裸 `/provider`、`/model`、`/key`，均为同一张卡片的别名）打开管理卡片；
   当前模型带 ✅ 标记，可直接点选其他模型或恢复默认（下一轮生效且保留上下文）。增删改查按
   BotFather 式多轮向导完成：能选择的用按钮点选（API 协议、provider、模型、凭据引用），
   需要填值的用卡片输入（ID、Base URL、模型列表、密钥值），写入前有确认卡，随时可取消；
