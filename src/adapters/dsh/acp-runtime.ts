@@ -25,6 +25,8 @@ export interface AcpRuntimeOptions {
   provider?: string;
   model?: string;
   install?: (profileRoot: string, options?: { force?: boolean }) => Promise<void>;
+  /** Package root that runtime overlays must link (defaults to the running CLI package). */
+  ownPackage?: OwnPackageInfo;
 }
 
 export interface AcpLaunchSpec {
@@ -43,8 +45,7 @@ export function acpProfileRoot(home: string, profile: string, env?: NodeJS.Proce
   return join(resolveDshHome(home, env), 'profiles', profile);
 }
 
-function packageJsonFor(profile: string): string {
-  const own = ownPackageInfo();
+function packageJsonFor(profile: string, own: OwnPackageInfo = ownPackageInfo()): string {
   return `${JSON.stringify(
     {
       name: `dsh-profile-${profile}`,
@@ -134,8 +135,10 @@ export function acpPatchYaml(provider: string, model: string): string {
   ].join('\n');
 }
 
-export function isAcpProfileReady(profileRoot: string): boolean {
-  const own = ownPackageInfo();
+export function isAcpProfileReady(
+  profileRoot: string,
+  own: OwnPackageInfo = ownPackageInfo(),
+): boolean {
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
@@ -150,8 +153,9 @@ export function isAcpManagedProfileCurrent(
   profileRoot: string,
   provider: string,
   model: string,
+  own: OwnPackageInfo = ownPackageInfo(),
 ): boolean {
-  if (!isAcpProfileReady(profileRoot)) return false;
+  if (!isAcpProfileReady(profileRoot, own)) return false;
   try {
     return readFileSync(join(profileRoot, 'cordis.patch.yml'), 'utf8') ===
       acpPatchYaml(provider, model);
@@ -221,10 +225,11 @@ export async function ensureAcpProfile(
   options: AcpRuntimeOptions,
 ): Promise<AcpProfileEnsureResult> {
   const profile = options.profile ?? DEFAULT_ACP_PROFILE;
+  const own = options.ownPackage ?? ownPackageInfo();
   const root = acpProfileRoot(options.home, profile, options.env);
   const provider = options.provider?.trim();
   const model = options.model?.trim();
-  const ready = isAcpProfileReady(root);
+  const ready = isAcpProfileReady(root, own);
 
   try {
     if (!provider || !model) {
@@ -233,14 +238,14 @@ export async function ensureAcpProfile(
       );
     }
     await mkdir(root, { recursive: true });
-    await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
+    await writeFile(join(root, 'package.json'), packageJsonFor(profile, own), 'utf8');
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
     await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
     if (!ready) {
       const install = options.install ?? runPnpmInstall;
       await install(root, { force: true });
     }
-    if (!isAcpProfileReady(root)) {
+    if (!isAcpProfileReady(root, own)) {
       return {
         ok: false,
         created: true,

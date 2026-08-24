@@ -376,7 +376,8 @@ dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_C
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
 当前 rc.8 runtime profile 会校验物理安装包的精确版本，不能仅凭目录或 lockfile 存在判定 ready；
 不匹配时 `ensureSdkProfile` / `ensureAcpProfile` 使用 `pnpm install --force` 刷新物理内容；SDK 路径
-还校验 `dsh-lark-bot/sdk-server` 实际解析的主插件依赖树，损坏时向上定位其 pnpm project 并强制刷新；
+还用 Node 模块解析校验 `dsh-lark-bot/sdk-server` 实际使用的主插件依赖树（兼容 pnpm 与 npm/npx
+扁平布局），损坏时向上定位其 pnpm project 并强制刷新；
 `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 直接向宿主 registry 注册 raw JSON Schema tool definition；
 `dsh-lark-bot/approval` 以 structural listener 接入宿主 `approval/request` waterfall；两者都不携带
 第二份 `dsh-tools`。完整审计见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
@@ -997,6 +998,9 @@ worker 固定在 `guardian/update-worker/cwd`（0700）执行，并为每个请�
 因此不继承 bridge cwd、用户全局 npm cache 或异常宿主 umask。失败只持久化
 `filesystem-access | registry-unavailable | bootstrap-unavailable | upgrade-failed` 类别和有界安全摘要，
 原始 stdout/stderr 不进入状态文件或飞书消息。
+包本体安装完成后，升级器用 `readInstalledPackage()` 从目标 dsh profile 重新读取并校验包名、版本和
+稳定根路径；`repairRuntimeProfiles({ ownPackage })` 将 SDK/ACP own-package 链接到该安装根，禁止使用
+执行命令的临时 `_npx` package root。目标包缺失或版本不符时升级立即失败，不进入 guardian/profile 重启。
 重载后的 bridge 在飞书通道、callback server 与 heartbeat 全部就绪后，才以自身实际版本协调被
 service cgroup 重启中断的 worker，并向原路由只回执一次；启动中途失败会保持 running/failed，
 不会仅凭版本相等误报成功。

@@ -29,6 +29,7 @@ import { loadRuntimeEnv } from '../../config/env.js';
 import { installGuardian } from '../../guardian/install.js';
 import {
   detectUpgradeState,
+  readInstalledPackage,
   type UpgradeDetection,
 } from '../../upgrade/detect.js';
 import {
@@ -87,6 +88,7 @@ export interface UpgradeOptions {
   pluginSpawnFn?: typeof runDshPlugin;
   runDoctorFn?: typeof runDoctorChecks;
   repairRuntimeFn?: typeof repairRuntimeProfiles;
+  readInstalledPackageFn?: typeof readInstalledPackage;
   listProcessesFn?: typeof import('../../guardian/process.js').listProcesses;
   stateFile?: string;
 }
@@ -309,13 +311,29 @@ export async function runUpgrade(options: UpgradeOptions = {}): Promise<void> {
     await (options.pluginSpawnFn ?? runDshPlugin)(bin, profile, target.spec);
     write(out, `✅ 包本体已更新到 ${target.version}。\n`);
 
+    const installedTarget = await (options.readInstalledPackageFn ?? readInstalledPackage)(
+      dshHome,
+      profile,
+      own.name,
+    );
+    if (
+      !installedTarget ||
+      installedTarget.name !== own.name ||
+      installedTarget.version !== target.version
+    ) {
+      throw new Error(
+        `dsh plugin add completed but ${own.name}@${target.version} is not installed in profile ${profile}`,
+      );
+    }
+
     // 1b. Runtime profiles (dsh-lark-sdk / dsh-lark-acp): after a package
     //     change their own-package link points at the old root; relink to the
-    //     running package so the next boot does not need to re-provision.
+    //     verified profile installation, never this possibly transient npx CLI.
     const repair = options.repairRuntimeFn ?? repairRuntimeProfiles;
     const runtimeStates: RuntimeProfileState[] = await repair({
       dshHome,
       env: process.env,
+      ownPackage: installedTarget,
       provider: env.provider,
       model: env.model,
     });
