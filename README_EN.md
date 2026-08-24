@@ -152,14 +152,15 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # upgrade (or admin /
 ## About the project
 
 - **Development**: `pnpm install && pnpm typecheck && pnpm test && pnpm build`; delivery standards in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md), AI-agent workflow in [`AGENTS.md`](AGENTS.md). Dual-package publish `pnpm publish:dual` (`dsh-lark-bot` + `dsh-feishu-bot`, shared dist).
-- **Author**: **PlutoKeating** ([profile](https://github.com/PlutoKeating)). Thanks to [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) (web single-writer + self-heal v2 + guardian auto-restart) and [Normanyin](https://github.com/Normanyin) (`/newg`).
+- **Author**: **PlutoKeating** ([profile](https://github.com/PlutoKeating)).
+- **Contributors**: [zhuguangjun2002](https://github.com/zhuguangjun2002) · [chensimo1992-sys](https://github.com/chensimo1992-sys) · [estelledc](https://github.com/estelledc) · [fredjiangyysx](https://github.com/fredjiangyysx) · [Geoffrey-hougaojie](https://github.com/Geoffrey-hougaojie) · [hellxiaoao](https://github.com/hellxiaoao) · [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) · [Normanyin](https://github.com/Normanyin) · [pancong0711](https://github.com/pancong0711) · [qvivp](https://github.com/qvivp).
 - **Docs**: `QUICK_START` (install / quick start) · `MANUAL` (full manual + commands + env vars) · `FEATURES` (capability behavior) · `COMPATIBILITY` · `ARCHITECTURE` · `API` · `roadmap`.
 
 ## Community & ecosystem
 
 | Platform | Status |
 | :--- | :--- |
-| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 listing PR submitted · pending ([#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)) |
+| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | ✅ listed ([#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)) |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ listed · runtime-verified |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ listed |
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ listed · install-verified |

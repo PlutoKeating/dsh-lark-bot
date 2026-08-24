@@ -148,14 +148,15 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # 升级（或飞书�
 ## 关于项目
 
 - **开发**：`pnpm install && pnpm typecheck && pnpm test && pnpm build`；生态交付标准见 [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)，AI Agent 工作流见 [`AGENTS.md`](AGENTS.md)。双包发布 `pnpm publish:dual`（`dsh-lark-bot` + `dsh-feishu-bot`，共享 dist）。
-- **作者**：**PlutoKeating**（[主页](https://github.com/PlutoKeating)）。致谢 [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss)（web 单写者 + 自愈 v2 + 守护自动重启）、[Normanyin](https://github.com/Normanyin)（`/newg`）。
+- **作者**：**PlutoKeating**（[主页](https://github.com/PlutoKeating)）。
+- **协作者**：[zhuguangjun2002](https://github.com/zhuguangjun2002) · [chensimo1992-sys](https://github.com/chensimo1992-sys) · [estelledc](https://github.com/estelledc) · [fredjiangyysx](https://github.com/fredjiangyysx) · [Geoffrey-hougaojie](https://github.com/Geoffrey-hougaojie) · [hellxiaoao](https://github.com/hellxiaoao) · [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) · [Normanyin](https://github.com/Normanyin) · [pancong0711](https://github.com/pancong0711) · [qvivp](https://github.com/qvivp)。
 - **文档**：`QUICK_START`（安装/快速开始）· `MANUAL`（完整手册+命令+环境变量）· `FEATURES`（能力行为细节）· `COMPATIBILITY`· `ARCHITECTURE`· `API`· `roadmap`。
 
 ## 社区与生态
 
 | 平台 | 状态 |
 | :--- | :--- |
-| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 收录 PR 已提交 · 待合并（[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)） |
+| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | ✅ 已收录（[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)） |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用 |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 |
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ 已收录 · 实测可装 |
