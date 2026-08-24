@@ -93,7 +93,7 @@ question-card buttons. If an existing app was created by an older flow, enable c
 Console → Events & Callbacks → Callback Configuration and publish the app again. Without it, messages still work
 while card clicks never reach the bot.
 
-`setup` automatically: locates your local dsh → pre-approves pnpm's build policy (protobufjs) → runs the standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running package) → installs the safety-net guardian system service. One command installs everything.
+`setup` automatically: locates your local dsh → pre-approves pnpm's build policy (protobufjs; an existing profile is also pinned to the exact pnpm release recorded by its install metadata, preventing Corepack/store-major conflicts) → runs the standard `dsh plugin --profile dsh-lark add dsh-lark-bot@<version>` (pinned to the running package) → installs the safety-net guardian system service. A fresh profile is still initialized by dsh. One command installs everything.
 
 > **No public IP / domain / server / tunneling required** (Feishu outbound WebSocket long connection); works on Linux / macOS / Windows.
 > With an existing PersonalAgent app you can skip the QR step (see Configuration): `DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu dsh --profile dsh-lark`
@@ -357,7 +357,9 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - `--rollback`: reinstall the version recorded before the last upgrade (`~/.dsh-lark/upgrade-state.json`);
 - `--force`: reinstall the running version when npm is unreachable (offline);
 - `--no-guardian`: skip the guardian upgrade;
-- **Runtime-profile consistency repair**: after upgrading, the own-package links of `dsh-lark-sdk` / `dsh-lark-acp` are re-pointed and stale SDK-server / ACP dependencies are idempotently reinstalled immediately.
+- **Runtime-profile consistency repair**: after `dsh plugin add`, the upgrader re-reads and verifies the exact target installed in the dsh profile, then re-points `dsh-lark-sdk` / `dsh-lark-acp` only to that stable package root—never to the transient npx worker—and refreshes stale SDK-server / ACP dependencies.
+- **npm/npx/pnpm layout support**: npm/npx-flat dependencies use Node's actual module resolution; pnpm package links are resolved to their physical `.pnpm` target before dependency validation, avoiding false corruption reports and unnecessary forced installs.
+- **Corepack-managed dsh compatibility**: before installing into an existing profile, the exact pnpm release from `node_modules/.modules.yaml` is persisted to `package.json#packageManager`, preventing a source-managed dsh working directory from selecting an incompatible pnpm store major.
 
 Pass `--yes` to skip the interactive confirmation (non-interactive runs fail closed without it). Alternatives:
 

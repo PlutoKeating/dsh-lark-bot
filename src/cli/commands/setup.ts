@@ -178,7 +178,7 @@ export async function preserveInstalledPnpmVersion(profileDir: string): Promise<
     const packageManager = modules?.packageManager;
     if (
       typeof packageManager !== 'string' ||
-      !/^pnpm@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(packageManager) ||
+      !/^pnpm@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(packageManager) ||
       profilePackage.packageManager === packageManager
     ) {
       return;

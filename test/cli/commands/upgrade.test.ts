@@ -184,6 +184,34 @@ describe('dsh-lark-bot upgrade', () => {
     });
   });
 
+  it.each([
+    ['a missing package', undefined],
+    [
+      'a different package name',
+      { name: 'another-package', version: '0.12.0', root: '/tmp/another-package' },
+    ],
+    [
+      'a stale package version',
+      { name: 'dsh-lark-bot', version: '0.11.9', root: '/tmp/dsh-lark-bot' },
+    ],
+  ])('rejects %s after dsh plugin add', async (_label, installedTarget) => {
+    const harness = makeHarness();
+    harness.dshHome = await makeHome();
+    harness.larkHome = await makeHome();
+    harness.stateFile = join(harness.larkHome, 'upgrade-state.json');
+    await installFakePackage(harness.dshHome, 'dsh-lark', '0.10.2');
+    harness.readInstalledPackage.mockResolvedValue(installedTarget);
+
+    await expect(runWith(harness, {
+      yes: true,
+      fetchLatestFn: async () => '0.12.0',
+    })).rejects.toThrow(
+      'dsh plugin add completed but dsh-lark-bot@0.12.0 is not installed in profile dsh-lark',
+    );
+    expect(harness.repairRuntime).not.toHaveBeenCalled();
+    expect(harness.installGuardian).not.toHaveBeenCalled();
+  });
+
   it('reports up-to-date without touching anything', async () => {
     const harness = makeHarness();
     harness.dshHome = await makeHome();
