@@ -343,6 +343,7 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `src/cli/commands/run.ts` 用 `resolveRuntimeModelRoute()` 解析路由并准备 runtime 目录：对
 `deepseek-official` 视觉模型，它会在同一 settings 写锁内幂等补齐 `llm-deepseek.models` 的
 `inputModalities: [text, image]`，因为 rc.8 DeepSeek adapter 将未列入有效目录的模型视为 text-only；
+已有 `models` 序列通过 YAML AST 定点修改目标条目，不重建序列，因此条目、字段及行内注释均保留；
 非视觉模型和其他 provider 不改写。随后路由传给适配器：SDK 适配器
 （`src/adapters/dsh/sdk-adapter.ts`）在路由变化时关闭旧 harness 并以新路由重建，
 因此 `/model use` 的「下一轮生效」承诺真实落地（issue #47）。

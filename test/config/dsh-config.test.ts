@@ -320,9 +320,10 @@ describe('DshProviderManager', () => {
         '  baseURL: https://api.deepseek.com',
         '  models:',
         '    - id: deepseek-chat',
-        '      description: keep this exotic field',
-        '    - id: deepseek-v4-flash-vision-exp',
-        '      name: Vision Preview',
+        '      description: keep this exotic field # keep text-model inline comment',
+        '    # keep vision list-item comment',
+        '    - id: deepseek-v4-flash-vision-exp # keep vision id comment',
+        '      name: Vision Preview # keep vision field comment',
         'agent-default-model:',
         '  provider: deepseek-official',
         '  model: deepseek-v4-flash-vision-exp',
@@ -338,6 +339,10 @@ describe('DshProviderManager', () => {
       const first = await readFile(settingsFile, 'utf8');
       expect(first).toContain('# keep this deployment comment');
       expect(first).toContain('description: keep this exotic field');
+      expect(first).toContain('# keep text-model inline comment');
+      expect(first).toContain('# keep vision list-item comment');
+      expect(first).toContain('# keep vision id comment');
+      expect(first).toContain('# keep vision field comment');
       const settings = await manager.readSettings();
       const models = (settings['llm-deepseek'] as {
         models: Array<Record<string, unknown>>;

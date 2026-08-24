@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Document, parseDocument } from 'yaml';
+import { Document, isMap, isSeq, parseDocument } from 'yaml';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 import { log } from '../core/logger.js';
 import { resolveDshHome } from './dsh-runtime.js';
@@ -376,6 +376,29 @@ function patchNode(
   if (!deepEqualJson(current, next)) document.setIn([...path], next);
 }
 
+/** Add or update one runtime model without replacing the surrounding YAML sequence. */
+function patchRuntimeModelModalities(
+  document: Document,
+  modelId: string,
+  modalities: Array<'text' | 'image'>,
+): void {
+  const modelsPath = [DEEPSEEK_NAMESPACE, 'models'];
+  const modelsNode = document.getIn(modelsPath, true);
+  if (!isSeq(modelsNode)) {
+    document.setIn(modelsPath, [{ id: modelId, inputModalities: modalities }]);
+    return;
+  }
+
+  const modelIndex = modelsNode.items.findIndex((item) =>
+    isMap(item) && item.get('id') === modelId,
+  );
+  if (modelIndex === -1) {
+    modelsNode.add({ id: modelId, inputModalities: modalities });
+    return;
+  }
+  document.setIn([...modelsPath, modelIndex, 'inputModalities'], modalities);
+}
+
 function parseYamlMap(text: string | undefined, filename: string): Record<string, unknown> {
   if (text === undefined || text.trim().length === 0) return {};
   const document = parseDocument(text, { prettyErrors: true });
@@ -714,14 +737,13 @@ export class DshProviderManager {
       )!;
       if (existing !== undefined && deepEqualJson(existing.inputModalities, modalities)) return;
 
-      const nextModel = {
-        ...(existing ?? { id: route.model }),
-        inputModalities: modalities,
+      const nextModel = { ...(existing ?? { id: route.model }), inputModalities: modalities };
+      const section = {
+        ...current,
+        models: index === -1
+          ? [...models, nextModel]
+          : models.map((model, modelIndex) => modelIndex === index ? nextModel : model),
       };
-      const nextModels = index === -1
-        ? [...models, nextModel]
-        : models.map((model, modelIndex) => modelIndex === index ? nextModel : model);
-      const section = { ...current, models: nextModels };
       if (text === undefined || text.trim().length === 0) {
         await writeFileAtomic(
           this.settingsFile,
@@ -735,7 +757,7 @@ export class DshProviderManager {
       if (document.errors.length > 0) {
         throw new Error(`invalid dsh settings at ${this.settingsFile}`);
       }
-      patchNode(document, [DEEPSEEK_NAMESPACE], root[DEEPSEEK_NAMESPACE], section);
+      patchRuntimeModelModalities(document, route.model, modalities);
       await writeFileAtomic(this.settingsFile, document.toString(), {});
       changed = true;
     });
