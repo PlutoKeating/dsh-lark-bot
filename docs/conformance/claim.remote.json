@@ -1,13 +1,13 @@
 {
   "claimVersion": "0.15",
-  "subject": "io.github.plutokeating.dsh-lark-bot@0.19.10",
+  "subject": "io.github.plutokeating.dsh-lark-bot@0.19.11",
   "specVersion": "community-v0.15",
   "hostDescriptorDigest": "sha256:993dd0fccfcd38c2d7bad2186ed725fa524a58f5572fe9df248d37d4319dbd47",
   "artifactDigest": "sha256:722ee4f6f2b62f25f1101d2c861bd4fe4cd07682dec494a9772c7a2a591f4d75",
   "suiteVersion": "0.15.0-experimental+e1b902b0",
   "evidenceLevel": "Tested",
   "result": "pass",
-  "testedAt": "2026-08-24T15:31:47Z",
+  "testedAt": "2026-08-24T16:30:57Z",
   "runtime": "node-22/linux-x64/remote-attach",
   "revoked": false,
   "failedRequirements": []
