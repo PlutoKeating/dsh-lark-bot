@@ -106,7 +106,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    同一 scope 的并发 fresh session 另开 runtime；run handle 捕获并只关闭自己的 entry。原生 resume
    还必须通过 adapter 的 live-owner 检查：只有当前进程仍持有同 runtime/session/route 时复用 ID；
    重启、停止或 route 重建后改用 fresh session + bridge transcript，避免上游新 live seed 与旧 JSONL
-   不匹配产生 `id collision`。
+   不匹配产生 `id collision`。只有会话分类器确认的零活动 collision/corruption 才进入恢复重试；同一
+   位置出现的模型、provider 或传输错误按普通 failed 事件原位终结过程卡，不清除 native binding。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
    `SessionStore` schema 2 在同一 `sessions.json` 中按 scope + canonical workspace cwd 分别保存
    transcript、native binding 与 metrics；schema 1 在启动时按 `WorkspaceStore` 当前选择迁移。消息入队
@@ -136,7 +137,10 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    Settings→Models 同一协议（`patchNode` 叶子 diff、`<file>.lock` 写锁、原子替换、0600 凭据文件），
    因此不重复造配置管理 API，也不绕过官方热发布；ACP / SDK 协议本身不含配置管理方法，
    模型切换通过每轮请求的 provider/model 路由与 dsh 热发布生效：桥接在每轮运行前调用
-   `DshProviderManager.resolveModelRoute()` 把模型解析为「provider + model」，SDK 适配器在
+   `DshProviderManager.resolveRuntimeModelRoute()` 把模型解析为「provider + model」，并在运行前
+   把选中的 DeepSeek 视觉模型以 `text,image` 幂等写入上游实际消费的 model catalog；这一步与
+   settings 的其他写入共用文件锁和原子 patch，避免只在 bridge 展示层补能力而 runtime 仍按 text-only
+   拒绝图片。SDK 适配器在
    路由变化时关闭旧 runtime 并以新路由重建（`/model use` 下一轮真正生效）；`agent-default-model`
    按 dsh 官方 schema 写入 `{ provider, model }` 双字段。管理入口的主卡直接列出模型并以
    `provider/model` 路由执行 per-scope 热切换、标记按「scope > role > profile > dsh > env」
@@ -171,7 +175,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    避免 Node/Undici 的 300 秒 headers/body inactivity timeout 取消仍在等待用户的卡片。
     运行过程卡不使用 `@larksuite/channel` 的 whole-card timer controller：其 timer 不观察异步
     `patchCard` rejection，弱网超时会升级为进程级 unhandled rejection。`adaptLarkChannel` 自己按
-    100 ms 合并并串行更新；patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
+    100 ms 合并并串行更新；re-anchor 的撤回/重建与 patch 同样在控制器内串行，并发 re-anchor 合并为
+    一次，因此 patch 不会命中已经撤回的旧 message ID。patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
     producer、Agent 与单独的最终 Markdown 继续运行。
    **过程卡跟随会话末尾**：飞书不能重排已存在消息，运行中 agent 发出的中间气泡（`lark_notify`、
    问答/计划/审批卡等）会被追加到会话底部，而只做原位更新的过程卡停留在顶部，用户查看新气泡后需
@@ -344,7 +349,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     models.dev 运行时目录只负责发现 provider 展示名、模型能力与供应商声明的推理档位；短 TTL
     缓存与 stale-on-error 避免目录抖动阻断聊天；首次离线时只投影 settings，并将对象形式
     `agent-default-model` 作为其已配置 provider 的最小可解析条目，不存在代码内置模型或展示名兜底，
-    其他未知模型仍拒绝。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段。
+    其他未知模型仍拒绝。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段；
+    选中的 DeepSeek 视觉模型会在运行准入时把该能力最小持久化到官方 runtime 目录；持久化在 YAML AST
+    上定点更新目标模型，不替换 `models` 序列，以保留部署者写在模型条目和字段上的注释。
     卡片把 `agent-default-model` 的缺席条目合并进本次投影与点击路由，不反向篡改 provider 配置；
     按钮按 provider 去除公共前缀、每行最多两个，以保证移动端可辨认。
 

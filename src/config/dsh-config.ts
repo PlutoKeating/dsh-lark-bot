@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Document, parseDocument } from 'yaml';
+import { Document, isMap, isSeq, parseDocument } from 'yaml';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 import { log } from '../core/logger.js';
 import { resolveDshHome } from './dsh-runtime.js';
@@ -376,6 +376,29 @@ function patchNode(
   if (!deepEqualJson(current, next)) document.setIn([...path], next);
 }
 
+/** Add or update one runtime model without replacing the surrounding YAML sequence. */
+function patchRuntimeModelModalities(
+  document: Document,
+  modelId: string,
+  modalities: Array<'text' | 'image'>,
+): void {
+  const modelsPath = [DEEPSEEK_NAMESPACE, 'models'];
+  const modelsNode = document.getIn(modelsPath, true);
+  if (!isSeq(modelsNode)) {
+    document.setIn(modelsPath, [{ id: modelId, inputModalities: modalities }]);
+    return;
+  }
+
+  const modelIndex = modelsNode.items.findIndex((item) =>
+    isMap(item) && item.get('id') === modelId,
+  );
+  if (modelIndex === -1) {
+    modelsNode.add({ id: modelId, inputModalities: modalities });
+    return;
+  }
+  document.setIn([...modelsPath, modelIndex, 'inputModalities'], modalities);
+}
+
 function parseYamlMap(text: string | undefined, filename: string): Record<string, unknown> {
   if (text === undefined || text.trim().length === 0) return {};
   const document = parseDocument(text, { prettyErrors: true });
@@ -606,6 +629,13 @@ export class DshProviderManager {
     return { provider: provider.id, model: selection };
   }
 
+  /** Resolve a model route and make its managed runtime catalog ready. */
+  async resolveRuntimeModelRoute(selection: string): Promise<DshModelSelection | undefined> {
+    const route = await this.resolveModelRoute(selection);
+    if (route !== undefined) await this.ensureRuntimeModelModalities(route);
+    return route;
+  }
+
   async setDefaultModel(model: string): Promise<void> {
     if (!model.trim()) throw new Error('默认模型不能为空');
     const route = await this.resolveModelRoute(model);
@@ -672,6 +702,66 @@ export class DshProviderManager {
       ...current,
       models: [...models, modelRecord(input)],
     });
+  }
+
+  /**
+   * Ensure the selected DeepSeek vision model is present in the catalog that
+   * the managed SDK/ACP runtime actually consumes. The upstream DeepSeek
+   * adapter treats an unlisted model as text-only even when its id identifies
+   * a vision endpoint, so read-time normalization alone is insufficient.
+   * Returns true only when settings were changed.
+   */
+  async ensureRuntimeModelModalities(route: DshModelSelection): Promise<boolean> {
+    if (route.provider !== DEEPSEEK_PROVIDER || !isVisionModelId(route.model)) return false;
+    await mkdir(dirname(this.settingsFile), { recursive: true });
+    let changed = false;
+    await withFileLock(this.settingsFile, async () => {
+      const text = await readOptional(this.settingsFile);
+      const root = parseYamlMap(text, this.settingsFile);
+      const current = isMapLike(root[DEEPSEEK_NAMESPACE])
+        ? root[DEEPSEEK_NAMESPACE]
+        : {};
+      const models = rawModels(current.models);
+      const index = models.findIndex((model) => model.id === route.model);
+      const existing = index === -1 ? undefined : models[index];
+      const configured = Array.isArray(existing?.inputModalities)
+        ? existing.inputModalities.filter(
+          (modality): modality is 'text' | 'image' =>
+            modality === 'text' || modality === 'image',
+        )
+        : undefined;
+      const modalities = normalizeVisionModelInputModalities(
+        route.model,
+        configured,
+        false,
+      )!;
+      if (existing !== undefined && deepEqualJson(existing.inputModalities, modalities)) return;
+
+      const nextModel = { ...(existing ?? { id: route.model }), inputModalities: modalities };
+      const section = {
+        ...current,
+        models: index === -1
+          ? [...models, nextModel]
+          : models.map((model, modelIndex) => modelIndex === index ? nextModel : model),
+      };
+      if (text === undefined || text.trim().length === 0) {
+        await writeFileAtomic(
+          this.settingsFile,
+          new Document({ [DEEPSEEK_NAMESPACE]: section }).toString(),
+          {},
+        );
+        changed = true;
+        return;
+      }
+      const document = parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh settings at ${this.settingsFile}`);
+      }
+      patchRuntimeModelModalities(document, route.model, modalities);
+      await writeFileAtomic(this.settingsFile, document.toString(), {});
+      changed = true;
+    });
+    return changed;
   }
 
   async removeDeepseekModel(id: string): Promise<boolean> {

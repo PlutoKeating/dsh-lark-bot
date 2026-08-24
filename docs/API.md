@@ -301,6 +301,8 @@ export class DshProviderManager {
   defaultModelSelection(): Promise<{ provider: string; model: string } | undefined>;
   resolveProviderForModel(modelId: string): Promise<DshProviderSummary | undefined>;
   resolveModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
+  resolveRuntimeModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
+  ensureRuntimeModelModalities(route: { provider: string; model: string }): Promise<boolean>;
   linkCredentialRefIfMissing(providerId: string): Promise<boolean>;
   setDefaultModel(model: string): Promise<void>;
   upsertDeepseekProvider(input: { baseURL?; apiKeyEnv?; apiKey? }): Promise<void>;
@@ -338,7 +340,11 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL`；代码不提供固定模型默认值。
 `/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由
 `resolveModelRoute()` 从模型自动解析，找不到模型时报错）。每轮运行前
-`src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器
+`src/cli/commands/run.ts` 用 `resolveRuntimeModelRoute()` 解析路由并准备 runtime 目录：对
+`deepseek-official` 视觉模型，它会在同一 settings 写锁内幂等补齐 `llm-deepseek.models` 的
+`inputModalities: [text, image]`，因为 rc.8 DeepSeek adapter 将未列入有效目录的模型视为 text-only；
+已有 `models` 序列通过 YAML AST 定点修改目标条目，不重建序列，因此条目、字段及行内注释均保留；
+非视觉模型和其他 provider 不改写。随后路由传给适配器：SDK 适配器
 （`src/adapters/dsh/sdk-adapter.ts`）在路由变化时关闭旧 harness 并以新路由重建，
 因此 `/model use` 的「下一轮生效」承诺真实落地（issue #47）。
 `linkCredentialRefIfMissing()` 在运行前把「凭据名 == provider ID」的老配置自动补齐
@@ -419,7 +425,9 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 runtime/session/cwd/route 才接收旧 ID，重启、停止、并发切换或模型 route 重建后直接使用
 fresh session 并回放 bridge transcript。若上游仍在零活动阶段返回已知 session
 collision/corruption，旧过程卡原位更新为固定的“正在恢复”状态，再触发 fresh-session retry；
-抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。
+抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。零活动阶段的模型能力、
+provider 或传输等非 session 错误不会进入该恢复分支：它们按普通失败归约并原位终结过程卡，移除
+“思考中”状态与停止按钮，同时保留原 session binding。
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
@@ -856,7 +864,9 @@ export interface Logger {
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
 - `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`；整卡
-  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。单次 patch 失败在内部结算并禁用该卡
+  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。过程卡撤回重建到会话尾部时，控制器会
+  合并并发 re-anchor，并暂停 patch 直到取得新 message ID；期间的最新状态随后只更新新卡，不会把
+  飞书预期的 `message withdrawn` 误判为卡片故障。单次 patch 失败在内部结算并禁用该卡
   后续更新，不向 producer 抛出，也不产生未处理 Promise rejection；初始卡发送失败仍向上抛出，
   由 `run-flow` 走 legacy/no-card 降级。
 

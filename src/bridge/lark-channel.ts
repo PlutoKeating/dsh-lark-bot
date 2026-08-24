@@ -47,6 +47,7 @@ class ResilientCardStreamController {
   private closed = false;
   private timer: NodeJS.Timeout | undefined;
   private inFlight: Promise<void> | undefined;
+  private reanchorInFlight: Promise<string> | undefined;
 
   constructor(
     private readonly channel: LarkChannel,
@@ -69,11 +70,17 @@ class ResilientCardStreamController {
       this.timer = undefined;
     }
     if (this.inFlight !== undefined) await this.inFlight;
+    if (this.reanchorInFlight !== undefined) await this.reanchorInFlight;
     if (!this.failed && this.dirty) await this.flush();
   }
 
   private schedule(): void {
-    if (this.timer !== undefined || this.inFlight !== undefined || this.failed) return;
+    if (
+      this.timer !== undefined ||
+      this.inFlight !== undefined ||
+      this.reanchorInFlight !== undefined ||
+      this.failed
+    ) return;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       this.startFlush();
@@ -146,6 +153,18 @@ class ResilientCardStreamController {
    */
   async reanchor(): Promise<string> {
     if (this.closed || this.failed) return this.messageId;
+    if (this.reanchorInFlight !== undefined) return this.reanchorInFlight;
+    const task = this.performReanchor();
+    this.reanchorInFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (this.reanchorInFlight === task) this.reanchorInFlight = undefined;
+      if (!this.closed && this.dirty && !this.failed) this.schedule();
+    }
+  }
+
+  private async performReanchor(): Promise<string> {
     if (this.inFlight !== undefined) await this.inFlight;
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
@@ -153,9 +172,14 @@ class ResilientCardStreamController {
     }
     const card = this.latest;
     if (card === undefined) return this.messageId;
+    // The fresh card will contain this snapshot. Updates received while recall
+    // or send is in progress set dirty again and are patched only after the new
+    // message id has been installed.
+    this.dirty = false;
     try {
       await this.channel.recallMessage(this.messageId);
     } catch (error) {
+      this.dirty = true;
       log.warn('lark-card-stream', 'reanchor-recall-failed', {
         messageId: this.messageId,
         error: error instanceof Error ? error.message : String(error),
@@ -167,8 +191,6 @@ class ResilientCardStreamController {
     const sent = await this.channel.send(this.chatId, { card }, {});
     if (!sent.messageId) throw new Error('Feishu card re-anchor returned no message_id');
     this.messageId = sent.messageId;
-    this.latest = card;
-    this.dirty = false;
     this.failed = false;
     return this.messageId;
   }

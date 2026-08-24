@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,7 @@ import {
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -77,7 +78,7 @@ function fakeAdapter(): AgentAdapter {
     async checkAvailability() {
       return { ok: true, error: undefined, version: 'fake' };
     },
-    run(): AgentRun {
+    run: vi.fn((): AgentRun => {
       return {
         runId: 'run-1',
         events: (async function* () {
@@ -86,19 +87,24 @@ function fakeAdapter(): AgentAdapter {
         stop,
         waitForExit: async () => true,
       };
-    },
+    }),
     dispose: vi.fn().mockResolvedValue(undefined),
   };
   return adapter;
 }
 
 function fakeChannel() {
+  const handlers: Record<string, (...args: never[]) => unknown> = {};
   return {
-    on: vi.fn(),
+    handlers,
+    on: vi.fn((next: Record<string, (...args: never[]) => unknown>) => {
+      Object.assign(handlers, next);
+    }),
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     getBotIdentity: vi.fn().mockReturnValue({ openId: 'ou_default_bot', name: 'Default Bot' }),
     send: vi.fn().mockResolvedValue({ messageId: 'm1' }),
+    updateCard: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -158,6 +164,63 @@ describe('dsh-lark-bot bundle plugin', () => {
     expect(channel.disconnect).toHaveBeenCalled();
     expect(service.status().state).toBe('stopped');
   });
+
+  it('prepares the selected vision model through the runtime route before an agent run', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-plugin-runtime-model-'));
+    tempDirs.push(root);
+    const dshHome = join(root, '.dsh');
+    const settingsFile = join(dshHome, 'settings.yaml');
+    await mkdir(dshHome, { recursive: true });
+    await writeFile(settingsFile, [
+      'llm-deepseek:',
+      '  models:',
+      '    - id: deepseek-v4-flash-vision-exp',
+      '',
+    ].join('\n'));
+    vi.stubEnv('DSH_HOME', dshHome);
+
+    const { ctx, provided } = makeCtx();
+    const adapter = fakeAdapter();
+    const channel = fakeChannel();
+    const dispose = applyBridgePlugin(
+      ctx as never,
+      {
+        profile: 'default',
+        home: root,
+        appId: 'cli_test',
+        appSecret: 'secret',
+        tenant: 'feishu',
+        model: 'deepseek-official/deepseek-v4-flash-vision-exp',
+      },
+      { env: {}, adapter, createChannel: vi.fn(() => channel) as never },
+    );
+    const service = provided.larkBridge as LarkBridgeService;
+    await vi.waitFor(() => expect(service.status().state).toBe('running'));
+    try {
+      await channel.handlers.message?.({
+        messageId: 'vision-message',
+        chatId: 'vision-chat',
+        chatType: 'p2p',
+        chatMode: 'p2p',
+        senderId: 'vision-user',
+        senderType: 'user',
+        content: 'describe this image',
+        rawContentType: 'text',
+        resources: [],
+        mentions: [],
+        mentionAll: false,
+        mentionedBot: false,
+        createTime: Date.now(),
+      } as never);
+
+      await vi.waitFor(async () => {
+        expect(await readFile(settingsFile, 'utf8')).toContain('inputModalities:');
+      }, { timeout: 10_000 });
+      expect(adapter.run).toHaveBeenCalledOnce();
+    } finally {
+      await dispose();
+    }
+  }, 15_000);
 
   it('stays stopped when disabled', () => {
     const { ctx, provided } = makeCtx();
