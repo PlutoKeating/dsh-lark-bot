@@ -1098,6 +1098,103 @@ describe('runAgentBatch', () => {
     ]);
   });
 
+  it('terminalizes a resumed run when its first error is not session-related', async () => {
+    const calls: Array<{ sessionId: string | undefined }> = [];
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        calls.push({ sessionId: options.sessionId });
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            yield {
+              type: 'error',
+              message: 'DeepSeek model "vision-exp" does not accept image input.',
+              terminationReason: 'failed',
+            };
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+
+    const outcome = await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['inspect this image'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(outcome).toBe('failed');
+    expect(calls).toEqual([{ sessionId: 'session-1' }]);
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
+    const lastCard = JSON.stringify(fake.updates[fake.updates.length - 1]);
+    expect(lastCard).toContain('Agent 运行失败');
+    expect(lastCard).not.toContain('思考中');
+  });
+
+  it('terminalizes a resumed run when a non-session error is thrown before activity', async () => {
+    const adapter: AgentAdapter = {
+      id: 'dsh-sdk',
+      displayName: 'DeepSeek Harness (SDK)',
+      resumeCapable: true,
+      async isAvailable() {
+        return true;
+      },
+      async checkAvailability() {
+        return { ok: true, error: undefined, version: 'test' };
+      },
+      run(options): AgentRun {
+        return {
+          runId: options.runId,
+          events: (async function* () {
+            throw new Error('provider transport unavailable');
+          })(),
+          stop: vi.fn().mockResolvedValue(undefined),
+          waitForExit: async () => true,
+        };
+      },
+    };
+    const sessions = new SessionStore(':memory:');
+    sessions.set('chat-a', 'session-1', '/tmp/project');
+    const fake = makeChannel();
+
+    const outcome = await runAgentBatch({
+      scope: 'chat-a',
+      chatId: 'chat-a',
+      messages: ['continue'],
+      adapter,
+      sessions,
+      workspaces: new WorkspaceStore(':memory:'),
+      activeRuns: new ActiveRuns(),
+      channel: fake.channel,
+      defaultWorkspace: '/tmp/project',
+    });
+
+    expect(outcome).toBe('failed');
+    expect(sessions.resumeFor('chat-a', '/tmp/project')).toBe('session-1');
+    const lastCard = JSON.stringify(fake.updates[fake.updates.length - 1]);
+    expect(lastCard).toContain('Agent 运行失败');
+    expect(lastCard).not.toContain('思考中');
+  });
+
   it('does not fall back when a resumed run errors after real activity', async () => {
     const calls: Array<{ sessionId: string | undefined }> = [];
     const adapter: AgentAdapter = {
