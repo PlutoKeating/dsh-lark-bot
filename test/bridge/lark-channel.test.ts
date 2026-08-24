@@ -140,6 +140,66 @@ describe('adaptLarkChannel', () => {
     expect(patchedIds).not.toContain('card-1');
   });
 
+  it('holds updates until a re-anchored card has a fresh message id', async () => {
+    let releaseFreshCard!: () => void;
+    const freshCardGate = new Promise<void>((resolve) => {
+      releaseFreshCard = resolve;
+    });
+    let freshCardSendStarted!: () => void;
+    const freshCardStarted = new Promise<void>((resolve) => {
+      freshCardSendStarted = resolve;
+    });
+    const send = vi.fn()
+      .mockResolvedValueOnce({ messageId: 'card-1' })
+      .mockImplementationOnce(async () => {
+        freshCardSendStarted();
+        await freshCardGate;
+        return { messageId: 'card-2' };
+      });
+    const updateCard = vi.fn(async (messageId: string) => {
+      if (messageId === 'card-1') throw new Error('The message was withdrawn');
+    });
+    const recallMessage = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'before-reanchor' });
+      const reanchor = controller.reanchor?.();
+      await freshCardStarted;
+      await controller.update({ state: 'during-reanchor' });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      releaseFreshCard();
+      await reanchor;
+    });
+
+    expect(updateCard.mock.calls.map((call) => call[0])).toEqual(['card-2']);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces concurrent re-anchor requests for the same streaming card', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce({ messageId: 'card-1' })
+      .mockResolvedValueOnce({ messageId: 'card-2' });
+    const updateCard = vi.fn().mockResolvedValue(undefined);
+    const recallMessage = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'running' });
+      const ids = await Promise.all([
+        controller.reanchor?.(),
+        controller.reanchor?.(),
+      ]);
+      expect(ids).toEqual(['card-2', 'card-2']);
+    });
+
+    expect(recallMessage).toHaveBeenCalledOnce();
+    expect(recallMessage).toHaveBeenCalledWith('card-1');
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the original card when the recall fails (no duplicate)', async () => {
     const send = vi.fn().mockResolvedValue({ messageId: 'card-1' });
     const updateCard = vi.fn().mockResolvedValue(undefined);

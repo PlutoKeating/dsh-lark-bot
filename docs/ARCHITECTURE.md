@@ -171,7 +171,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    避免 Node/Undici 的 300 秒 headers/body inactivity timeout 取消仍在等待用户的卡片。
     运行过程卡不使用 `@larksuite/channel` 的 whole-card timer controller：其 timer 不观察异步
     `patchCard` rejection，弱网超时会升级为进程级 unhandled rejection。`adaptLarkChannel` 自己按
-    100 ms 合并并串行更新；patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
+    100 ms 合并并串行更新；re-anchor 的撤回/重建与 patch 同样在控制器内串行，并发 re-anchor 合并为
+    一次，因此 patch 不会命中已经撤回的旧 message ID。patch 失败会有限重试，仍失败则记录脱敏日志、冻结该卡并发送普通降级提示，
     producer、Agent 与单独的最终 Markdown 继续运行。
    **过程卡跟随会话末尾**：飞书不能重排已存在消息，运行中 agent 发出的中间气泡（`lark_notify`、
    问答/计划/审批卡等）会被追加到会话底部，而只做原位更新的过程卡停留在顶部，用户查看新气泡后需

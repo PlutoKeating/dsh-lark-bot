@@ -856,7 +856,9 @@ export interface Logger {
 - `src/bridge/run-flow.ts`：`runAgentBatch(input)` 单次 agent 运行（worktree 确保、事件消费、
   超时看门狗、审批/问答接线）；`approvalHandlerFor` / `questionHandlerFor` 提供卡片回调。
 - `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`；整卡
-  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。单次 patch 失败在内部结算并禁用该卡
+  流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。过程卡撤回重建到会话尾部时，控制器会
+  合并并发 re-anchor，并暂停 patch 直到取得新 message ID；期间的最新状态随后只更新新卡，不会把
+  飞书预期的 `message withdrawn` 误判为卡片故障。单次 patch 失败在内部结算并禁用该卡
   后续更新，不向 producer 抛出，也不产生未处理 Promise rejection；初始卡发送失败仍向上抛出，
   由 `run-flow` 走 legacy/no-card 降级。
 
