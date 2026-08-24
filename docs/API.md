@@ -101,7 +101,9 @@ export function loadRuntimeEnv(source?: NodeJS.ProcessEnv): RuntimeEnv;
 - `DSH_LARK_UPGRADE_REGISTRY`：`dsh-lark-bot upgrade` 探测最新版本的 npm registry，
   默认官方 registry（可指向镜像，issue #10）。
 - `DSH_LARK_UPGRADE_CHECK`：`doctor`、`/version`、`/upgrade` 与 `/new` 是否探测 npm 最新版本（默认开启，
-  `0` 关闭；探测为 best-effort，失败不影响 doctor 结果，issue #15）。
+  `0` 关闭；探测为 best-effort，失败不影响 doctor 结果，issue #15）。`/version` 与通知器的内存
+  探测缓存**成功 1h、失败仅 15s**（issue #110），避免一次瞬时 registry 卡顿被误报为长时间
+  「最新版本查询暂不可用」。
 - `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS`：桥接引擎周期检查新版本的间隔（默认 6h，`0`
   关闭；发现新版本默认记日志，issue #15）。
 - `DSH_LARK_UPGRADE_NOTIFY` / `DSH_LARK_UPGRADE_NOTIFY_CHAT`：`true` 时发现新版本向
