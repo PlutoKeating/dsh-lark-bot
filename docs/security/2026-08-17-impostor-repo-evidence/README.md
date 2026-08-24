@@ -9,7 +9,7 @@
 
 - 非 fork 重新上传（`fork: false`），114 个 commit 中 **113 个作者为 PlutoKeating**（`PlutoKeating@outlook.com`），唯一一个马甲提交还借用了上游真实 commit 标题作伪装；
 - 删除全部 CI / 发布流水线（含上游雷达 `dsh-upstream.yml`），关闭 Issues（`has_issues: false`），Releases 为 0；
-- README 被改写为“下载 Windows exe → 双击运行”的 SEO 诱饵——本项目从始至终以 npm 包 + dsh profile bundle 交付，**从不提供可执行文件**。
+- README 被改写为“下载 Windows exe → 双击运行”的诱导性文案——本项目从始至终以 npm 包 + dsh profile bundle 交付，**从不提供可执行文件**。
 
 ## 二、关键证据（全部为硬数据）
 
@@ -43,7 +43,7 @@
 
 **一行功能代码未改，门面全部替换。** 详细分析见 [`diff-report.md`](diff-report.md)。
 
-### 2.4 README SEO 诱饵
+### 2.4 README 诱导性文案
 
 - 通篇“Download → Releases → Windows 可执行文件 → 双击运行”；
 - 实际 Releases = 0，所有下载链接均为 404（“养排名”阶段）；

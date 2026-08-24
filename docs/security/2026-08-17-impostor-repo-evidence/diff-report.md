@@ -25,7 +25,7 @@ GitHub contributors API 结果一致：PlutoKeating 113 / tarraencompassing61 1�
 
 - 马甲唯一提交 `4d6c01a` 的标题与上游 `e4d3422` **完全相同**（`docs: add omdsh community submission link to README maintenance section`）；
 - 但其实际 diff 是删除 3 个 workflow + 重写 README——用上游标题掩盖真实动作；
-- 意图链：`fork: false` 切断与上游的关联显示 → 删除 `dsh-upstream.yml` 移除自动同步雷达 → 删除 CI/发布流水线 → 换 SEO 诱饵 README。
+- 意图链：`fork: false` 切断与上游的关联显示 → 删除 `dsh-upstream.yml` 移除自动同步雷达 → 删除 CI/发布流水线 → 换成诱导性 README。
 
 ## 4. README 差异要点
 
