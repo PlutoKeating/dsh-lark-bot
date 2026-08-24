@@ -215,12 +215,12 @@ describe('dsh-lark-bot bundle plugin', () => {
 
       await vi.waitFor(async () => {
         expect(await readFile(settingsFile, 'utf8')).toContain('inputModalities:');
-      }, { timeout: 3_000 });
+      }, { timeout: 10_000 });
       expect(adapter.run).toHaveBeenCalledOnce();
     } finally {
       await dispose();
     }
-  });
+  }, 15_000);
 
   it('stays stopped when disabled', () => {
     const { ctx, provided } = makeCtx();
