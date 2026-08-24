@@ -37,6 +37,15 @@ import type { ExecutionMode } from '../bot/execution-mode-store.js';
 import { permissionPolicyDenial, policyDenialText } from '../policy/tool-policy.js';
 import { renderChannelContext, type ChannelContext } from './channel-context.js';
 
+/**
+ * Pause threshold (ms) after which a non-empty interim text buffer is flushed
+ * as an independent Feishu bubble. A high-frequency token stream is folded into
+ * one logical message and only closed at a message boundary (tool call /
+ * thinking / final_text) or once the stream goes quiet for this window, so a
+ * message is never fragmented token-by-token.
+ */
+export const INTERIM_BUBBLE_PAUSE_MS = 1200;
+
 export interface RunFlowInput {
   scope: string;
   chatId: string;
@@ -88,6 +97,11 @@ export interface RunFlowInput {
     markdown: string,
     options?: SendOptions,
   ) => Promise<void>;
+  /**
+   * Pause threshold (ms) after which a non-empty interim text buffer is flushed
+   * as an independent bubble (issue #95). Defaults to `INTERIM_BUBBLE_PAUSE_MS`.
+   */
+  interimDebounceMs?: number;
   /** Visible member identity when the group uses member-isolated scopes. */
   scopeOwner?: string;
   /** Trusted peer identities available for an explicit lark_notify handoff. */
@@ -361,6 +375,49 @@ async function runAttempt(
           });
         }, 5_000);
         ticker.unref?.();
+        // Interim text bubbles (issue #95): the agent's streaming text is folded
+        // into one "logical message" and emitted as an independent Feishu bubble
+        // at each message boundary (tool call / thinking / final_text) or once
+        // the stream goes quiet beyond the pause threshold. `buffered` holds
+        // the current message; `delivered` records what was already shown so
+        // the final answer only sends the as-yet-unsent tail (never a duplicate).
+        const interim = { buffered: '', delivered: '' };
+        let interimTimer: NodeJS.Timeout | undefined;
+        const clearInterimTimer = (): void => {
+          if (interimTimer !== undefined) {
+            clearTimeout(interimTimer);
+            interimTimer = undefined;
+          }
+        };
+        const flushInterim = async (): Promise<void> => {
+          clearInterimTimer();
+          // Never emit a bubble once the run has left "running" (an error,
+          // an interruption, or the terminal transition), otherwise a straggler
+          // pause-timer callback would duplicate text already sent as the
+          // final answer.
+          if (timedOut || state.terminal !== 'running') return;
+          if (interim.buffered === '') return;
+          const text = interim.buffered;
+          interim.buffered = '';
+          interim.delivered += text;
+          try {
+            await input.channel.sendMarkdown(input.chatId, text, replyOptions);
+          } catch (error) {
+            log.warn('run-flow', 'interim-bubble-failed', {
+              scope: input.scope,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        };
+        const schedulePauseFlush = (): void => {
+          clearInterimTimer();
+          if (timedOut || state.terminal !== 'running') return;
+          interimTimer = setTimeout(() => {
+            interimTimer = undefined;
+            void flushInterim();
+          }, input.interimDebounceMs ?? INTERIM_BUBBLE_PAUSE_MS);
+          interimTimer.unref?.();
+        };
         const consume = async (): Promise<void> => {
           for await (const event of run.events) {
             if (timedOut) return;
@@ -432,8 +489,26 @@ async function runAttempt(
             }
             if (event.type === 'final_text') {
               assistantOutput = event.content;
+              // `final_text` is the complete answer for its segment and subsumes
+              // any deltas already buffered. Drop the buffer (it is delivered
+              // once via the final remaining tail) rather than emit a duplicate
+              // bubble for it.
+              clearInterimTimer();
+              interim.buffered = '';
             } else if (event.type === 'text') {
               assistantOutput += event.delta;
+              interim.buffered += event.delta;
+              schedulePauseFlush();
+            }
+            if (
+              event.type === 'thinking' ||
+              event.type === 'tool_use' ||
+              event.type === 'tool_result'
+            ) {
+              // A message boundary: the text emitted before the tool call /
+              // thinking block is a complete agent message — close it as its own
+              // bubble (a no-op when nothing was buffered).
+              await flushInterim();
             }
             if (event.type === 'system' && event.sessionId) {
               activeSessionId = event.sessionId;
@@ -557,20 +632,30 @@ async function runAttempt(
             : finalizeIfRunning(state);
           await safeUpdate();
           await checkpoint('finalizing');
-          if (state.terminal === 'done' && assistantOutput.trim() !== '') {
+          // The final answer is only the tail not already delivered as an
+          // interim bubble; `delivered` is always a prefix of the accumulated
+          // output, so this never duplicates the interim bubbles (issue #95).
+          const delivered = interim.delivered;
+          const remaining = delivered === ''
+            ? assistantOutput
+            : assistantOutput.startsWith(delivered)
+              ? assistantOutput.slice(delivered.length)
+              : '';
+          if (state.terminal === 'done' && remaining.trim() !== '') {
             try {
               await (input.deliverFinalReply
-                ? input.deliverFinalReply(input.scope, input.chatId, assistantOutput, { ...replyOptions })
-                : input.channel.sendMarkdown(input.chatId, assistantOutput, { ...replyOptions }));
+                ? input.deliverFinalReply(input.scope, input.chatId, remaining, { ...replyOptions })
+                : input.channel.sendMarkdown(input.chatId, remaining, { ...replyOptions }));
             } catch (error) {
               const message = errorMessage(error);
               log.fail('run-flow', error, { scope: input.scope, step: 'final-answer' });
-              state = markFinalDeliveryFailed(state, message, assistantOutput);
+              state = markFinalDeliveryFailed(state, message, remaining);
               await safeUpdate();
             }
           }
         } finally {
           clearInterval(ticker);
+          clearInterimTimer();
           if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
           unsubscribeQuestion?.();
           unsubscribePlan?.();

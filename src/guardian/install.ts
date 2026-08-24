@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { ownPackageInfo } from '../adapters/dsh/own-package.js';
 import { resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
@@ -115,7 +115,11 @@ export function systemdUnit(
   cliEntry: string,
   env: Record<string, string> = {},
 ): string {
-  const envLines = Object.entries(env)
+  const renderedEnv = {
+    PATH: env.PATH ?? dirname(nodeBin),
+    ...env,
+  };
+  const envLines = Object.entries(renderedEnv)
     .map(([key, value]) => `Environment=${key}=${value}`)
     .join('\n');
   return [
@@ -218,7 +222,12 @@ export async function installGuardian(
     const unitPath = guardianServiceFilePath(process.platform, root);
     await writeFile(
       unitPath,
-      systemdUnit(nodeBin, cliEntry, { DSH_LARK_GUARDIAN_DISABLED: '0' }),
+      systemdUnit(nodeBin, cliEntry, {
+        PATH: [dirname(nodeBin), process.env.PATH]
+          .filter((value): value is string => Boolean(value))
+          .join(delimiter),
+        DSH_LARK_GUARDIAN_DISABLED: '0',
+      }),
       'utf8',
     );
     messages.push(`systemd user unit 已写入 ${unitPath}`);

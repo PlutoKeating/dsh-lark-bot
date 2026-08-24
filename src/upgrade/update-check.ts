@@ -23,13 +23,21 @@ export function upgradeCheckEnabled(): boolean {
   return (process.env.DSH_LARK_UPGRADE_CHECK ?? '1') !== '0';
 }
 
+/**
+ * The version of the running package. Returns an empty string when the running
+ * version cannot be resolved (never a misleading sentinel like `'unknown'`),
+ * so callers can treat "unknown current" explicitly and never compare it as a
+ * real version.
+ */
 export function currentVersion(): string {
-  return ownPackageInfo().version ?? 'unknown';
+  return ownPackageInfo().version ?? '';
 }
 
 /** True when `latest` is a strictly newer release than `current`. */
 export function isNewer(latest: string | undefined, current: string): boolean {
-  return latest !== undefined && compareVersions(latest, current) > 0;
+  if (latest === undefined) return false;
+  if (current === '') return false; // unknown current: never claim an update
+  return compareVersions(latest, current) > 0;
 }
 
 /**

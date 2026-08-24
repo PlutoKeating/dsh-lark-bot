@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   findOwnPackageRoot,
   ownPackageInfo,
+  resolveOwnPackage,
 } from '../../../src/adapters/dsh/own-package.js';
 import {
   isSdkProfileReady,
@@ -49,6 +50,51 @@ describe('ownPackageInfo', () => {
     const info = findOwnPackageRoot(deep);
     expect(info.name).toBe('dsh-feishu-bot');
     expect(info.root).toBe(root);
+  });
+
+  it('walks past a foreign/unrelated package.json to the real own package', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-own-'));
+    tempDirs.push(root);
+    // A foreign package with the same name is *not* one of ours, so it must be
+    // skipped rather than returned as the running package.
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'some-other-tool', version: '9.9.9' }),
+    );
+    const dist = join(root, 'dist', 'adapters', 'dsh');
+    await mkdir(dist, { recursive: true });
+
+    // No own package anywhere up the chain: the cwd fallback has no version.
+    const info = resolveOwnPackage(dist);
+    expect(info.name).toBe('dsh-lark-bot');
+    expect(info.version).toBeUndefined();
+  });
+
+  it('prefers the co-located package.json over a stale own-package at the start dir', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-own-'));
+    tempDirs.push(root);
+    // Bundled layout: the module lives at `<root>/dist/<module>.js`, so the
+    // *co-located* manifest is `<root>/dist/../package.json` = `<root>/package.json`.
+    const dist = join(root, 'dist');
+    await mkdir(dist, { recursive: true });
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'dsh-lark-bot', version: '0.19.3' }),
+    );
+    // A stale own-package manifest sitting *directly* in the start dir (the
+    // boundary the upward walk would hit first) must not win over the
+    // co-located manifest — this is the `/new` `0.9.0` false-positive class.
+    await writeFile(
+      join(dist, 'package.json'),
+      JSON.stringify({ name: 'dsh-lark-bot', version: '0.9.0' }),
+    );
+
+    // The upward walk would return the stale copy at `dist`…
+    expect(findOwnPackageRoot(dist).version).toBe('0.9.0');
+    // …but the canonical resolver prefers the co-located running manifest.
+    const info = resolveOwnPackage(dist);
+    expect(info.root).toBe(root);
+    expect(info.version).toBe('0.19.3');
   });
 });
 

@@ -2,7 +2,7 @@ import { spawn } from 'cross-spawn';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import { BRIDGE_RUNTIME_PERSONA } from './bridge-persona.js';
@@ -38,7 +38,11 @@ export interface SdkRuntimeOptions {
    */
   bridgeTools?: boolean;
   /** Injectable installer for tests. */
-  install?: (profileRoot: string) => Promise<void>;
+  install?: (profileRoot: string, options?: { force?: boolean }) => Promise<void>;
+  /** Running bridge package identity (defaults to auto-discovery). */
+  ownPackage?: OwnPackageInfo;
+  /** Injectable repair for the running package's physical dependency tree. */
+  installOwnDependencies?: (projectRoot: string, options?: { force?: boolean }) => Promise<void>;
 }
 
 export interface SdkLaunchSpec {
@@ -57,8 +61,7 @@ export function sdkProfileRoot(home: string, profile: string, env?: NodeJS.Proce
   return join(resolveDshHome(home, env), 'profiles', profile);
 }
 
-function packageJsonFor(profile: string): string {
-  const own = ownPackageInfo();
+function packageJsonFor(profile: string, own: OwnPackageInfo = ownPackageInfo()): string {
   return `${JSON.stringify(
     {
       name: `dsh-profile-${profile}`,
@@ -177,14 +180,17 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
   return lines.join('\n');
 }
 
-export function isSdkProfileReady(profileRoot: string): boolean {
-  const own = ownPackageInfo();
+export function isSdkProfileReady(
+  profileRoot: string,
+  own: OwnPackageInfo = ownPackageInfo(),
+): boolean {
   return (
     existsSync(join(profileRoot, 'package.json')) &&
     existsSync(join(profileRoot, 'cordis.yml')) &&
     existsSync(join(profileRoot, 'cordis.patch.yml')) &&
     profilePackageMatches(profileRoot, SDK_SERVER_PACKAGE, SDK_SERVER_VERSION) &&
-    ownPackageLinked(profileRoot, own)
+    ownPackageLinked(profileRoot, own) &&
+    ownSdkServerDependencyReady(own)
   );
 }
 
@@ -192,11 +198,27 @@ export function isSdkProfileReady(profileRoot: string): boolean {
 export function isSdkManagedProfileCurrent(
   profileRoot: string,
   options?: { bridgeTools?: boolean },
+  own: OwnPackageInfo = ownPackageInfo(),
 ): boolean {
   return (
-    isSdkProfileReady(profileRoot) &&
+    isSdkProfileReady(profileRoot, own) &&
     readFileIfPresent(join(profileRoot, 'cordis.patch.yml')) === patchYamlFor(options)
   );
+}
+
+/** The wrapper exported as `dsh-lark-bot/sdk-server` resolves from this package. */
+function ownSdkServerDependencyReady(own: OwnPackageInfo): boolean {
+  return profilePackageMatches(own.root, SDK_SERVER_PACKAGE, SDK_SERVER_VERSION);
+}
+
+function findPnpmProjectRoot(start: string): string | undefined {
+  let current = start;
+  while (true) {
+    if (existsSync(join(current, 'pnpm-lock.yaml'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 /**
@@ -223,9 +245,9 @@ function ownPackageLinked(profileRoot: string, own: OwnPackageInfo): boolean {
   }
 }
 
-function runPnpmInstall(profileRoot: string): Promise<void> {
+function runPnpmInstall(profileRoot: string, options: { force?: boolean } = {}): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['install'], {
+    const child = spawn('pnpm', ['install', ...(options.force ? ['--force'] : [])], {
       cwd: profileRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -259,18 +281,19 @@ export async function ensureSdkProfile(
   options: SdkRuntimeOptions,
 ): Promise<SdkProfileEnsureResult> {
   const profile = options.profile ?? DEFAULT_SDK_PROFILE;
+  const own = options.ownPackage ?? ownPackageInfo();
   const root = sdkProfileRoot(options.home, profile, options.env);
   const patchOptions = options.bridgeTools === undefined
     ? {}
     : { bridgeTools: options.bridgeTools };
   const expectedPatch = patchYamlFor(patchOptions);
-  if (isSdkManagedProfileCurrent(root, patchOptions)) {
+  if (isSdkManagedProfileCurrent(root, patchOptions, own)) {
     return { ok: true, created: false };
   }
 
   try {
     await mkdir(root, { recursive: true });
-    await writeFile(join(root, 'package.json'), packageJsonFor(profile), 'utf8');
+    await writeFile(join(root, 'package.json'), packageJsonFor(profile, own), 'utf8');
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
     await writeFile(
       join(root, 'cordis.patch.yml'),
@@ -278,10 +301,20 @@ export async function ensureSdkProfile(
       'utf8',
     );
     const install = options.install ?? runPnpmInstall;
-    if (!isSdkProfileReady(root)) {
-      await install(root);
+    if (!isSdkProfileReady(root, own)) {
+      // A lockfile-consistent install may leave a physically stale/corrupt
+      // package untouched. Readiness is based on node_modules itself, so a
+      // failed readiness check must force pnpm to refresh package contents.
+      await install(root, { force: true });
     }
-    if (!isSdkProfileReady(root)) {
+    if (!ownSdkServerDependencyReady(own)) {
+      const projectRoot = findPnpmProjectRoot(own.root);
+      if (!projectRoot) {
+        throw new Error(`could not locate the pnpm project containing ${own.root}`);
+      }
+      await (options.installOwnDependencies ?? runPnpmInstall)(projectRoot, { force: true });
+    }
+    if (!isSdkProfileReady(root, own)) {
       return {
         ok: false,
         created: true,

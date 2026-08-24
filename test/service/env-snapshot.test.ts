@@ -57,6 +57,29 @@ describe('snapshotServiceEnv', () => {
       PATH: '/usr/bin',
     });
   });
+
+  it('does not persist bridge callback secrets or update-worker internals', () => {
+    const env = snapshotServiceEnv({
+      DSH_LARK_ADAPTER: 'sdk',
+      DSH_LARK_NOTIFY_URL: 'http://127.0.0.1:1234/notify',
+      DSH_LARK_ASK_URL: 'http://127.0.0.1:1234/ask',
+      DSH_LARK_NOTIFY_TOKEN: 'ephemeral-secret',
+      DSH_LARK_UPDATE_WORKER: '1',
+    });
+    expect(env).toEqual({ DSH_LARK_ADAPTER: 'sdk' });
+  });
+
+  it('keeps the stable inherited PATH when restarted by an update worker', () => {
+    const env = snapshotServiceEnv(
+      { DSH_LARK_UPDATE_WORKER: '1', PATH: '/tmp/update-worker/node_modules/.bin:/usr/bin' },
+      [],
+      { PATH: '/home/user/.local/bin:/usr/bin', DSH_LARK_MODEL: 'saved-model' },
+    );
+    expect(env).toEqual({
+      PATH: '/home/user/.local/bin:/usr/bin',
+      DSH_LARK_MODEL: 'saved-model',
+    });
+  });
 });
 
 describe('writeServiceEnv', () => {

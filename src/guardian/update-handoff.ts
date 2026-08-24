@@ -161,7 +161,7 @@ async function defaultLaunch(request: GuardianUpdateWorkerRequest): Promise<void
       detached: process.platform !== 'win32',
       stdio: 'ignore',
       windowsHide: true,
-      env: { ...process.env },
+      env: { ...process.env, DSH_LARK_UPDATE_WORKER: '1' },
     });
     child.once('spawn', () => {
       if (process.platform !== 'win32') child.unref();

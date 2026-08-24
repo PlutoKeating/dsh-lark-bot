@@ -352,7 +352,9 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 
 `snapshotServiceEnv(source, extraKeys, inherited)` 只合并白名单受管键，顺序为旧 service env → 当前
 shell（后者覆盖）；`ServiceManager.buildSpec()` 每次 install/start/restart 都先读取原 0600 env 文件，
-所以稀疏 shell 不会擦除已有 `DSH_LARK_PROVIDER`，显式新值仍可正常替换。
+所以稀疏 shell 不会擦除已有 `DSH_LARK_PROVIDER`，显式新值仍可正常替换。函数拒绝持久化 bridge
+callback URL/token、E2E/live-upgrade 开关与 update-worker 标记；当 update-worker 重启受管服务时保留
+已有 PATH，不接受 npx 临时 cache/cwd PATH 覆盖。
 
 交互式管理：`/providers`（或裸 `/provider`、`/model`、`/key`）打开管理卡片
 （`src/card/config-cards.ts`），BotFather 式多轮向导由 `src/commands/config-wizard.ts` 驱动，
@@ -372,7 +374,9 @@ per-scope 向导状态由 `src/bot/wizard-store.ts` 持有（30 分钟无操作�
 dsh 兼容矩阵的**单一事实来源**为 `src/config/dsh-compat.ts`（`DSH_COMPATIBILITY`），
 供 `sdk-runtime.ts` / `acp-runtime.ts` 的版本常量引用；升级流程见
 [`COMPATIBILITY.md`](COMPATIBILITY.md)。
-当前 rc.8 runtime profile 会校验物理安装包的精确版本，不能仅凭目录存在判定 ready；
+当前 rc.8 runtime profile 会校验物理安装包的精确版本，不能仅凭目录或 lockfile 存在判定 ready；
+不匹配时 `ensureSdkProfile` / `ensureAcpProfile` 使用 `pnpm install --force` 刷新物理内容；SDK 路径
+还校验 `dsh-lark-bot/sdk-server` 实际解析的主插件依赖树，损坏时向上定位其 pnpm project 并强制刷新；
 `lark_notify` / `lark_ask_user` / `lark_request_plan_approval` 直接向宿主 registry 注册 raw JSON Schema tool definition；
 `dsh-lark-bot/approval` 以 structural listener 接入宿主 `approval/request` waterfall；两者都不携带
 第二份 `dsh-tools`。完整审计见 [`DSH_RC8_AUDIT.md`](DSH_RC8_AUDIT.md)。
@@ -778,7 +782,7 @@ export interface Logger {
   [--rollback] [--force] [--package <spec>]`：一行命令彻底升级（issue #10）——检测已装 /
   运行中 CLI / npm 最新版本 → `dsh plugin add <name>@<latest>` 升级包本体 → **修复
   `dsh-lark-sdk` / `dsh-lark-acp` runtime profile 的 own-package 链接并重装陈旧的
-  SDK server / ACP 依赖** → 幂等重装并
+  SDK server / ACP 依赖（含被链接主插件依赖树；物理版本不匹配时强制刷新）** → 幂等重装并
   重启 guardian 服务 → `doctor` 验证。运行中实例默认只提示重启命令（不中断会话）；
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
@@ -798,7 +802,8 @@ export interface Logger {
   service 未运行但发现同 profile 前台进程时 fail closed，要求先停止前台实例。
 - `dsh-lark-bot service logs [--profile <name>] [-n <count>] [-f]`：读取 / 跟随
   `profiles/<profile>/logs/service.log`。服务元数据与环境分别为 `service/<profile>.json`、`.env`
-  （POSIX 0600；Windows 以 owner-only ACL 收紧）；环境仅快照 `DSH_LARK_*`、PATH/HOME/DSH_HOME、DeepSeek key 与 provider 实际引用键。
+  （POSIX 0600；Windows 以 owner-only ACL 收紧）；环境仅快照可持久配置的 `DSH_LARK_*`、
+  PATH/HOME/DSH_HOME、DeepSeek key 与 provider 实际引用键，排除进程内 callback、测试和更新 worker 变量。
 - `dsh-lark-bot bot add <name> [--app-id/--app-secret] [--tenant] [--workspace] [--model]`：
   安装独立 `dsh-lark-<name>` bundle profile、创建/保存同名 bridge profile、写 fleet row，并只启动
   该实例的 OS 用户服务；任一步启动失败会卸载部分 service、删除 fleet row 与配置凭据。附加实例
@@ -992,7 +997,9 @@ worker 固定在 `guardian/update-worker/cwd`（0700）执行，并为每个请�
 因此不继承 bridge cwd、用户全局 npm cache 或异常宿主 umask。失败只持久化
 `filesystem-access | registry-unavailable | bootstrap-unavailable | upgrade-failed` 类别和有界安全摘要，
 原始 stdout/stderr 不进入状态文件或飞书消息。
-重载后的 bridge 以自身实际版本协调被 service cgroup 重启中断的 worker，并向原路由只回执一次。
+重载后的 bridge 在飞书通道、callback server 与 heartbeat 全部就绪后，才以自身实际版本协调被
+service cgroup 重启中断的 worker，并向原路由只回执一次；启动中途失败会保持 running/failed，
+不会仅凭版本相等误报成功。
 `/new` / `/reset` 每次执行一次 best-effort npm 查询，仅在严格新版本存在时发送一条短文本提醒；
 registry 失败和已是最新均保持静默，不影响新会话。
 

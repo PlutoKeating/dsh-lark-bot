@@ -1,9 +1,9 @@
 {
   "claimVersion": "0.15",
-  "subject": "io.github.plutokeating.dsh-lark-bot@0.19.4",
+  "subject": "io.github.plutokeating.dsh-lark-bot@0.19.5",
   "specVersion": "community-v0.15",
   "hostDescriptorDigest": "sha256:b440a6f6548c56d9b7e07627ddd3c5324fbdba5efca646eb010435d523d6b4a1",
-  "artifactDigest": "sha256:9eac03b3c4c69ff369cce47bf25fcc300890ac66542aec84cf39c518ab5347ca",
+  "artifactDigest": "sha256:c5bf0422ea374cc2a734599781530c159c37660293cc1acdf45070e0d66efa31",
   "suiteVersion": "0.15.0-experimental+e1b902b0",
   "evidenceLevel": "Tested",
   "result": "pass",

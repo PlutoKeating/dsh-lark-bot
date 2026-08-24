@@ -8,8 +8,10 @@ import {
   DEEPSEEK_PROVIDER,
   PIAI_NAMESPACE,
   DshProviderManager,
+  isVisionModelId,
   normalizeBaseUrl,
   normalizeDeepseekBaseUrl,
+  normalizeVisionModelInputModalities,
 } from '../../src/config/dsh-config.js';
 import type { ModelCatalog } from '../../src/config/model-catalog.js';
 
@@ -286,6 +288,44 @@ describe('DshProviderManager', () => {
     });
   });
 
+  it('defaults vision model modalities to text+image even when unset (issue #96)', async () => {
+    await withHome(async (root, manager) => {
+      // A vision model added through /model add WITHOUT --input-modalities must
+      // still be persisted with ['text','image'] so the harness accepts images.
+      await manager.addDeepseekModel({
+        id: 'deepseek-v4-flash-vision-exp',
+        name: 'Vision Flash',
+        contextWindow: undefined,
+        maxTokens: undefined,
+        inputModalities: undefined,
+      });
+
+      const settings = await readFile(join(root, '.dsh', 'settings.yaml'), 'utf8');
+      expect(settings).toContain('- image');
+      const provider = (await manager.listProviders())[0];
+      expect(
+        provider?.models.find((model) => model.id === 'deepseek-v4-flash-vision-exp')
+          ?.inputModalities,
+      ).toEqual(['text', 'image']);
+    });
+  });
+
+  it('leaves non-vision model modalities unset (issue #96)', async () => {
+    await withHome(async (_root, manager) => {
+      await manager.addDeepseekModel({
+        id: 'deepseek-chat',
+        name: 'Chat',
+        contextWindow: undefined,
+        maxTokens: undefined,
+        inputModalities: undefined,
+      });
+      const provider = (await manager.listProviders())[0];
+      expect(
+        provider?.models.find((model) => model.id === 'deepseek-chat')?.inputModalities,
+      ).toBeUndefined();
+    });
+  });
+
   it('rejects a new pi-ai provider without api/base-url/models and rejects unknown protocols', async () => {
     await withHome(async (_root, manager) => {
       await expect(
@@ -346,5 +386,38 @@ describe('DshProviderManager', () => {
       });
       expect(await envManager.hasCredential('DEEPSEEK_API_KEY')).toBe(true);
     });
+  });
+});
+
+describe('vision model modality normalization (issue #96)', () => {
+  it('identifies vision-capable model ids', () => {
+    expect(isVisionModelId('deepseek-v4-flash-vision-exp')).toBe(true);
+    expect(isVisionModelId('qwen2-vl')).toBe(true);
+    expect(isVisionModelId('gpt-4o')).toBe(true);
+    expect(isVisionModelId('gpt-image-1')).toBe(true);
+    expect(isVisionModelId('glm-4v')).toBe(true);
+    expect(isVisionModelId('deepseek-chat')).toBe(false);
+    expect(isVisionModelId('gpt-4')).toBe(false);
+    expect(isVisionModelId('claude-3-5-sonnet')).toBe(false);
+  });
+
+  it('defaults a vision model with no configured modality to text+image', () => {
+    expect(normalizeVisionModelInputModalities('deepseek-v4-flash-vision-exp', undefined, false))
+      .toEqual(['text', 'image']);
+    expect(normalizeVisionModelInputModalities('gpt-4o', ['text'], false))
+      .toEqual(['text', 'image']);
+    // A catalog that already declares image also upgrades the modality.
+    expect(normalizeVisionModelInputModalities('some-model', undefined, true))
+      .toEqual(['text', 'image']);
+  });
+
+  it('leaves non-vision models and explicitly image-capable models unchanged', () => {
+    expect(normalizeVisionModelInputModalities('deepseek-chat', undefined, false))
+      .toBeUndefined();
+    expect(normalizeVisionModelInputModalities('deepseek-chat', ['text'], false))
+      .toEqual(['text']);
+    // An explicitly image-capable vision model keeps its declaration as-is.
+    expect(normalizeVisionModelInputModalities('deepseek-v4-flash-vision-exp', ['text', 'image'], false))
+      .toEqual(['text', 'image']);
   });
 });
