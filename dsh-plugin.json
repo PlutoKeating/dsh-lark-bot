@@ -3,7 +3,7 @@
   "manifestVersion": "0.15",
   "id": "io.github.plutokeating.dsh-lark-bot",
   "name": "dsh-lark-bot",
-  "version": "0.19.8",
+  "version": "0.19.9",
   "facets": {
     "host": {
       "entry": "dist/plugin.js",
@@ -30,7 +30,7 @@
     "repository": "https://github.com/PlutoKeating/dsh-lark-bot"
   },
   "artifact": {
-    "digest": "sha256:a3e152d59e7f669a153e24cbfe5bd966a4fbac600ed455a3f35aeadb4d197d30",
+    "digest": "sha256:54941f19511b694e36fa0ff13bc14d0562aa6064cd007d5b72dd496bb51d9c56",
     "algorithm": "sha256",
     "path": "dist/plugin.js"
   },
