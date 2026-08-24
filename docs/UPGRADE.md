@@ -37,12 +37,14 @@
 - `fetchNpmLatestVersion`（`src/upgrade/versions.ts`）：**最多 3 次尝试 + 退避重试**，每次依次
   使用 `application/vnd.npm.install-v1+json` → `application/json` 两个 Accept 头；
   404 视为“包不存在”不重试；镜像通过 `DSH_LARK_UPGRADE_REGISTRY` 指定。
-- `fetchNpmLatestVersionOnce`：单次、5s 超时、best-effort，供 `doctor` 更新提醒等廉价探测使用；
+- `fetchNpmLatestVersionOnce`：单次、15s 超时（与加固路径的每请求超时 `NPM_LATEST_TIMEOUT_MS` 一致，#110）、
+  best-effort，供 `/version`、更新通知器与 `doctor` 更新提醒等廉价探测使用；
   **任何失败都不得导致 doctor / upgrade 报错**。
 - `doctor` 更新提醒：`DSH_LARK_UPGRADE_CHECK=0` 关闭；发现新版本输出
   `upgrade: 有新版本 X（当前 Y）；执行 dsh-lark-bot upgrade 更新`。
 - `/version`、`/upgrade`、`/new` 与桥接周期检测（`src/upgrade/update-check.ts` /
-  `src/upgrade/update-notifier.ts`）：内存缓存 1h；`/version` 展示当前/最新版本；
+  `src/upgrade/update-notifier.ts`）：内存缓存 **成功 1h、失败仅 15s**（#110，避免一次瞬时卡顿被
+  误报为长时间「最新版本查询暂不可用」）；`/version` 展示当前/最新版本；
   `/upgrade` 与每次 `/new` / `/reset` 强制一次 best-effort 探测（`/new` 仅在严格更新时发短文本）；
   桥接按 `DSH_LARK_UPGRADE_CHECK_INTERVAL_MS`（默认 6h）检测，发现新版本默认记日志，
   `DSH_LARK_UPGRADE_NOTIFY=true` + `DSH_LARK_UPGRADE_NOTIFY_CHAT` 时向指定 chat 推送

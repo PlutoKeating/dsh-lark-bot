@@ -4,11 +4,13 @@ import {
   isNewer,
   latestVersion,
   resetUpdateCheckCache,
+  UPDATE_CHECK_FAILURE_CACHE_MS,
   upgradeCheckEnabled,
 } from '../../src/upgrade/update-check.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   resetUpdateCheckCache();
 });
 
@@ -38,6 +40,30 @@ describe('update-check', () => {
     await expect(latestVersion({ probe, cacheMs: 60_000 })).resolves.toBe('0.14.0');
     await expect(latestVersion({ probe, cacheMs: 60_000 })).resolves.toBe('0.14.0');
     expect(probe).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not stick a failed lookup for the full success window', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const probe = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce('0.14.0');
+
+    // First probe fails and is cached for only the short failure window.
+    await expect(latestVersion({ probe })).resolves.toBeUndefined();
+    // A call right after the failure is served from that brief cache.
+    await expect(latestVersion({ probe })).resolves.toBeUndefined();
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // Once the short failure window elapses, the next call re-probes and succeeds.
+    now += UPDATE_CHECK_FAILURE_CACHE_MS + 1;
+    await expect(latestVersion({ probe })).resolves.toBe('0.14.0');
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it('honors an explicit cacheMs override even right after a failed lookup', async () => {
+    const probe = vi.fn().mockResolvedValue(undefined);
+    await expect(latestVersion({ probe, cacheMs: 0 })).resolves.toBeUndefined();
+    await expect(latestVersion({ probe, cacheMs: 0 })).resolves.toBeUndefined();
+    expect(probe).toHaveBeenCalledTimes(2);
   });
 
   it('respects DSH_LARK_UPGRADE_CHECK=0', async () => {

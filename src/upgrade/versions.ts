@@ -116,14 +116,20 @@ export async function fetchNpmLatestVersion(
 }
 
 /**
- * Single-attempt, short-timeout probe of the npm `latest` dist-tag, used by
- * cheap best-effort checks (e.g. `doctor`'s update reminder). Returns
+ * Single-attempt probe of the npm `latest` dist-tag, used by cheap best-effort
+ * checks (`/version`, the notifier, `doctor`'s update reminder). Returns
  * undefined on any failure — callers treat it as "unknown", never fatal.
+ *
+ * The `timeoutMs` default matches the hardened probe's per-request timeout
+ * (issue #110): a cold npm `/latest` response can hover just at the old 5s
+ * cutoff, so a single attempt needs the same headroom the hardened path gives
+ * each request. Kept single-attempt so a hard outage costs at most one timeout
+ * instead of a multi-attempt worst case.
  */
 export async function fetchNpmLatestVersionOnce(
   packageName: string,
   registryUrl: string = defaultRegistryUrl(),
-  timeoutMs: number = 5_000,
+  timeoutMs: number = NPM_LATEST_TIMEOUT_MS,
   fetcher: typeof fetch = fetch,
 ): Promise<string | undefined> {
   try {
