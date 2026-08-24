@@ -848,6 +848,12 @@ describe('startChannel', () => {
 
     expect(fake.createOptions?.resolveChatMode).toBe(true);
     expect((fake.createOptions?.policy as { requireMention?: boolean })?.requireMention).toBe(false);
+    // Issue #108: the channel liveness watchdog must be enabled by default so a
+    // half-open WebSocket (TCP ESTABLISHED but Feishu not delivering) is
+    // detected and force-reconnected.
+    expect((fake.createOptions?.wsConfig as { pingTimeout?: number })?.pingTimeout).toBe(30);
+    expect((fake.createOptions?.keepalive as { enabled?: boolean })?.enabled).toBe(true);
+    expect(typeof (fake.createOptions?.keepalive as { onUnrecoverable?: unknown })?.onUnrecoverable).toBe('function');
 
     await (fake.handlers.message as (msg: NormalizedMessage) => Promise<void>)(
       message({ content: '/status' }),

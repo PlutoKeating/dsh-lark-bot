@@ -73,6 +73,14 @@ export interface RuntimeEnv {
    * longer than this, treat the engine as dead and take over (default 120000).
    */
   guardianEngineDeadMs: number;
+  /** SDK liveness ping timeout (s) before a stuck WebSocket is reconnected, default 30. */
+  channelPingTimeoutSec: number;
+  /** App-level keepalive watchdog for the Feishu channel, default true. */
+  channelKeepalive: boolean;
+  /** App-level keepalive watchdog probe interval (ms), default 15000. */
+  channelKeepaliveMs: number;
+  /** Channel health poll cadence (ms), default 5000. */
+  channelHealthPollMs: number;
 }
 
 const DEFAULTS = {
@@ -95,6 +103,10 @@ const DEFAULTS = {
   guardianBridgeProfile: 'default',
   upgradeNotify: false,
   upgradeCheckIntervalMs: 6 * 60 * 60_000,
+  channelPingTimeoutSec: 30,
+  channelKeepalive: true,
+  channelKeepaliveMs: 15_000,
+  channelHealthPollMs: 5_000,
   sessionBackfillMessages: 20,
   sessionBackfillBytes: 64 * 1024,
   sessionStreamUpdateMs: 800,
@@ -353,6 +365,22 @@ export function loadRuntimeEnv(
       source.DSH_LARK_GUARDIAN_ENGINE_DEAD_MS,
       DEFAULTS.guardianEngineDeadMs,
       'DSH_LARK_GUARDIAN_ENGINE_DEAD_MS',
+    ),
+    channelPingTimeoutSec: parsePositiveIntMin(
+      source.DSH_LARK_CHANNEL_PING_TIMEOUT_SEC,
+      DEFAULTS.channelPingTimeoutSec,
+      'DSH_LARK_CHANNEL_PING_TIMEOUT_SEC',
+    ),
+    channelKeepalive: parseBoolean(source.DSH_LARK_CHANNEL_KEEPALIVE, DEFAULTS.channelKeepalive),
+    channelKeepaliveMs: parsePositiveIntMin(
+      source.DSH_LARK_CHANNEL_KEEPALIVE_MS,
+      DEFAULTS.channelKeepaliveMs,
+      'DSH_LARK_CHANNEL_KEEPALIVE_MS',
+    ),
+    channelHealthPollMs: parsePositiveIntMin(
+      source.DSH_LARK_CHANNEL_HEALTH_POLL_MS,
+      DEFAULTS.channelHealthPollMs,
+      'DSH_LARK_CHANNEL_HEALTH_POLL_MS',
     ),
   };
 }

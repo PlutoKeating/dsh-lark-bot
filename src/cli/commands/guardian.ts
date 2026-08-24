@@ -5,6 +5,7 @@ import {
   buildGuardianService,
 } from '../../guardian/service.js';
 import {
+  channelHealthLabel,
   heartbeatAgeMs,
   isHeartbeatFresh,
   readHeartbeat,
@@ -109,6 +110,7 @@ export async function statusGuardianCommand(
     `桥接 profile：${state.bridgeProfile}`,
     `dsh 是否在线：${up ? '是' : '否'}${processFound ? `（pid ${processFound.pid}）` : ''}`,
     `心跳龄：${heartbeat ? `${heartbeatAgeMs(heartbeat)}ms` : '无'}`,
+    `飞书通道：${channelHealthLabel(heartbeat?.channel)}`,
     `已观察过 dsh 运行：${state.profileSeenUp ? '是' : '否'}`,
     guardianProcess === undefined
       ? '守护进程 pid：未发现（无法唯一证明 resident guardian 身份）'
