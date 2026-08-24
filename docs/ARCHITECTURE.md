@@ -294,8 +294,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 10. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
    runtime profile（dsh-lark-sdk / dsh-lark-acp）own-package 链接修复，以及 runtime profile 与被链接
-   主插件依赖树中陈旧/物理损坏上游依赖的强制刷新
-   → `doctor` 升级后验证；
+   主插件依赖树中陈旧/物理损坏上游依赖的强制刷新；managed overlay 的 bridge 工具行按已安装（回滚目标）
+    包实际导出的 subpath 生成，只引用其真正导出的 `notify`/`file`/`secret`/`ask`/`plan`/`approval`/
+    `skill`/`sdk-server`，`./sdk-server` 缺失时回退官方 server，因此回滚到更旧版本不会产生
+    `ERR_PACKAGE_PATH_NOT_EXPORTED`
+    → `doctor` 升级后验证；
    运行中实例默认只提示重启命令（不中断会话 / 配置 / 凭据），`--restart` 可选自动重启，
    `--rollback` 按 `~/.dsh-lark/upgrade-state.json` 记录精确回滚。旧版本（无 upgrade 命令）
    通过 `npx dsh-lark-bot@latest upgrade` 引导：npx 拉取最新版执行升级。

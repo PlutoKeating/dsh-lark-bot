@@ -8,7 +8,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import { BRIDGE_RUNTIME_PERSONA } from './bridge-persona.js';
 import type { OwnPackageInfo } from './own-package.js';
-import { ownPackageInfo } from './own-package.js';
+import { ownExportsSubpath, ownPackageInfo } from './own-package.js';
 import { profilePackageMatches } from './profile-package.js';
 
 export const SDK_SERVER_PACKAGE = '@deepseek-ai/dsh-sdk-jsonrpc-server';
@@ -82,15 +82,16 @@ function packageJsonFor(profile: string, own: OwnPackageInfo = ownPackageInfo())
   )}\n`;
 }
 
-export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
-  const own = ownPackageInfo();
+export function patchYamlFor(options?: { bridgeTools?: boolean; own?: OwnPackageInfo }): string {
+  const own = options?.own ?? ownPackageInfo();
   const bridgeTools = options?.bridgeTools ?? true;
+  const has = (subpath: string): boolean => ownExportsSubpath(own, subpath);
   const lines = [
     '# dsh-lark SDK JSON-RPC runtime overlay (managed by dsh-lark-bot).',
     '# stdout is reserved for SDK JSON-RPC frames; no console logger may load.',
     '- insert:',
     '    - id: sdk-jsonrpc-server',
-    `      name: '${bridgeTools ? `${own.name}/sdk-server` : SDK_SERVER_PACKAGE}'`,
+    `      name: '${bridgeTools && has('sdk-server') ? `${own.name}/sdk-server` : SDK_SERVER_PACKAGE}'`,
     '      config:',
     '        maxTokensAsSuccess: true',
     '',
@@ -109,23 +110,32 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
     '- id: hmr',
     '  disabled: true',
     '',
-    // Model-invocable channel skill: expose the dsh-lark-bot operations guide
-    // to THIS agent session's skill catalog — the one the `skill` tool reads.
-    // The bridge engine registers the same skill on its own cordis context
-    // (plugin.ts), but that context is never the one the model reads. This row
-    // ensures the skill also lands on the agent runtime's context so that
-    // `skill("dsh-lark-bot")` resolves in a live SDK session. It is kept
-    // outside the bridgeTools gate because it needs no callback endpoint and
-    // is also useful to the guardian's core-only safe profile.
-    '- insert:',
-    '    - id: lark-skill',
-    `      name: '${own.name}/skill'`,
-    '',
   ];
-  if (bridgeTools) {
+  // Model-invocable channel skill: expose the dsh-lark-bot operations guide to
+  // THIS agent session's skill catalog — the one the `skill` tool reads. The
+  // bridge engine registers the same skill on its own cordis context
+  // (plugin.ts), but that context is never the one the model reads. This row
+  // ensures the skill also lands on the agent runtime's context so that
+  // `skill("dsh-lark-bot")` resolves in a live SDK session. It is kept outside
+  // the bridgeTools gate because it needs no callback endpoint and is also
+  // useful to the guardian's core-only safe profile. Only emitted when the
+  // installed package exports `./skill` (older versions may not).
+  if (has('skill')) {
     lines.push(
-      // In-process bridge callback tool: lets the agent mention users and push
-      // messages to other chats/topics through the running bridge process.
+      '- insert:',
+      '    - id: lark-skill',
+      `      name: '${own.name}/skill'`,
+      '',
+    );
+  }
+  // Each bridge tool row is emitted only when the installed (possibly
+  // rolled-back) package exports the corresponding subpath, so a rollback to a
+  // version that does not provide that entrypoint never produces a
+  // `ERR_PACKAGE_PATH_NOT_EXPORTED` at runtime.
+  if (bridgeTools && has('notify')) {
+    // In-process bridge callback tool: lets the agent mention users and push
+    // messages to other chats/topics through the running bridge process.
+    lines.push(
       '- insert:',
       '    - id: lark-notify',
       `      name: '${own.name}/notify'`,
@@ -133,7 +143,11 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
-      // Local result-file upload tool.
+    );
+  }
+  if (bridgeTools && has('file')) {
+    // Local result-file upload tool.
+    lines.push(
       '- insert:',
       '    - id: lark-file',
       `      name: '${own.name}/file'`,
@@ -141,7 +155,11 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
-      // Owner-only secure value collection; values bypass the agent process.
+    );
+  }
+  if (bridgeTools && has('secret')) {
+    // Owner-only secure value collection; values bypass the agent process.
+    lines.push(
       '- insert:',
       '    - id: lark-secret',
       `      name: '${own.name}/secret'`,
@@ -149,8 +167,12 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_SECRET_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
-      // Question-card tool: the agent asks the user for decisions / missing
-      // information; the bridge shows a card and returns the answer.
+    );
+  }
+  if (bridgeTools && has('ask')) {
+    // Question-card tool: the agent asks the user for decisions / missing
+    // information; the bridge shows a card and returns the answer.
+    lines.push(
       '- insert:',
       '    - id: lark-ask',
       `      name: '${own.name}/ask'`,
@@ -158,7 +180,11 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '',
-      // Plan gate: send the complete plan, then wait for approve/revise.
+    );
+  }
+  if (bridgeTools && has('plan')) {
+    // Plan gate: send the complete plan, then wait for approve/revise.
+    lines.push(
       '- insert:',
       '    - id: lark-plan-approval',
       `      name: '${own.name}/plan'`,
@@ -168,7 +194,11 @@ export function patchYamlFor(options?: { bridgeTools?: boolean }): string {
       '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
       '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
       '',
-      // Default-runtime answerer for the official dsh user-approval seam.
+    );
+  }
+  if (bridgeTools && has('approval')) {
+    // Default-runtime answerer for the official dsh user-approval seam.
+    lines.push(
       '- insert:',
       '    - id: lark-approval-answerer',
       `      name: '${own.name}/approval'`,
@@ -203,7 +233,7 @@ export function isSdkManagedProfileCurrent(
 ): boolean {
   return (
     isSdkProfileReady(profileRoot, own) &&
-    readFileIfPresent(join(profileRoot, 'cordis.patch.yml')) === patchYamlFor(options)
+    readFileIfPresent(join(profileRoot, 'cordis.patch.yml')) === patchYamlFor({ ...(options ?? {}), own })
   );
 }
 
@@ -311,8 +341,8 @@ export async function ensureSdkProfile(
   const own = options.ownPackage ?? ownPackageInfo();
   const root = sdkProfileRoot(options.home, profile, options.env);
   const patchOptions = options.bridgeTools === undefined
-    ? {}
-    : { bridgeTools: options.bridgeTools };
+    ? { own }
+    : { bridgeTools: options.bridgeTools, own };
   const expectedPatch = patchYamlFor(patchOptions);
   if (isSdkManagedProfileCurrent(root, patchOptions, own)) {
     return { ok: true, created: false };

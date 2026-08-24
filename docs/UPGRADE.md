@@ -65,7 +65,10 @@
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
    包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；SDK
    依赖校验在 pnpm isolated tree 中先解引用 own-package 到 `.pnpm` 物理目录，再执行 Node 模块解析，
-   同时兼容 npm/npx 扁平树；
+   同时兼容 npm/npx 扁平树。managed overlay 的 bridge 工具行（`notify`/`file`/`secret`/`ask`/
+   `plan`/`approval`/`skill`/`sdk-server`）按**已安装（回滚目标）包实际导出的 subpath** 生成：
+   只在目标包导出时才写入该行，`./sdk-server` 缺失时回退为官方 `@deepseek-ai/dsh-sdk-jsonrpc-server`，
+   因此回滚到导出 subpath 更少的旧版本不会再产生 `ERR_PACKAGE_PATH_NOT_EXPORTED`；
 6. 新版 bridge 首次启动时迁移 workspace session schema；若存在旧版 scope-only Git worktree，先从
    Git registry 解析 owning repo；先以逐文件原子、半完成可重试的幂等流程把旧 execution-cwd
    retention archive header 归回该项目并生成 migration commit，全部成功后才提交 session schema 2。
@@ -124,7 +127,7 @@ package 遮蔽或异常宿主 umask 破坏 npm 子目录。失败输出只映射
 | 回滚 | `upgrade-state.json` + `--rollback` | 已支持 |
 | 运行中实例待生效 | `pendingRestart` 记录 + doctor 提示 | 已实现 |
 | runtime 链接漂移 | doctor 检测 sdk/acp 链接版本与已装版本不一致 | 已实现 |
-| runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写 | 已实现 + 单测覆盖 |
+| runtime managed overlay 漂移 | upgrade 按当前包精确比较 SDK overlay；ACP 按既有 provider/model route 生成期望内容，陈旧时原地重写；回滚时按已安装包实际导出的 subpath 生成兼容 overlay | 已实现 + 单测覆盖（含回滚兼容） |
 | schema 1 workspace/worktree/archive | 从旧树核验 owning repo并归属 session/retention archive；owner 匹配时原位移动，不匹配时保留旧树并为当前项目另建 | 已实现 + 单测覆盖 owner match/mismatch/archive rebind |
 | 多机器人版本漂移 | 每个实例是独立 dsh profile，单次 upgrade 不做 fleet-wide mutation | `bot list` 后逐 profile 升级并 doctor |
 
