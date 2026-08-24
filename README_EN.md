@@ -45,25 +45,24 @@ app → once bound, message the bot directly; groups / threads default to `@bot`
 
 ## Core capabilities
 
-> **Strongest Feishu-only channel in the ecosystem**: among the DSH "channels & notify × Feishu" plugins, ours is the
-> **most feature-complete** (a full 5.0/5.0 feature-completeness score), backed by `ARCHITECTURE.md` + `API.md`
-> engineering docs. We don't chase multi-platform breadth (WeChat / DingTalk / QQ etc. is a different game) — instead
-> we make **the Feishu channel the deepest, the most painless, and the most durable**.
+**Unique to the ecosystem**
 
-- **Safety-net guardian** (**unique in the ecosystem**): Feishu still replies if dsh crashes; `/safemode` opens a core-only safe mode to self-heal — most bridges are "serial single chat + lost on crash".
-- **Parallel tasks**: many tasks run concurrently in the same group with isolated sessions; others only queue serially.
-- **Multi-role agents**: `/role` switches / assigns PM, dev, doc, etc., each with its own persona, model preference, and rules.
+- **Safety-net guardian**: Feishu still replies if dsh crashes; `/safemode` opens a core-only safe mode to self-heal, queued tasks are restored on restart, and `/jobs` retries explicitly. Most bridges are "serial single chat + lost on crash".
 - **Multi-bot trusted hand-off**: `bot add` adds independent instances and trusted bots hand off with a real @ in the same group, capped.
-- **Crash reconciliation**: messages write to a durable task ledger before queueing; restart restores queued items, `/jobs` retries explicitly.
-- **Session archive & retention**: `/archive` + `/retention` auto-archive and clean up.
-- **Cross-session notify + @**: a task finishing in group A can push to group B / DM and @ you.
+- **Full workspace & session management**: an isolated git worktree is auto-created per session; `/session` lists / binds sessions and `/archive` + `/retention` auto-archive and clean up, so the session list never gets cluttered.
+- **Robust version management**: an admin just sends `/upgrade` in Feishu to update, verify, and reload in the background; you're only nudged when a new version exists, with no interruption to current work.
+- **dsh Web visual settings**: point-and-click work dir, model, concurrency, and reminders in Settings → Plugins — no env vars to memorize.
+
+**Other core capabilities**
+
+- **Parallel tasks**: many tasks run concurrently in the same group with isolated sessions.
+- **Multi-role agents**: `/role` switches / assigns PM, dev, doc, etc., each with its own persona, model preference, and rules.
 - **In-chat model & key management**: one `/config` card to switch providers and hot-reload keys, without leaving Feishu.
 - **Quick / balanced / deep mode**: `/mode` picks the strength for the next turn without interrupting the current task.
-- **Plan gate for key tasks**: `lark_request_plan_approval` sends the full plan first, then approves or revises via a card.
-- **dsh Web visual settings**: point-and-click work dir, model, concurrency, and reminders in Settings → Plugins.
-- **In-Feishu self-update**: an admin `/upgrade` updates, verifies, and reloads; only nudges when a new version exists.
+- **Plan gate for key tasks**: `lark_request_plan_approval` sends the full plan first, then approves or revises.
+- **Cross-session notify + @**: a task finishing in group A can push to group B / DM and @ you.
 
-> Each session auto-creates an isolated git worktree project workspace; streaming process cards render in a native Feishu collapsible panel.
+> Streaming process cards render in a native Feishu collapsible panel.
 
 ## Command reference
 
