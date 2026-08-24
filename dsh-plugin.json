@@ -30,7 +30,7 @@
     "repository": "https://github.com/PlutoKeating/dsh-lark-bot"
   },
   "artifact": {
-    "digest": "sha256:9d975d726c048f1fe11eeb4402bbcb23e12b8b58a6b8c85d41b078ea946ede84",
+    "digest": "sha256:440f058c4d0f7493870632ca196d4937c6b6a87ab4d5f0bf9e1bd068809fa007",
     "algorithm": "sha256",
     "path": "dist/plugin.js"
   },

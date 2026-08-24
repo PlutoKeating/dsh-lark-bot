@@ -165,7 +165,10 @@ to the cloud LLM.
 Feishu images are detected by content as PNG/JPEG/WebP/GIF and receive a safe extension. The default
 SDK validates them through dsh's attachment store and sends native image blocks instead of path text.
 Unreadable or unsupported images fail explicitly, and the agent is instructed never to substitute another
-workspace image. Text files are read and injected into the task context.
+workspace image. Before each run, the selected `deepseek-official` vision model is idempotently added to the
+model catalogue consumed by the dsh runtime with `text,image` modalities. This prevents rc.8 from treating the
+model as text-only even when the display catalogue already recognizes its vision capability. Text files are read
+and injected into the task context.
 The `/model` card merges the dsh default into its switchable catalogue even when a provider's explicit
 list omits it, and uses compact distinguishing labels with at most two buttons per mobile row. Provider
 names, models, input modalities, and reasoning-effort options are discovered from the models.dev runtime
