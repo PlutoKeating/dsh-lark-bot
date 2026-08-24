@@ -233,6 +233,13 @@ function createWebRun(adapter: WebDshAdapter, options: WebRunOptions): WebRunHan
 export class WebDshAdapter implements AgentAdapter {
   readonly id = 'dsh-web';
   readonly displayName = 'DeepSeek Harness (Web GUI)';
+  /**
+   * The web agent is the single writer of each session log and holds sessions
+   * server-side across connections, so `run()` natively resumes the session
+   * identified by `options.sessionId` (the run-flow only replays the bridge
+   * transcript for adapters that cannot resume).
+   */
+  readonly resumeCapable = true;
 
   private readonly baseUrl: string;
   private readonly model: string;
@@ -304,6 +311,24 @@ export class WebDshAdapter implements AgentAdapter {
       );
     });
     return socket;
+  }
+
+  /**
+   * Whether this live adapter instance can still resume the named native
+   * session. The web server is the session's single writer, and a freshly
+   * constructed adapter is reconnected to the same web server after a bridge
+   * restart, so the only case where resume is denied is once the adapter has
+   * been disposed (bridge shutdown). An unknown/expired session id is handled
+   * by the run-flow fallback rather than here.
+   */
+  canResume(_options: {
+    runtimeKey?: string;
+    cwd: string | undefined;
+    sessionId: string;
+    provider?: string;
+    model: string | undefined;
+  }): boolean {
+    return !this.disposed;
   }
 
   async isAvailable(): Promise<boolean> {

@@ -81,9 +81,9 @@ export interface AgentAdapter {
   readonly displayName: string;
   /**
    * Whether `run()` natively resumes the session identified by
-   * `options.sessionId` (the SDK adapter does). ACP / headless always start a
-   * fresh session, so the bridge replays the scope transcript into the prompt
-   * for them instead.
+   * `options.sessionId` (the SDK and web adapters do). ACP / headless always
+   * start a fresh session, so the bridge replays the scope transcript into the
+   * prompt for them instead.
    */
   resumeCapable?: boolean;
   /** Whether this live adapter instance still owns the named native session. */
