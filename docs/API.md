@@ -1006,6 +1006,8 @@ worker 固定在 `guardian/update-worker/cwd`（0700）执行，并为每个请�
 包本体安装完成后，升级器用 `readInstalledPackage()` 从目标 dsh profile 重新读取并校验包名、版本和
 稳定根路径；`repairRuntimeProfiles({ ownPackage })` 将 SDK/ACP own-package 链接到该安装根，禁止使用
 执行命令的临时 `_npx` package root。目标包缺失或版本不符时升级立即失败，不进入 guardian/profile 重启。
+Guardian 重装 systemd unit 时会从 PATH 过滤 `_npx`、update-worker npm cache 与
+`node_modules/.bin`，仅保留 Node 所在目录和稳定用户/系统路径，避免常驻进程依赖已清理缓存。
 重载后的 bridge 在飞书通道、callback server 与 heartbeat 全部就绪后，才以自身实际版本协调被
 service cgroup 重启中断的 worker，并向原路由只回执一次；启动中途失败会保持 running/failed，
 不会仅凭版本相等误报成功。

@@ -361,8 +361,9 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
   `node_modules/.modules.yaml`，把其中记录的精确 pnpm 版本同步到 profile `package.json`，避免
   Corepack 因 source-managed dsh 的工作目录选择另一 pnpm 主版本并触发
   `ERR_PNPM_UNEXPECTED_STORE`；全新 profile 不会被提前创建 manifest；
-- **受管服务安全重载**：更新 worker 的临时 callback URL/token 与 npx cache PATH 不会写入持久
-  service env；只有飞书通道、callback server 和 Guardian 心跳均已就绪后才确认更新成功。
+- **受管服务安全重载**：更新 worker 的临时 callback URL/token 与 npx/npm package-bin PATH 不会写入持久
+  service env 或 Guardian unit；Guardian 仅保留 Node 所在目录及稳定的用户/系统 PATH。只有飞书通道、
+  callback server 和 Guardian 心跳均已就绪后才确认更新成功。
 
 无需交互确认时加 `--yes`（非交互环境不带 `--yes` 会安全中止）。其余方式：
 
