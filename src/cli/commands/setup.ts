@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import { ownPackageInfo } from '../../adapters/dsh/own-package.js';
 import { loadRuntimeEnv } from '../../config/env.js';
@@ -126,6 +127,7 @@ export function runDshPlugin(
 }
 
 export async function approveBuilds(profileDir: string): Promise<void> {
+  await preserveInstalledPnpmVersion(profileDir);
   const workspaceFile = join(profileDir, 'pnpm-workspace.yaml');
   let existing = '';
   try {
@@ -143,4 +145,47 @@ export async function approveBuilds(profileDir: string): Promise<void> {
     existing = existing.replace(/(allowBuilds:\s*\n)/, `$1  ${allowBuilds}\n`);
   }
   await writeFile(workspaceFile, existing, 'utf8');
+}
+
+/**
+ * Keep Corepack on the pnpm release that created this profile's node_modules.
+ *
+ * dsh invokes bare `pnpm` with the profile as cwd. Generated profiles do not
+ * normally declare `packageManager`, so a source-managed dsh installation can
+ * make Corepack select a different major and fail with
+ * ERR_PNPM_UNEXPECTED_STORE. pnpm records the exact creator release in
+ * node_modules/.modules.yaml; copy that value into an existing profile
+ * manifest before dsh runs. Do not create a manifest for a fresh profile,
+ * because dsh still owns first-time profile initialization.
+ */
+export async function preserveInstalledPnpmVersion(profileDir: string): Promise<void> {
+  const packageFile = join(profileDir, 'package.json');
+  const modulesFile = join(profileDir, 'node_modules', '.modules.yaml');
+  let packageText: string;
+  let modulesText: string;
+  try {
+    [packageText, modulesText] = await Promise.all([
+      readFile(packageFile, 'utf8'),
+      readFile(modulesFile, 'utf8'),
+    ]);
+  } catch {
+    return;
+  }
+
+  try {
+    const profilePackage = JSON.parse(packageText) as Record<string, unknown>;
+    const modules = parse(modulesText) as { packageManager?: unknown } | null;
+    const packageManager = modules?.packageManager;
+    if (
+      typeof packageManager !== 'string' ||
+      !/^pnpm@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(packageManager) ||
+      profilePackage.packageManager === packageManager
+    ) {
+      return;
+    }
+    profilePackage.packageManager = packageManager;
+    await writeFile(packageFile, `${JSON.stringify(profilePackage, null, 2)}\n`, 'utf8');
+  } catch {
+    // Invalid or partial install metadata must not prevent dsh's own recovery.
+  }
 }

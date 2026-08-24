@@ -15,7 +15,8 @@
 npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
-`setup` 会：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs 等）→ 执行标准
+`setup` 会：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs 等；既有 profile 同时固定到其
+安装元数据记录的精确 pnpm 版本，避免 Corepack/store 主版本冲突）→ 执行标准
 `dsh plugin --profile dsh-lark add dsh-lark-bot`，把本插件作为标准 bundle 装进 profile，
 并**默认同时安装「安全网守护」**（见第 6 节；不需要时加 `--no-guardian` 跳过）。
 

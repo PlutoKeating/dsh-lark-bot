@@ -355,6 +355,10 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
   own-package 链接重指到新版本，并当场强制刷新 runtime profile 及被链接主插件中版本陈旧或物理
   内容损坏的 SDK server / ACP 依赖；修复目标以 dsh profile 中重新读取并验证的安装包为准，
   不会链接到临时 npx worker。npm/npx 扁平依赖按 Node 的真实模块解析结果校验；
+- **托管环境 pnpm 一致性**：执行 `dsh plugin add` 前读取既有 profile 的
+  `node_modules/.modules.yaml`，把其中记录的精确 pnpm 版本同步到 profile `package.json`，避免
+  Corepack 因 source-managed dsh 的工作目录选择另一 pnpm 主版本并触发
+  `ERR_PNPM_UNEXPECTED_STORE`；全新 profile 不会被提前创建 manifest；
 - **受管服务安全重载**：更新 worker 的临时 callback URL/token 与 npx cache PATH 不会写入持久
   service env；只有飞书通道、callback server 和 Guardian 心跳均已就绪后才确认更新成功。
 
