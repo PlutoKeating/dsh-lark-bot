@@ -3,11 +3,7 @@
 <p align="center">🌏 英文版：[README_EN.md](README_EN.md)</p>
 
 <p align="center">
-  <strong>把 DeepSeek Harness 装进飞书 / Lark</strong> · 扫码 30 秒 · 手机指挥本机 coding agent
-</p>
-
-<p align="center">
-  <strong>⚡ dsh 崩溃后，飞书里依然叫得应</strong>
+  <strong>把 DeepSeek Harness 装进飞书 / Lark</strong> · 扫码 30 秒 · 手机指挥本机 coding agent · dsh 崩溃后飞书里依然叫得应
 </p>
 
 <p align="center">
@@ -27,13 +23,8 @@
   · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
-> **产品简介**：让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
-> 走飞书 WebSocket 长连接，**不需要公网 IP、域名、服务器或内网穿透**；Linux / macOS / Windows 通用，Node.js ≥ 22。
-
-> **⚠️ 仅认准官方渠道**：唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，
-> 唯一官方 npm 包 `dsh-lark-bot` / `dsh-feishu-bot`（维护者 `plutokeating`）。本项目**从不提供 .exe 或
-> “下载即运行”的安装包**，任何以此名义分发的页面 / 仓库均为**假冒 / 恶意来源**。官方安装唯一命令：
-> `npx dsh-lark-bot@latest setup --profile dsh-lark`。详见文末「安全提醒」。
+**产品简介**：让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
+走飞书 WebSocket 长连接，**不需要公网 IP、域名、服务器或内网穿透**；Linux / macOS / Windows 通用，Node.js ≥ 22。
 
 ---
 
@@ -48,13 +39,10 @@ dsh --profile dsh-lark                              # ② 启动
 
 ③ 首次启动终端打印二维码 → 飞书 App 扫码创建或选择 PersonalAgent 应用 → 绑定后直接私聊发消息；群聊 / 话题默认 `@bot`。
 
-> [!IMPORTANT]
-> **按钮生效的关键一步**：卡片按钮（计划门禁 / 审批 / 问答）需要在飞书开放平台的「事件与回调 → 回调配置」
-> 启用**卡片回调**并**重新发布**应用（扫码向导会自动申请 `card.action.trigger`；旧版创建的应用需补做一次），
-> 否则消息收发正常但按钮点击不会送达 bot。
-
 - **已有应用**可跳过扫码：`DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu dsh --profile dsh-lark`。
-- **升级**：`npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes`；或不碰命令行，管理员在飞书发 `/upgrade`。
+- **升级**：`npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes`。
+
+> **不用碰命令行**：管理员直接在飞书发 `/upgrade` 即可。
 
 ---
 
@@ -99,6 +87,11 @@ dsh --profile dsh-lark                              # ② 启动
 
 ---
 
+> **⚠️ 仅认准官方渠道**：唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，
+> 唯一官方 npm 包 `dsh-lark-bot` / `dsh-feishu-bot`（维护者 `plutokeating`）。本项目**从不提供 .exe 或
+> “下载即运行”的安装包**，任何以此名义分发的页面 / 仓库均为**假冒 / 恶意来源**。官方安装唯一命令：
+> `npx dsh-lark-bot@latest setup --profile dsh-lark`。详见文末「安全提醒」。
+
 ## 常见问题
 
 **Q: DeepSeek Harness 怎么接入飞书？**
@@ -111,7 +104,7 @@ dsh --profile dsh-lark                              # ② 启动
 **A:** 功能组合最全——安全网守护、并行多任务、多角色 Agent、多机器人交接、持久任务对账、会话归档、跨会话通知、dsh Web 可视化设置、对话内模型 / 密钥管理、执行模式、计划门禁、飞书内自更新。标准 dsh profile bundle，`setup` 是唯一安装路径。
 
 **Q: 会不会有假冒版本？**
-**A:** 唯一官方仓库 / npm 包见顶部「仅认准官方渠道」；本项目从不提供 `.exe` 或“下载即运行”安装包，任何分发 exe 的都是假冒来源。
+**A:** 唯一官方仓库 / npm 包见上方「仅认准官方渠道」；本项目从不提供 `.exe` 或“下载即运行”安装包，任何分发 exe 的都是假冒来源。
 
 ---
 
@@ -148,14 +141,15 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # 升级（或飞书�
 ## 关于项目
 
 - **开发**：`pnpm install && pnpm typecheck && pnpm test && pnpm build`；生态交付标准见 [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)，AI Agent 工作流见 [`AGENTS.md`](AGENTS.md)。双包发布 `pnpm publish:dual`（`dsh-lark-bot` + `dsh-feishu-bot`，共享 dist）。
-- **作者**：**PlutoKeating**（[主页](https://github.com/PlutoKeating)）。致谢 [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss)（web 单写者 + 自愈 v2 + 守护自动重启）、[Normanyin](https://github.com/Normanyin)（`/newg`）。
+- **作者**：**PlutoKeating**（[主页](https://github.com/PlutoKeating)）。
+- **协作者**：[zhuguangjun2002](https://github.com/zhuguangjun2002) · [chensimo1992-sys](https://github.com/chensimo1992-sys) · [estelledc](https://github.com/estelledc) · [fredjiangyysx](https://github.com/fredjiangyysx) · [Geoffrey-hougaojie](https://github.com/Geoffrey-hougaojie) · [hellxiaoao](https://github.com/hellxiaoao) · [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) · [Normanyin](https://github.com/Normanyin) · [pancong0711](https://github.com/pancong0711) · [qvivp](https://github.com/qvivp)。
 - **文档**：`QUICK_START`（安装/快速开始）· `MANUAL`（完整手册+命令+环境变量）· `FEATURES`（能力行为细节）· `COMPATIBILITY`· `ARCHITECTURE`· `API`· `roadmap`。
 
 ## 社区与生态
 
 | 平台 | 状态 |
 | :--- | :--- |
-| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 收录 PR 已提交 · 待合并（[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)） |
+| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | ✅ 已收录（[#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)） |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ 已收录 · 运行级可用 |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ 已收录 |
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ 已收录 · 实测可装 |

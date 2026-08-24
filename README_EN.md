@@ -3,11 +3,7 @@
 <p align="center">🌏 中文版：[README.md](README.md)</p>
 
 <p align="center">
-  <strong>Put DeepSeek Harness into Feishu / Lark</strong> · scan to connect in 30 s · drive your local coding agent from your phone
-</p>
-
-<p align="center">
-  <strong>⚡ Feishu still answers you if dsh goes down</strong>
+  <strong>Put DeepSeek Harness into Feishu / Lark</strong> · scan to connect in 30 s · drive your local coding agent from your phone · Feishu still answers you if dsh goes down
 </p>
 
 <p align="center">
@@ -27,15 +23,9 @@
   · mirror <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
-> **Overview**: make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly
-> from phone, group, or thread. It uses a Feishu WebSocket long connection, so you need **no public IP, domain,
-> server, or NAT-tunnelling**; Linux / macOS / Windows, Node.js ≥ 22.
-
-> **⚠️ Official channels only**: the only official repo is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot),
-> and the only official npm packages are `dsh-lark-bot` / `dsh-feishu-bot` (maintainer `plutokeating`). This project
-> **never ships a Windows .exe or a "download & run" installer** — any page or repo distributing one under its name
-> is **fake / malicious**. The only official install command is `npx dsh-lark-bot@latest setup --profile dsh-lark`.
-> See the Security notice below.
+**Overview**: make DeepSeek Harness a member of your Feishu/Lark and drive your local coding agent directly
+from phone, group, or thread. It uses a Feishu WebSocket long connection, so you need **no public IP, domain,
+server, or NAT-tunnelling**; Linux / macOS / Windows, Node.js ≥ 22.
 
 ---
 
@@ -51,14 +41,10 @@ dsh --profile dsh-lark                              # ② start
 ③ On first start the terminal prints a QR code → scan it with the Feishu app to create / select a PersonalAgent
 app → once bound, message the bot directly; groups / threads default to `@bot`.
 
-> [!IMPORTANT]
-> **The one step that makes buttons work**: card buttons (plan gate / approval / question) need the **card callback**
-> enabled in Feishu Open Platform → **Events & Callbacks → Callback config** and the app **re-published** (the scan
-> wizard requests `card.action.trigger` automatically; apps created by an older wizard need this once), otherwise
-> messages flow but button clicks never reach the bot.
-
 - **Already have an app**: skip the scan with `DSH_LARK_APP_ID=cli_xxx DSH_LARK_APP_SECRET=<secret> DSH_LARK_TENANT=feishu dsh --profile dsh-lark`.
-- **Upgrade**: `npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes`; or without a terminal, an admin sends `/upgrade` in Feishu.
+- **Upgrade**: `npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes`.
+
+> **No terminal needed**: an admin just sends `/upgrade` in Feishu.
 
 ---
 
@@ -103,6 +89,12 @@ Command help, status, and cards are bilingual; `/help` is the full authoritative
 
 ---
 
+> **⚠️ Official channels only**: the only official repo is [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot),
+> and the only official npm packages are `dsh-lark-bot` / `dsh-feishu-bot` (maintainer `plutokeating`). This project
+> **never ships a Windows .exe or a "download & run" installer** — any page or repo distributing one under its name
+> is **fake / malicious**. The only official install command is `npx dsh-lark-bot@latest setup --profile dsh-lark`.
+> See the Security notice below.
+
 ## FAQ
 
 **Q: How do I connect DeepSeek Harness to Feishu?**
@@ -115,7 +107,7 @@ Command help, status, and cards are bilingual; `/help` is the full authoritative
 **A:** The most complete feature set: safety-net guardian, parallel tasks, multi-role agents, multi-bot hand-off, persistent job ledger, session archive, cross-session notify, dsh Web visual settings, in-chat model & key management, execution modes, plan gate, and in-Feishu self-update. It's a standard dsh profile bundle and `setup` is the only install path.
 
 **Q: Could there be a fake version?**
-**A:** The only official repo / npm packages are at the top under "Official channels only"; this project never ships an `.exe` or a "download & run" installer — anything distributing an exe is fake.
+**A:** The only official repo / npm packages are above under "Official channels only"; this project never ships an `.exe` or a "download & run" installer — anything distributing an exe is fake.
 
 ---
 
@@ -152,14 +144,15 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # upgrade (or admin /
 ## About the project
 
 - **Development**: `pnpm install && pnpm typecheck && pnpm test && pnpm build`; delivery standards in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md), AI-agent workflow in [`AGENTS.md`](AGENTS.md). Dual-package publish `pnpm publish:dual` (`dsh-lark-bot` + `dsh-feishu-bot`, shared dist).
-- **Author**: **PlutoKeating** ([profile](https://github.com/PlutoKeating)). Thanks to [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) (web single-writer + self-heal v2 + guardian auto-restart) and [Normanyin](https://github.com/Normanyin) (`/newg`).
+- **Author**: **PlutoKeating** ([profile](https://github.com/PlutoKeating)).
+- **Contributors**: [zhuguangjun2002](https://github.com/zhuguangjun2002) · [chensimo1992-sys](https://github.com/chensimo1992-sys) · [estelledc](https://github.com/estelledc) · [fredjiangyysx](https://github.com/fredjiangyysx) · [Geoffrey-hougaojie](https://github.com/Geoffrey-hougaojie) · [hellxiaoao](https://github.com/hellxiaoao) · [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss) · [Normanyin](https://github.com/Normanyin) · [pancong0711](https://github.com/pancong0711) · [qvivp](https://github.com/qvivp).
 - **Docs**: `QUICK_START` (install / quick start) · `MANUAL` (full manual + commands + env vars) · `FEATURES` (capability behavior) · `COMPATIBILITY` · `ARCHITECTURE` · `API` · `roadmap`.
 
 ## Community & ecosystem
 
 | Platform | Status |
 | :--- | :--- |
-| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | 📨 listing PR submitted · pending ([#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)) |
+| [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) | ✅ listed ([#1408](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/1408)) |
 | [awesome-dsh-plugins](https://github.com/AdamPlatin123/awesome-dsh-plugins) | ✅ listed · runtime-verified |
 | [dshfind](https://dshfind.com/zh/plugins/PlutoKeating/dsh-lark-bot) | ✅ listed |
 | [dshbase](https://dshbase.com/zh/plugins/dsh-lark-bot) | ✅ listed · install-verified |
