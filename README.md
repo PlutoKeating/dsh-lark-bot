@@ -162,7 +162,9 @@ Markdown、toast 与旧客户端降级路径同时显示中英文。agent 最终
 
 飞书消息中的图片会按文件内容识别 PNG/JPEG/WebP/GIF 并补全安全扩展名；默认 SDK 会经 dsh
 附件存储校验后发送原生 image block，而不是把路径当作图片。无法读取或模型不支持视觉时会明确
-失败，agent 被要求不得用工作区内其他图片替代。文本类文件会读取内容并注入任务上下文。
+失败，agent 被要求不得用工作区内其他图片替代。选中的 `deepseek-official` 视觉模型会在每轮运行前
+幂等补入 dsh runtime 实际消费的模型目录并声明 `text,image`，避免展示目录已识别视觉能力但 rc.8
+runtime 仍按 text-only 拒绝。文本类文件会读取内容并注入任务上下文。
 `/model` 卡片会把 dsh 默认模型并入可切换目录（即使 provider 的显式列表尚未包含它），
 并用去除公共前缀后的短标签、每行最多两个按钮适配移动端。provider 名称、模型、输入模态和
 推理档位从 models.dev 运行时目录发现（15 分钟内存缓存）；网络失败时只使用 dsh settings 中的

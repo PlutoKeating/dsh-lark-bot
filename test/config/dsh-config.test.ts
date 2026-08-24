@@ -310,6 +310,69 @@ describe('DshProviderManager', () => {
     });
   });
 
+  it('persists the selected DeepSeek vision model in the runtime catalog idempotently', async () => {
+    await withHome(async (root, manager) => {
+      const settingsFile = join(root, '.dsh', 'settings.yaml');
+      await mkdir(join(root, '.dsh'), { recursive: true });
+      await writeFile(settingsFile, [
+        '# keep this deployment comment',
+        'llm-deepseek:',
+        '  baseURL: https://api.deepseek.com',
+        '  models:',
+        '    - id: deepseek-chat',
+        '      description: keep this exotic field',
+        '    - id: deepseek-v4-flash-vision-exp',
+        '      name: Vision Preview',
+        'agent-default-model:',
+        '  provider: deepseek-official',
+        '  model: deepseek-v4-flash-vision-exp',
+        '',
+      ].join('\n'));
+
+      expect(await manager.resolveRuntimeModelRoute(
+        `${DEEPSEEK_PROVIDER}/deepseek-v4-flash-vision-exp`,
+      )).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash-vision-exp',
+      });
+      const first = await readFile(settingsFile, 'utf8');
+      expect(first).toContain('# keep this deployment comment');
+      expect(first).toContain('description: keep this exotic field');
+      const settings = await manager.readSettings();
+      const models = (settings['llm-deepseek'] as {
+        models: Array<Record<string, unknown>>;
+      }).models;
+      expect(models.find((model) => model.id === 'deepseek-v4-flash-vision-exp'))
+        .toMatchObject({
+          id: 'deepseek-v4-flash-vision-exp',
+          name: 'Vision Preview',
+          inputModalities: ['text', 'image'],
+        });
+
+      expect(await manager.resolveRuntimeModelRoute(
+        `${DEEPSEEK_PROVIDER}/deepseek-v4-flash-vision-exp`,
+      )).toEqual({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-v4-flash-vision-exp',
+      });
+      expect(await readFile(settingsFile, 'utf8')).toBe(first);
+    });
+  });
+
+  it('does not rewrite runtime catalogs for text models or other providers', async () => {
+    await withHome(async (root, manager) => {
+      expect(await manager.ensureRuntimeModelModalities({
+        provider: DEEPSEEK_PROVIDER,
+        model: 'deepseek-chat',
+      })).toBe(false);
+      expect(await manager.ensureRuntimeModelModalities({
+        provider: 'custom-provider',
+        model: 'custom-vision',
+      })).toBe(false);
+      await expect(readFile(join(root, '.dsh', 'settings.yaml'), 'utf8')).rejects.toThrow();
+    });
+  });
+
   it('leaves non-vision model modalities unset (issue #96)', async () => {
     await withHome(async (_root, manager) => {
       await manager.addDeepseekModel({
