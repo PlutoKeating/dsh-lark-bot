@@ -1,6 +1,7 @@
 import { createLarkChannel, type LarkChannel, type NormalizedMessage } from '@larksuite/channel';
 import type { AgentAdapter } from '../adapters/types.js';
 import type { ActiveRuns } from '../bot/active-runs.js';
+import { ChannelHealthMonitor, type ChannelHealth } from './channel-health.js';
 import type { ApprovalRegistry } from '../bot/approvals.js';
 import type { DensityStore } from '../bot/density-store.js';
 import type { ConcurrencyStore } from '../bot/concurrency-store.js';
@@ -62,6 +63,11 @@ import { renderSecretCard } from '../card/secret-card.js';
 import type { ChannelUpdateController } from '../upgrade/channel-update.js';
 
 export type QueuedMessage = NormalizedMessage & { workspaceCwd: string };
+
+/** Default SDK liveness ping timeout (seconds) before a stuck WS is reconnected. */
+export const DEFAULT_CHANNEL_PING_TIMEOUT_SEC = 30;
+/** Default app-level keepalive watchdog probe interval (ms). */
+export const DEFAULT_CHANNEL_KEEPALIVE_MS = 15_000;
 
 export interface StartChannelDeps {
   appId: string;
@@ -126,6 +132,23 @@ export interface StartChannelDeps {
   createDiagnosticBundle?: (request: DiagnosticRequestSnapshot) => Promise<DiagnosticFile>;
   stopGraceMs?: number;
   createChannel?: typeof createLarkChannel;
+  /**
+   * Channel liveness watchdog (issue #108). The SDK's `wsConfig.pingTimeout`
+   * (seconds) force-reconnects the WebSocket when no inbound frame arrives
+   * after the last ping; the app-level `keepalive` watchdog probes and
+   * force-reconnects, and calls {@link onChannelUnrecoverable} when even a
+   * forced reconnect fails. Both default to an enabled, bounded policy.
+   */
+  channelPingTimeoutSec?: number;
+  channelKeepalive?: boolean;
+  channelKeepaliveMs?: number;
+  channelHealthPollMs?: number;
+  /**
+   * Called when the persistent channel is unrecoverable (even a forced
+   * reconnect failed). The engine should exit non-zero so the managed service /
+   * guardian restarts it. Optional so tests can omit it.
+   */
+  onChannelUnrecoverable?: (error: unknown) => void;
   sessionProjectionStore?: SessionProjectionStore;
   sessionProjectionSource?: SessionProjectionSource;
   sessionProjectionLimits?: SessionProjectionLimits;
@@ -134,6 +157,8 @@ export interface StartChannelDeps {
 export interface BridgeChannel {
   channel: LarkChannel;
   disconnect(): Promise<void>;
+  /** Live channel-readiness snapshot (issue #108). */
+  channelHealth?: () => ChannelHealth;
 }
 
 export async function startChannel(deps: StartChannelDeps): Promise<BridgeChannel> {
@@ -168,6 +193,26 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     handshakeTimeoutMs: 8_000,
     httpTimeoutMs: 30_000,
     respectProxyEnv: true,
+    // Issue #108: detect a half-open WebSocket (TCP ESTABLISHED but Feishu no
+    // longer delivering). `pingTimeout` force-reconnects when no inbound frame
+    // arrives after the last ping; the app-level `keepalive` probes and
+    // force-reconnects, and `onUnrecoverable` fires when even that fails so the
+    // engine can exit and let the managed service / guardian restart it.
+    wsConfig: { pingTimeout: deps.channelPingTimeoutSec ?? DEFAULT_CHANNEL_PING_TIMEOUT_SEC },
+    keepalive: {
+      enabled: deps.channelKeepalive ?? true,
+      intervalMs: deps.channelKeepaliveMs ?? DEFAULT_CHANNEL_KEEPALIVE_MS,
+      onUnrecoverable: (error) => {
+        log.fail('channel', 'unrecoverable', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        deps.onChannelUnrecoverable?.(error);
+      },
+    },
+  });
+
+  const channelHealth = new ChannelHealthMonitor(channel, {
+    ...(deps.channelHealthPollMs !== undefined ? { pollMs: deps.channelHealthPollMs } : {}),
   });
 
   const streaming = adaptLarkChannel(channel);
@@ -219,6 +264,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     msg: NormalizedMessage,
     alreadyClaimed = false,
   ): Promise<void> => {
+    channelHealth.observeMessage();
     if (groupPoller && !alreadyClaimed && !groupPoller.claim(msg.messageId)) return;
     const chatMode = msg.chatMode ?? msg.chatType;
     const botSender = msg.senderType === 'bot';
@@ -875,22 +921,26 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
     },
     reconnecting: () => {
       log.warn('channel', 'reconnecting', {});
+      channelHealth.observeReconnecting();
       void reconnectNotifier.reconnecting().catch((error) => {
         log.fail('channel-reconnect-notice', error);
       });
     },
     reconnected: () => {
       log.info('channel', 'reconnected', {});
+      channelHealth.observeReconnected();
       void reconnectNotifier.reconnected().catch((error) => {
         log.fail('channel-reconnect-notice', error);
       });
     },
     error: (error) => {
       log.fail('channel', error);
+      channelHealth.observeError(error);
     },
   });
 
   await channel.connect();
+  channelHealth.start();
   if (sessionProjectionBridge) {
     void sessionProjectionBridge.start().catch((error) => {
       log.fail('session-projection', error, { step: 'start' });
@@ -907,8 +957,10 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
   }
   return {
     channel,
+    channelHealth: () => channelHealth.snapshot(),
     disconnect: async () => {
       await groupPoller?.stop();
+      channelHealth.stop();
       sessionProjection?.close();
       await sessionProjectionBridge?.close();
       await channel.disconnect();

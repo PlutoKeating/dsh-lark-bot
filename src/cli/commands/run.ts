@@ -764,6 +764,23 @@ export async function startBridgeEngine(
     allowedUsers: activeProfile.access.allowedUsers,
     allowedChats: activeProfile.access.allowedChats,
     ...(options.createChannel ? { createChannel: options.createChannel } : {}),
+    channelPingTimeoutSec: env.channelPingTimeoutSec,
+    channelKeepalive: env.channelKeepalive,
+    channelKeepaliveMs: env.channelKeepaliveMs,
+    channelHealthPollMs: env.channelHealthPollMs,
+    onChannelUnrecoverable: (error) => {
+      // Last-resort self-heal (issue #108): the persistent channel could not
+      // be restored by the SDK's ping timeout or the app-level keepalive, so
+      // the engine cannot keep publishing a healthy heartbeat. Exit non-zero
+      // so the managed service / guardian restarts it with a fresh WebSocket
+      // generation. The guardian's takeover only engages once the engine
+      // stops writing a fresh heartbeat, so no double-consumer results.
+      log.fail('engine', 'channel-unrecoverable', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      process.exitCode = 1;
+      setTimeout(() => process.exit(1), 300);
+    },
   };
   if (activeProfile.preferences.stopGraceMs !== undefined) {
     channelInput.stopGraceMs = activeProfile.preferences.stopGraceMs;
@@ -831,6 +848,7 @@ export async function startBridgeEngine(
     paths.profilePath(profileName, 'guardian', 'heartbeat.json'),
     process.pid,
     env.heartbeatMs,
+    () => bridge.channelHealth?.(),
   );
   // Version equality only proves that replacement files were loaded. Mark the
   // handoff successful after the channel, callback server, and heartbeat are

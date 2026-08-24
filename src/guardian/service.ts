@@ -49,6 +49,7 @@ import {
   isHeartbeatFresh,
   readHeartbeat,
   heartbeatAgeMs,
+  type HeartbeatChannelSnapshot,
 } from './heartbeat.js';
 import {
   captureOutput,
@@ -149,6 +150,8 @@ export interface GuardianSnapshot {
   dshUp: boolean;
   heartbeatAgeMs: number | undefined;
   channelConnected: boolean;
+  /** Engine-heartbeat channel readiness (issue #108); undefined when not reported. */
+  channelState: string | undefined;
   safeEngine: 'sdk' | 'headless' | 'test' | undefined;
   safeRuns: number;
   pid: number;
@@ -331,6 +334,7 @@ export class GuardianService {
       dshUp: this.dshUp,
     heartbeatAgeMs: this.lastHeartbeatAgeMs,
     channelConnected: this.channel !== undefined,
+    channelState: this.lastHeartbeatChannel?.state,
     safeEngine: this.safeEngine?.kind,
     safeRuns: this.safeRuns.size,
     pid: process.pid,
@@ -342,6 +346,9 @@ export class GuardianService {
 
   private dshUp = false;
   private lastHeartbeatAgeMs: number | undefined;
+  private lastHeartbeatChannel: HeartbeatChannelSnapshot | undefined;
+  /** When the engine reported a non-ready channel while its heartbeat was fresh. */
+  private channelUnhealthySinceMs: number | undefined;
 
   private log() {
     return this.options.logger ?? log;
@@ -383,7 +390,32 @@ export class GuardianService {
       const now = (this.options.now ?? Date.now)();
       const heartbeatFresh = isHeartbeatFresh(heartbeat, this.options.staleMs, now);
       this.lastHeartbeatAgeMs = heartbeat ? heartbeatAgeMs(heartbeat, now) : undefined;
+      this.lastHeartbeatChannel = heartbeat?.channel;
       if (heartbeatFresh) this.lastHeartbeatFreshAt = now;
+      // Issue #108: the engine heartbeat is still fresh but the embedded channel
+      // snapshot is not ready — that is a half-open / degraded WebSocket. Do NOT
+      // preempt the channel (single-consumer fencing): the engine's own watchdog
+      // will reconnect or (on unrecoverable) exit, which then lets the guardian
+      // take over. Here we only surface the condition and log a transition once.
+      const channelSnapshot = this.lastHeartbeatChannel;
+      const channelUnhealthy =
+        heartbeatFresh &&
+        channelSnapshot !== undefined &&
+        channelSnapshot.ready === false;
+      if (channelUnhealthy) {
+        if (this.channelUnhealthySinceMs === undefined) {
+          this.channelUnhealthySinceMs = now;
+          this.log().warn('guardian', 'channel-unhealthy', {
+            dshProfile: this.state.dshProfile,
+            state: channelSnapshot.state,
+            generation: channelSnapshot.generation,
+            reconnectAttempts: channelSnapshot.reconnectAttempts,
+            lastError: channelSnapshot.lastError,
+          });
+        }
+      } else {
+        this.channelUnhealthySinceMs = undefined;
+      }
       const processFound = await (this.options.findProcess ?? findProfileProcess)(
         this.state.dshProfile,
       );

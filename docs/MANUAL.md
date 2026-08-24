@@ -473,6 +473,10 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_GUARDIAN_SAFE_ADAPTER` | `auto` | 安全模式引擎：`auto` 优先 SDK 流式、失败回退 headless；`sdk` 强制 SDK；`headless` 跳过预置 |
 | `DSH_LARK_GUARDIAN_SAFE_TIMEOUT_MS` | `600000` | 安全模式单任务空闲超时（持续无活动事件才停止并出超时卡） |
 | `DSH_LARK_GUARDIAN_CARD_DENSITY` | `detailed` | 安全模式任务卡片密度（compact / standard / detailed） |
+| `DSH_LARK_CHANNEL_PING_TIMEOUT_SEC` | `30` | 通道活性看门狗：无入站帧判定死连接并强制重连的秒数（issue #108） |
+| `DSH_LARK_CHANNEL_KEEPALIVE` | `true` | 是否启用应用层通道 keepalive 看门狗（探测 + 强制重连） |
+| `DSH_LARK_CHANNEL_KEEPALIVE_MS` | `15000` | 应用层通道 keepalive 探测间隔（毫秒） |
+| `DSH_LARK_CHANNEL_HEALTH_POLL_MS` | `5000` | 通道健康快照轮询间隔（毫秒） |
 
 环境变量在启动 dsh profile 前导出即可（`DSH_LARK_*`、`DEEPSEEK_API_KEY` 等会随 dsh 进程传入
 桥接引擎）。SDK / ACP 会先使用完整显式 provider/model；缺失时回退到 dsh 对象形式
