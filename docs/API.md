@@ -871,9 +871,12 @@ export interface Logger {
 - `src/bridge/lark-channel.ts`：`adaptLarkChannel` 把 `LarkChannel` 适配为 `StreamingChannel`；整卡
   流式更新由 bridge 自己按 100 ms 合并、单路串行 patch。过程卡撤回重建到会话尾部时，控制器会
   合并并发 re-anchor，并暂停 patch 直到取得新 message ID；期间的最新状态随后只更新新卡，不会把
-  飞书预期的 `message withdrawn` 误判为卡片故障。单次 patch 失败在内部结算并禁用该卡
-  后续更新，不向 producer 抛出，也不产生未处理 Promise rejection；初始卡发送失败仍向上抛出，
-  由 `run-flow` 走 legacy/no-card 降级。
+  飞书预期的 `message withdrawn` 误判为卡片故障。`ResilientCardStreamController.flush()` 对 patch
+  失败按错误分类处理：若是飞书 `230011 / message withdrawn`（目标消息已不存在，属正常可恢复状态），
+  控制器按最新快照在会话尾部**重建**卡片、重定向到新 `message_id` 并继续流式更新（`MAX_CARD_WITHDRAW_RECOVERIES`
+  恢复预算防止无限建卡），不抛出也不弹“更新失败”提示；只有真正不可恢复的失败（网络/超时且重试仍失败）
+  才在内部结算并禁用该卡后续更新。任何分类都不向 producer 抛出，也不产生未处理 Promise rejection；
+  初始卡发送失败仍向上抛出，由 `run-flow` 走 legacy/no-card 降级。
 
 `src/bridge/send-options.ts` 定义出站 `SendOptions { replyTo?, mentions?, threadId? }` 与
 `MentionTarget { userId, name? }`：`sendMarkdown` / `sendCard` / `streamCard` 均接受该选项，

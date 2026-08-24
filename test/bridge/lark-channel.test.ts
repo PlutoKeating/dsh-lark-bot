@@ -217,4 +217,71 @@ describe('adaptLarkChannel', () => {
     expect(send).toHaveBeenCalledOnce();
     expect(updateCard.mock.calls.map((call) => call[0])).toContain('card-1');
   });
+
+  /** Mimic the Feishu error shape actually logged for a withdrawn card message. */
+  function withdrawnError(): Error {
+    const err = new Error('Request failed with status code 400') as Error & {
+      response?: { data?: Array<{ code: number; msg: string }> };
+    };
+    err.response = { data: [{ code: 230011, msg: 'The message was withdrawn.' }] };
+    return err;
+  }
+
+  it('re-creates the card and keeps streaming when Feishu withdrew the message', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce({ messageId: 'card-1' })
+      .mockResolvedValueOnce({ messageId: 'card-2' });
+    const updateCard = vi.fn()
+      .mockRejectedValueOnce(withdrawnError())
+      .mockResolvedValue(undefined);
+    const recallMessage = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'running' });
+    });
+
+    // The controller must recover by re-creating the card, not disable it.
+    const patchedIds = updateCard.mock.calls.map((call) => call[0]);
+    expect(patchedIds).toContain('card-2');
+    expect(patchedIds[patchedIds.length - 1]).toBe('card-2');
+    expect(send).toHaveBeenCalledTimes(2);
+    // A fresh card was created at the tail with the latest snapshot.
+    expect(send.mock.calls[1]?.[1]).toMatchObject({ card: { state: 'running' } });
+    // No alarming fallback notice is sent.
+    expect(send.mock.calls.some((call) => {
+      const payload = call[1] as { markdown?: string };
+      return typeof payload.markdown === 'string' && payload.markdown.includes('过程卡更新失败');
+    })).toBe(false);
+  });
+
+  it('boundedly re-creates the card across repeated withdrawals before degrading', async () => {
+    const send = vi.fn()
+      .mockResolvedValueOnce({ messageId: 'card-1' })
+      .mockResolvedValueOnce({ messageId: 'card-2' })
+      .mockResolvedValueOnce({ messageId: 'card-3' })
+      .mockResolvedValueOnce({ messageId: 'card-4' });
+    // Always withdrawn: every patch needs a fresh card, up to the recovery budget.
+    const updateCard = vi.fn().mockRejectedValue(withdrawnError());
+    const recallMessage = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, updateCard, recallMessage } as unknown as LarkChannel;
+    const bridge = adaptLarkChannel(channel);
+
+    await bridge.streamCard('oc_chat', { state: 'initial' }, async (controller) => {
+      await controller.update({ state: 'running' });
+    });
+
+    // Recovery is attempted several times (each withdrawal re-creates a card),
+    // then the controller degrades to a static card with a fallback notice
+    // rather than looping forever.
+    const freshStates = send.mock.calls
+      .map((call) => (call[1] as { card?: { state?: string } })?.card?.state)
+      .filter((state): state is string => typeof state === 'string');
+    expect(freshStates).toContain('running');
+    // The healed card carried the running snapshot, and the loop is bounded.
+    expect(updateCard.mock.calls.length).toBeGreaterThan(1);
+    expect(updateCard.mock.calls.length).toBeLessThan(10);
+    expect(send.mock.calls.length).toBeLessThan(10);
+  });
 });

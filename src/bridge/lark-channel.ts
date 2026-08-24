@@ -11,6 +11,45 @@ import { log } from '../core/logger.js';
 
 const CARD_STREAM_THROTTLE_MS = 100;
 const CARD_PATCH_ATTEMPTS = 2;
+const MAX_CARD_WITHDRAW_RECOVERIES = 3;
+
+/**
+ * Feishu signals that the target message no longer exists (it was recalled,
+ * replaced, or evicted) by returning HTTP 400 with error code `230011` and a
+ * message of "The message was withdrawn". This is an ordinary, recoverable
+ * condition — not a card failure — so the streaming controller must re-create
+ * the card rather than treat it like a transient network error. The classifier
+ * walks the thrown error object (which may be an Axios-style error with
+ * `response.data` as an object or array, or the raw `[rawError, {code,msg}]`
+ * tuple the SDK surfaces) and looks for `code 230011` or a "withdrawn" message.
+ */
+function isMessageWithdrawn(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [error];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === null || node === undefined) continue;
+    if (typeof node === 'string') {
+      if (node.toLowerCase().includes('withdrawn')) return true;
+      continue;
+    }
+    if (typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item);
+      continue;
+    }
+    const record = node as Record<string, unknown>;
+    if (record['code'] === 230011) return true;
+    if (typeof record['message'] === 'string' && record['message'].toLowerCase().includes('withdrawn')) return true;
+    if (typeof record['msg'] === 'string' && record['msg'].toLowerCase().includes('withdrawn')) return true;
+    for (const key of ['response', 'data', 'error', 'errors']) {
+      const value = record[key];
+      if (value !== undefined && value !== null) stack.push(value);
+    }
+  }
+  return false;
+}
 
 function toLarkSendOptions(options: BridgeSendOptions | undefined): SendOptions {
   const sendOptions: SendOptions = {};
@@ -38,7 +77,10 @@ function toLarkSendOptions(options: BridgeSendOptions | undefined): SendOptions 
  * The upstream timer invokes its async patch callback without observing the
  * returned promise, so a network timeout becomes an unhandled rejection and
  * can terminate the host process. This controller coalesces updates, owns the
- * in-flight promise, and degrades to a frozen process card after one failure.
+ * in-flight promise, and degrades to a frozen process card only after genuinely
+ * unrecoverable failures. When Feishu reports that the card message was
+ * withdrawn (an ordinary, recoverable condition) it re-creates the card at the
+ * tail from the latest snapshot and keeps streaming.
  */
 class ResilientCardStreamController {
   private latest: object | undefined;
@@ -48,6 +90,7 @@ class ResilientCardStreamController {
   private timer: NodeJS.Timeout | undefined;
   private inFlight: Promise<void> | undefined;
   private reanchorInFlight: Promise<string> | undefined;
+  private recoveries = 0;
 
   constructor(
     private readonly channel: LarkChannel,
@@ -114,6 +157,8 @@ class ResilientCardStreamController {
     for (let attempt = 1; attempt <= CARD_PATCH_ATTEMPTS; attempt += 1) {
       try {
         await this.channel.updateCard(this.messageId, snapshot);
+        // A successful patch proves the card is healthy again.
+        this.recoveries = 0;
         return;
       } catch (error) {
         lastError = error;
@@ -122,6 +167,28 @@ class ResilientCardStreamController {
           attempt,
           error: error instanceof Error ? error.message : String(error),
         });
+        // Feishu reports the card message was withdrawn — an ordinary,
+        // recoverable condition. Re-create the card at the tail and keep
+        // streaming, up to a bounded budget, so a hostile loop cannot spawn
+        // cards forever.
+        if (
+          isMessageWithdrawn(error) &&
+          this.recoveries < MAX_CARD_WITHDRAW_RECOVERIES
+        ) {
+          try {
+            await this.healFromWithdrawal();
+          } catch (healError) {
+            log.warn('lark-card-stream', 'heal-failed', {
+              messageId: this.messageId,
+              error: healError instanceof Error ? healError.message : String(healError),
+            });
+            break;
+          }
+          // A fresh message id is now installed; reuse this attempt slot so the
+          // patched snapshot lands on the re-created card.
+          attempt -= 1;
+          continue;
+        }
       }
     }
     this.failed = true;
@@ -140,6 +207,27 @@ class ResilientCardStreamController {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * Re-create the process card at the conversation tail after the target message
+   * was withdrawn (Feishu `230011` / "The message was withdrawn"). The message
+   * is already gone, so there is nothing to recall: we send a fresh card carrying
+   * the latest snapshot and rebind the controller to its new message id. Unlike
+   * `reanchor()` this must NOT `await this.inFlight`, because we are already
+   * running inside the in-flight flush; the recovery budget
+   * (`MAX_CARD_WITHDRAW_RECOVERIES`) is enforced by the caller so a hostile loop
+   * cannot spawn cards forever.
+   */
+  private async healFromWithdrawal(): Promise<void> {
+    const card = this.latest;
+    if (card === undefined) throw new Error('Feishu card re-creation has no snapshot to send');
+    this.dirty = false;
+    const sent = await this.channel.send(this.chatId, { card }, {});
+    if (!sent.messageId) throw new Error('Feishu card re-creation returned no message_id');
+    this.messageId = sent.messageId;
+    this.failed = false;
+    this.recoveries += 1;
   }
 
   /**
