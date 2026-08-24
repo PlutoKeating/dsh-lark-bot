@@ -207,3 +207,30 @@ describe('ensureAcpProfile', () => {
     expect(install).toHaveBeenCalledWith(root, { force: true });
   });
 });
+
+describe('acpPatchYaml rollback compatibility', () => {
+  it('omits rows for subpaths a rolled-back package does not export', async () => {
+    const oldPkg = await mkdtemp(join(tmpdir(), 'old-acp-pkg-'));
+    tempDirs.push(oldPkg);
+    const own = { name: 'dsh-lark-bot', root: oldPkg, version: '0.15.9' };
+    await writeFile(join(oldPkg, 'package.json'), JSON.stringify({
+      name: own.name,
+      version: own.version,
+      exports: {
+        '.': './dist/index.js',
+        './plugin': './dist/plugin.js',
+        './notify': './dist/notify.js',
+      },
+    }));
+
+    const patch = acpPatchYaml('deepseek-official', 'deepseek-v4-flash', own);
+    expect(patch).toContain('id: acp');
+    expect(patch).toContain('id: lark-notify');
+    expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).not.toContain('id: lark-file');
+    expect(patch).not.toContain("name: 'dsh-lark-bot/file'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/secret'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/ask'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/plan'");
+  });
+});

@@ -7,7 +7,7 @@ import { DSH_COMPATIBILITY } from '../../config/dsh-compat.js';
 import { discoverDshBin, resolveDshHome } from '../../config/dsh-runtime.js';
 import { BRIDGE_RUNTIME_PERSONA } from './bridge-persona.js';
 import type { OwnPackageInfo } from './own-package.js';
-import { ownPackageInfo } from './own-package.js';
+import { ownExportsSubpath, ownPackageInfo } from './own-package.js';
 import { profilePackageMatches } from './profile-package.js';
 
 export const ACP_PACKAGE = '@deepseek-ai/dsh-acp';
@@ -65,9 +65,13 @@ function packageJsonFor(profile: string, own: OwnPackageInfo = ownPackageInfo())
   )}\n`;
 }
 
-export function acpPatchYaml(provider: string, model: string): string {
-  const own = ownPackageInfo();
-  return [
+export function acpPatchYaml(
+  provider: string,
+  model: string,
+  own: OwnPackageInfo = ownPackageInfo(),
+): string {
+  const has = (subpath: string): boolean => ownExportsSubpath(own, subpath);
+  const lines = [
     '# dsh-lark ACP JSON-RPC runtime overlay (managed by dsh-lark-bot).',
     '# stdout is reserved for ACP JSON-RPC frames; no console logger may load.',
     '- insert:',
@@ -90,49 +94,68 @@ export function acpPatchYaml(provider: string, model: string): string {
     '- id: hmr',
     '  disabled: true',
     '',
-    // In-process bridge callback tool (same contract as the SDK runtime).
-    '- insert:',
-    '    - id: lark-notify',
-    `      name: '${own.name}/notify'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-    // Local result-file upload tool.
-    '- insert:',
-    '    - id: lark-file',
-    `      name: '${own.name}/file'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-    // Owner-only secure value collection; values bypass the agent process.
-    '- insert:',
-    '    - id: lark-secret',
-    `      name: '${own.name}/secret'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_SECRET_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-    // Question-card tool (same contract as the SDK runtime).
-    '- insert:',
-    '    - id: lark-ask',
-    `      name: '${own.name}/ask'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '',
-    // Plan gate (same contract as the SDK runtime).
-    '- insert:',
-    '    - id: lark-plan-approval',
-    `      name: '${own.name}/plan'`,
-    '      config:',
-    '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
-    '        policyEndpoint: !!js process.env.DSH_LARK_APPROVAL_URL',
-    '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
-    '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
-    '',
-  ].join('\n');
+  ];
+  // Only emit each bridge-tool row when the installed (possibly rolled-back)
+  // package actually exports the subpath, so a rollback to a version missing
+  // that entrypoint never yields ERR_PACKAGE_PATH_NOT_EXPORTED.
+  if (has('notify')) {
+    lines.push(
+      '- insert:',
+      '    - id: lark-notify',
+      `      name: '${own.name}/notify'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_NOTIFY_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+    );
+  }
+  if (has('file')) {
+    lines.push(
+      '- insert:',
+      '    - id: lark-file',
+      `      name: '${own.name}/file'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_FILE_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+    );
+  }
+  if (has('secret')) {
+    lines.push(
+      '- insert:',
+      '    - id: lark-secret',
+      `      name: '${own.name}/secret'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_SECRET_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+    );
+  }
+  if (has('ask')) {
+    lines.push(
+      '- insert:',
+      '    - id: lark-ask',
+      `      name: '${own.name}/ask'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_ASK_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '',
+    );
+  }
+  if (has('plan')) {
+    lines.push(
+      '- insert:',
+      '    - id: lark-plan-approval',
+      `      name: '${own.name}/plan'`,
+      '      config:',
+      '        endpoint: !!js process.env.DSH_LARK_PLAN_URL',
+      '        policyEndpoint: !!js process.env.DSH_LARK_APPROVAL_URL',
+      '        token: !!js process.env.DSH_LARK_NOTIFY_TOKEN',
+      '        mode: !!js process.env.DSH_LARK_PLAN_GATE',
+      '',
+    );
+  }
+  return lines.join('\n');
 }
 
 export function isAcpProfileReady(
@@ -158,7 +181,7 @@ export function isAcpManagedProfileCurrent(
   if (!isAcpProfileReady(profileRoot, own)) return false;
   try {
     return readFileSync(join(profileRoot, 'cordis.patch.yml'), 'utf8') ===
-      acpPatchYaml(provider, model);
+      acpPatchYaml(provider, model, own);
   } catch {
     return false;
   }
@@ -240,7 +263,7 @@ export async function ensureAcpProfile(
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'package.json'), packageJsonFor(profile, own), 'utf8');
     await writeFile(join(root, 'cordis.yml'), '[]\n', 'utf8');
-    await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model), 'utf8');
+    await writeFile(join(root, 'cordis.patch.yml'), acpPatchYaml(provider, model, own), 'utf8');
     if (!ready) {
       const install = options.install ?? runPnpmInstall;
       await install(root, { force: true });

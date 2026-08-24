@@ -423,7 +423,9 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 （复制失败不删原目录）。
 `run-flow` 在 native resume 前调用 adapter `canResume()`；SDK 只有当前进程仍持有完全相同的
 runtime/session/cwd/route 才接收旧 ID，重启、停止、并发切换或模型 route 重建后直接使用
-fresh session 并回放 bridge transcript。若上游仍在零活动阶段返回已知 session
+fresh session 并回放 bridge transcript。`web` adapter 声明 `resumeCapable = true`，其
+`canResume` 只在 adapter 被 dispose 后拒绝复用（web 服务端是 session 单写者），其余情况交给
+run-flow 的 fresh-session 兜底。若上游仍在零活动阶段返回已知 session
 collision/corruption，旧过程卡原位更新为固定的“正在恢复”状态，再触发 fresh-session retry；
 抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。零活动阶段的模型能力、
 provider 或传输等非 session 错误不会进入该恢复分支：它们按普通失败归约并原位终结过程卡，移除
@@ -540,7 +542,7 @@ export interface AgentRun {
 export interface AgentAdapter {
   readonly id: string;
   readonly displayName: string;
-  /** True for the SDK adapter: a live runtime can natively resume a session. */
+  /** True for adapters that natively resume a session (SDK and web). */
   resumeCapable?: boolean;
   /** Confirm this adapter instance still owns the exact live runtime/session/route. */
   canResume?(options: {
@@ -593,13 +595,16 @@ export async function buildAgentAdapter(
 - `headless`：`DshAdapter`（`src/adapters/dsh/adapter.ts`），legacy 子进程 JSONL 翻译。
 - `web`：`WebDshAdapter`（`src/adapters/dsh/web-adapter.ts`），驱动本地 dsh web agent
   （`session.create` / `session.prompt` + `/api/events.mux` WebSocket），网页端成为**唯一写者**，
-  从根上消除多写者会话损坏，跨实例续接天然可用。`SessionProjectionBridge` 只消费用户在飞书
-  显式确认的 binding；WebUI/TUI 的 open/resume/activity 不会自动切换或广播。
+  从根上消除多写者会话损坏，跨实例续接天然可用。它声明 `resumeCapable = true` 并实现
+  `canResume`，因此 run-flow 复用同一 native session、延续前一轮记忆。`SessionProjectionBridge`
+  只消费用户在飞书显式确认的 binding；WebUI/TUI 的 open/resume/activity 不会自动切换或广播。
 
 翻译与 runtime 管理模块：`src/adapters/dsh/sdk-translate.ts`（SDK `session.event` →
 `AgentEvent`，并将本地图片上传为 durable attachment ref + 原生 image block）、
 `sdk-server.ts`（在官方 server 上仅扩展 `attachment/upload`，复用 dsh attachment store 的批量
-准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈）、
+准入与限制）、`sdk-runtime.ts` / `acp-runtime.ts`（profile 自动创建与自愈；managed overlay 的 bridge
+工具行按已安装包实际导出的 subpath 生成，回滚到导出 subpath 更少的旧版本时只保留其确实导出的行，
+`./sdk-server` 缺失时回退官方 server，避免 `ERR_PACKAGE_PATH_NOT_EXPORTED`）、
 `event-channel.ts`（有序事件队列）。
 
 ### 3.1 显式 session 投影契约

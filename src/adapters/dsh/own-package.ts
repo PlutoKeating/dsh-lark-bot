@@ -83,3 +83,52 @@ function isOwnPackageName(name: string): boolean {
     /^@[^/]+\/(dsh-lark-bot|dsh-feishu-bot)$/.test(name)
   );
 }
+
+export interface OwnPackageExports {
+  /**
+   * Node legacy resolution: a package with no `exports` field makes every
+   * subpath importable, so a generated overlay may reference any bridge
+   * subpath regardless of the declared list.
+   */
+  unrestricted: boolean;
+  /** Subpaths declared by the `exports` field, keyed without the leading `./`. */
+  subpaths: Set<string>;
+}
+
+/**
+ * Read which subpaths (`./notify`, `./sdk-server`, …) the installed package
+ * actually exports. Used to generate a managed runtime `cordis.patch.yml` that
+ * only references bridge subpaths the installed (possibly rolled-back) package
+ * can resolve, avoiding `ERR_PACKAGE_PATH_NOT_EXPORTED` after a rollback to a
+ * version that declares a smaller `exports` set. An unreadable manifest is
+ * treated as unrestricted (the safe legacy default).
+ */
+export function ownPackageExports(own: OwnPackageInfo): OwnPackageExports {
+  try {
+    const pkg = JSON.parse(readFileSync(join(own.root, 'package.json'), 'utf8')) as {
+      exports?: Record<string, unknown> | string;
+    };
+    if (typeof pkg.exports === 'string') {
+      // Only the root entry is exported; no bridge subpath is importable.
+      return { unrestricted: false, subpaths: new Set() };
+    }
+    if (typeof pkg.exports !== 'object' || pkg.exports === null) {
+      // No `exports` field: Node legacy resolution allows arbitrary subpaths.
+      return { unrestricted: true, subpaths: new Set() };
+    }
+    const subpaths = new Set<string>();
+    for (const key of Object.keys(pkg.exports)) {
+      if (key === '.' || key === './package.json') continue;
+      subpaths.add(key.startsWith('./') ? key.slice(2) : key);
+    }
+    return { unrestricted: false, subpaths };
+  } catch {
+    return { unrestricted: true, subpaths: new Set() };
+  }
+}
+
+/** Whether `own` can resolve the given bridge subpath (`"notify"`, …). */
+export function ownExportsSubpath(own: OwnPackageInfo, subpath: string): boolean {
+  const { unrestricted, subpaths } = ownPackageExports(own);
+  return unrestricted || subpaths.has(subpath);
+}

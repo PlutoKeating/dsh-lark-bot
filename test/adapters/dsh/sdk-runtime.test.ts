@@ -395,3 +395,51 @@ describe('ensureSdkProfile', () => {
     expect(result.error).toContain('offline');
   });
 });
+
+describe('patchYamlFor rollback compatibility', () => {
+  it('omits rows for subpaths a rolled-back package does not export and falls back to the official server', async () => {
+    const oldPkg = await mkdtemp(join(tmpdir(), 'old-sdk-pkg-'));
+    tempDirs.push(oldPkg);
+    const own = { name: 'dsh-lark-bot', root: oldPkg, version: '0.15.9' };
+    await writeFile(join(oldPkg, 'package.json'), JSON.stringify({
+      name: own.name,
+      version: own.version,
+      exports: {
+        '.': './dist/index.js',
+        './plugin': './dist/plugin.js',
+        './notify': './dist/notify.js',
+      },
+    }));
+
+    const patch = patchYamlFor({ own });
+    // ./sdk-server is not exported, so fall back to the official server.
+    expect(patch).toContain(`name: '${SDK_SERVER_PACKAGE}'`);
+    expect(patch).not.toContain("name: 'dsh-lark-bot/sdk-server'");
+    // Only exported subpaths are referenced.
+    expect(patch).toContain("name: 'dsh-lark-bot/notify'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/file'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/secret'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/ask'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/plan'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/approval'");
+    expect(patch).not.toContain("name: 'dsh-lark-bot/skill'");
+    expect(patch).not.toContain('id: lark-file');
+    expect(patch).not.toContain('id: lark-approval-answerer');
+  });
+
+  it('treats a package with no exports field as allowing every subpath', async () => {
+    const oldPkg = await mkdtemp(join(tmpdir(), 'no-exports-sdk-pkg-'));
+    tempDirs.push(oldPkg);
+    const own = { name: 'dsh-lark-bot', root: oldPkg, version: '0.15.9' };
+    await writeFile(join(oldPkg, 'package.json'), JSON.stringify({ name: own.name, version: own.version }));
+
+    const patch = patchYamlFor({ own });
+    expect(patch).toContain("name: 'dsh-lark-bot/sdk-server'");
+    expect(patch).toContain('id: lark-notify');
+    expect(patch).toContain('id: lark-file');
+    expect(patch).toContain('id: lark-ask');
+    expect(patch).toContain('id: lark-plan-approval');
+    expect(patch).toContain('id: lark-approval-answerer');
+    expect(patch).toContain('id: lark-skill');
+  });
+});
