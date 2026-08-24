@@ -27,17 +27,17 @@
   · 备用 <a href="https://plutokeating.github.io/dsh-lark-bot/">GitHub Pages</a>
 </p>
 
-> **这是什么**：让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
+> **产品简介**：让 DeepSeek Harness 成为你飞书里的一员，在手机、群聊、话题里直接指挥本机 coding agent。
 > 走飞书 WebSocket 长连接，**不需要公网 IP、域名、服务器或内网穿透**；Linux / macOS / Windows 通用，Node.js ≥ 22。
 
 > **⚠️ 仅认准官方渠道**：唯一官方仓库 [PlutoKeating/dsh-lark-bot](https://github.com/PlutoKeating/dsh-lark-bot)，
 > 唯一官方 npm 包 `dsh-lark-bot` / `dsh-feishu-bot`（维护者 `plutokeating`）。本项目**从不提供 .exe 或
 > “下载即运行”的安装包**，任何以此名义分发的页面 / 仓库均为**假冒 / 恶意来源**。官方安装唯一命令：
-> `npx dsh-lark-bot@latest setup --profile dsh-lark`。详见文末「假冒仓库警告」。
+> `npx dsh-lark-bot@latest setup --profile dsh-lark`。详见文末「安全提醒」。
 
 ---
 
-## 30 秒上线
+## 快速开始
 
 **前置**：本机已安装 DeepSeek Harness（`dsh`）并配置好 `DEEPSEEK_API_KEY`；Node.js ≥ 22.19；一个飞书 / Lark 账号。
 
@@ -58,7 +58,7 @@ dsh --profile dsh-lark                              # ② 启动
 
 ---
 
-## 能做什么
+## 核心能力
 
 - **安全网守护**：dsh 崩溃后飞书仍会回复你，`/safemode` 进入仅核心安全模式直接自愈。
 - **并行多任务**：同一群聊同时跑多个任务、会话隔离；其他方案只能串行排队。
@@ -75,7 +75,7 @@ dsh --profile dsh-lark                              # ② 启动
 
 > 每会话自动创建隔离 git worktree 项目工作区；流式过程卡以飞书原生折叠面板实时展示阶段、耗时与工具状态。
 
-## 常用命令
+## 命令速览
 
 命令帮助、状态与卡片均中英文；`/help` 为全量权威清单，全部命令见 [`docs/MANUAL.md`](docs/MANUAL.md)。
 
@@ -99,7 +99,7 @@ dsh --profile dsh-lark                              # ② 启动
 
 ---
 
-## FAQ
+## 常见问题
 
 **Q: DeepSeek Harness 怎么接入飞书？**
 **A:** 装好 Node ≥ 22 与 dsh（已配 `DEEPSEEK_API_KEY`）后，执行 `npx dsh-lark-bot@latest setup --profile dsh-lark`，再 `dsh --profile dsh-lark` 扫码绑定即可；私聊直接发消息，群聊 / 话题默认 `@bot`。
@@ -120,7 +120,7 @@ dsh --profile dsh-lark                              # ② 启动
 - **DeepSeek Harness（`dsh`）**：已验证 **0.1.0-rc.8**（2026-08-22），经官方 `@deepseek-ai/dsh-sdk-client` / `dsh-acp` 接入；锁定版本与升级政策见 [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md)。
 - **运行时**：Node.js ≥ 22.19；**平台**：Linux / macOS / Windows。adapter 默认 `sdk`（原生续跑 / 流式 / 图片块），可切 `acp` / `headless` / `web`。
 
-## 配置
+## 配置说明
 
 - **推荐**：本机 dsh Web → **Settings → Plugins → dsh-lark-bot**，直接查看 / 修改服务区域、App ID、App Secret、工作目录、默认模型、并行数、adapter 与提醒；App Secret 只写不回显。
 - 也可用 `/config`、`/providers`、`/provider`、`/key` 在飞书内核验供应商 / 模型 / 凭据并写操作（仅管理员）。
@@ -129,12 +129,12 @@ dsh --profile dsh-lark                              # ② 启动
 > 行为细节（崩溃对账、会话隔离、计划门禁、逐操作审批、多机器人交接、安全网守护等）见 [`docs/FEATURES.md`](docs/FEATURES.md)；
 > 权限与数据见 [`docs/MANUAL.md`](docs/MANUAL.md) §6 与 [`SECURITY.md`](SECURITY.md)。
 
-## 许可与安全
+## 安全与许可
 
 - **许可证**：GNU AGPL-3.0（见 [`LICENSE`](LICENSE)）。开源可自托管，个人 / 内部使用免费；**商用 / SaaS / 闭源二开需另行授权**。
 - **安全**：默认拒绝、密钥脱敏、路径 containment、SSRF 防护、过期事件拒绝、交互工具默认禁用——见 [`SECURITY.md`](SECURITY.md)；安全漏洞请走 GitHub Security Advisory 私下报告。
 
-## 升级、禁用与卸载
+## 升级与卸载
 
 ```bash
 npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # 升级（或飞书内管理员 /upgrade）
@@ -145,13 +145,13 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # 升级（或飞书�
 
 ---
 
-## 更多（开发 / 作者 / 文档）
+## 关于项目
 
 - **开发**：`pnpm install && pnpm typecheck && pnpm test && pnpm build`；生态交付标准见 [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)，AI Agent 工作流见 [`AGENTS.md`](AGENTS.md)。双包发布 `pnpm publish:dual`（`dsh-lark-bot` + `dsh-feishu-bot`，共享 dist）。
 - **作者**：**PlutoKeating**（[主页](https://github.com/PlutoKeating)）。致谢 [koprivnikarurnaa-oss](https://github.com/koprivnikarurnaa-oss)（web 单写者 + 自愈 v2 + 守护自动重启）、[Normanyin](https://github.com/Normanyin)（`/newg`）。
 - **文档**：`QUICK_START`（安装/快速开始）· `MANUAL`（完整手册+命令+环境变量）· `FEATURES`（能力行为细节）· `COMPATIBILITY`· `ARCHITECTURE`· `API`· `roadmap`。
 
-## 社区收录
+## 社区与生态
 
 | 平台 | 状态 |
 | :--- | :--- |
@@ -162,7 +162,7 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes   # 升级（或飞书�
 | [dsh-plugin.org](https://dsh-plugin.org/zh/plugins/plutokeating/dsh-lark-bot) | ✅ 已收录 · 官方源已核验 |
 | [omdsh-dev/community](https://github.com/orgs/omdsh-dev/discussions/11) | ✅ 收录申请通过 · 讨论活跃 |
 
-## 假冒仓库警告
+## 安全提醒
 
 > 2026-08-17 发现假冒仓库 **`tarraencompassing61/dsh-lark-bot`**：非 fork 重新上传、114 个 commit 中
 > 113 个作者为 PlutoKeating、删除全部 CI、关闭 Issues、Releases 为 0，却以“下载 Windows exe 双击运行”的
