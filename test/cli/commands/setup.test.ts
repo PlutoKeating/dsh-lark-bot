@@ -1,10 +1,13 @@
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runSetup } from '../../../src/cli/commands/setup.js';
+import {
+  approveBuilds,
+  runSetup,
+} from '../../../src/cli/commands/setup.js';
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -23,6 +26,41 @@ afterEach(async () => {
 });
 
 describe('dsh-lark-bot setup', () => {
+  it('pins Corepack to the pnpm version recorded by the existing profile install', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-setup-pnpm-'));
+    tempDirs.push(home);
+    const profileDir = join(home, 'profile');
+    await mkdir(join(profileDir, 'node_modules'), { recursive: true });
+    await writeFile(
+      join(profileDir, 'package.json'),
+      `${JSON.stringify({ name: 'dsh-profile-demo', private: true, packageManager: 'pnpm@11.21.0' }, null, 2)}\n`,
+      'utf8',
+    );
+    await writeFile(
+      join(profileDir, 'node_modules', '.modules.yaml'),
+      `${JSON.stringify({ packageManager: 'pnpm@10.33.0', storeDir: '/store/v10' }, null, 2)}\n`,
+      'utf8',
+    );
+
+    await approveBuilds(profileDir);
+
+    const profilePackage = JSON.parse(
+      await readFile(join(profileDir, 'package.json'), 'utf8'),
+    ) as { packageManager?: string };
+    expect(profilePackage.packageManager).toBe('pnpm@10.33.0');
+  });
+
+  it('does not create package.json for a fresh profile without pnpm install metadata', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-setup-fresh-'));
+    tempDirs.push(home);
+
+    await approveBuilds(home);
+
+    await expect(readFile(join(home, 'package.json'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('pre-approves pnpm builds, installs the bundle and the guardian by default', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-setup-'));
     tempDirs.push(home);

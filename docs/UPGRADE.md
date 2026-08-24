@@ -56,7 +56,9 @@
 
 1. `detectUpgradeState`：读取 own / installed / dsh 进程 / guardian / 心跳；
 2. `resolveTarget`：`--rollback` → `--package <name>@<version>` → npm latest；
-3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；
+3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；既有 profile 会先
+   把 `.modules.yaml` 记录的精确 pnpm 版本同步到 `package.json#packageManager`，防止 Corepack 在
+   源码托管 dsh 的工作目录下误选另一 store 主版本；全新 profile 不提前创建 manifest；
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
    包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；

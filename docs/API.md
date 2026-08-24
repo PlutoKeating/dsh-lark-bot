@@ -788,6 +788,9 @@ export interface Logger {
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
   `--force` 离线时按当前版本重装；非交互环境不带 `--yes` 会安全中止。
+  对既有 profile，安装前会从 `node_modules/.modules.yaml` 恢复精确
+  `packageManager`，防止 Corepack 在 source-managed dsh 环境中切换 pnpm store 主版本；新 profile
+  不会因此提前生成 `package.json`。
 - `dsh-lark-bot doctor`：运行本地诊断（含对应 adapter 的真实可用性探测）。
 - `dsh-lark-bot --version` / `-v`：版本号。
 - `dsh-lark-bot run`（隐藏）：直接运行桥接引擎（诊断用；插件模式下引擎在 dsh 进程内运行）。
