@@ -106,7 +106,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    同一 scope 的并发 fresh session 另开 runtime；run handle 捕获并只关闭自己的 entry。原生 resume
    还必须通过 adapter 的 live-owner 检查：只有当前进程仍持有同 runtime/session/route 时复用 ID；
    重启、停止或 route 重建后改用 fresh session + bridge transcript，避免上游新 live seed 与旧 JSONL
-   不匹配产生 `id collision`。
+   不匹配产生 `id collision`。只有会话分类器确认的零活动 collision/corruption 才进入恢复重试；同一
+   位置出现的模型、provider 或传输错误按普通 failed 事件原位终结过程卡，不清除 native binding。
 3. **工作区管理**：会话绑定 git worktree / 分支 + 项目级规则注入 + 上下文持久化，是本项目的核心差异化能力。
    `SessionStore` schema 2 在同一 `sessions.json` 中按 scope + canonical workspace cwd 分别保存
    transcript、native binding 与 metrics；schema 1 在启动时按 `WorkspaceStore` 当前选择迁移。消息入队

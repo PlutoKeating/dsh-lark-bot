@@ -425,7 +425,8 @@ async function runAttempt(
               resuming &&
               !sawActivity &&
               event.type === 'error' &&
-              event.terminationReason === 'failed'
+              event.terminationReason === 'failed' &&
+              classifySessionError(event.message) !== undefined
             ) {
               await showResumeRecovery(event.message);
               return;
@@ -555,9 +556,22 @@ async function runAttempt(
           try {
             await consume();
           } catch (error) {
-            if (resuming && !sawActivity) {
+            if (
+              resuming &&
+              !sawActivity &&
+              classifySessionError(errorMessage(error)) !== undefined
+            ) {
               await showResumeRecovery(error);
               return;
+            }
+            if (state.terminal === 'running') {
+              state = applyEvent(state, {
+                type: 'error',
+                message: errorMessage(error),
+                terminationReason: 'failed',
+              }, stopRequested);
+              state = { ...state, lastActivityMs: Date.now() };
+              await safeUpdate();
             }
             throw error;
           }
@@ -707,7 +721,12 @@ async function runAttempt(
     // failed before any real activity, the persisted session itself is
     // unusable: throw so the caller clears the binding and retries with a
     // fresh session instead of leaving the user with a hard failure card.
-    if (resuming && state.terminal === 'error' && !sawActivity) {
+    if (
+      resuming &&
+      state.terminal === 'error' &&
+      !sawActivity &&
+      classifySessionError(state.errorMsg ?? '') !== undefined
+    ) {
       throw new Error(state.errorMsg ?? 'native session resume failed');
     }
     input.sessions.recordExchange(input.scope, workspaceCwd, input.messages, assistantOutput, {
@@ -725,17 +744,17 @@ async function runAttempt(
         : {}),
     });
   } catch (error) {
-    state = markInterrupted(state);
+    const runErrorText = errorMessage(error);
+    const healKind = classifySessionError(runErrorText);
     // A failed native-session resume (thrown above when `resuming` and no
     // activity yet) must propagate so `runAgentBatch` clears the binding and
     // retries with a fresh session — do not swallow it here.
-    if (resuming && !sawActivity) {
+    if (resuming && !sawActivity && healKind !== undefined) {
       log.warn('run-flow', 'resume-attempt-failed', { scope: input.scope, runId });
       throw error;
     }
+    if (state.terminal === 'running') state = markInterrupted(state);
     log.fail('run-flow', error, { scope: input.scope, runId });
-    const runErrorText = errorMessage(error);
-    const healKind = classifySessionError(runErrorText);
     if (healKind !== undefined) {
       const brokenSessionId = input.sessions.getRaw(input.scope, workspaceCwd)?.sessionId;
       if (brokenSessionId !== undefined) {

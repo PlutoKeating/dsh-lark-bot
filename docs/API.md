@@ -419,7 +419,9 @@ running 的状态转换延迟到 outbound ready，避免启动中途失败吞掉
 runtime/session/cwd/route 才接收旧 ID，重启、停止、并发切换或模型 route 重建后直接使用
 fresh session 并回放 bridge transcript。若上游仍在零活动阶段返回已知 session
 collision/corruption，旧过程卡原位更新为固定的“正在恢复”状态，再触发 fresh-session retry；
-抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。
+抛异常和 error-event 两种 adapter 形态共用该兜底，原始错误仅写本机日志。零活动阶段的模型能力、
+provider 或传输等非 session 错误不会进入该恢复分支：它们按普通失败归约并原位终结过程卡，移除
+“思考中”状态与停止按钮，同时保留原 session binding。
 
 `src/session/archive.ts` 提供 `SessionArchive`：每次归档写 Markdown 转写 + JSONL 原始数据到
 `<profile>/archives/<scope-slug>/<timestamp>.jsonl|.md`，归档目录惰性初始化为独立 Git 仓库，
