@@ -210,7 +210,9 @@ bot 会为每个飞书 scope 默认保存最近 40 条对话（`/retention` 可�
 
 发送图片时，bot 会先下载到本地 media 目录，按内容识别 PNG/JPEG/WebP/GIF 并补全扩展名；默认
 SDK 经 dsh attachment store 校验后发送原生 image block，不发送路径文本，也不会改用工作区内
-其他图片。发送文本类文件时，会把文件内容注入给 dsh 处理。
+其他图片。每轮运行前还会把选中的 `deepseek-official` 视觉模型幂等登记到
+`llm-deepseek.models` 并声明 `inputModalities: [text, image]`；这是 rc.8 runtime 实际执行图片请求所需，
+仅在 `/model` 卡片中显示视觉能力并不够。发送文本类文件时，会把文件内容注入给 dsh 处理。
 
 **任务中向你提问（问答卡）**：agent 需要你拍板、确认或补充缺失信息时，会通过 `lark_ask_user`
 工具主动向当前会话弹一张问答卡（单选 / 多选 / 自由文本）。可提交卡片，也可直接回复该卡片输入

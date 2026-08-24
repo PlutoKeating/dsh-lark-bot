@@ -606,6 +606,13 @@ export class DshProviderManager {
     return { provider: provider.id, model: selection };
   }
 
+  /** Resolve a model route and make its managed runtime catalog ready. */
+  async resolveRuntimeModelRoute(selection: string): Promise<DshModelSelection | undefined> {
+    const route = await this.resolveModelRoute(selection);
+    if (route !== undefined) await this.ensureRuntimeModelModalities(route);
+    return route;
+  }
+
   async setDefaultModel(model: string): Promise<void> {
     if (!model.trim()) throw new Error('默认模型不能为空');
     const route = await this.resolveModelRoute(model);
@@ -672,6 +679,67 @@ export class DshProviderManager {
       ...current,
       models: [...models, modelRecord(input)],
     });
+  }
+
+  /**
+   * Ensure the selected DeepSeek vision model is present in the catalog that
+   * the managed SDK/ACP runtime actually consumes. The upstream DeepSeek
+   * adapter treats an unlisted model as text-only even when its id identifies
+   * a vision endpoint, so read-time normalization alone is insufficient.
+   * Returns true only when settings were changed.
+   */
+  async ensureRuntimeModelModalities(route: DshModelSelection): Promise<boolean> {
+    if (route.provider !== DEEPSEEK_PROVIDER || !isVisionModelId(route.model)) return false;
+    await mkdir(dirname(this.settingsFile), { recursive: true });
+    let changed = false;
+    await withFileLock(this.settingsFile, async () => {
+      const text = await readOptional(this.settingsFile);
+      const root = parseYamlMap(text, this.settingsFile);
+      const current = isMapLike(root[DEEPSEEK_NAMESPACE])
+        ? root[DEEPSEEK_NAMESPACE]
+        : {};
+      const models = rawModels(current.models);
+      const index = models.findIndex((model) => model.id === route.model);
+      const existing = index === -1 ? undefined : models[index];
+      const configured = Array.isArray(existing?.inputModalities)
+        ? existing.inputModalities.filter(
+          (modality): modality is 'text' | 'image' =>
+            modality === 'text' || modality === 'image',
+        )
+        : undefined;
+      const modalities = normalizeVisionModelInputModalities(
+        route.model,
+        configured,
+        false,
+      )!;
+      if (existing !== undefined && deepEqualJson(existing.inputModalities, modalities)) return;
+
+      const nextModel = {
+        ...(existing ?? { id: route.model }),
+        inputModalities: modalities,
+      };
+      const nextModels = index === -1
+        ? [...models, nextModel]
+        : models.map((model, modelIndex) => modelIndex === index ? nextModel : model);
+      const section = { ...current, models: nextModels };
+      if (text === undefined || text.trim().length === 0) {
+        await writeFileAtomic(
+          this.settingsFile,
+          new Document({ [DEEPSEEK_NAMESPACE]: section }).toString(),
+          {},
+        );
+        changed = true;
+        return;
+      }
+      const document = parseDocument(text);
+      if (document.errors.length > 0) {
+        throw new Error(`invalid dsh settings at ${this.settingsFile}`);
+      }
+      patchNode(document, [DEEPSEEK_NAMESPACE], root[DEEPSEEK_NAMESPACE], section);
+      await writeFileAtomic(this.settingsFile, document.toString(), {});
+      changed = true;
+    });
+    return changed;
   }
 
   async removeDeepseekModel(id: string): Promise<boolean> {

@@ -301,6 +301,8 @@ export class DshProviderManager {
   defaultModelSelection(): Promise<{ provider: string; model: string } | undefined>;
   resolveProviderForModel(modelId: string): Promise<DshProviderSummary | undefined>;
   resolveModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
+  resolveRuntimeModelRoute(modelId: string): Promise<{ provider: string; model: string } | undefined>;
+  ensureRuntimeModelModalities(route: { provider: string; model: string }): Promise<boolean>;
   linkCredentialRefIfMissing(providerId: string): Promise<boolean>;
   setDefaultModel(model: string): Promise<void>;
   upsertDeepseekProvider(input: { baseURL?; apiKeyEnv?; apiKey? }): Promise<void>;
@@ -338,7 +340,10 @@ pi-ai 的 `baseURL` 由 `normalizeBaseUrl()` 归一化：填根域名（如 `htt
 `agent-default-model`（`/model default` 写入）> `DSH_LARK_MODEL`；代码不提供固定模型默认值。
 `/model default` 按 dsh 官方 schema 写入 `{ provider, model }`（provider 由
 `resolveModelRoute()` 从模型自动解析，找不到模型时报错）。每轮运行前
-`src/cli/commands/run.ts` 用 `resolveModelRoute()` 解析路由并传给适配器：SDK 适配器
+`src/cli/commands/run.ts` 用 `resolveRuntimeModelRoute()` 解析路由并准备 runtime 目录：对
+`deepseek-official` 视觉模型，它会在同一 settings 写锁内幂等补齐 `llm-deepseek.models` 的
+`inputModalities: [text, image]`，因为 rc.8 DeepSeek adapter 将未列入有效目录的模型视为 text-only；
+非视觉模型和其他 provider 不改写。随后路由传给适配器：SDK 适配器
 （`src/adapters/dsh/sdk-adapter.ts`）在路由变化时关闭旧 harness 并以新路由重建，
 因此 `/model use` 的「下一轮生效」承诺真实落地（issue #47）。
 `linkCredentialRefIfMissing()` 在运行前把「凭据名 == provider ID」的老配置自动补齐

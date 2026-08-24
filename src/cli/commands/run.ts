@@ -509,18 +509,18 @@ export async function startBridgeEngine(
           activeProfile.preferences.model ??
           (dshDefault ? `${dshDefault.provider}/${dshDefault.model}` : undefined) ??
           defaultModel;
-        let modelRoute: Awaited<ReturnType<DshProviderManager['resolveModelRoute']>>;
+        let modelRoute: Awaited<ReturnType<DshProviderManager['resolveRuntimeModelRoute']>>;
         if (resolvedModel) {
           try {
-            modelRoute = await dshConfig.resolveModelRoute(resolvedModel);
+            modelRoute = await dshConfig.resolveRuntimeModelRoute(resolvedModel);
           } catch (error) {
             // A settings read/parse failure is a different problem than a
             // missing model; report it instead of a misleading "not found".
             await streaming.sendMarkdown(
               first.chatId,
               bilingualMarkdown(
-                `⚠️ 读取 dsh 配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
-                `⚠️ Failed to read dsh configuration, so the provider route for model \`${resolvedModel}\` could not be resolved: ${error instanceof Error ? error.message : String(error)}`,
+                `⚠️ 读取或准备 dsh 运行时配置失败，无法解析模型 \`${resolvedModel}\` 的 provider 路由：${error instanceof Error ? error.message : String(error)}`,
+                `⚠️ Failed to read or prepare dsh runtime configuration, so the provider route for model \`${resolvedModel}\` could not be resolved: ${error instanceof Error ? error.message : String(error)}`,
               ),
               { replyTo: first.messageId },
             );
