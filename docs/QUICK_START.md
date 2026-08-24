@@ -15,6 +15,10 @@
 npx dsh-lark-bot@latest setup --profile dsh-lark
 ```
 
+> [!TIP]
+> `npx` 无需全局安装任何东西。若你已 `npm i -g dsh-lark-bot` 全局装过，`setup` 等价于
+> `dsh-lark-bot setup`。装好 dsh 并配好 `DEEPSEEK_API_KEY` 后，**安装 → 启动 → 扫码绑定 = 30 秒**。
+
 `setup` 会：定位本机 dsh → 预批准 pnpm 构建策略（protobufjs 等；既有 profile 同时固定到其
 安装元数据记录的精确 pnpm 版本，避免 Corepack/store 主版本冲突）→ 执行标准
 `dsh plugin --profile dsh-lark add dsh-lark-bot`，把本插件作为标准 bundle 装进 profile，
