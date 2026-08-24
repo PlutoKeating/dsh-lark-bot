@@ -18,7 +18,7 @@
 | :--- | :--- | :--- |
 | 包本体 Package | `~/.dsh/profiles/<profile>/node_modules/dsh-lark-bot` | pnpm 安装（vendor tgz 或 npm），`dsh plugin add <name>@<version>` 更新 |
 | runtime profile（sdk/acp） | `~/.dsh/profiles/dsh-lark-sdk` / `dsh-lark-acp` | 通过 own-package 链接引用包本体；`upgrade` 负责链接、上游依赖及 managed overlay 精确一致性，重写 ACP overlay 时保留当前 provider/model route |
-| guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向 CLI 入口；**必须指向稳定路径**（见 §5） |
+| guardian 服务单元 | `~/.config/systemd/user/dsh-lark-guardian.service`（Linux）等 | ExecStart 指向稳定 CLI 入口，PATH 不含 update worker / package-bin 临时目录（见 §5） |
 | 正常引擎服务 | `~/.dsh-lark/service/<profile>.json|env|intent.json` + OS 用户服务 | 可选；稳定 CLI runner 启动同一 dsh profile；env 在 POSIX 为 0600、Windows 为 owner-only ACL；intent 记录显式 stop/uninstall |
 | dsh profile 进程 | `dsh --profile <name>` | 桥接引擎在进程内运行；换包后需重启才加载新代码 |
 | 桥接心跳 | `~/.dsh-lark/profiles/<bridge>/guardian/heartbeat.json` | guardian 判定 dsh 在线状态的依据 |
@@ -59,7 +59,9 @@
 3. `dsh plugin add <name>@<target>`：profile 内 pnpm 安装（含构建策略预批准）；既有 profile 会先
    把 `.modules.yaml` 记录的精确 pnpm 版本同步到 `package.json#packageManager`，防止 Corepack 在
    源码托管 dsh 的工作目录下误选另一 store 主版本；全新 profile 不提前创建 manifest；
-4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
+4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**；Linux unit 通过
+   `stableGuardianServicePath` 保留 Node 与稳定用户/系统工具目录，同时过滤 `_npx`、update-worker
+   npm cache 和 `node_modules/.bin`（见 §5）；
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
    包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；SDK
    依赖校验在 pnpm isolated tree 中先解引用 own-package 到 `.pnpm` 物理目录，再执行 Node 模块解析，
@@ -94,6 +96,9 @@ package 遮蔽或异常宿主 umask 破坏 npm 子目录。失败输出只映射
   曾把 ExecStart 指向 `~/.npm/_npx/<hash>/...`——npm 清理缓存后服务失效。现改为优先解析
   `~/.dsh/profiles/<profile>/node_modules/<name>/dist/cli.js`（稳定路径），仅在 profile 内
   无包时回退到当前运行包；`doctor` 会检测单元内容并警告 npx 缓存路径。
+- **guardian 单元 PATH（issue #102）**：飞书升级 worker 自带逐请求 npx cache 和多级
+  `node_modules/.bin`。`stableGuardianServicePath` 在重装 Linux systemd unit 时过滤这些短期目录，
+  去重后只保留 Node 所在目录及稳定用户/系统 PATH，避免缓存清理后常驻进程或子命令失效。
 - 包更新后，**运行中的 dsh 进程仍执行旧代码**：CLI 默认只提示重启命令（不中断会话），
   `--restart` 自动重启 guardian 服务与受管 profile；若安装了 `service`，优先走 OS 服务重启；
   飞书 `/upgrade` 总是走该 guardian 协调的自动重载路径。重载会中断正在执行的任务，但持久会话、
@@ -111,7 +116,7 @@ package 遮蔽或异常宿主 umask 破坏 npm 子目录。失败输出只映射
 | 场景 Scenario | 现状 Status | 处置 Handling |
 | :--- | :--- | :--- |
 | 旧版本 `npx` 引导（< v0.12.0） | v0.13.1 起探测健壮；**在包源码目录内**执行会触发 npm shim 错误 | 文档提示从任意普通目录执行 |
-| guardian 单元指向 npx 缓存 | 已修复 + doctor 告警 | 重新 `guardian install` |
+| guardian 单元指向/携带 npx 缓存 | ExecStart 与 PATH 均已修复 + doctor 告警 | 重新 `guardian install` |
 | registry 偶发 406 / 慢响应 | #14 重试 + Accept 降级 | 已修复 |
 | 运行中实例升级 | CLI 默认提示重启；飞书确认后 Guardian 自动更新并重载，活动任务会中断 | 已支持最小重启窗口；非进程内 HMR |
 | 离线 / 镜像 | `--force` 按当前版本重装；`DSH_LARK_UPGRADE_REGISTRY` | 已支持，需回归 |
