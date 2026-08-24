@@ -788,6 +788,8 @@ export interface Logger {
   `--restart` 额外重启 guardian 服务与受管 dsh profile 进程；`--check` 只报告；
   `--rollback` 回滚到上次升级前版本（记录在 `~/.dsh-lark/upgrade-state.json`）；
   `--force` 离线时按当前版本重装；非交互环境不带 `--yes` 会安全中止。
+  runtime 校验兼容 npm/npx 扁平树与 pnpm isolated tree：pnpm 包入口会先解引用到 `.pnpm` 物理
+  目标，再按 Node 解析其相邻依赖，避免把完整安装误判为损坏。
   对既有 profile，安装前会从 `node_modules/.modules.yaml` 恢复精确
   `packageManager`，防止 Corepack 在 source-managed dsh 环境中切换 pnpm store 主版本；新 profile
   不会因此提前生成 `package.json`。

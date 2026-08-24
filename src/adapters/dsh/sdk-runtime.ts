@@ -210,7 +210,13 @@ export function isSdkManagedProfileCurrent(
 /** The wrapper exported as `dsh-lark-bot/sdk-server` resolves from this package. */
 function ownSdkServerDependencyReady(own: OwnPackageInfo): boolean {
   try {
-    const entry = createRequire(join(own.root, 'package.json')).resolve(SDK_SERVER_PACKAGE);
+    // `readInstalledPackage` returns the profile-visible package symlink. In
+    // pnpm's isolated layout the package dependencies sit beside the physical
+    // symlink target under `.pnpm/<pkg>/node_modules`, not beside the logical
+    // profile path. Resolve the root first so Node searches the real layout;
+    // npm/npx directories are unchanged because their package root is real.
+    const physicalOwnRoot = realpathSync(own.root);
+    const entry = createRequire(join(physicalOwnRoot, 'package.json')).resolve(SDK_SERVER_PACKAGE);
     let current = dirname(entry);
     for (let depth = 0; depth < 8; depth += 1) {
       try {

@@ -310,6 +310,55 @@ describe('ensureSdkProfile', () => {
     expect(installOwnDependencies).not.toHaveBeenCalled();
   });
 
+  it('resolves dependencies beside a pnpm package symlink target', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-home-pnpm-link-'));
+    tempDirs.push(home);
+    const profileRoot = sdkProfileRoot(home, DEFAULT_SDK_PROFILE);
+    const profileNodeModules = join(home, 'installed-profile', 'node_modules');
+    const physicalNodeModules = join(
+      profileNodeModules,
+      '.pnpm',
+      'dsh-lark-bot@0.19.5_fixture',
+      'node_modules',
+    );
+    const physicalOwnRoot = join(physicalNodeModules, 'dsh-lark-bot');
+    const logicalOwnRoot = join(profileNodeModules, 'dsh-lark-bot');
+    const own = { name: 'dsh-lark-bot', root: logicalOwnRoot, version: '0.19.5' };
+    await mkdir(physicalOwnRoot, { recursive: true });
+    await mkdir(join(physicalNodeModules, ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(physicalOwnRoot, 'package.json'),
+      JSON.stringify({ name: own.name, version: own.version, dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+    );
+    await writeFile(
+      join(physicalNodeModules, SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION, main: 'index.js' }),
+    );
+    await writeFile(join(physicalNodeModules, SDK_SERVER_PACKAGE, 'index.js'), 'export {};\n');
+    await symlink(physicalOwnRoot, logicalOwnRoot, 'dir');
+
+    await mkdir(join(profileRoot, 'node_modules', ...SDK_SERVER_PACKAGE.split('/')), { recursive: true });
+    await writeFile(
+      join(profileRoot, 'node_modules', SDK_SERVER_PACKAGE, 'package.json'),
+      JSON.stringify({ name: SDK_SERVER_PACKAGE, version: SDK_SERVER_VERSION }),
+    );
+    await symlink(logicalOwnRoot, join(profileRoot, 'node_modules', own.name), 'dir');
+    await writeFile(join(profileRoot, 'package.json'), '{}');
+    await writeFile(join(profileRoot, 'cordis.yml'), '[]\n');
+    await writeFile(join(profileRoot, 'cordis.patch.yml'), patchYamlFor());
+    const install = vi.fn();
+    const installOwnDependencies = vi.fn();
+
+    await expect(ensureSdkProfile({
+      home,
+      ownPackage: own,
+      install,
+      installOwnDependencies,
+    })).resolves.toMatchObject({ ok: true, created: false });
+    expect(install).not.toHaveBeenCalled();
+    expect(installOwnDependencies).not.toHaveBeenCalled();
+  });
+
   it('does not let a matching hoisted package hide a stale profile-local copy', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-home-shadowed-server-'));
     tempDirs.push(home);

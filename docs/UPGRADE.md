@@ -61,7 +61,9 @@
    源码托管 dsh 的工作目录下误选另一 store 主版本；全新 profile 不提前创建 manifest；
 4. guardian 重装：`resolveGuardianCliEntry` **优先 profile 内已装包**（稳定路径，见 §5）；
 5. runtime profile 一致性修复：sdk/acp own-package 链接、陈旧 SDK server / ACP 依赖，以及与当前
-   包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；
+   包不一致的 managed `cordis.patch.yml`；ACP 重写前解析并保留既有 provider/model route；SDK
+   依赖校验在 pnpm isolated tree 中先解引用 own-package 到 `.pnpm` 物理目录，再执行 Node 模块解析，
+   同时兼容 npm/npx 扁平树；
 6. 新版 bridge 首次启动时迁移 workspace session schema；若存在旧版 scope-only Git worktree，先从
    Git registry 解析 owning repo；先以逐文件原子、半完成可重试的幂等流程把旧 execution-cwd
    retention archive header 归回该项目并生成 migration commit，全部成功后才提交 session schema 2。

@@ -301,7 +301,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    严格更新时追加短文本，不改变建会话结果。
    `dsh plugin add` 后升级器重新读取 profile 内包清单并校验精确目标版本，再把该稳定安装根传给
    SDK/ACP runtime repair；运行于 npm/npx 扁平树的 worker 只负责执行，不会成为 runtime 链接目标，
-   其依赖就绪性按 Node 从 worker package 实际解析到的模块入口与清单判断。
+   其依赖就绪性按 Node 从 worker package 实际解析到的模块入口与清单判断；pnpm profile 中的包
+   入口先解引用为 `.pnpm` 物理目标，使 Node 能从物理包目录旁的依赖链接解析，而不是从逻辑
+   `node_modules/<package>` 路径误判依赖缺失。
    在进入 `dsh plugin add` 前，既有 profile 的 `.modules.yaml` 所记录的精确 pnpm 版本会同步到
    profile `package.json#packageManager`。因此即使 dsh 由源码仓库或 Corepack 特殊托管，裸
    `pnpm` 仍使用创建现有依赖树的版本，不会跨 store 主版本；无安装元数据的新 profile 保持由 dsh
