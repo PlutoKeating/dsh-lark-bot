@@ -276,7 +276,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    plist / 计划任务泄露密钥（Windows 另以 owner-only ACL 收紧 env）。guardian 自动重启和 `upgrade --restart` 优先操作该受管服务，避免双实例。
    环境快照排除 bridge callback URL/token、测试开关和 update-worker 标记；飞书内更新重启时沿用
    既有稳定 PATH，避免 npx 私有 cache 路径污染后续服务。Guardian systemd unit 显式携带 Node
-   所在目录及安装时 PATH，以保证安全模式可调用同工具链中的 pnpm。
+   所在目录及安装时的稳定用户/系统 PATH，并过滤 `_npx`、update-worker npm cache 与所有
+   `node_modules/.bin` 条目，以保证安全模式可调用同工具链中的 pnpm且不依赖临时缓存。
    portable supervisor 在 spawn 后、任何异步状态落盘之前即订阅 child 的 `exit/error`，因此停止信号与
    状态写入并发时不会丢失一次性退出事件或永久挂起；该顺序由受控时钟竞态测试锁定。
    `service/<profile>.intent.json` 持久化 running/stopped 意图，stop/uninstall 后 guardian 不回拉；

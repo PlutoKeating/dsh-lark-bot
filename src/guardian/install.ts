@@ -141,6 +141,36 @@ export function systemdUnit(
   ].join('\n');
 }
 
+/**
+ * Keep the guardian service independent from the short-lived environment of
+ * an npm/npx worker. Package-manager script bins are useful while launching
+ * the worker, but they disappear with its cache or checkout and must not be
+ * persisted into a resident system service.
+ */
+export function stableGuardianServicePath(
+  nodeBin: string,
+  inheritedPath: string | undefined = process.env.PATH,
+): string {
+  const entries = [dirname(nodeBin), ...(inheritedPath?.split(delimiter) ?? [])];
+  const seen = new Set<string>();
+  return entries
+    .filter((entry) => {
+      if (!entry) return false;
+      const normalized = entry.replaceAll('\\', '/');
+      if (
+        normalized.includes('/node_modules/.bin') ||
+        /\/_npx(?:\/|$)/.test(normalized) ||
+        /\/guardian\/update-worker\/npm-cache(?:\/|$)/.test(normalized)
+      ) {
+        return false;
+      }
+      if (seen.has(entry)) return false;
+      seen.add(entry);
+      return true;
+    })
+    .join(delimiter);
+}
+
 export function launchdPlist(
   nodeBin: string,
   cliEntry: string,
@@ -223,9 +253,7 @@ export async function installGuardian(
     await writeFile(
       unitPath,
       systemdUnit(nodeBin, cliEntry, {
-        PATH: [dirname(nodeBin), process.env.PATH]
-          .filter((value): value is string => Boolean(value))
-          .join(delimiter),
+        PATH: stableGuardianServicePath(nodeBin),
         DSH_LARK_GUARDIAN_DISABLED: '0',
       }),
       'utf8',

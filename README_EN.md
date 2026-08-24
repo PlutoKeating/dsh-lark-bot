@@ -363,6 +363,8 @@ Pass `--yes` to skip the interactive confirmation (non-interactive runs fail clo
 
 - Plugin: re-run `setup` (or `dsh plugin --profile <name> add dsh-lark-bot`) to pull the latest npm release.
 - Safety-net guardian: installed / upgraded together with `upgrade` / `setup` (idempotent), or standalone via `dsh-lark-bot guardian install`.
+- Managed reloads never persist the update worker's npx/npm package-bin paths into the service environment or
+  Guardian unit. Guardian keeps only the Node directory and stable user/system PATH entries.
 - CLI tool (optional): `npm i -g dsh-lark-bot@latest`; not needed when using `npx`.
 - Restart the profile after upgrading (when not using `--restart`): `dsh --profile dsh-lark`.
 

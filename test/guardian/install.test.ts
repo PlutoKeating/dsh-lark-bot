@@ -8,6 +8,7 @@ import {
   launchdPlist,
   readGuardianUnit,
   resolveGuardianCliEntry,
+  stableGuardianServicePath,
   systemdUnit,
   windowsStartupCmd,
 } from '../../src/guardian/install.js';
@@ -28,6 +29,24 @@ describe('guardian service units', () => {
     expect(unit).toContain('Restart=on-failure');
     expect(unit).toContain('WantedBy=default.target');
     expect(unit).toContain('Environment=PATH=/usr/bin');
+  });
+
+  it('removes transient npm/npx bins from the resident service PATH', () => {
+    const path = stableGuardianServicePath(
+      '/opt/node/bin/node',
+      [
+        '/tmp/guardian/update-worker/npm-cache/request/_npx/hash/node_modules/.bin',
+        '/workspace/node_modules/.bin',
+        '/opt/node/bin',
+        '/home/user/.local/bin',
+        '/usr/bin',
+        '/home/user/.local/bin',
+      ].join(':'),
+    );
+
+    expect(path).toBe('/opt/node/bin:/home/user/.local/bin:/usr/bin');
+    expect(path).not.toContain('_npx');
+    expect(path).not.toContain('node_modules/.bin');
   });
 
   it('renders a launchd plist and a Windows startup script', () => {
