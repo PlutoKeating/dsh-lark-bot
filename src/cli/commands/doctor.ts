@@ -10,6 +10,7 @@ import { resolveDshHome } from '../../config/dsh-runtime.js';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { ConfigStore } from '../../config/profile-store.js';
 import { readGuardianUnit } from '../../guardian/install.js';
+import { channelHealthLabel, readHeartbeat } from '../../guardian/heartbeat.js';
 import { readInstalledPackage } from '../../upgrade/detect.js';
 import { loadUpgradeState, upgradeStatePath } from '../../upgrade/state.js';
 import { compareVersions, fetchNpmLatestVersionOnce } from '../../upgrade/versions.js';
@@ -123,6 +124,22 @@ export async function runDoctorChecks(
     }
   } catch (error) {
     lines.push(`service: ⚠️ 状态检查失败（${error instanceof Error ? error.message : String(error)}）`);
+  }
+  try {
+    // Channel readiness snapshot (issue #108): the engine heartbeat now also
+    // carries the WebSocket lifecycle, so doctor can tell "engine alive" apart
+    // from "Feishu channel ready".
+    const heartbeat = await readHeartbeat(
+      paths.profilePath(env.guardianBridgeProfile, 'guardian', 'heartbeat.json'),
+    );
+    lines.push(`channel: ${channelHealthLabel(heartbeat?.channel)}`);
+    if (heartbeat?.channel && !heartbeat.channel.ready) {
+      lines.push(
+        'channel: ⚠️ 引擎进程存活但通道未就绪（半开/重连/失败）；请检查网络路由或重启 managed engine',
+      );
+    }
+  } catch {
+    // Best effort.
   }
   try {
     const state = await loadUpgradeState(upgradeStatePath(env.home));

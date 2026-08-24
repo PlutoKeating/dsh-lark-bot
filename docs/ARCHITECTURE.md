@@ -327,7 +327,12 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    boot 失败，导致桥接引擎与 dsh 一起下线。因此在插件托管架构之外，额外提供**独立于 dsh
    进程的最小「安全网守护」**：桥接引擎周期写入心跳文件（`<bridge-profile>/guardian/
    heartbeat.json`），守护仅在「曾观察 dsh 在线 且 心跳过期 / 无 dsh 进程」时接管飞书长连接
-   （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。`/safemode` 进入仅核心
+   （同 app 单长连接约束：dsh 在线时守护必须静默，绝不抢占通道）。心跳在 `{pid, startedAt, ts}` 之外还携带
+    **channel readiness 快照**（`state/generation/reconnectAttempts/lastInboundAt/
+    lastReconnectAt/lastError`），让 `service status`、`doctor`、`guardian status` 区分「引擎进程活着」
+    与「飞书通道可用」；长连接默认启用 SDK `wsConfig.pingTimeout` 与应用层 `keepalive` 看门狗，
+    半开连接（TCP 仍 ESTABLISHED 但飞书不再投递）被识别后强制重连新 WS generation，`onUnrecoverable`
+    时引擎以非零状态退出、交由受管 service / guardian 重启。`/safemode` 进入仅核心
    安全模式：优先预置 `~/.dsh/profiles/<profile>-safe-sdk`（官方 `dsh-base` +
    `dsh-sdk-jsonrpc-server`，无第三方插件）以获得与正常模式一致、仅展示阶段 / 耗时 / 工具名与状态的
    原生折叠过程卡和独立最终回答；turn 正常结束但存在失败工具时只把用户可见汇总标为

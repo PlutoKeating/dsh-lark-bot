@@ -14,10 +14,32 @@ import { writeFileAtomic } from '../platform/atomic-write.js';
  * read it without importing the bridge, sessions, adapters or any plugin.
  */
 
+/**
+ * Channel readiness snapshot embedded in the engine heartbeat (issue #108).
+ *
+ * The engine heartbeat only proves the *process* is alive; this optional
+ * field lets readers (`service status`, `doctor`, the guardian) distinguish
+ * "engine alive" from "Feishu channel ready". It is deliberately a plain,
+ * self-contained shape so the guardian can read it without importing the
+ * bridge.
+ */
+export interface HeartbeatChannelSnapshot {
+  state: string;
+  ready: boolean;
+  generation?: number;
+  connectedAt?: number;
+  reconnectAttempts?: number;
+  lastInboundAt?: number;
+  lastReconnectAt?: number;
+  lastError?: string;
+  at?: number;
+}
+
 export interface HeartbeatPayload {
   pid: number;
   startedAt: string;
   ts: number;
+  channel?: HeartbeatChannelSnapshot;
 }
 
 export const DEFAULT_HEARTBEAT_INTERVAL_MS = 5_000;
@@ -35,14 +57,25 @@ export async function readHeartbeat(
     ) {
       return undefined;
     }
-    return {
+    const payload: HeartbeatPayload = {
       pid: parsed.pid,
       startedAt: parsed.startedAt,
       ts: parsed.ts,
     };
+    const channel = parsed.channel;
+    if (isChannelSnapshot(channel)) {
+      payload.channel = channel;
+    }
+    return payload;
   } catch {
     return undefined;
   }
+}
+
+function isChannelSnapshot(value: unknown): value is HeartbeatChannelSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const snapshot = value as Record<string, unknown>;
+  return typeof snapshot.state === 'string' && typeof snapshot.ready === 'boolean';
 }
 
 export function heartbeatAgeMs(
@@ -61,6 +94,28 @@ export function isHeartbeatFresh(
   return heartbeatAgeMs(payload, now) < maxAgeMs;
 }
 
+/** Compact human label for a channel-health snapshot (issue #108). */
+export function channelHealthLabel(
+  channel: HeartbeatChannelSnapshot | undefined,
+): string {
+  if (channel === undefined) return '未上报';
+  if (channel.ready) {
+    return `ready (generation ${channel.generation ?? '-'})`;
+  }
+  switch (channel.state) {
+    case 'connecting':
+      return 'connecting';
+    case 'reconnecting':
+      return `reconnecting (attempt ${channel.reconnectAttempts ?? '-'})`;
+    case 'failed':
+      return 'failed';
+    case 'stopped':
+      return 'stopped';
+    default:
+      return channel.state;
+  }
+}
+
 export interface HeartbeatHandle {
   stop(): void;
 }
@@ -74,6 +129,7 @@ export function startHeartbeat(
   file: string,
   pid: number,
   intervalMs: number = DEFAULT_HEARTBEAT_INTERVAL_MS,
+  getChannelHealth?: () => HeartbeatChannelSnapshot | undefined,
 ): HeartbeatHandle {
   const startedAt = new Date().toISOString();
   let stopped = false;
@@ -81,6 +137,10 @@ export function startHeartbeat(
   const beat = async (): Promise<void> => {
     if (stopped) return;
     const payload: HeartbeatPayload = { pid, startedAt, ts: Date.now() };
+    const channel = getChannelHealth?.();
+    if (channel !== undefined) {
+      payload.channel = channel;
+    }
     try {
       await writeFileAtomic(file, `${JSON.stringify(payload)}\n`, {
         mode: 0o600,

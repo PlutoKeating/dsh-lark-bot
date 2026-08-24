@@ -160,6 +160,22 @@ agent 需要你拍板、确认或补充信息时，通过 `lark_ask_user` 工具
 默认安装；已安装后也可单独安装 / 重装）。不需要时 `setup --no-guardian` 跳过；单独卸载用
 `dsh-lark-bot guardian uninstall`。
 
+### 通道活性看门狗与健康模型（issue #108）
+
+桥接引擎的心跳文件在 `{pid, startedAt, ts}` 之外，还附带一个 **channel readiness 快照**
+（`state: connecting|ready|reconnecting|failed|stopped`、`generation`、`reconnectAttempts`、
+`lastInboundAt`、`lastReconnectAt`、`lastError`）。因此 `service status`、`doctor` 与
+`guardian status` 都能把 **「引擎进程活着」** 与 **「飞书通道可用」** 区分开，而不再把新鲜的
+engine heartbeat 单独当成端到端 healthy。
+
+- 长连接默认启用 SDK 的 `wsConfig.pingTimeout`（无入站帧判定死连接并强制重连）与应用层
+  `keepalive` 看门狗（定期探测 + 强制重建新 WS generation）。
+- 当强制重连也失败（`onUnrecoverable`）时，引擎以非零状态退出，交给受管 service / guardian
+  恢复，用一个新的 WebSocket 连接重启。
+- guardian 只在 **引擎心跳过期且无 dsh 进程** 时接管通道（同 app 单长连接约束）；引擎存活但
+  上报通道不健康时 guardian **不抢占**，仅记录 `channel-unhealthy` 事件并如实展示，避免双实例
+  同时消费同一连接。
+
 ## 15. 正常引擎后台服务
 
 安装仍只有 `setup` 这一条路径；如需登录后自动运行、退出终端仍在线，可再用一条命令把同一个标准 dsh

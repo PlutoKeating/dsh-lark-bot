@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 import { loadRuntimeEnv } from '../../config/env.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
-import { heartbeatAgeMs, readHeartbeat } from '../../guardian/heartbeat.js';
+import {
+  channelHealthLabel,
+  heartbeatAgeMs,
+  readHeartbeat,
+  type HeartbeatChannelSnapshot,
+} from '../../guardian/heartbeat.js';
 import { ServiceManager } from '../../service/manager.js';
 import type { ServiceStatus } from '../../service/types.js';
 
@@ -26,6 +31,7 @@ export interface ServiceCommandDeps {
   output?: (text: string) => void;
   followLog?: (path: string, lines: number) => Promise<void>;
   heartbeatAge?: () => Promise<number | undefined>;
+  heartbeatChannel?: () => Promise<HeartbeatChannelSnapshot | undefined>;
 }
 
 function managerFor(options: ServiceCommandOptions, version: string): ServiceManager {
@@ -41,6 +47,7 @@ function managerFor(options: ServiceCommandOptions, version: string): ServiceMan
 export function formatServiceStatus(
   status: ServiceStatus,
   heartbeatAge: number | undefined,
+  channel?: HeartbeatChannelSnapshot | undefined,
 ): string {
   return [
     'dsh-lark-bot 正常引擎服务',
@@ -53,6 +60,7 @@ export function formatServiceStatus(
     `  pid:       ${status.pid ?? '-'}`,
     `  restarts:  ${status.restarts ?? '-'}`,
     `  heartbeat: ${heartbeatAge === undefined ? '暂无' : `${heartbeatAge}ms`}`,
+    `  channel:   ${channelHealthLabel(channel)}`,
   ].join('\n');
 }
 
@@ -65,6 +73,17 @@ async function heartbeatAge(): Promise<number | undefined> {
   );
   const heartbeat = await readHeartbeat(file);
   return heartbeat ? heartbeatAgeMs(heartbeat) : undefined;
+}
+
+async function heartbeatChannel(): Promise<HeartbeatChannelSnapshot | undefined> {
+  const env = loadRuntimeEnv(process.env);
+  const file = resolveAppPaths(env.home).profilePath(
+    env.guardianBridgeProfile,
+    'guardian',
+    'heartbeat.json',
+  );
+  const heartbeat = await readHeartbeat(file);
+  return heartbeat?.channel;
 }
 
 export async function runServiceCommand(
@@ -92,7 +111,11 @@ export async function runServiceCommand(
             : action === 'stop' ? await manager.stop()
               : action === 'uninstall' ? await manager.uninstall()
                 : await manager.status();
-    output(`${formatServiceStatus(status, await (deps.heartbeatAge ?? heartbeatAge)())}\n`);
+    const [age, channel] = await Promise.all([
+      (deps.heartbeatAge ?? heartbeatAge)(),
+      (deps.heartbeatChannel ?? heartbeatChannel)(),
+    ]);
+    output(`${formatServiceStatus(status, age, channel)}\n`);
     if (
       (action === 'install' || action === 'start' || action === 'restart') &&
       status.state !== 'running'
