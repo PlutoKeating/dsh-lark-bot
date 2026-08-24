@@ -350,7 +350,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     缓存与 stale-on-error 避免目录抖动阻断聊天；首次离线时只投影 settings，并将对象形式
     `agent-default-model` 作为其已配置 provider 的最小可解析条目，不存在代码内置模型或展示名兜底，
     其他未知模型仍拒绝。bot 写回模型时只保存用户显式增量并保留 `inputModalities` 与图像预算字段；
-    选中的 DeepSeek 视觉模型会在运行准入时把该能力最小持久化到官方 runtime 目录。
+    选中的 DeepSeek 视觉模型会在运行准入时把该能力最小持久化到官方 runtime 目录；持久化在 YAML AST
+    上定点更新目标模型，不替换 `models` 序列，以保留部署者写在模型条目和字段上的注释。
     卡片把 `agent-default-model` 的缺席条目合并进本次投影与点击路由，不反向篡改 provider 配置；
     按钮按 provider 去除公共前缀、每行最多两个，以保证移动端可辨认。
 
