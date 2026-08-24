@@ -354,7 +354,8 @@ npx dsh-lark-bot@latest upgrade --profile dsh-lark --yes
 - **runtime profile 一致性修复**：升级后自动把 `dsh-lark-sdk` / `dsh-lark-acp` 的
   own-package 链接重指到新版本，并当场强制刷新 runtime profile 及被链接主插件中版本陈旧或物理
   内容损坏的 SDK server / ACP 依赖；修复目标以 dsh profile 中重新读取并验证的安装包为准，
-  不会链接到临时 npx worker。npm/npx 扁平依赖按 Node 的真实模块解析结果校验；
+  不会链接到临时 npx worker。npm/npx 扁平依赖按 Node 的真实模块解析结果校验；pnpm 安装则先
+  解引用 profile 中的包链接，再从 `.pnpm` 物理包目录解析其依赖，避免误判缺失并强制重装；
 - **托管环境 pnpm 一致性**：执行 `dsh plugin add` 前读取既有 profile 的
   `node_modules/.modules.yaml`，把其中记录的精确 pnpm 版本同步到 profile `package.json`，避免
   Corepack 因 source-managed dsh 的工作目录选择另一 pnpm 主版本并触发
