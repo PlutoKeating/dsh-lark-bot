@@ -5,6 +5,7 @@ import { DshAdapter } from './dsh/adapter.js';
 import { SdkDshAdapter } from './dsh/sdk-adapter.js';
 import { ensureSdkProfile, resolveSdkLaunch } from './dsh/sdk-runtime.js';
 import { WebDshAdapter } from './dsh/web-adapter.js';
+import { resolveModelChoice } from './model-choice.js';
 import type { AgentAdapter } from './types.js';
 
 export interface AdapterPreferences {
@@ -52,7 +53,10 @@ export async function buildAgentAdapter(
   env: RuntimeEnv,
   preferences: AdapterPreferences = { stopGraceMs: undefined, model: undefined },
 ): Promise<AgentAdapter> {
-  const configuredModel = preferences.model ?? env.model;
+  // A blank `preferences.model` (the fresh-install default) must be treated as
+  // unset so it falls back to `env.model` (DSH_LARK_MODEL) instead of producing
+  // an empty AgentOptions.model that fails startup (issue #112 Bug C).
+  const configuredModel = resolveModelChoice(preferences.model, env.model);
   const managedRoute = env.adapterMode === 'sdk' || env.adapterMode === 'acp'
     ? await resolveAdapterRoute(
         { provider: env.provider, model: configuredModel },
@@ -87,7 +91,7 @@ export async function buildAgentAdapter(
       return new WebDshAdapter({
         baseUrl: env.webBaseUrl,
         provider: env.provider,
-        model: preferences.model ?? env.model,
+        model: resolveModelChoice(preferences.model, env.model),
       });
     }
     case 'sdk':
