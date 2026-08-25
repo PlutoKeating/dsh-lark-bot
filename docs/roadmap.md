@@ -33,6 +33,7 @@
 | **P30 结果文件回传** Outbound result files | `lark_send_file` 按 native session 上传受限本地文件；`/archive` 自动发送 Markdown + JSONL，支持按 id 重发或管理员转发到指定会话（issue #31） | ✅ 已完成 Done |
 | **P31 主动通知偏好** Proactive notification preferences | 默认关闭；按 scope 持久化完成/失败/审批等待提醒、目标与 @，跨会话仅管理员，`/status` 可见（issue #33） | ✅ 已完成 Done |
 | **P32 回复流量控制** Reply flow control | 按 scope 持久化最终回答合并、批量/频率限制与同发送者近似任务去重；管理员 `/replies`，`/status` 可见（issue #34） | ✅ 已完成 Done |
+| **P33 通知转发到其他 IM** Forward to other IMs | 出站纯通知渠道（`OutboundSink`）：Telegram 官方 Bot API / 企业微信群机器人 webhook；`/channels` 管理（凭据 0600 不回显）、`/notifications … sinks=`、`events=…,urgent`、`notifyUrgent` 突发/故障广播；未配置时行为不变（issue #113） | ✅ 已完成 Done（0.19.13） |
 
 ## 里程碑 · Milestones
 
