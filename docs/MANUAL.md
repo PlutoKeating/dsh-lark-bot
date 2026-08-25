@@ -114,7 +114,8 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/role remove <id>` | 删除角色（管理员） |
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
-| `/notifications [show\|off\|default\|on …]` | 查看、关闭、恢复 Web 默认或开启当前 scope 的主动提醒 |
+| `/notifications [show\|off\|default\|on …]` | 查看、关闭、恢复 Web 默认或开启当前 scope 的主动提醒（支持 `sinks=`） |
+| `/channels [list\|show\|add\|remove\|enable\|disable …]` | 管理出站通知渠道（管理员） |
 | `/replies [show\|default\|set …]` | 查看或由 profile 管理员、当前群主/群管理员修改当前 scope 的回复流量策略 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
@@ -248,10 +249,23 @@ dsh-lark-bot bot remove reviewer
   缺省当前会话）、`chat_id`（直连兜底）、`mention_user_ids`（@ 提及的 open_id 列表）。
   runtime 子进程通过 `http://127.0.0.1:<随机端口>/notify` + 每启动随机 token 回调 bridge，
   不暴露公网。
-- `/notifications on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]`
+- `/notifications on [current|scope|chatId] [events=completed,failed,approval,urgent] [mentions=self,ou_x|none] [sinks=channelId1,channelId2] [remind=10]`
   显式开启当前 scope 的主动提醒；默认事件全选、@ 操作者、审批等待 10 分钟提醒一次。普通用户只能
   使用当前会话，管理员可选已登记的跨会话目标；`show` 查看，`off` 关闭。偏好以 0600 原子持久化，
   `/status` 同步显示开关、事件、目标和审批延迟。通知失败只记日志，不改变任务终态。
+- **通知转发到其他 IM（纯通知，issue #113）**：把完成 / 失败 / 审批与突发 / 故障通知，作为飞书
+  之外的**额外出站投递目标**。先由管理员配置渠道：
+  - `/channels list`：查看已配置渠道（不显示凭据）。
+  - `/channels add <telegram|wecom> <label> [--id <id>] --destination <目标> --secret <密钥>`：
+    添加一个出站渠道。`telegram` 的 `--destination` 是目标 chat_id / `@handle`，`--secret` 是 Bot
+    token；`wecom` 的 `--destination` 是群机器人 webhook key（与 `--secret` 相同）。凭据写入
+    `<profile>/notification-channels.json`（0600），只被 bridge 读取，命令回显与 `/status` 一律只显示
+    打码值；建议在 0600 文件中直接维护，或由管理员安全提供。
+  - `/channels show <id>` / `enable <id>` / `disable <id>` / `remove <id>`。
+  - 在 `/notifications on … sinks=<id1,id2>` 里把某 channel 加入 scope 的通知目标；也可
+    `events=…,urgent` 让 scope 接收突发 / 故障级飞书提醒。
+  - `/status` 会列出已启用渠道 id。未配置任何渠道时行为与现状完全一致；这些渠道只推送、
+    **不做任何入站交互**（命令、卡片、问答、审批、文件）。
 - `/replies set merge=5 batch=3 interval=10 dedupe=60`：当前 scope 的最终回答在 5 秒内合并，每条最多
   3 个任务，两批至少间隔 10 秒；超出部分继续排队。60 秒内同一发送者、同 workspace 的高度近似任务
   在 durable enqueue 前被明确提示并跳过。查看对所有成员开放，修改/`default` 仅管理员；策略 0600

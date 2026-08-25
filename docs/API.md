@@ -234,9 +234,10 @@ Web 的 `tools/pre-execute` 先向 `/approval` 发 `policyCheckOnly` 请求，�
 
 `src/bot/notification-preference-store.ts` 提供 `NotificationPreferenceStore`（schema 2，
 `<profile>/notification-preferences.json`，0600），按 immutable scope 保存目标、
-`completed|failed|approval` 事件、mention open_id 与审批提醒延迟。更新为 awaited atomic write，
+`completed|failed|approval|urgent` 事件、mention open_id、出站渠道 id（`sinks`）与审批提醒延迟。更新为 awaited atomic write，
 并用 `false` 保存相对 Web profile default 的显式关闭；缺项继承 `notificationDefault`，`undefined`
-重置为继承。失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒；SDK/Web 与 ACP
+重置为继承。失败回滚。`NotificationDispatcher` 在 durable job 终态落盘后发送完成/失败提醒，并按偏好 `sinks`
+追加转发到出站渠道；`notifyUrgent()` 面向突发/故障事件广播到全部启用渠道。SDK/Web 与 ACP
 审批卡创建后启动单次 timer，结算/取消即清除。发送失败只记日志，不改变 job/approval outcome。
 
 `src/bot/reply-policy-store.ts` 提供 `ReplyPolicyStore`（`<profile>/reply-policies.json`，0600），
@@ -906,9 +907,19 @@ worktree、该 scope 归档目录和实例日志；runtime 提交的 cwd 只用�
 入站消息注册 scope → `{chatId, threadId, chatMode, messageId}`，其中最近的入站 messageId 是
 topic 出站卡片调用 reply API 的 anchor；`resolve(scope)` / `resolveChat(chatId)` 用于跨会话出站；
 `/notify <scope|chatId> <text>` 与 `/notify list` 读写该目录。
-`/notifications on [current|scope|chatId] [events=…] [mentions=…] [remind=N]` 为当前 scope
+`/notifications on [current|scope|chatId] [events=…] [mentions=…] [sinks=…] [remind=N]` 为当前 scope
 显式开启提醒；当前目标允许普通用户设置，跨会话目标仅管理员；`show` / `off` 查看或显式关闭，
-`default` 删除 scope override 并恢复 Web profile default。
+`default` 删除 scope override 并恢复 Web profile default。`events=` 支持 `completed,failed,approval,urgent`，
+`sinks=` 指定把事件一并转发的出站渠道 id。
+
+`src/notify/sinks/` 提供出站只通知渠道（issue #113）：`NotificationChannelStore`
+（`<profile>/notification-channels.json`，0600）持久化 `{ id, type: 'telegram'|'wecom', label,
+destination, secret, enabled, mentionMap? }`，`OutboundSinkRegistry.broadcast(ids, message)` 对启用且配置的
+渠道 best-effort 投递（单渠道失败不阻塞），`TelegramSink` 走官方 Bot API `sendMessage`、
+`WeComSink` 走企业微信群机器人 webhook。`/channels list|show|add|remove|enable|disable` 由管理员使用，
+凭据只存 0600 文件、从不回显（`maskSecret` / `maskChannel`）；`/status` 显示启用渠道 id。
+`NotificationDispatcher.notify()` 在飞书路径后按偏好 `sinks` 追加转发，`notifyUrgent()` 把突发 / 故障
+事件广播到全部启用渠道。
 `/replies set merge=N batch=N interval=N dedupe=N` 由 profile 管理员或当前群的群主/群管理员配置当前 scope 的最终回答合并、每批任务
 上限、批次最小发送间隔与同发送者近似去重窗口；`show` 对所有成员开放，`default` 恢复兼容默认。
 
