@@ -30,6 +30,8 @@ export interface RuntimeEnv {
   provider: string;
   model: string;
   maxTokens: number | undefined;
+  /** Long-edge bound (px) applied to inbound images before upload (DSH_LARK_IMAGE_MAX_DIMENSION, default 2000). */
+  imageMaxDimension: number;
   runTimeoutMs: number;
   stopGraceMs: number;
   /** Opt-in group history polling to receive messages that do not mention the bot. */
@@ -87,6 +89,7 @@ const DEFAULTS = {
   tenant: 'feishu' as const,
   provider: '',
   model: '',
+  imageMaxDimension: 2_000,
   runTimeoutMs: 300_000,
   stopGraceMs: 5_000,
   groupPollMs: 3_000,
@@ -296,6 +299,11 @@ export function loadRuntimeEnv(
     provider: nonEmpty(source.DSH_LARK_PROVIDER) ?? DEFAULTS.provider,
     model: nonEmpty(source.DSH_LARK_MODEL) ?? DEFAULTS.model,
     maxTokens: parseMaxTokens(source.DSH_LARK_MAX_TOKENS),
+    imageMaxDimension: parseMinOneInt(
+      source.DSH_LARK_IMAGE_MAX_DIMENSION,
+      DEFAULTS.imageMaxDimension,
+      'DSH_LARK_IMAGE_MAX_DIMENSION',
+    ),
     runTimeoutMs: parseTimeout(source.DSH_LARK_RUN_TIMEOUT_MS),
     stopGraceMs: parseStopGrace(source.DSH_LARK_STOP_GRACE_MS),
     groupNoAt: parseBoolean(source.DSH_LARK_GROUP_NO_AT, false),

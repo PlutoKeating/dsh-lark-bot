@@ -6,10 +6,16 @@ import type {
   NormalizedMessage,
 } from '@larksuite/channel';
 import { detectImageType } from './image-file.js';
+import { downscaleImageIfNeeded } from './image-scale.js';
 
 export interface PreparedAttachments {
   imagePaths: string[];
   textFileNotes: string[];
+}
+
+export interface PrepareAttachmentsOptions {
+  /** Long-edge bound (px) for inbound images; oversized images are downscaled proportionally. */
+  maxImageDimension?: number;
 }
 
 const MAX_TEXT_FILE_BYTES = 256_000;
@@ -24,7 +30,9 @@ export async function prepareAttachments(
   channel: LarkChannel | undefined,
   message: NormalizedMessage,
   mediaDir: string,
+  options: PrepareAttachmentsOptions = {},
 ): Promise<PreparedAttachments> {
+  const { maxImageDimension = 0 } = options;
   await mkdir(mediaDir, { recursive: true });
   const result: PreparedAttachments = { imagePaths: [], textFileNotes: [] };
 
@@ -47,7 +55,8 @@ export async function prepareAttachments(
         const imagePath = `${destination}${detected.extension}`;
         assertSafeMediaName(mediaDir, imagePath);
         await rename(downloadPath, imagePath);
-        result.imagePaths.push(imagePath);
+        const finalPath = await downscaleImageIfNeeded(imagePath, maxImageDimension);
+        result.imagePaths.push(finalPath);
       } catch (error) {
         await rm(downloadPath, { force: true });
         throw error;

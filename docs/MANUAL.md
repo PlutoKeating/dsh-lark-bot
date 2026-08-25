@@ -466,6 +466,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `DSH_LARK_MODEL` | 未设置 | 默认模型；可由 dsh `agent-default-model` 提供 |
 | `DSH_LARK_MODEL_CATALOG_URL` | `https://models.dev/api.json` | provider / 模型能力实时目录或兼容镜像 |
 | `DSH_LARK_MAX_TOKENS` | 未设置 | SDK agent 输出 token 上限 |
+| `DSH_LARK_IMAGE_MAX_DIMENSION` | `2000` | 入站图片上传前的长边限制（px）。超过该值会按比例缩小以适配上游附件库 `maxImageDimension` 的准入上限（默认 2000，与 `dsh-attachment-local` 一致）；设为 `0` 关闭缩放 |
 | `DSH_LARK_PLAN_GATE` | `strict` | `strict` 启用独立计划门禁；可信 profile 可设 `off`，仅关闭计划门禁，不关闭逐工具审批；受管服务需在该环境下 restart 以重新快照 |
 | `DSH_LARK_WEB_URL` | `http://127.0.0.1:3080` | `web` 适配器：本地 dsh web agent base URL |
 | `DSH_LARK_SESSION_PROJECTION` | `true` | `web` 适配器：启用用户显式确认的 DSH session 历史/实时投影；不会自动跟随 WebUI/TUI |

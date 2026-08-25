@@ -496,6 +496,7 @@ export async function startBridgeEngine(
             larkChannel,
             message,
             paths.mediaDir(profileName),
+            { maxImageDimension: env.imageMaxDimension },
           ),
         })));
         const messages = prepared.flatMap(({ message, attachments }) => [

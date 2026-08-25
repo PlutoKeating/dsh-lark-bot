@@ -103,6 +103,11 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    核对精确版本，旧 profile 进入幂等重装。入站图片按 magic bytes 识别格式；ACP 使用
    capability-gated 原生 image block，默认 SDK profile 则以桥接扩展的 `attachment/upload` 调用
    dsh 自带 attachment store 完成校验与持久化，再把 durable ref 作为原生 image block 发送。
+   上游 attachment store 默认以 `maxImageDimension=2000` 拒绝长边超限图片（`IMAGE_DIMENSION_TOO_LARGE`），
+   因此入站图片在 `prepareAttachments` 阶段由 `src/media/image-scale.ts` 用 sharp 做**等比例缩小**
+   （可选依赖、动态加载；缺失或失败则原样放行、不引入硬失败），上限默认 2000 且可用
+   `DSH_LARK_IMAGE_MAX_DIMENSION` 调整（设 0 关闭缩放）。这既避免把竖版截图当成“模型不能看图”，
+   也不触及宿主 store 自身的准入限制。
    图片从不退化为路径文本，也不得用工作区其他文件替代；安全模式仍装配未扩展的官方 SDK server。
    出站图片在 channel 增加二进制能力前输出明确降级提示。
    SDK rc.8 没有 per-session cancel，adapter 因此以 `scope + workspace` 建立 runtime 取消域，

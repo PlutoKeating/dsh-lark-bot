@@ -31,6 +31,7 @@ export default defineConfig([
       '@deepseek-ai/dsh-sdk-jsonrpc-server',
       '@deepseek-ai/dsh-sdk-protocol',
       '@deepseek-ai/dsh-settings',
+      'sharp',
     ],
   },
   {
