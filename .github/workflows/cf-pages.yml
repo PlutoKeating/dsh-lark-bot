@@ -38,4 +38,4 @@ jobs:
         run: pnpm --dir docs/site build
 
       - name: Deploy to Cloudflare Pages
-        run: npx --yes wrangler@4 pages deploy docs/site/dist --project-name=dsh-lark-bot --branch=main
+        run: npx --yes wrangler@4 pages deploy docs/site/.vitepress/dist --project-name=dsh-lark-bot --branch=main

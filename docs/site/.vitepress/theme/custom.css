@@ -1,0 +1,110 @@
+/* dsh-lark-bot landing/docs — premium, responsive re-theme over VitePress default. */
+
+:root {
+  /* Brand palette (indigo → violet) */
+  --vp-c-brand-1: #5468ff;
+  --vp-c-brand-2: #4a5df0;
+  --vp-c-brand-3: #3d4fd6;
+  --vp-c-brand-soft: rgba(84, 104, 255, 0.14);
+
+  /* Typography: clean system stack incl. PingFang SC for zh-CN */
+  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+
+  --vp-c-divider: rgba(60, 60, 67, 0.12);
+}
+
+html.dark {
+  --vp-c-brand-1: #7c88ff;
+  --vp-c-brand-2: #6f7bff;
+  --vp-c-brand-3: #9aa2ff;
+  --vp-c-brand-soft: rgba(124, 136, 255, 0.16);
+}
+
+/* A touch more breathing room and a softer baseline. */
+body {
+  font-feature-settings: 'tnum', 'cv02';
+}
+
+/* --- Home hero --- */
+.VPHero .name {
+  background: linear-gradient(120deg, #5468ff 0%, #8b5cf6 45%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html.dark .VPHero .name {
+  background: linear-gradient(120deg, #7c88ff 0%, #c084fc 50%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.VPHero .actions .VPButton.primary {
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(84, 104, 255, 0.26);
+}
+.VPHero .actions .VPButton.secondary {
+  border-radius: 10px;
+}
+.VPHero .image-bg {
+  opacity: 0.9;
+}
+
+/* --- Feature cards: subtle lift + rounded corners --- */
+.VPFeature .box {
+  border-radius: 16px;
+  border-color: var(--vp-c-divider);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.VPFeature .box:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  border-color: var(--vp-c-brand-1);
+}
+html.dark .VPFeature .box:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* --- Code blocks --- */
+.vp-doc div[class*='language-'] {
+  border-radius: 12px;
+  box-shadow: none;
+}
+.vp-doc div[class*='language-'] > button.copy {
+  border-radius: 6px;
+}
+
+/* --- Custom blocks --- */
+.vp-doc .custom-block {
+  border-radius: 12px;
+}
+
+/* --- Tables on small screens: keep them readable --- */
+.vp-doc table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+
+/* --- Mobile tune-up --- */
+@media (max-width: 720px) {
+  :root {
+    --vp-nav-height: 56px;
+  }
+  .VPHero .name {
+    font-size: 44px !important;
+  }
+  .VPHero .text {
+    font-size: 18px;
+  }
+  .vp-doc {
+    padding-top: 8px;
+  }
+}
+
+/* Smooth appearance switching. */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

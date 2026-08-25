@@ -58,10 +58,10 @@ dsh-lark-bot 让 DeepSeek Harness（dsh）成为飞书里的成员：在私聊�
 ## 站点文档路由
 
 - `/` 首页
-- `/docs/quickstart` 快速开始
-- `/docs/features` 核心功能
-- `/docs/commands` 命令速览
-- `/docs/notification-sinks` 通知转发到其他 IM
-- `/docs/configuration` 配置
-- `/docs/security` 安全与权限
-- `/docs/troubleshooting` 排障与 FAQ
+- `/guide/quickstart` 快速开始
+- `/guide/features` 核心功能
+- `/guide/commands` 命令速览
+- `/guide/notification-sinks` 通知转发到其他 IM
+- `/guide/configuration` 配置
+- `/guide/security` 安全与权限
+- `/guide/troubleshooting` 排障与 FAQ
