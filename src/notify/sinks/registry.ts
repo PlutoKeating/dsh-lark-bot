@@ -2,6 +2,8 @@ import { log } from '../../core/logger.js';
 import type { NotificationChannelStore } from './channel-store.js';
 import { TelegramSink } from './telegram.js';
 import { WeComSink } from './wecom.js';
+import { WeChatIlinkSink } from './wechat.js';
+import { QqSink } from './qq.js';
 import type { OutboundSink, SinkChannel, SinkMessage, SinkType } from './types.js';
 
 export interface BroadcastSummary {
@@ -23,7 +25,7 @@ export class OutboundSinkRegistry {
 
   constructor(
     private readonly store: NotificationChannelStore,
-    sinks: OutboundSink[] = [new TelegramSink(), new WeComSink()],
+    sinks: OutboundSink[] = [new TelegramSink(), new WeComSink(), new WeChatIlinkSink(), new QqSink()],
   ) {
     this.sinks = sinks;
   }

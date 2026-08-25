@@ -85,5 +85,11 @@ export function attachRunCardAnchors(
       notify(chatId);
       return result;
     },
+    async sendImage(chatId, content, options) {
+      if (typeof channel.sendImage !== 'function') return undefined;
+      const result = await channel.sendImage(chatId, content, options);
+      notify(chatId);
+      return result;
+    },
   };
 }

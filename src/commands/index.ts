@@ -88,6 +88,8 @@ export interface CommandChannel {
     content: Buffer,
     options?: SendOptions,
   ): Promise<void>;
+  /** Upload a raw image buffer (PNG/JPEG) as an image message (for QR binds). */
+  sendImage?(chatId: string, content: Buffer, options?: SendOptions): Promise<void>;
   /** Create a group chat and seed it with members (Feishu `im.v1.chat.create`). */
   createChat?(opts: {
     name: string;

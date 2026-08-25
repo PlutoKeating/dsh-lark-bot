@@ -299,6 +299,13 @@ export function adaptLarkChannel(channel: LarkChannel): StreamingChannel {
         toLarkSendOptions(options),
       );
     },
+    async sendImage(chatId, content, options) {
+      await channel.send(
+        chatId,
+        { image: { source: content } },
+        toLarkSendOptions(options),
+      );
+    },
   };
 
   return {
