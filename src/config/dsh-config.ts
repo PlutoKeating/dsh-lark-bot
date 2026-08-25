@@ -499,7 +499,12 @@ export class DshProviderManager {
     try {
       catalogProviders = await this.catalog.listProviders();
     } catch (error) {
-      log.warn('model-catalog', 'refresh-failed', {
+      // `models.dev` (the default of DSH_LARK_MODEL_CATALOG_URL) may be
+      // unreachable from some regions (e.g. mainland China), so a refresh
+      // timeout is expected and benign — the catalog is best-effort with a
+      // short-TTL cache and stale-on-error. Keep it as informational noise
+      // rather than a per-invocation warning (issue #112 Bug E).
+      log.info('model-catalog', 'refresh-failed', {
         error: error instanceof Error ? error.message : String(error),
       });
     }
