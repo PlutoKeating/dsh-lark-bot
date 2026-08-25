@@ -61,6 +61,7 @@ app → once bound, message the bot directly; groups / threads default to `@bot`
 - **Quick / balanced / deep mode**: `/mode` picks the strength for the next turn without interrupting the current task.
 - **Plan gate for key tasks**: `lark_request_plan_approval` sends the full plan first, then approves or revises.
 - **Cross-session notify + @**: a task finishing in group A can push to group B / DM and @ you.
+- **Forward notifications to other IMs (notification-only)**: after `/channels` is configured, completion / failure / approval and urgent/fault notifications can be pushed one-way to Telegram / WeCom group robots and more. Push-only, no inbound interaction; Feishu stays the sole full-interaction platform and the default behavior is unchanged when no channel is configured.
 
 > Streaming process cards render in a native Feishu collapsible panel.
 
@@ -80,7 +81,8 @@ Command help, status, and cards are bilingual; `/help` is the full authoritative
 | `/session`、`/session bind` | Browse / explicitly bind a DSH session |
 | `/role list\|show\|set\|clear` | View / bind roles |
 | `/notify <scope\|chatId> <text>` | Cross-session notification (admin) |
-| `/notifications [show\|off\|on …]` | Configure completion / failure / approval reminders |
+| `/notifications [show\|off\|on …]` | Configure completion / failure / approval / urgent reminders (`sinks=` forwards to other IM channels) |
+| `/channels [list\|show\|add\|remove\|enable\|disable …]` | Manage outbound notification channels (admin) |
 | `/stop` | Stop current tasks |
 | `/upgrade` | Self-update (admin) |
 | `/doctor` | Generate a redacted diagnostic bundle (admin) |

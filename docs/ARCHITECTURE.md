@@ -409,6 +409,8 @@ TUI/WebUI 的 active session 不参与 binding 决策。
     adapter/prompt/session/jobs/archive/logger/diagnostics/response。Guardian 明确为降级面。profile 语言策略
     以 0600 原子文件保存：UI 固定 per-viewer，plain 可 bilingual/zh/en，agent 可 auto/zh/en。
 
+18. **出站通知渠道（issue #113）**：在飞书一等通知路径之外，提供**可选的、只出站的单向通知渠道**（`OutboundSink`，镜像 `AgentAdapter` 的可插拔 seam）。`NotificationChannelStore`（`<profile>/notification-channels.json`，0600）持久化渠道 `{ id, type, label, destination, secret, enabled, mentionMap? }`，凭据（telegram bot token / wecom webhook key）只存于此文件、绝不经日志 / 卡片 / 诊断 / 命令回显（`maskSecret` / `maskChannel` 是唯一渲染入口）。`OutboundSinkRegistry` 按类型构建缓存 sink 实例（首期 `TelegramSink` 走官方 Bot API `sendMessage`、`WeComSink` 走企业微信群机器人 webhook，均为无状态 HTTPS POST），`broadcast()` 对每个启用且已配置渠道 best-effort 投递，单渠道失败不阻塞其他渠道、更不污染飞书终态。`NotificationDispatcher` 保持飞书为默认一等路径：在持久 job 终态后发送完成 / 失败提醒，并按 scope 偏好 `sinks` 追加广播；`notifyUrgent()` 面向「突发 / 故障」类事件，不管 scope 是否 opt-in 都广播到全部启用渠道（安全网守护 / 重连 / 心跳异常的天然来源），scope 显式开启 `urgent` 事件时也发送飞书。`/channels`（管理员）管理渠道，`/notifications ... sinks=<id1,id2>` 为 scope 选渠道，`/status` 显示启用渠道 id（不显示密文）。未配置任何额外渠道时行为与现状完全一致：偏好默认 `sinks: []`，飞书仍为唯一完整交互平台，这些渠道**不做任何入站**（命令 / 卡片 / 问答 / 审批 / 文件）。
+
 ## 目录映射 · Directory Mapping
 
 | 目录 Dir | 职责 Responsibility |
@@ -429,7 +431,7 @@ TUI/WebUI 的 active session 不参与 binding 决策。
 | `src/core/` | 结构化日志 |
 | `src/diagnostics/` | 管理员 `/doctor` 的有界、脱敏、内存诊断文件生成 |
 | `src/media/` | 附件下载、文本注入与出站文件边界校验 |
-| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` `/secret` 回调、raw-schema dsh 工具与 approval answerer |
+| `src/notify/` | 主动通知调度、进程内 `/notify` `/file` `/ask` `/plan` `/approval` `/secret` 回调、raw-schema dsh 工具与 approval answerer；`sinks/` 为出站只通知渠道（`OutboundSink` / `TelegramSink` / `WeComSink` / `NotificationChannelStore` / `OutboundSinkRegistry`） |
 | `src/secret/`、`src/skill/` | 安全密钥请求/allowlist 写入边界与官方 runtime Skill 注册 |
 | `src/platform/` | 跨平台原子写入 |
 | `src/guardian/` | 安全网守护（默认随 setup 安装）：心跳、状态持久化、仅核心安全 profile、进程观察、控制信号、接管状态机、系统服务安装 |
