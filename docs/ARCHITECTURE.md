@@ -156,7 +156,9 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    SDK / ACP managed runtime 在 profile provision 之前还会调用统一的 `resolveAdapterRoute()`：完整显式
    route 直接使用；空 route 回退到 dsh 对象形式 `agent-default-model`；只有单边字段时必须能与模型目录
    或默认 route 一致，否则在本项目边界给出配置错误，绝不把空 provider 交给上游。doctor 与真实 bridge
-   复用同一 adapter 工厂。OS service 重建 env snapshot 时先读取现有 0600 env 文件，再以当前 shell 的
+   复用同一 adapter 工厂。模型选择把空白 preference（新装默认 `""`）视为未设置，回落到
+    `DSH_LARK_MODEL`（issue #112 Bug C），避免空 `AgentOptions.model` 令 agent 启动失败。
+    OS service 重建 env snapshot 时先读取现有 0600 env 文件，再以当前 shell 的
    已定义受管键覆盖，防止普通 restart 删除此前保存的 provider/model 或实例设置。
    dsh Web 的通用 bridge 设置走官方 settings 扩展契约：Host `src/plugin.ts` 以
    `@deepseek-ai/dsh-settings` 注册 `dsh-lark-bot` namespace 与 Schemastery schema，先把
@@ -289,10 +291,12 @@ TUI/WebUI 的 active session 不参与 binding 决策。
    既有稳定 PATH，避免 npx 私有 cache 路径污染后续服务。Guardian systemd unit 显式携带 Node
    所在目录及安装时的稳定用户/系统 PATH，并过滤 `_npx`、update-worker npm cache 与所有
    `node_modules/.bin` 条目，以保证安全模式可调用同工具链中的 pnpm且不依赖临时缓存。
+
+    环境快照与 Guardian systemd unit 共用同一个 `sanitizeServicePath()`（issue #111）：同样过滤 `_npx`/`node_modules/.bin` 条目、去重并前置 Node 所在目录，避免托管服务把 npx/cwd-walk 的临时插件版本钉进服务 env。`service install/start` 检测到未受管的同 profile 进程时，若其父进程是 resident guardian 则自动接管停止（issue #112 Bug D），而非报“请先原终端停止”造成死锁。
    portable supervisor 在 spawn 后、任何异步状态落盘之前即订阅 child 的 `exit/error`，因此停止信号与
    状态写入并发时不会丢失一次性退出事件或永久挂起；该顺序由受控时钟竞态测试锁定。
    `service/<profile>.intent.json` 持久化 running/stopped 意图，stop/uninstall 后 guardian 不回拉；
-   生命周期目录锁串行化 mutation，install/start 还会拒绝已存在的未受管同 profile 进程。
+   生命周期目录锁串行化 mutation，install/start 会拒绝已存在的未受管同 profile 进程；仅当该进程由 resident guardian 派生时才自动接管（issue #112 Bug D）。
    WebSocket 在机器睡眠 / 断网期间无法收消息；恢复后仅向最近活跃 destination 发恢复通知。
 10. **一键彻底升级（issue #10）**：`dsh-lark-bot upgrade` 从任意旧版本（含 0.7.0 前遗留形态）
    一条命令完成 包本体（`dsh plugin add <name>@<latest>`）→ guardian 幂等重装并重启 →
