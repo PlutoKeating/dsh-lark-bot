@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { sanitizeServicePath } from '../platform/path.js';
 import { ownPackageInfo } from '../adapters/dsh/own-package.js';
 import { resolveDshHome } from '../config/dsh-runtime.js';
 import type { RuntimeEnv } from '../config/env.js';
@@ -151,24 +152,7 @@ export function stableGuardianServicePath(
   nodeBin: string,
   inheritedPath: string | undefined = process.env.PATH,
 ): string {
-  const entries = [dirname(nodeBin), ...(inheritedPath?.split(delimiter) ?? [])];
-  const seen = new Set<string>();
-  return entries
-    .filter((entry) => {
-      if (!entry) return false;
-      const normalized = entry.replaceAll('\\', '/');
-      if (
-        normalized.includes('/node_modules/.bin') ||
-        /\/_npx(?:\/|$)/.test(normalized) ||
-        /\/guardian\/update-worker\/npm-cache(?:\/|$)/.test(normalized)
-      ) {
-        return false;
-      }
-      if (seen.has(entry)) return false;
-      seen.add(entry);
-      return true;
-    })
-    .join(delimiter);
+  return sanitizeServicePath(nodeBin, inheritedPath);
 }
 
 export function launchdPlist(

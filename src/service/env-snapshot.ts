@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { writeFileAtomic } from '../platform/atomic-write.js';
+import { sanitizeServicePath } from '../platform/path.js';
 import { runCommand } from './command.js';
 import type { CommandRunner } from './types.js';
 
@@ -41,6 +42,14 @@ export function snapshotServiceEnv(
         env[key] = value;
       }
     }
+  }
+  // PATH came from the invoking shell. npx prepends its private cache bin and
+  // npm synthesises cwd-walk bins that pin an ephemeral plugin version into the
+  // managed service, so sanitize it exactly like the guardian unit (issue #111
+  // / #102). Runs after the update-worker special-case above, so the preserved
+  // inherited PATH is also stabilized.
+  if (typeof env.PATH === 'string' && env.PATH.length > 0) {
+    env.PATH = sanitizeServicePath(process.execPath, env.PATH);
   }
   return env;
 }
