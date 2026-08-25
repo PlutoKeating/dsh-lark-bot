@@ -114,7 +114,7 @@ Command help, status, and cards are bilingual; `/help` is the full authoritative
 
 ## Compatibility
 
-- **DeepSeek Harness (`dsh`)**: verified against **0.1.0-rc.8** (2026-08-22) via the official `@deepseek-ai/dsh-sdk-client` / `dsh-acp`; locked versions & upgrade policy in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+- **DeepSeek Harness (`dsh`)**: verified against **0.1.0-rc.8** (2026-08-25) via the official `@deepseek-ai/dsh-sdk-client` / `dsh-acp`; locked versions & upgrade policy in [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
 - **Runtime**: Node.js ≥ 22.19; **Platforms**: Linux / macOS / Windows. Default adapter `sdk` (native resume / streaming / image blocks); switchable to `acp` / `headless` / `web`.
 
 ## Configuration

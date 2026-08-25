@@ -7,7 +7,7 @@
 
 ## 1. 兼容矩阵
 
-> 最后验证：2026-08-22（临时 DSH_HOME 安装 + SDK / ACP initialize；ACP task/permission；SDK notify/ask/plan/approval、live session 续接与 restart collision；rc.7 SQLite fail-closed 实测）。
+> 最后验证：2026-08-25（临时 DSH_HOME 安装 + SDK / ACP initialize；ACP task/permission；SDK notify/ask/plan/approval、live session 续接与 restart collision；rc.7 SQLite fail-closed 实测）。
 
 | 组件 | 锁定版本 | 说明 |
 | :--- | :--- | :--- |
