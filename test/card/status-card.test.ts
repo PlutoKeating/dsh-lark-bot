@@ -13,7 +13,7 @@ describe('renderStatusCard', () => {
       isolation: 'member',
       executionMode: 'deep',
       permissionPolicy: 'deny',
-      notificationPreference: { target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 600_000 },
+      notificationPreference: { target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], sinks: [], approvalReminderMs: 600_000 },
       replyPolicy: { mergeWindowMs: 5_000, maxBatchSize: 3, minIntervalMs: 10_000, dedupeWindowMs: 60_000 },
       replyPolicyConfigured: true,
       role: 'coder (Coder)',

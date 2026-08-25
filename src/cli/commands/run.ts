@@ -40,6 +40,7 @@ import { buildPlanHandler } from '../../notify/plan-handler.js';
 import { buildApprovalHandler } from '../../notify/approval-handler.js';
 import { buildFileHandler } from '../../notify/file-handler.js';
 import { NotificationDispatcher } from '../../notify/notification-dispatcher.js';
+import { NotificationChannelStore, OutboundSinkRegistry } from '../../notify/sinks/index.js';
 import { ReplyDispatcher } from '../../bridge/reply-dispatcher.js';
 import type { StartOptions } from '../../cli.js';
 import { resolveAppPaths } from '../../config/app-paths.js';
@@ -238,6 +239,8 @@ export async function startBridgeEngine(
   const isolationStore = new IsolationStore(paths.profilePath(profileName, 'isolation.json'));
   const permissionPolicies = new PermissionPolicyStore(paths.permissionPoliciesFile(profileName));
   const notificationPreferences = new NotificationPreferenceStore(paths.notificationPreferencesFile(profileName));
+  const notificationChannels = new NotificationChannelStore(paths.notificationChannelsFile(profileName));
+  const notificationSinks = new OutboundSinkRegistry(notificationChannels);
   const replyPolicies = new ReplyPolicyStore(paths.replyPoliciesFile(profileName));
   const executionModes = new ExecutionModeStore(paths.executionModesFile(profileName));
   const languagePolicies = new LanguagePolicyStore(paths.languagePoliciesFile(profileName));
@@ -260,6 +263,7 @@ export async function startBridgeEngine(
     isolationStore.load(),
     permissionPolicies.load(),
     notificationPreferences.load(),
+    notificationChannels.load(),
     replyPolicies.load(),
     executionModes.load(),
     languagePolicies.load(),
@@ -344,6 +348,7 @@ export async function startBridgeEngine(
       if (!streaming) throw new Error('bridge channel is not ready');
       await streaming.sendMarkdown(chatId, markdown, options);
     },
+    sinks: notificationSinks,
   });
   const replyDispatcher = new ReplyDispatcher({
     policies: replyPolicies,
@@ -660,6 +665,9 @@ export async function startBridgeEngine(
     approvals,
     permissionPolicies,
     notificationPreferences,
+    notificationChannels,
+    notificationSinks,
+    faultNotifier: (scope, title, detail) => notificationDispatcher.notifyUrgent(scope, title, detail),
     ...(defaultNotificationPreference
       ? { defaultNotificationPreference: { ...defaultNotificationPreference, events: [...defaultNotificationPreference.events] } }
       : {}),
@@ -958,6 +966,7 @@ function notificationPreferenceFor(
       ? ['completed', 'failed', 'approval']
       : ['completed', 'failed'],
     mentionUserIds: [],
+    sinks: [],
     approvalReminderMs: 10 * 60_000,
   };
 }

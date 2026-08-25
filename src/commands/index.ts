@@ -9,6 +9,7 @@ import type {
   NotificationPreference,
   NotificationPreferenceStore,
 } from '../bot/notification-preference-store.js';
+import type { NotificationChannelStore, OutboundSinkRegistry } from '../notify/sinks/index.js';
 import type { ConcurrencyStore } from '../bot/concurrency-store.js';
 import type { QuestionRegistry } from '../bot/questions.js';
 import type { RunPolicyStore } from '../bot/run-policy.js';
@@ -47,6 +48,7 @@ import { handleArchive, handleRetention } from './archive.js';
 import { handleRole } from './roles.js';
 import { handleNotify } from './notify.js';
 import { handleNotifications } from './notifications.js';
+import { handleChannels } from './channels.js';
 import { handleReplies } from './replies.js';
 import type { ReplyPolicyStore } from '../bot/reply-policy-store.js';
 import {
@@ -125,6 +127,8 @@ export interface CommandContext {
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
   defaultNotificationPreference?: NotificationPreference;
+  notificationChannels?: NotificationChannelStore;
+  notificationSinks?: OutboundSinkRegistry;
   replyPolicies?: ReplyPolicyStore;
   executionModes?: ExecutionModeStore;
   models: ModelStore;
@@ -203,6 +207,7 @@ const HELP = [
   '- `/notify <scope|chatId> <text>` — 跨会话发送通知（管理员）',
   '- `/notify list` — 查看已注册 scope',
   '- `/notifications [show|off|on …]` — 配置当前 scope 的完成 / 失败 / 审批提醒',
+  '- `/channels [list|show|add|remove|enable|disable …]` — 管理出站通知渠道（管理员），转发到微信 / Telegram 等',
   '- `/replies [show|default|set …]` — 配置回复合并、频率与近似去重（profile 管理员或当前群管理员可修改）',
   '- `/retention [N|default]` — 查看或设置当前会话保留消息条数（超出自动归档）',
   '- `/archive [note]`、`/archive send <id> [scope|chatId]`、`/archive list [N]`、`/archive clean` — 归档并上传 / 重发或转发 / 查看 / 清理',
@@ -500,6 +505,7 @@ export type StatusContext = Pick<
   | 'permissionPolicies'
   | 'notificationPreferences'
   | 'defaultNotificationPreference'
+  | 'notificationSinks'
   | 'replyPolicies'
   | 'executionModes'
   | 'models'
@@ -570,6 +576,7 @@ export async function statusCardInputFor(
     permissionPolicy: ctx.permissionPolicies?.get(ctx.scope) ?? 'ask',
     executionMode: ctx.executionModes?.get(ctx.scope) ?? 'balanced',
     ...(notificationPreference ? { notificationPreference } : {}),
+    ...(ctx.notificationSinks ? { notificationChannels: ctx.notificationSinks.enabledChannels().map((channel) => channel.id) } : {}),
     ...(replyPolicy ? { replyPolicy, replyPolicyConfigured: ctx.replyPolicies?.isConfigured(ctx.scope) ?? false } : {}),
     role: role ? `\`${role.id}\` (${role.name})` : undefined,
     metrics,
@@ -1354,6 +1361,7 @@ const handlers: Record<string, Handler> = {
   '/role': handleRole,
   '/notify': handleNotify,
   '/notifications': handleNotifications,
+  '/channels': handleChannels,
   '/replies': handleReplies,
   '/retention': handleRetention,
   '/archive': handleArchive,

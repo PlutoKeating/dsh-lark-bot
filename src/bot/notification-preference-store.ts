@@ -2,13 +2,16 @@ import { readFile } from 'node:fs/promises';
 import { log } from '../core/logger.js';
 import { writeFileAtomic } from '../platform/atomic-write.js';
 
-export type NotificationEvent = 'completed' | 'failed' | 'approval';
+export type NotificationEvent = 'completed' | 'failed' | 'approval' | 'urgent';
 
 export interface NotificationPreference {
   target?: string;
   events: NotificationEvent[];
+  /** Feishu open_ids to @mention in the primary Feishu notification. */
   mentionUserIds: string[];
   approvalReminderMs: number;
+  /** Outbound notification channel ids (see `/channels`) fanned out on top of the Feishu route. */
+  sinks: string[];
 }
 
 interface NotificationPreferenceData {
@@ -16,7 +19,7 @@ interface NotificationPreferenceData {
   scopes: Record<string, NotificationPreference | false>;
 }
 
-const EVENTS = new Set<NotificationEvent>(['completed', 'failed', 'approval']);
+const EVENTS = new Set<NotificationEvent>(['completed', 'failed', 'approval', 'urgent']);
 
 /** Opt-in notification preferences keyed by immutable bridge scope. */
 export class NotificationPreferenceStore {
@@ -47,7 +50,7 @@ export class NotificationPreferenceStore {
   get(scope: string): NotificationPreference | undefined {
     const value = this.data.scopes[scope];
     if (value === undefined || value === false) return undefined;
-    return { ...value, events: [...value.events], mentionUserIds: [...value.mentionUserIds] };
+    return { ...value, events: [...value.events], mentionUserIds: [...value.mentionUserIds], sinks: [...value.sinks] };
   }
 
   resolve(scope: string, fallback: NotificationPreference | undefined): NotificationPreference | undefined {
@@ -95,6 +98,7 @@ function normalizePreference(value: unknown): NotificationPreference | undefined
     ...(typeof input.target === 'string' && input.target.trim() ? { target: input.target.trim() } : {}),
     events,
     mentionUserIds: [...new Set((input.mentionUserIds ?? []).filter((id): id is string => typeof id === 'string' && id.trim().length > 0).map((id) => id.trim()))],
+    sinks: [...new Set((input.sinks ?? []).filter((id): id is string => typeof id === 'string' && id.trim().length > 0).map((id) => id.trim()))],
     approvalReminderMs: approvalReminderMs as number,
   };
 }

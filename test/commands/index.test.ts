@@ -250,7 +250,7 @@ describe('command router', () => {
     const sendMarkdown = vi.fn().mockResolvedValue(undefined);
     const regular = makeContext({ notificationPreferences, senderId: 'ou_user', channel: { sendMarkdown }, accessManager: makeAccessManager() });
     await tryHandleCommand('/notifications on current events=completed,approval mentions=self remind=5', regular);
-    expect(notificationPreferences.set).toHaveBeenCalledWith('chat-a', { events: ['completed', 'approval'], mentionUserIds: ['ou_user'], approvalReminderMs: 300_000 });
+    expect(notificationPreferences.set).toHaveBeenCalledWith('chat-a', { events: ['completed', 'approval'], mentionUserIds: ['ou_user'], approvalReminderMs: 300_000, sinks: [] });
     await tryHandleCommand('/notifications on chat-b', regular);
     expect(sendMarkdown).toHaveBeenLastCalledWith('chat-a', expect.stringContaining('只有管理员'), { replyTo: 'msg-1' });
 
@@ -258,7 +258,7 @@ describe('command router', () => {
     directory.register('chat-b', 'chat-b', undefined);
     const admin = makeContext({ notificationPreferences, scopeDirectory: directory, senderId: 'ou_admin', channel: { sendMarkdown }, accessManager: makeAccessManager({ admins: ['ou_admin'] }) });
     await tryHandleCommand('/notifications on chat-b events=failed mentions=none remind=3', admin);
-    expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', { target: 'chat-b', events: ['failed'], mentionUserIds: [], approvalReminderMs: 180_000 });
+    expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', { target: 'chat-b', events: ['failed'], mentionUserIds: [], approvalReminderMs: 180_000, sinks: [] });
     await tryHandleCommand('/notifications off', admin);
     expect(notificationPreferences.set).toHaveBeenLastCalledWith('chat-a', false);
     await tryHandleCommand('/notifications default', admin);

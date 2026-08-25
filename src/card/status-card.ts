@@ -16,6 +16,8 @@ export interface StatusCardInput {
   executionMode?: ExecutionMode;
   permissionPolicy?: 'ask' | 'allow' | 'deny';
   notificationPreference?: NotificationPreference;
+  /** Enabled outbound notification channel ids (issue #113). */
+  notificationChannels?: string[];
   replyPolicy?: ReplyPolicy;
   replyPolicyConfigured?: boolean;
   role: string | undefined;
@@ -84,6 +86,11 @@ function statusCardMarkdownFor(input: StatusCardInput, locale: CardLocale): stri
           ? `🔔 **主动提醒**：\`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\`（审批 ${String(input.notificationPreference.approvalReminderMs / 60_000)} 分钟）`
           : `🔔 **Notifications**: \`${input.notificationPreference.events.join(',')}\` → \`${input.notificationPreference.target ?? 'current'}\` (approval ${String(input.notificationPreference.approvalReminderMs / 60_000)} min)`]
       : [zh ? '🔕 **主动提醒**：关闭' : '🔕 **Notifications**: off']),
+    ...(input.notificationChannels && input.notificationChannels.length > 0
+      ? [zh
+          ? `📤 **出站渠道**：\`${input.notificationChannels.join(',')}\``
+          : `📤 **Outbound channels**: \`${input.notificationChannels.join(',')}\``]
+      : []),
     ...(input.replyPolicy
       ? [zh
           ? `📨 **回复策略**：${input.replyPolicyConfigured ? '自定义' : '默认'} · 合并 ${String(input.replyPolicy.mergeWindowMs / 1_000)} 秒 · 每批 ${String(input.replyPolicy.maxBatchSize)} · 间隔 ${String(input.replyPolicy.minIntervalMs / 1_000)} 秒 · 去重 ${String(input.replyPolicy.dedupeWindowMs / 1_000)} 秒`
