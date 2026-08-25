@@ -38,7 +38,7 @@ pnpm typecheck    # tsc --noEmit（校验 .vitepress 配置 / 主题）
 
 ## URL 生成
 
-使用默认 `.html` 页面（例如 `/guide/quickstart.html`），与静态托管精确匹配，无需额外的 clean-URL 回退规则。
+`cleanUrls: true` 生成干净的 URL（如 `/guide/quickstart`，页面文件为 `guide/quickstart.html`）。Cloudflare Pages 原生把扩展名路径解析到 `.html` 文件并规范化到干净 URL，无需额外的 `_redirects` 规则；本地 `vite preview` 不做该解析属正常，需直接访问 `/guide/quickstart.html`。
 
 ## 内容维护
 
