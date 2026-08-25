@@ -17,7 +17,7 @@ describe('guardian process watch', () => {
       if (command === 'systemctl') return { code: 0, stdout: '4242\n', stderr: '' };
       return {
         code: 0,
-        stdout: ' 4242 node /home/u/node_modules/dsh-lark-bot/dist/cli.js guardian run\n',
+        stdout: ' 4242 1 node /home/u/node_modules/dsh-lark-bot/dist/cli.js guardian run\n',
         stderr: '',
       };
     });
@@ -42,7 +42,7 @@ describe('guardian process watch', () => {
       }
       return {
         code: 0,
-        stdout: ' 5151 /opt/homebrew/bin/node /Users/u/dsh-lark-bot/dist/cli.js guardian run\n',
+        stdout: ' 5151 1 /opt/homebrew/bin/node /Users/u/dsh-lark-bot/dist/cli.js guardian run\n',
         stderr: '',
       };
     });
@@ -66,8 +66,8 @@ describe('guardian process watch', () => {
     const run = vi.fn(async () => ({
       code: 0,
       stdout: JSON.stringify([
-        { ProcessId: 6262, CommandLine: cmdline },
-        { ProcessId: 7000, CommandLine: null },
+        { ProcessId: 6262, ParentProcessId: 1, CommandLine: cmdline },
+        { ProcessId: 7000, ParentProcessId: 1, CommandLine: null },
       ]),
       stderr: '',
     }));
@@ -77,10 +77,10 @@ describe('guardian process watch', () => {
       currentPid: 9000,
       run,
       isAlive: () => true,
-    })).resolves.toEqual({ pid: 6262, cmdline });
+    })).resolves.toEqual({ pid: 6262, ppid: 1, cmdline });
     expect(run).toHaveBeenCalledWith(
       'powershell.exe',
-      expect.arrayContaining(['Get-CimInstance Win32_Process | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress']),
+      expect.arrayContaining(['Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, CommandLine | ConvertTo-Json -Compress']),
       10_000,
     );
   });
@@ -91,8 +91,8 @@ describe('guardian process watch', () => {
       : {
           code: 0,
           stdout: [
-            ' 7001 node /a/dsh-lark-bot/dist/cli.js guardian run',
-            ' 7002 node /b/dsh-feishu-bot/dist/cli.js guardian run',
+            ' 7001 1 node /a/dsh-lark-bot/dist/cli.js guardian run',
+            ' 7002 1 node /b/dsh-feishu-bot/dist/cli.js guardian run',
           ].join('\n'),
           stderr: '',
         });
@@ -110,7 +110,7 @@ describe('guardian process watch', () => {
       ? { code: 0, stdout: '7002\n', stderr: '' }
       : {
           code: 0,
-          stdout: ' 7001 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
+          stdout: ' 7001 1 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
           stderr: '',
         });
 
@@ -125,7 +125,7 @@ describe('guardian process watch', () => {
   it('fails closed when the verified candidate exits before it is returned', async () => {
     const run = vi.fn(async () => ({
       code: 0,
-      stdout: ' 7001 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
+      stdout: ' 7001 1 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
       stderr: '',
     }));
     const isAlive = vi.fn()
@@ -144,7 +144,7 @@ describe('guardian process watch', () => {
   it('never returns the querying process as the resident guardian', async () => {
     const run = vi.fn(async () => ({
       code: 0,
-      stdout: ' 9000 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
+      stdout: ' 9000 1 node /a/dsh-lark-bot/dist/cli.js guardian run\n',
       stderr: '',
     }));
 

@@ -30,6 +30,7 @@ import type {
 } from '../types.js';
 import { ensureAcpProfile, resolveAcpLaunch, type AcpLaunchSpec } from './acp-runtime.js';
 import { EventChannel } from './event-channel.js';
+import { resolveModelChoice } from '../model-choice.js';
 
 export interface AcpAdapterOptions {
   launch: AcpLaunchSpec;
@@ -417,7 +418,7 @@ export async function buildAcpAgentAdapter(
     home: homedir(),
     env: process.env,
     provider: env.provider,
-    model: preferences.model ?? env.model,
+    model: resolveModelChoice(preferences.model, env.model),
     ...(env.dshExplicit ? { command: env.dshCommand, args: env.dshArgs } : {}),
   };
   const ensure = await ensureAcpProfile(runtimeOptions);
@@ -431,6 +432,6 @@ export async function buildAcpAgentAdapter(
   return new AcpDshAdapter({
     launch,
     provider: env.provider,
-    model: preferences.model ?? env.model,
+    model: resolveModelChoice(preferences.model, env.model),
   });
 }

@@ -11,6 +11,8 @@ import { spawn } from 'node:child_process';
 
 export interface ProfileProcess {
   pid: number;
+  /** Parent process id, when the platform exposes it (used to detect guardian-spawned dsh). */
+  ppid?: number;
   cmdline: string;
 }
 
@@ -123,12 +125,18 @@ export async function listProcesses(
 }
 
 async function listProcessesPosix(run: typeof captureOutput): Promise<ProfileProcess[]> {
-  const { stdout } = await run('ps', ['-axo', 'pid=,args='], 10_000);
+  const { stdout } = await run('ps', ['-axo', 'pid=,ppid=,args='], 10_000);
   const result: ProfileProcess[] = [];
   for (const line of stdout.split('\n')) {
-    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
-    if (match) {
-      result.push({ pid: Number(match[1]), cmdline: match[2] ?? '' });
+    const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+    if (!match) continue;
+    const pid = Number(match[1]);
+    const ppid = Number(match[2]);
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    if (Number.isInteger(ppid) && ppid > 0) {
+      result.push({ pid, ppid, cmdline: match[3] ?? '' });
+    } else {
+      result.push({ pid, cmdline: match[3] ?? '' });
     }
   }
   return result;
@@ -141,7 +149,7 @@ async function listProcessesWindows(run: typeof captureOutput): Promise<ProfileP
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      'Get-CimInstance Win32_Process | Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress',
+      'Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, CommandLine | ConvertTo-Json -Compress',
     ],
     10_000,
   );
@@ -152,10 +160,11 @@ async function listProcessesWindows(run: typeof captureOutput): Promise<ProfileP
       if (typeof row !== 'object' || row === null) return [];
       const record = row as Record<string, unknown>;
       const pid = Number(record.ProcessId);
+      const ppid = Number(record.ParentProcessId);
       const cmdline = record.CommandLine;
-      return Number.isInteger(pid) && pid > 0 && typeof cmdline === 'string'
-        ? [{ pid, cmdline }]
-        : [];
+      if (!Number.isInteger(pid) || pid <= 0 || typeof cmdline !== 'string') return [];
+      if (Number.isInteger(ppid) && ppid > 0) return [{ pid, ppid, cmdline }];
+      return [{ pid, cmdline }];
     });
   } catch {
     return [];
