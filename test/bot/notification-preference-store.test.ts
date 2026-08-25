@@ -15,12 +15,12 @@ describe('NotificationPreferenceStore', () => {
     const store = new NotificationPreferenceStore(path);
     await store.load();
     expect(store.get('chat-a')).toBeUndefined();
-    await store.set('chat-a', { target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 60_000 });
+    await store.set('chat-a', { target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], sinks: ['tg-main'], approvalReminderMs: 60_000 });
     const reloaded = new NotificationPreferenceStore(path);
     await reloaded.load();
-    expect(reloaded.get('chat-a')).toEqual({ target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], approvalReminderMs: 60_000 });
+    expect(reloaded.get('chat-a')).toEqual({ target: 'chat-b', events: ['completed', 'approval'], mentionUserIds: ['ou_a'], sinks: ['tg-main'], approvalReminderMs: 60_000 });
     expect((await stat(path)).mode & 0o777).toBe(0o600);
-    const fallback = { events: ['failed'] as const, mentionUserIds: [], approvalReminderMs: 60_000 };
+    const fallback = { events: ['failed'] as const, mentionUserIds: [], sinks: [], approvalReminderMs: 60_000 };
     await reloaded.set('chat-a', false);
     expect(reloaded.resolve('chat-a', { ...fallback, events: [...fallback.events] })).toBeUndefined();
     const disabled = new NotificationPreferenceStore(path);
@@ -40,7 +40,7 @@ describe('NotificationPreferenceStore', () => {
     await store.load();
     await rm(blocked, { recursive: true });
     await writeFile(blocked, 'x');
-    await expect(store.set('chat-a', { events: ['completed'], mentionUserIds: [], approvalReminderMs: 60_000 })).rejects.toThrow();
+    await expect(store.set('chat-a', { events: ['completed'], mentionUserIds: [], sinks: [], approvalReminderMs: 60_000 })).rejects.toThrow();
     expect(store.get('chat-a')).toBeUndefined();
   });
 });
