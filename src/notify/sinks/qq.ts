@@ -13,12 +13,14 @@ import { renderSinkText } from './text.js';
  *     `Authorization: Bearer <access_token>`, `{ content, msg_type: 0 }`.
  *
  * Channel encoding:
- *   - `destination` = the target group `openid` (from the QR bind / admin setup).
+ *   - `destination` = the target openid. For a group use the plain group
+ *     `openid`; for a C2C private message to the scanner, prefix with
+ *     `user:` (e.g. `user:<user_openid>`) — the QR bind returns this form.
  *   - `secret`      = `<app_id>:<client_secret>` (split on the first `:`).
  *
  * The QR bind flow (see `src/onboard/sink-qr.ts` qq provider) obtains the
  * `app_id` / `client_secret` from the QQ open-platform device-flow and the
- * target group `openid` from the scanner, mirroring the hermes-agent qqbot
+ * target openid from the scanner, mirroring the hermes-agent qqbot
  * onboarding.
  */
 export class QqSink implements OutboundSink {
@@ -31,14 +33,16 @@ export class QqSink implements OutboundSink {
 
   async send(channel: SinkChannel, message: SinkMessage): Promise<boolean> {
     const [appId, clientSecret] = splitAppCredential(channel.secret);
-    const groupOpenId = channel.destination;
-    if (!appId || !clientSecret || !groupOpenId) {
+    const target = channel.destination;
+    if (!appId || !clientSecret || !target) {
       log.warn('sink:qq', 'missing-credential', { channel: channel.id });
       return false;
     }
+    const isC2c = target.startsWith('user:');
+    const openId = isC2c ? target.slice('user:'.length) : target;
+    const url = `${this.apiBase}/v2/${isC2c ? 'users' : 'groups'}/${encodeURIComponent(openId)}/messages`;
     try {
       const token = await this.fetchAccessToken(appId, clientSecret);
-      const url = `${this.apiBase}/v2/groups/${encodeURIComponent(groupOpenId)}/messages`;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 10_000);
       timer.unref?.();

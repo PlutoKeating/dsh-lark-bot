@@ -31,6 +31,14 @@ describe('QqSink', () => {
     expect(JSON.parse(init.body as string)).toMatchObject({ msg_type: 0 });
   });
 
+  it('routes a `user:` destination to the C2C private-message endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'm1' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const sink = new QqSink('https://api.sgroup.qq.com', () => Promise.resolve('t'));
+    await expect(sink.send({ ...channel, destination: 'user:openid-u' }, message)).resolves.toBe(true);
+    expect(fetchMock.mock.calls[0]![0]).toBe('https://api.sgroup.qq.com/v2/users/openid-u/messages');
+  });
+
   it('returns false on a non-ok send response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 1, message: 'forbidden' }), { status: 403 })));
     await expect(new QqSink('https://api.sgroup.qq.com', () => Promise.resolve('t')).send(channel, message)).resolves.toBe(false);

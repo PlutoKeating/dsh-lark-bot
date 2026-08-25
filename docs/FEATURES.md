@@ -85,8 +85,11 @@ Web 设置默认关闭、不刷屏，也可为未单独设置的会话选择「�
 转发到其他 IM（`OutboundSink`，实现 Telegram 官方 Bot API、企业微信群机器人 webhook，以及
 **微信(iLink)** 与 **QQ 开放平台 Bot**，并对微信/QQ/Telegram 提供**扫码即建**：`/channels add --qr <wechat|qq|telegram>`
 在飞书会话里发一张二维码图片，用户用对应 IM App 扫码即完成绑定并落盘渠道；超时回退 `/channels accept`
-手动补录。无状态 HTTPS POST 的渠道无需第三方 bot 框架，微信/QQ 属近交互/官方 Bot 通道，有合规与
-审核要求）。管理员用 `/channels` 配置渠道（含打码显示、0600 存储、绝不回显），scope 用
+手动补录。扫码绑定走真正的设备流：**QQ** 的 `create_bind_task → poll_bind_result → 本地 AES-256-GCM 解密`
+（对齐 hermes-agent 实现，自动完成）；**微信个人号** 走 iLink `get_bot_qrcode → get_qrcode_status`
+（第三方协议无官方规范，绑定时返回的「扫码确认/令牌/用户」字段名需维护者用真实微信账号确认，未确认前
+以 `/channels accept` 手工回退为准）。无状态 HTTPS POST 的渠道无需第三方 bot 框架，微信/QQ 属近交互/
+官方 Bot 通道，有合规与审核要求）。管理员用 `/channels` 配置渠道（含打码显示、0600 存储、绝不回显），scope 用
 `/notifications on … sinks=<id>` 选择把事件一并推给渠道。`notifyUrgent()` 面向
 安全网守护 / 重连 / 心跳异常的「突发 / 故障」类事件，不管 scope 是否 opt-in 都广播到全部启用渠道。
 未配置任何额外渠道，或偏好未列出 `sinks` 时，行为与现状完全一致；这些渠道**不做任何入站交互**
