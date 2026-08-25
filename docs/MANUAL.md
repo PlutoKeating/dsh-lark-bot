@@ -115,7 +115,7 @@ dsh plugin --profile dsh-lark remove dsh-lark-bot
 | `/notify <scope\|chatId> <text>` | 向其他会话推送通知（管理员） |
 | `/notify list` | 查看 bridge 已注册的 scope |
 | `/notifications [show\|off\|default\|on …]` | 查看、关闭、恢复 Web 默认或开启当前 scope 的主动提醒（支持 `sinks=`） |
-| `/channels [list\|show\|add\|remove\|enable\|disable …]` | 管理出站通知渠道（管理员） |
+| `/channels [list\|show\|add\|accept\|remove\|enable\|disable …]` | 管理出站通知渠道（管理员）；`add --qr <wechat\|qq\|telegram>` 扫码即建 |
 | `/replies [show\|default\|set …]` | 查看或由 profile 管理员、当前群主/群管理员修改当前 scope 的回复流量策略 |
 | `/retention [N\|default]` | 查看或设置保留消息条数（超出自动归档） |
 | `/archive [note]` | 手动归档当前会话并把 Markdown + JSONL 上传到当前聊天 |
@@ -256,11 +256,18 @@ dsh-lark-bot bot remove reviewer
 - **通知转发到其他 IM（纯通知，issue #113）**：把完成 / 失败 / 审批与突发 / 故障通知，作为飞书
   之外的**额外出站投递目标**。先由管理员配置渠道：
   - `/channels list`：查看已配置渠道（不显示凭据）。
-  - `/channels add <telegram|wecom> <label> [--id <id>] --destination <目标> --secret <密钥>`：
-    添加一个出站渠道。`telegram` 的 `--destination` 是目标 chat_id / `@handle`，`--secret` 是 Bot
-    token；`wecom` 的 `--destination` 是群机器人 webhook key（与 `--secret` 相同）。凭据写入
+  - `/channels add --qr <wechat|qq|telegram> [--id <id>] [--label <label>]`：**扫码即建**。
+    bot 在飞书会话里发一张二维码**图片**，用户用对应 IM App 扫码即完成绑定；超时/失败自动回退到手动
+    填写（见下）。支持：`wechat`（iLink，个人微信）、`qq`（QQ 开放平台 Bot）、`telegram`
+    （deep-link 扫码开聊）；另有 `wecom`（企业微信群机器人 webhook）。
+  - `/channels add <telegram|wecom|wechat|qq> <label> [--id <id>] --destination <目标> --secret <密钥>`：
+    手动添加一个出站渠道。`telegram` 的 `--destination` 是目标 chat_id / `@handle`，`--secret` 是 Bot
+    token；`wecom` 的 `--destination` 是群机器人 webhook key（与 `--secret` 相同）；`wechat` 的
+    `--destination` 是 `<to_user_id>|<context_token>`，`--secret` 是 iLink Bot token；`qq` 的
+    `--destination` 是目标群 `openid`，`--secret` 是 `<app_id>:<client_secret>`。凭据写入
     `<profile>/notification-channels.json`（0600），只被 bridge 读取，命令回显与 `/status` 一律只显示
-    打码值；建议在 0600 文件中直接维护，或由管理员安全提供。
+    打码值。
+  - `/channels accept <type> <id> <label> <destination> <secret>`：扫码超时后手动补录一个渠道。
   - `/channels show <id>` / `enable <id>` / `disable <id>` / `remove <id>`。
   - 在 `/notifications on … sinks=<id1,id2>` 里把某 channel 加入 scope 的通知目标；也可
     `events=…,urgent` 让 scope 接收突发 / 故障级飞书提醒。
