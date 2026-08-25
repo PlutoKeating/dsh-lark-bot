@@ -1,6 +1,6 @@
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   formatEnvFile,
@@ -9,6 +9,10 @@ import {
   writeServiceEnv,
   secureWindowsServiceEnv,
 } from '../../src/service/env-snapshot.js';
+
+// sanitizeServicePath prepends the Node binary directory so the service always
+// resolves node/pnpm from a stable location.
+const NODE_BIN_DIR = dirname(process.execPath);
 
 describe('snapshotServiceEnv', () => {
   it('captures DSH_LARK_* variables and essential runtime keys', () => {
@@ -26,7 +30,7 @@ describe('snapshotServiceEnv', () => {
       DSH_LARK_ADAPTER: 'sdk',
       DSH_LARK_MODEL: 'deepseek-v4-flash',
       DEEPSEEK_API_KEY: 'sk-test-secret',
-      PATH: '/usr/local/bin:/usr/bin',
+      PATH: `${NODE_BIN_DIR}:/usr/local/bin:/usr/bin`,
       HOME: '/home/user',
       DSH_HOME: '/home/user/.dsh',
     });
@@ -54,7 +58,7 @@ describe('snapshotServiceEnv', () => {
     expect(env).toEqual({
       DSH_LARK_PROVIDER: 'deepseek-official',
       DSH_LARK_MODEL: 'shell-model',
-      PATH: '/usr/bin',
+      PATH: `${NODE_BIN_DIR}:/usr/bin`,
     });
   });
 
@@ -76,9 +80,32 @@ describe('snapshotServiceEnv', () => {
       { PATH: '/home/user/.local/bin:/usr/bin', DSH_LARK_MODEL: 'saved-model' },
     );
     expect(env).toEqual({
-      PATH: '/home/user/.local/bin:/usr/bin',
+      PATH: `${NODE_BIN_DIR}:/home/user/.local/bin:/usr/bin`,
       DSH_LARK_MODEL: 'saved-model',
     });
+  });
+
+  it('strips npx / node_modules/.bin from the snapshotted PATH (issue #111)', () => {
+    const env = snapshotServiceEnv({
+      PATH: [
+        '/home/user/.npm/_npx/abc123/node_modules/.bin',
+        '/home/user/proj/node_modules/.bin',
+        '/home/user/.local/bin',
+        '/usr/bin',
+      ].join(':'),
+    });
+    expect(env.PATH).toBe(`${NODE_BIN_DIR}:/home/user/.local/bin:/usr/bin`);
+    expect(env.PATH).not.toContain('_npx');
+    expect(env.PATH).not.toContain('node_modules/.bin');
+  });
+
+  it('de-duplicates repeated PATH entries', () => {
+    const env = snapshotServiceEnv({
+      PATH: '/usr/bin:/home/user/.local/bin:/usr/bin:/usr/local/bin',
+    });
+    const entries = env.PATH!.split(':');
+    expect(new Set(entries).size).toBe(entries.length);
+    expect(entries.filter((entry) => entry === '/usr/bin')).toHaveLength(1);
   });
 });
 
