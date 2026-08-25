@@ -34,11 +34,11 @@ pnpm typecheck    # tsc --noEmit（校验 .vitepress 配置 / 主题）
   - `guide/configuration.md` 配置
   - `guide/security.md` 安全与权限
   - `guide/troubleshooting.md` 排障与 FAQ
-- `docs/public/` — `robots.txt`、`sitemap.xml`、`llms.txt`、`favicon.svg`、`logo.svg`、`_redirects`（Cloudflare clean-URL 回退）
+- `docs/public/` — `robots.txt`、`sitemap.xml`、`llms.txt`、`favicon.svg`、`logo.svg`
 
-## 路由回退
+## URL 生成
 
-`cleanUrls: true` 生成 `/guide/quickstart` 这类无 `.html` 的 URL。Cloudflare Pages 通过 `docs/public/_redirects`（`/guide/:page /guide/:page.html 200`）解析；本地 `vite preview` 不带该回退属正常。
+使用默认 `.html` 页面（例如 `/guide/quickstart.html`），与静态托管精确匹配，无需额外的 clean-URL 回退规则。
 
 ## 内容维护
 

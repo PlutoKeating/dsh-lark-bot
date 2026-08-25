@@ -7,43 +7,43 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/quickstart</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/quickstart.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/features</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/features.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/commands</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/commands.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/notification-sinks</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/notification-sinks.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/configuration</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/configuration.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/security</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/security.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/troubleshooting</loc>
+    <loc>https://dsh-lark-bot.arr2018.dpdns.org/guide/troubleshooting.html</loc>
     <lastmod>2026-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

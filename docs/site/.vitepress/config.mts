@@ -5,7 +5,6 @@ export default defineConfig({
   lang: 'zh-CN',
   title: 'dsh-lark-bot',
   description: '把 DeepSeek Harness (dsh) 装进飞书 / Lark 的开源桥接插件：扫码即用，流式卡片、并行任务、多角色 Agent、跨会话通知、通知转发到其他 IM 与安全网守护。',
-  cleanUrls: true,
   lastUpdated: true,
   head: [
     ['link', { rel: 'icon', href: '/favicon.svg' }],
