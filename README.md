@@ -61,7 +61,7 @@ dsh --profile dsh-lark                              # ② 启动
 - **快速 / 平衡 / 深度模式**：`/mode` 一键选任务强度，下一轮生效且不打断当前任务。
 - **关键任务先拍板**：`lark_request_plan_approval` 先出完整计划，再批准或附意见继续规划。
 - **跨会话通知 + @人**：A 群跑完任务主动推送到 B 群 / 私聊并 @ 你。
-- **通知转发到常用 IM（纯通知）**：把完成 / 失败 / 审批与突发 / 故障通知，经 `/channels` 配置后单向推送到 Telegram / 企业微信群机器人等；只推送、无入站交互，飞书仍是唯一完整交互平台，未配置时行为不变。
+- **通知转发到常用 IM（纯通知）**：把完成 / 失败 / 审批与突发 / 故障通知，经 `/channels` 配置后单向推送到 Telegram / 企业微信群机器人等；只推送、无入站交互，飞书仍是唯一完整交互平台，未配置时行为不变。**`/channels add --qr <wechat|qq|telegram>` 让用户在飞书会话里收到二维码图片，用对应 IM 扫码即创建并绑定通知渠道。**
 
 > 流式过程卡以飞书原生折叠面板实时展示阶段、耗时与工具状态。
 
@@ -82,7 +82,7 @@ dsh --profile dsh-lark                              # ② 启动
 | `/role list\|show\|set\|clear` | 查看 / 绑定角色 |
 | `/notify <scope\|chatId> <text>` | 跨会话发送通知（管理员） |
 | `/notifications [show\|off\|on …]` | 配置完成 / 失败 / 审批提醒（`sinks=` 转发到其他 IM 渠道） |
-| `/channels [list\|show\|add\|remove\|enable\|disable …]` | 管理出站通知渠道（管理员） |
+| `/channels [list\|show\|add\|accept\|remove\|enable\|disable …]` | 管理出站通知渠道（管理员）；`add --qr <wechat\|qq\|telegram>` 扫码即建 |
 | `/stop` | 终止当前任务 |
 | `/upgrade` | 自更新（管理员） |
 | `/doctor` | 生成脱敏诊断包（管理员） |

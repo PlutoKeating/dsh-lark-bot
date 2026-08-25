@@ -3,7 +3,7 @@ import { log } from '../../core/logger.js';
 import { writeFileAtomic } from '../../platform/atomic-write.js';
 import type { SinkChannel, SinkType } from './types.js';
 
-export const SINK_TYPES: readonly SinkType[] = ['telegram', 'wecom'] as const;
+export const SINK_TYPES: readonly SinkType[] = ['telegram', 'wecom', 'wechat', 'qq'] as const;
 
 interface NotificationChannelData {
   schemaVersion: 1;
@@ -99,7 +99,8 @@ function normalizeChannel(id: string, value: unknown): SinkChannel | undefined {
   if (!value || typeof value !== 'object' || !id.trim()) return undefined;
   const input = value as Partial<SinkChannel>;
   const type = input.type;
-  if (type !== 'telegram' && type !== 'wecom') return undefined;
+  if (typeof type !== 'string' || !(SINK_TYPES as readonly string[]).includes(type)) return undefined;
+  const normalizedType = type as SinkType;
   const label = typeof input.label === 'string' ? input.label.trim() : '';
   const destination = typeof input.destination === 'string' ? input.destination.trim() : '';
   const secret = typeof input.secret === 'string' ? input.secret.trim() : '';
@@ -112,7 +113,7 @@ function normalizeChannel(id: string, value: unknown): SinkChannel | undefined {
   }
   return {
     id: id.trim(),
-    type,
+    type: normalizedType,
     label,
     destination,
     secret,

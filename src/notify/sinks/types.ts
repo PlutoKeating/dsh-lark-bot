@@ -1,7 +1,7 @@
 import type { NotificationEvent } from '../../bot/notification-preference-store.js';
 
 /** Supported outbound notification-only sink platforms. */
-export type SinkType = 'telegram' | 'wecom';
+export type SinkType = 'telegram' | 'wecom' | 'wechat' | 'qq';
 
 /**
  * A configured outbound notification channel. The bridge is the only consumer
@@ -22,6 +22,8 @@ export interface SinkChannel {
    * Platform destination:
    * - telegram: target chat_id / @handle that messages are sent to.
    * - wecom   : the webhook key (the value after `?key=`).
+   * - wechat  : the bound target user id (iLink `context_token` owner).
+   * - qq      : the target channel / group id that receives the message.
    */
   destination: string;
   /**
@@ -30,6 +32,9 @@ export interface SinkChannel {
    * - wecom   : the webhook key (kept mirrored from `destination` so a single
    *   redaction helper always covers the credential; only ever read by the
    *   sink itself, never logged).
+   * - wechat  : the iLink bot access token (from the QR bind).
+   * - qq      : the bot app secret (`app_id:app_secret` form so a single
+   *   redaction helper covers the whole credential).
    */
   secret: string;
   enabled: boolean;
