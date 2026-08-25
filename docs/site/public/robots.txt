@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dsh-lark-bot.arr2018.dpdns.org/sitemap.xml

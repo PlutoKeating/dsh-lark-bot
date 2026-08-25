@@ -12,7 +12,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 7a495b2c871926a73fd06fbef7dd3b75
@@ -20,12 +20,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare deploy directory
-        run: |
-          mkdir -p _cf_site
-          cp docs/index.html _cf_site/
-          cp docs/*.txt _cf_site/
-          cp docs/*.xml _cf_site/
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install landing site dependencies
+        run: pnpm --dir docs/site install --frozen-lockfile
+
+      - name: Build landing site
+        run: pnpm --dir docs/site build
 
       - name: Deploy to Cloudflare Pages
-        run: npx --yes wrangler@4 pages deploy _cf_site --project-name=dsh-lark-bot --branch=main
+        run: npx --yes wrangler@4 pages deploy docs/site/dist --project-name=dsh-lark-bot --branch=main
