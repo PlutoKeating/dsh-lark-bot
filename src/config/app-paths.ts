@@ -20,6 +20,7 @@ export interface AppPaths {
   jobsFile: (profile: string) => string;
   permissionPoliciesFile: (profile: string) => string;
   notificationPreferencesFile: (profile: string) => string;
+  notificationChannelsFile: (profile: string) => string;
   replyPoliciesFile: (profile: string) => string;
   executionModesFile: (profile: string) => string;
   languagePoliciesFile: (profile: string) => string;
@@ -60,6 +61,7 @@ export function resolveAppPaths(root: string = defaultHome()): AppPaths {
     jobsFile: (profile) => profilePath(profile, 'jobs.json'),
     permissionPoliciesFile: (profile) => profilePath(profile, 'permission-policies.json'),
     notificationPreferencesFile: (profile) => profilePath(profile, 'notification-preferences.json'),
+    notificationChannelsFile: (profile) => profilePath(profile, 'notification-channels.json'),
     replyPoliciesFile: (profile) => profilePath(profile, 'reply-policies.json'),
     executionModesFile: (profile) => profilePath(profile, 'execution-modes.json'),
     languagePoliciesFile: (profile) => profilePath(profile, 'language-policy.json'),

@@ -2,7 +2,7 @@ import type { NotificationEvent, NotificationPreference } from '../bot/notificat
 import { bilingualMarkdown } from '../card/i18n.js';
 import type { CommandContext } from './index.js';
 
-const ALL_EVENTS: NotificationEvent[] = ['completed', 'failed', 'approval'];
+const ALL_EVENTS: NotificationEvent[] = ['completed', 'failed', 'approval', 'urgent'];
 
 async function reply(ctx: CommandContext, zh: string, en: string): Promise<void> {
   await ctx.channel.sendMarkdown(ctx.chatId, bilingualMarkdown(zh, en), { replyTo: ctx.messageId });
@@ -43,6 +43,7 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
   let events = [...ALL_EVENTS];
   let mentionUserIds = ctx.senderId ? [ctx.senderId] : [];
   let reminderMinutes = 10;
+  let sinks: string[] = [];
   for (const token of tokens.slice(1)) {
     if (token.startsWith('events=')) {
       const requested = token.slice(7).split(',').filter(Boolean);
@@ -54,6 +55,8 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
     } else if (token.startsWith('remind=')) {
       reminderMinutes = Number(token.slice(7));
       if (!Number.isInteger(reminderMinutes) || reminderMinutes < 1 || reminderMinutes > 1_440) return usage(ctx);
+    } else if (token.startsWith('sinks=')) {
+      sinks = token.slice(6).split(',').map((id) => id.trim()).filter(Boolean);
     } else if (!target) {
       target = token === 'current' ? undefined : token;
     } else return usage(ctx);
@@ -73,6 +76,7 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
     events,
     mentionUserIds: [...new Set(mentionUserIds)],
     approvalReminderMs: reminderMinutes * 60_000,
+    sinks: [...new Set(sinks)],
   };
   await store.set(ctx.scope, value);
   await reply(ctx, `已开启。${describe(value, true)}`, `Enabled. ${describe(value, false)}`);
@@ -80,14 +84,15 @@ export async function handleNotifications(args: string, ctx: CommandContext): Pr
 
 function describe(value: NotificationPreference, zh: boolean): string {
   const minutes = value.approvalReminderMs / 60_000;
+  const sinks = value.sinks.join(',') || 'none';
   return zh
-    ? `主动提醒：**开启** · 事件 \`${value.events.join(',')}\` · 目标 \`${value.target ?? 'current'}\` · @ \`${value.mentionUserIds.join(',') || 'none'}\` · 审批提醒 ${String(minutes)} 分钟。`
-    : `Proactive notifications: **on** · events \`${value.events.join(',')}\` · target \`${value.target ?? 'current'}\` · mentions \`${value.mentionUserIds.join(',') || 'none'}\` · approval reminder ${String(minutes)} min.`;
+    ? `主动提醒：**开启** · 事件 \`${value.events.join(',')}\` · 目标 \`${value.target ?? 'current'}\` · @ \`${value.mentionUserIds.join(',') || 'none'}\` · 渠道 \`${sinks}\` · 审批提醒 ${String(minutes)} 分钟。`
+    : `Proactive notifications: **on** · events \`${value.events.join(',')}\` · target \`${value.target ?? 'current'}\` · mentions \`${value.mentionUserIds.join(',') || 'none'}\` · channels \`${sinks}\` · approval reminder ${String(minutes)} min.`;
 }
 
 async function usage(ctx: CommandContext): Promise<void> {
   await reply(ctx,
-    '用法：`/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
-    'Usage: `/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval] [mentions=self,ou_x|none] [remind=10]]`',
+    '用法：`/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval,urgent] [mentions=self,ou_x|none] [sinks=channelId1,channelId2] [remind=10]]`',
+    'Usage: `/notifications [show|off|default|on [current|scope|chatId] [events=completed,failed,approval,urgent] [mentions=self,ou_x|none] [sinks=channelId1,channelId2] [remind=10]]`',
   );
 }

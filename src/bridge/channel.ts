@@ -48,6 +48,7 @@ import type { DurableQueuedMessage, JobLedger } from '../bot/job-ledger.js';
 import type { DiagnosticFile, DiagnosticRequestSnapshot } from '../diagnostics/bundle.js';
 import type { PermissionPolicyStore } from '../bot/permission-policy-store.js';
 import type { NotificationPreference, NotificationPreferenceStore } from '../bot/notification-preference-store.js';
+import type { NotificationChannelStore, OutboundSinkRegistry } from '../notify/sinks/index.js';
 import type { ReplyPolicyStore } from '../bot/reply-policy-store.js';
 import type { SessionProjectionStore } from '../session/projection-store.js';
 import type { SessionProjectionSource } from '../session/projection-protocol.js';
@@ -98,6 +99,12 @@ export interface StartChannelDeps {
   permissionPolicies?: PermissionPolicyStore;
   notificationPreferences?: NotificationPreferenceStore;
   defaultNotificationPreference?: NotificationPreference;
+  /** Configurable push-only outbound notification channels (issue #113). */
+  notificationChannels?: NotificationChannelStore;
+  /** Fan-out registry backed by `notificationChannels` (issue #113). */
+  notificationSinks?: OutboundSinkRegistry;
+  /** Route reconnect / crash / heartbeat fault classes to outbound sinks. */
+  faultNotifier?: (scope: string, title: { zh: string; en: string }, detail?: string) => Promise<void>;
   replyPolicies?: ReplyPolicyStore;
   executionModes?: ExecutionModeStore;
   languagePolicies?: LanguagePolicyStore;
@@ -256,6 +263,7 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
           };
         }
       : undefined,
+    deps.faultNotifier,
   );
   const isolationStore = deps.isolationStore ?? EMPTY_ISOLATION_STORE;
   let groupPoller: GroupMessagePoller | undefined;
@@ -421,6 +429,8 @@ export async function startChannel(deps: StartChannelDeps): Promise<BridgeChanne
       ...(deps.defaultNotificationPreference
         ? { defaultNotificationPreference: deps.defaultNotificationPreference }
         : {}),
+      ...(deps.notificationChannels ? { notificationChannels: deps.notificationChannels } : {}),
+      ...(deps.notificationSinks ? { notificationSinks: deps.notificationSinks } : {}),
       ...(deps.replyPolicies ? { replyPolicies: deps.replyPolicies } : {}),
       ...(deps.executionModes ? { executionModes: deps.executionModes } : {}),
       ...(deps.languagePolicies ? { languagePolicies: deps.languagePolicies } : {}),
