@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NotifyMessage } from '../../src/notify/server.js';
-import { NotifyServer } from '../../src/notify/server.js';
+import { NotifyServer, resolveNotifyDestination } from '../../src/notify/server.js';
 import { ScopeDirectory } from '../../src/bridge/scope-directory.js';
 import { apply as applyNotifyTool } from '../../src/notify/tool.js';
 
@@ -13,15 +13,15 @@ afterEach(async () => {
 async function startServer(deps: {
   directory: ScopeDirectory;
   send?: ReturnType<typeof vi.fn>;
+  /** Session lookup the bridge engine also uses for the current-chat default. */
+  sessions?: { scopeForSession(sessionId: string): string | undefined };
 }) {
   const send = deps.send ?? vi.fn().mockResolvedValue(undefined);
+  const sessions = deps.sessions ?? { scopeForSession: () => undefined };
   const server = new NotifyServer({
     token: 'test-token',
-    resolve: (message: NotifyMessage) => {
-      if (message.scope) return deps.directory.resolve(message.scope);
-      if (message.chatId) return deps.directory.resolveChat(message.chatId);
-      return undefined;
-    },
+    resolve: (message: NotifyMessage) =>
+      resolveNotifyDestination(message, deps.directory, sessions),
     send,
   });
   servers.push(server);
@@ -92,6 +92,68 @@ describe('NotifyServer', () => {
     });
     expect(unknown.status).toBe(404);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('routes an untargeted message to the chat bound to the calling session', async () => {
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'oc_group', undefined);
+    const { server, send } = await startServer({
+      directory,
+      sessions: { scopeForSession: (sessionId) => (sessionId === 'session-1' ? 'chat-a' : undefined) },
+    });
+
+    const response = await fetch(server.url!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 'session-1', text: 'task done' }),
+    });
+    expect(response.status).toBe(200);
+    expect(send).toHaveBeenCalledWith(
+      { chatId: 'oc_group', threadId: undefined },
+      { text: 'task done' },
+    );
+  });
+
+  it('fails closed instead of guessing a chat when the session is unknown', async () => {
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'oc_group', undefined);
+    directory.register('chat-b', 'oc_other', undefined);
+    const { server, send } = await startServer({
+      directory,
+      sessions: { scopeForSession: () => undefined },
+    });
+
+    const response = await fetch(server.url!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: 'test-token', sessionId: 'ghost', text: 'task done' }),
+    });
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining('active session'),
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit target ahead of the session fallback', () => {
+    const directory = new ScopeDirectory(':memory:');
+    directory.register('chat-a', 'oc_group', undefined);
+    directory.register('chat-b', 'oc_other', undefined);
+    const sessions = { scopeForSession: () => 'chat-b' };
+
+    expect(resolveNotifyDestination({ scope: 'chat-a' }, directory, sessions)).toEqual({
+      chatId: 'oc_group',
+      threadId: undefined,
+    });
+    expect(resolveNotifyDestination({ chatId: 'oc_other' }, directory, sessions)).toEqual({
+      chatId: 'oc_other',
+      threadId: undefined,
+    });
+    expect(resolveNotifyDestination({ sessionId: 'session-1' }, directory, sessions)).toEqual({
+      chatId: 'oc_other',
+      threadId: undefined,
+    });
+    expect(resolveNotifyDestination({}, directory, sessions)).toBeUndefined();
   });
 
   it('end-to-end: the lark_notify tool posts through the real server', async () => {

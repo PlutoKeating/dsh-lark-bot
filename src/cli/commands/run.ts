@@ -34,7 +34,11 @@ import { ScopeDirectory } from '../../bridge/scope-directory.js';
 import { memberOwnerForScope } from '../../bridge/scope-isolation.js';
 import type { StreamingChannel } from '../../bridge/types.js';
 import { WebDshAdapter } from '../../adapters/dsh/web-adapter.js';
-import { generateNotifyToken, NotifyServer } from '../../notify/server.js';
+import {
+  generateNotifyToken,
+  NotifyServer,
+  resolveNotifyDestination,
+} from '../../notify/server.js';
 import { buildAskHandler } from '../../notify/ask-handler.js';
 import { buildPlanHandler } from '../../notify/plan-handler.js';
 import { buildApprovalHandler } from '../../notify/approval-handler.js';
@@ -361,13 +365,9 @@ export async function startBridgeEngine(
   const notifyServer = new NotifyServer({
     token: notifyToken,
     resolve: (message) => {
-      if (message.scope) {
-        return scopeDirectory.resolve(message.scope);
-      }
-      if (message.chatId) {
-        return scopeDirectory.resolveChat(message.chatId);
-      }
-      return undefined;
+      // Explicit scope/chat first, then the chat the calling session is bound
+      // to, so `lark_notify` honours its documented current-chat default.
+      return resolveNotifyDestination(message, scopeDirectory, sessions);
     },
     send: async (destination, payload) => {
       if (!streaming) throw new Error('bridge channel is not ready');

@@ -15,6 +15,12 @@ export interface NotifyMessage {
   scope?: string;
   /** Direct chat id fallback when scope is unknown. */
   chatId?: string;
+  /**
+   * Active dsh session id. When neither scope nor chatId is given the bridge
+   * resolves the session's own chat, so `lark_notify` can honour its
+   * documented "Omit to send to the current chat" default.
+   */
+  sessionId?: string;
   threadId?: string;
   text: string;
   mentions?: MentionTarget[];
@@ -23,6 +29,29 @@ export interface NotifyMessage {
 export interface NotifyDestination {
   chatId: string;
   threadId: string | undefined;
+}
+
+/**
+ * Resolve a `lark_notify` target the way the bridge engine does: an explicit
+ * `scope` first, then an explicit `chatId`, then the chat the calling session
+ * is bound to. Returns undefined when none of the three is known, so the
+ * documented "Omit to send to the current chat" default works while an
+ * untargeted message from an unknown session still fails closed instead of
+ * leaking into whichever chat was active most recently.
+ */
+export function resolveNotifyDestination(
+  message: Pick<NotifyMessage, 'scope' | 'chatId' | 'sessionId'>,
+  directory: {
+    resolve(scope: string): NotifyDestination | undefined;
+    resolveChat(chatId: string): NotifyDestination | undefined;
+  },
+  sessions: { scopeForSession(sessionId: string): string | undefined },
+): NotifyDestination | undefined {
+  if (message.scope) return directory.resolve(message.scope);
+  if (message.chatId) return directory.resolveChat(message.chatId);
+  if (!message.sessionId) return undefined;
+  const scope = sessions.scopeForSession(message.sessionId);
+  return scope ? directory.resolve(scope) : undefined;
 }
 
 export interface NotifyServerDeps {
@@ -310,7 +339,12 @@ export class NotifyServer {
       }
       const destination = this.deps.resolve(message);
       if (!destination) {
-        respond(404, { ok: false, error: `unknown scope/chat: ${message.scope ?? message.chatId ?? ''}` });
+        respond(404, {
+          ok: false,
+          error:
+            `unknown scope/chat: ${message.scope ?? message.chatId ?? ''}` +
+            ' (pass scope/chat_id, or call lark_notify from an active session)',
+        });
         return;
       }
       await this.deps.send(destination, {

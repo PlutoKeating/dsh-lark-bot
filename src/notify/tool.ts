@@ -4,6 +4,7 @@ import {
   optionalString,
   optionalStringArray,
   requiredString,
+  type RawToolExecution,
   type ToolPluginContext,
 } from './raw-tool.js';
 
@@ -73,7 +74,7 @@ export function apply(ctx: Context, config: Config = {}) {
           ];
         },
       },
-      async execute(rawArgs) {
+      async execute(rawArgs, exec: RawToolExecution | undefined) {
         const args = objectArgs(rawArgs, 'lark_notify');
         const text = requiredString(args, 'text', 'lark_notify');
         const scope = optionalString(args, 'scope', 'lark_notify');
@@ -93,6 +94,15 @@ export function apply(ctx: Context, config: Config = {}) {
         };
         if (scope) payload.scope = scope;
         if (chatId) payload.chatId = chatId;
+        // Without an explicit target the bridge falls back to the chat this
+        // session is bound to, matching the documented "Omit to send to the
+        // current chat" behaviour. Same lookup the ask/plan/approval/secret
+        // channels already use.
+        const sessionId =
+          exec?.agent?.session === undefined
+            ? undefined
+            : String(exec.agent.session.id);
+        if (sessionId) payload.sessionId = sessionId;
         if (mentionUserIds && mentionUserIds.length > 0) {
           payload.mentions = mentionUserIds.map((userId) => ({ userId }));
         }

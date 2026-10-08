@@ -56,6 +56,41 @@ describe('lark_notify tool plugin', () => {
     );
   });
 
+  it('posts the active session id so the bridge can fall back to the current chat', async () => {
+    const registered: ToolDefinition[] = [];
+    const ctx = {
+      logger: { warn: vi.fn() },
+      tools: {
+        register: vi.fn((definition: ToolDefinition) => {
+          registered.push(definition);
+        }),
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, chatId: 'oc_group' }),
+    });
+    globalThis.fetch = fetchMock as never;
+
+    applyNotifyTool(ctx as never, { endpoint: 'http://127.0.0.1:1234/notify', token: 'secret' });
+    const tool = registered[0];
+    if (!tool) throw new Error('tool was not registered');
+
+    const result = await tool.execute(
+      { text: 'task done' },
+      { agent: { session: { id: 'session-1' } } } as never,
+    );
+    expect(result).toEqual({ ok: true, chatId: 'oc_group' });
+    // No scope/chat_id: the session id is what lets the bridge honour the
+    // documented "Omit to send to the current chat" default.
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(options.body))).toEqual({
+      token: 'secret',
+      text: 'task done',
+      sessionId: 'session-1',
+    });
+  });
+
   it('validates raw JSON-schema tool arguments without importing dsh-tools', async () => {
     const ctx = { tools: { register: vi.fn() } };
     applyNotifyTool(ctx as never, { endpoint: 'http://127.0.0.1/notify', token: 't' });
